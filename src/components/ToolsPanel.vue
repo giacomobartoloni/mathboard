@@ -1,6 +1,12 @@
 <template>
   <div class="tools-panel">
-    <img alt="Vue logo" src="../assets/logo.png" width="30px" />
+    <!--     <img alt="Vue logo" src="../assets/logo.png" width="30px" /> -->
+    <div :class="{'selected':pencil.selected == true}">
+      <font-awesome-icon icon="mouse-pointer" />
+    </div>
+    <div :class="{'selected':text.selected == true}">
+        <font-awesome-icon icon="font" />
+    </div>
   </div>
 </template>
 
@@ -10,10 +16,14 @@ export default {
   data() {
     return {
       pencil: {
-          selected: true,
-          width: 10,
-          color: "(187, 187, 187)"
+        selected: true,
+        width: 10,
+        color: "(187, 187, 187)",
       },
+      text: {
+          selected: false,
+
+      }
     };
   },
 };
@@ -32,5 +42,14 @@ export default {
   border-radius: 5px;
   padding: 5px 10px;
   border: rgb(187, 187, 187) 1px solid;
+}
+
+.tools-panel div {
+  padding: 5px 10px;
+  border-radius: 5px;
+}
+
+.tools-panel div.selected {
+    background-color: rgb(214, 214, 214);
 }
 </style>
