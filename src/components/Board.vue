@@ -195,4 +195,9 @@ div#boardcontainer {
 canvas {
   background: rgba(255, 255, 255, 0.6);
 }
+canvas {
+  background: url("../assets/bg.svg") #f9f9f9 repeat;
+  background-size: 40px 40px;
+  width: 100%;
+  height: 100%; }
 </style>
