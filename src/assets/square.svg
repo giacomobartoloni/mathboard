@@ -1,0 +1,30 @@
+<svg width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+ <defs>
+  <style>.cls-1 {
+        clip-path: url(#clip-Custom_Size_1);
+      }
+
+      .cls-2 {
+        fill: #e5e5e5;
+      }
+
+      .cls-3 {
+        fill: #fff;
+      }</style>
+  <clipPath id="clip-Custom_Size_1">
+   <rect id="svg_1" height="40" width="40"/>
+  </clipPath>
+ </defs>
+ <g>
+  <title>background</title>
+  <rect fill="none" id="canvas_background" height="402" width="582" y="-1" x="-1"/>
+ </g>
+ <g>
+  <title>Layer 1</title>
+  <g class="cls-1" id="Custom_Size_1">
+   <rect y="-0.066225" x="0.045195" id="svg_2" height="40" width="40" class="cls-3"/>
+   <line stroke="#e0eeff" stroke-linecap="null" stroke-linejoin="null" id="svg_5" y2="39.742506" x2="20.417827" y1="-0.031335" x1="20.417827" stroke-width="NaN" fill="none"/>
+   <line transform="rotate(90 20.584957122802734,19.855585098266605) " stroke="#e0eeff" stroke-linecap="null" stroke-linejoin="null" id="svg_6" y2="39.742506" x2="20.584958" y1="-0.031335" x1="20.584958" stroke-width="NaN" fill="none"/>
+  </g>
+ </g>
+</svg>

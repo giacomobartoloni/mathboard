@@ -1,11 +1,14 @@
 <template>
   <div class="tools-panel">
     <!--     <img alt="Vue logo" src="../assets/logo.png" width="30px" /> -->
-    <div :class="{'selected':pencil.selected == true}">
-      <font-awesome-icon icon="mouse-pointer" />
+    <div :class="{ selected: selected === 'pencil' }" v-on:click="select('pencil')" >
+      <font-awesome-icon icon="pencil-alt" />
     </div>
-    <div :class="{'selected':text.selected == true}">
-        <font-awesome-icon icon="font" />
+    <div :class="{ selected: selected === 'pan' }" v-on:click="select('pan')" >
+      <font-awesome-icon :icon="['far', 'hand-paper']" />
+    </div>
+    <div :class="{ selected: selected === 'font' }" v-on:click="select('font')" >
+      <font-awesome-icon icon="font" />
     </div>
   </div>
 </template>
@@ -15,16 +18,21 @@ export default {
   name: "ToolsPanel",
   data() {
     return {
+      selected: "pencil",
       pencil: {
-        selected: true,
         width: 10,
         color: "(187, 187, 187)",
       },
+      pan: {
+      },
       text: {
-          selected: false,
-
-      }
+      },
     };
+  },
+  methods: {
+    select: function (element) {
+      this.selected = element;
+    }
   },
 };
 </script>
@@ -37,10 +45,10 @@ export default {
   left: 12px;
   top: 76px;
 
-  background-color: whitesmoke;
+  background-color: rgb(245, 244, 244);
   color: rgb(61, 61, 61);
   border-radius: 5px;
-  padding: 5px 10px;
+  padding: 5px 5px;
   border: rgb(187, 187, 187) 1px solid;
 }
 
@@ -50,6 +58,6 @@ export default {
 }
 
 .tools-panel div.selected {
-    background-color: rgb(214, 214, 214);
+  background-color: rgb(214, 214, 214);
 }
 </style>
