@@ -32,6 +32,8 @@ export default {
   methods: {
     select: function (element) {
       this.selected = element;
+      this.$store.commit('selectTool', element)
+      console.log(this.$store.state.selectedTool)
     }
   },
 };
