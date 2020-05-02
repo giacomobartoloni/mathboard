@@ -43,6 +43,7 @@ let canvasEvents = [
   "drop",
 ];
 
+import { mapState } from 'vuex';
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 
@@ -107,8 +108,8 @@ export default {
         }
       });
       return obj;
-    },
-  },
+    }, ...mapState(['selectedTool']),
+  }, 
   mounted() {
     var canvas = document.querySelector("canvas");
     this.fitToContainer(canvas);
@@ -170,6 +171,9 @@ export default {
       this.canvas.renderAll();
       this.canvas.calcOffset();
     },
+    selectedTool(newValue, oldValue) {
+      console.log(`Updating from ${oldValue} to ${newValue}`);
+    }
   },
 };
 

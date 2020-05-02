@@ -19,21 +19,15 @@ export default {
   data() {
     return {
       selected: "pencil",
-      pencil: {
-        width: 10,
-        color: "(187, 187, 187)",
-      },
-      pan: {
-      },
-      text: {
-      },
     };
   },
   methods: {
     select: function (element) {
-      this.selected = element;
-      this.$store.commit('selectTool', element)
-      console.log(this.$store.state.selectedTool)
+      if (this.selected != element) {
+        this.selected = element;
+        this.$store.commit('selectTool', element)
+        console.log(this.$store.state.selectedTool)
+      }
     }
   },
 };
