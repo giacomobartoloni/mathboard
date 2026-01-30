@@ -1,0 +1,10 @@
+# robots.txt for MathBoard
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://mathboard.app/sitemap.xml
+
+# Disallow admin or private areas if any
+# User-agent: *
+# Disallow: /admin/

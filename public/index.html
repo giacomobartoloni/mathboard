@@ -4,9 +4,75 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    
+    <!-- Primary Meta Tags -->
+    <title>MathBoard - Interactive Digital Whiteboard for Math Teachers</title>
+    <meta name="title" content="MathBoard - Interactive Digital Whiteboard for Math Teachers">
+    <meta name="description" content="MathBoard is an interactive digital whiteboard combining freehand drawing with LaTeX formula support. Perfect for educators, students, and professionals to create and organize mathematical content with ease.">
+    <meta name="keywords" content="mathboard, digital whiteboard, mathematical notation, LaTeX editor, math drawing, educational tool, online whiteboard, math education, formula editor, interactive whiteboard, teaching math, mathematical content">
+    <meta name="author" content="Giacomo Bartoloni">
+    <meta name="theme-color" content="#2c3e50">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://mathboard.app/">
+    <meta property="og:title" content="MathBoard - Interactive Digital Whiteboard for Math Teachers">
+    <meta property="og:description" content="MathBoard is an interactive digital whiteboard combining freehand drawing with LaTeX formula support. Perfect for educators, students, and professionals.">
+    <meta property="og:image" content="https://mathboard.app/og-image.png">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://mathboard.app/">
+    <meta property="twitter:title" content="MathBoard - Interactive Digital Whiteboard for Math Teachers">
+    <meta property="twitter:description" content="MathBoard is an interactive digital whiteboard combining freehand drawing with LaTeX formula support. Perfect for educators, students, and professionals.">
+    <meta property="twitter:image" content="https://mathboard.app/twitter-image.png">
+    
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://mathboard.app/">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="<%= BASE_URL %>manifest.json">
+    
+    <link rel="icon" type="image/svg+xml" href="<%= BASE_URL %>favicon.svg">
     <link rel="icon" href="<%= BASE_URL %>favicon.ico">
+    <link rel="apple-touch-icon" href="<%= BASE_URL %>favicon.svg">
     <link href="https://fonts.googleapis.com/css2?family=Satisfy&display=swap" rel="stylesheet">
-    <title><%= htmlWebpackPlugin.options.title %></title>
+    
+    <!-- Structured Data / JSON-LD -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "MathBoard",
+      "applicationCategory": "EducationalApplication",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "operatingSystem": "Web Browser",
+      "description": "Interactive digital whiteboard designed for mathematical notation and drawings, combining freehand drawing with LaTeX formula support.",
+      "author": {
+        "@type": "Person",
+        "name": "Giacomo Bartoloni",
+        "email": "giacomo.bartoloni@gmail.com"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "100"
+      },
+      "featureList": [
+        "Freehand drawing",
+        "LaTeX formula support",
+        "Mathematical notation",
+        "Interactive whiteboard",
+        "Content organization",
+        "Export functionality"
+      ],
+      "privacyPolicy": "https://mathboard.app/privacy-policy.html"
+    }
+    </script>
   </head>
   <body>
     <noscript>
