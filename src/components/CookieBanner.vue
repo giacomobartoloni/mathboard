@@ -135,10 +135,10 @@ export default {
   bottom: 0;
   left: 0;
   right: 0;
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  background: var(--cookie-bg);
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   z-index: 9999;
-  border-top: 3px solid #2c3e50;
+  border-top: 3px solid var(--cookie-border-top);
 }
 
 .cookie-content {
@@ -163,14 +163,14 @@ export default {
 
 .cookie-text h3 {
   margin: 0 0 8px 0;
-  color: #2c3e50;
+  color: var(--cookie-heading);
   font-size: 20px;
   font-weight: 600;
 }
 
 .cookie-text p {
   margin: 0 0 8px 0;
-  color: #555;
+  color: var(--cookie-text);
   line-height: 1.6;
   font-size: 14px;
 }
@@ -193,7 +193,7 @@ export default {
 .cookie-details {
   margin-top: 12px;
   padding: 12px;
-  background: rgba(0, 0, 0, 0.03);
+  background: var(--cookie-details-bg);
   border-radius: 6px;
   font-size: 13px;
 }
@@ -205,7 +205,7 @@ export default {
 
 .cookie-details li {
   margin: 4px 0;
-  color: #555;
+  color: var(--cookie-text);
 }
 
 .cookie-details a {

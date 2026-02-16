@@ -139,13 +139,12 @@ export default {
   left: 12px;
   top: max(15vh, 100px);
 
-  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
-  color: #3d3d3d;
+  background: var(--panel-bg);
+  color: var(--panel-color);
   border-radius: 8px;
   padding: 8px 6px;
   border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-              0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--panel-shadow);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -157,18 +156,18 @@ export default {
   position: relative;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #555;
+  color: var(--panel-icon-color);
 }
 
 .tools-panel > div:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--panel-hover-bg);
   transform: translateY(-1px);
 }
 
 .tools-panel > div.selected {
-  background-color: tan;
-  color: rgb(61, 61, 61);
-  box-shadow: 0 2px 8px rgba(210, 180, 140, 0.5);
+  background-color: var(--panel-selected-bg);
+  color: var(--panel-selected-color);
+  box-shadow: var(--panel-selected-shadow);
 }
 
 .history-panel {
@@ -177,13 +176,12 @@ export default {
   left: 12px;
   top: calc(max(15vh, 100px) + 300px);
 
-  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
-  color: #3d3d3d;
+  background: var(--panel-bg);
+  color: var(--panel-color);
   border-radius: 8px;
   padding: 8px 6px;
   border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-              0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--panel-shadow);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -194,11 +192,11 @@ export default {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #555;
+  color: var(--panel-icon-color);
 }
 
 .history-panel > div:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--panel-hover-bg);
   transform: translateY(-1px);
 }
 
@@ -207,15 +205,14 @@ export default {
   left: 100%;
   top: -2px;
   margin-left: 10px;
-  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  background: var(--panel-bg);
   border: none;
   border-radius: 8px;
   display: flex;
   flex-direction: row;
   padding: 6px 4px;
   white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-              0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--panel-shadow);
 }
 
 .shapes-submenu > div {
@@ -223,17 +220,17 @@ export default {
   border-radius: 5px;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #555;
+  color: var(--panel-icon-color);
 }
 
 .shapes-submenu > div:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--panel-hover-bg);
   transform: translateY(-1px);
 }
 
 .shapes-submenu > div.selected-shape {
-  background-color: tan;
-  color: rgb(61, 61, 61);
+  background-color: var(--panel-selected-bg);
+  color: var(--panel-selected-color);
   box-shadow: 0 2px 6px rgba(210, 180, 140, 0.5);
 }
 

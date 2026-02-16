@@ -44,6 +44,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </button>
     
     <div class="zoom-level">{{ zoomPercentage }}%</div>
+
+    <div class="divider"></div>
+
+    <button 
+      class="zoom-button dark-mode-toggle" 
+      @click="$emit('toggle-dark-mode')" 
+      :title="isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+    >
+      <font-awesome-icon :icon="['fas', isDarkMode ? 'sun' : 'moon']" />
+    </button>
   </div>
 </template>
 
@@ -54,6 +64,10 @@ export default {
     zoomLevel: {
       type: Number,
       default: 1
+    },
+    isDarkMode: {
+      type: Boolean,
+      default: false
     }
   },
   computed: {
@@ -71,11 +85,10 @@ export default {
   right: 150px;
   bottom: 12px;
   
-  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  background: var(--panel-bg);
   border-radius: 8px;
   padding: 8px 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-              0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--panel-shadow);
   display: flex;
   gap: 6px;
   align-items: center;
@@ -100,10 +113,11 @@ export default {
   align-items: center;
   justify-content: center;
   min-width: 40px;
+  color: var(--panel-icon-color);
 }
 
 .zoom-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--panel-hover-bg);
   transform: translateY(-1px);
 }
 
@@ -114,18 +128,35 @@ export default {
 .zoom-button.reset {
   font-size: 12px;
   font-weight: 600;
-  color: #333;
+  color: var(--zoom-reset-color);
 }
 
 .zoom-level {
   font-size: 12px;
   font-weight: 600;
-  color: #666;
-  padding: 0 8px;
+  color: var(--zoom-level-color);
+  padding: 4px 8px;
   min-width: 45px;
   text-align: center;
-  background-color: rgba(0, 0, 0, 0.03);
+  background-color: var(--zoom-level-bg);
   border-radius: 4px;
-  padding: 4px 8px;
+}
+
+.divider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--modal-border);
+  margin: 0 2px;
+}
+
+.dark-mode-toggle {
+  font-size: 14px;
+  min-width: 36px;
+  padding: 8px 10px;
+  color: var(--panel-icon-color);
+}
+
+.dark-mode-toggle:hover {
+  color: #f5a623;
 }
 </style>

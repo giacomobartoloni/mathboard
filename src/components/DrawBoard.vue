@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, util, FabricImage } from "fabric";
+import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, util, FabricImage, filters } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
@@ -72,6 +72,7 @@ export default {
     id: { type: String, required: false, default: "c" },
     selectedTool: { type: String, default: "pencil" },
     selectedShape: { type: String, default: "rectangle" },
+    isDarkMode: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -113,10 +114,13 @@ export default {
       patternCanvas.width = GRID_SIZE;
       patternCanvas.height = GRID_SIZE;
       
-      ctx.fillStyle = '#f9f9f9';
+      const bgColor = this.isDarkMode ? '#1e1e22' : '#f9f9f9';
+      const lineColor = this.isDarkMode ? '#333338' : '#e0e0e0';
+      
+      ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
       
-      ctx.strokeStyle = '#e0e0e0';
+      ctx.strokeStyle = lineColor;
       ctx.lineWidth = 1;
       
       ctx.beginPath();
@@ -307,6 +311,12 @@ export default {
             img.latex = formulaData.latex;
             img.formulaType = 'katex-formula';
             
+            // Apply invert filter if dark mode is active
+            if (this.isDarkMode) {
+              img.filters = [new filters.Invert()];
+              img.applyFilters();
+            }
+            
             this.canvas.add(img);
             this.canvas.setActiveObject(img);
             this.canvas.requestRenderAll();
@@ -397,7 +407,7 @@ export default {
     createShape(x, y, width, height) {
       const commonProps = {
         fill: 'transparent',
-        stroke: '#000000',
+        stroke: this.isDarkMode ? 'whitesmoke' : '#000000',
         strokeWidth: 2,
         selectable: true
       };
@@ -434,7 +444,7 @@ export default {
         left: pointer.x,
         top: pointer.y,
         fontSize: DEFAULT_TEXT_CONFIG.fontSize,
-        fill: DEFAULT_TEXT_CONFIG.fill,
+        fill: this.isDarkMode ? 'whitesmoke' : DEFAULT_TEXT_CONFIG.fill,
         fontFamily: DEFAULT_TEXT_CONFIG.fontFamily,
         editable: true,
         selectable: true,
@@ -587,7 +597,7 @@ export default {
     },
     initializeBrush() {
       const brush = new PencilBrush(this.canvas);
-      brush.color = DEFAULT_BRUSH_CONFIG.color;
+      brush.color = this.isDarkMode ? 'whitesmoke' : DEFAULT_BRUSH_CONFIG.color;
       brush.width = DEFAULT_BRUSH_CONFIG.width;
       brush.shadow = new Shadow({
         blur: DEFAULT_BRUSH_CONFIG.shadowBlur,
@@ -728,6 +738,37 @@ export default {
         case 'shapes':
           this.enableShapeDrawing();
           break;
+      }
+    },
+    isDarkMode() {
+      if (this.canvas) {
+        this.setBackgroundPattern();
+        // Update brush color directly on the existing brush
+        const newColor = this.isDarkMode ? 'whitesmoke' : '#000000';
+        const oldColor = this.isDarkMode ? '#000000' : 'whitesmoke';
+        if (this.canvas.freeDrawingBrush) {
+          this.canvas.freeDrawingBrush.color = newColor;
+        }
+        // Swap colors on all existing objects
+        this.canvas.forEachObject((obj) => {
+          // Invert formula images
+          if (obj.formulaType === 'katex-formula') {
+            if (this.isDarkMode) {
+              obj.filters = [new filters.Invert()];
+            } else {
+              obj.filters = [];
+            }
+            obj.applyFilters();
+          } else {
+            if (obj.stroke && obj.stroke.toLowerCase() === oldColor.toLowerCase()) {
+              obj.set('stroke', newColor);
+            }
+            if (obj.fill && obj.fill.toLowerCase() === oldColor.toLowerCase()) {
+              obj.set('fill', newColor);
+            }
+          }
+        });
+        this.canvas.requestRenderAll();
       }
     },
   },

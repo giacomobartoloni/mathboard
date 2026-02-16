@@ -104,11 +104,10 @@ export default {
   right: 12px;
   bottom: 12px;
   
-  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  background: var(--panel-bg);
   border-radius: 8px;
   padding: 8px 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-              0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--panel-shadow);
   display: flex;
   gap: 8px;
   align-items: center;
@@ -133,10 +132,11 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  color: var(--panel-icon-color);
 }
 
 .about-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--panel-hover-bg);
   transform: translateY(-1px);
 }
 
@@ -149,7 +149,7 @@ export default {
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #555;
+  color: var(--panel-icon-color);
   text-decoration: none;
   font-size: 14px;
 }
@@ -164,7 +164,7 @@ export default {
 }
 
 .support-panel a:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--panel-hover-bg);
   transform: translateY(-1px);
   color: #FFDD00;
 }
@@ -184,7 +184,7 @@ export default {
 }
 
 .modal-content {
-  background: white;
+  background: var(--about-modal-bg);
   border-radius: 12px;
   padding: 30px;
   max-width: 500px;
@@ -203,7 +203,7 @@ export default {
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: #666;
+  color: var(--close-btn-color);
   width: 32px;
   height: 32px;
   display: flex;
@@ -214,27 +214,27 @@ export default {
 }
 
 .close-button:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-  color: #000;
+  background-color: var(--close-btn-hover-bg);
+  color: var(--modal-text);
 }
 
 .modal-content h2 {
   margin: 0 0 5px 0;
-  color: #2c3e50;
+  color: var(--modal-text);
   font-size: 28px;
   font-family: 'Satisfy', cursive;
 }
 
 .version {
   margin: 0 0 20px 0;
-  color: #666;
+  color: var(--zoom-level-color);
   font-size: 14px;
 }
 
 .about-text {
   margin-bottom: 25px;
   line-height: 1.6;
-  color: #333;
+  color: var(--about-text-color);
   text-align: left;
 }
 
@@ -243,7 +243,7 @@ export default {
 }
 
 .opensource-section {
-  background: linear-gradient(135deg, #f0f7ff 0%, #e3f0ff 100%);
+  background: var(--about-section-bg);
   padding: 20px;
   border-radius: 8px;
   text-align: left;
@@ -252,7 +252,7 @@ export default {
 
 .opensource-section p {
   margin: 0 0 10px 0;
-  color: #333;
+  color: var(--about-text-color);
 }
 
 .opensource-section p:last-of-type {
@@ -260,7 +260,7 @@ export default {
 }
 
 .feedback-section {
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  background: var(--feedback-section-bg);
   padding: 20px;
   border-radius: 8px;
   text-align: left;
@@ -269,7 +269,7 @@ export default {
 
 .feedback-section p {
   margin: 0 0 10px 0;
-  color: #333;
+  color: var(--about-text-color);
 }
 
 .feedback-section p:last-child {
@@ -299,8 +299,8 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: white;
-  border: 1px solid #dee2e6;
+  background: var(--contact-link-bg);
+  border: 1px solid var(--contact-link-border);
   border-radius: 6px;
   color: #007bff;
   text-decoration: none;
@@ -323,12 +323,12 @@ export default {
   text-align: center;
   margin-top: 20px;
   padding: 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--separator-color);
 }
 
 .coffee-section p {
   margin: 0 0 15px 0;
-  color: #555;
+  color: var(--modal-label-color);
   font-size: 14px;
 }
 
@@ -361,12 +361,12 @@ export default {
   text-align: center;
   padding: 15px 20px 0;
   margin-top: 15px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--separator-color);
   font-size: 13px;
 }
 
 .legal-links a {
-  color: #666;
+  color: var(--zoom-level-color);
   text-decoration: none;
   transition: color 0.2s ease;
 }
