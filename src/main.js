@@ -32,6 +32,8 @@ import { faShapes } from '@fortawesome/free-solid-svg-icons'
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons'
 import { faHeart } from '@fortawesome/free-solid-svg-icons'
 import { faCodeBranch } from '@fortawesome/free-solid-svg-icons'
+import { faMoon } from '@fortawesome/free-solid-svg-icons'
+import { faSun } from '@fortawesome/free-solid-svg-icons'
 import { faHandPaper } from '@fortawesome/free-regular-svg-icons'
 import { faSquare } from '@fortawesome/free-regular-svg-icons'
 import { faCircle } from '@fortawesome/free-regular-svg-icons'
@@ -52,6 +54,8 @@ library.add(faPencilAlt)
 library.add(faUndo)
 library.add(faRedo)
 library.add(faCodeBranch)
+library.add(faMoon)
+library.add(faSun)
 library.add(faGithub)
 
 const app = createApp(App)
