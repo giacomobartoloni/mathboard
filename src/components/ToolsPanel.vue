@@ -73,6 +73,41 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </div>
         </transition>
       </div>
+
+      <div class="color-control">
+        <button
+          type="button"
+          class="color-indicator"
+          :class="{ white: displayColor === '#ffffff' }"
+          :style="{ background: displayColor }"
+          aria-label="Pen color"
+          :aria-expanded="paletteOpen ? 'true' : 'false'"
+          @click="paletteOpen = !paletteOpen"
+        ></button>
+        <div v-if="paletteOpen" class="color-popover" role="group" aria-label="Pen colors">
+          <button
+            v-for="preset in colorPresets"
+            :key="preset.id"
+            type="button"
+            class="swatch"
+            :class="{ selected: selectedColor === preset.value, white: preset.value === '#ffffff' }"
+            :style="{ background: preset.value }"
+            :aria-label="preset.label"
+            :aria-pressed="selectedColor === preset.value"
+            @click="chooseColor(preset.value)"
+          ></button>
+          <label class="custom-color">
+            Custom
+            <input
+              type="color"
+              :value="displayColor"
+              aria-label="Custom color"
+              @input="chooseCustomColor($event.target.value)"
+            />
+          </label>
+        </div>
+      </div>
+
     </div>
     
     <div class="history-panel">
@@ -87,12 +122,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
+import { COLOR_PRESETS, normalizeHexColor } from '../config/colors.js'
+
 export default {
   name: "ToolsPanel",
   props: {
     selectedTool: {
       type: String,
       default: 'select'
+    },
+    selectedColor: {
+      type: String,
+      default: null
+    },
+    displayColor: {
+      type: String,
+      default: '#000000'
     }
   },
   data() {
@@ -100,6 +145,8 @@ export default {
       selected: "select",
       selectedShape: "rectangle",
       showShapesSubmenu: false,
+      paletteOpen: false,
+      colorPresets: COLOR_PRESETS,
       pencil: {
         width: 10,
         color: "(187, 187, 187)",
@@ -121,6 +168,14 @@ export default {
     selectShape: function (shape) {
       this.selectedShape = shape;
       this.$emit('shape-selected', shape);
+    },
+    chooseColor(value) {
+      this.$emit('color-selected', value);
+      this.paletteOpen = false;
+    },
+    chooseCustomColor(value) {
+      const normalized = normalizeHexColor(value);
+      if (normalized) this.$emit('color-selected', normalized);
     }
   },
   watch: {
@@ -174,7 +229,7 @@ export default {
   position: absolute;
   z-index: 10;
   left: 12px;
-  top: calc(max(15vh, 100px) + 300px);
+  top: calc(max(15vh, 100px) + 360px);
 
   background: var(--surface-primary);
   color: var(--text-primary);
@@ -250,5 +305,77 @@ export default {
 
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+.tools-panel > div.color-control:hover {
+  transform: none;
+  background: transparent;
+}
+
+.color-control {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.color-indicator {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-indicator.white,
+.swatch.white {
+  border: 1px solid var(--border-color);
+}
+
+.color-popover {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-left: 10px;
+  background: var(--surface-primary);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  width: 148px;
+  box-shadow: var(--panel-shadow);
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.swatch.selected {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.custom-color {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.custom-color input[type="color"] {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
 }
 </style>

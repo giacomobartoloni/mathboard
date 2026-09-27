@@ -28,7 +28,7 @@ import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, util, 
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
-import { BOARD_THEMES, INK_MODE_AUTO, normalizeBoardTheme } from "../config/themes";
+import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
 
 // Custom Fabric properties that must be serialized with canvas state (history).
 const SERIALIZED_CUSTOM_PROPS = [
@@ -89,6 +89,7 @@ export default {
     selectedTool: { type: String, default: "pencil" },
     selectedShape: { type: String, default: "rectangle" },
     boardTheme: { type: String, default: "light" },
+    selectedColor: { type: String, default: null },
   },
   data() {
     return {
@@ -190,8 +191,14 @@ export default {
       img.filters = shouldInvert ? [new filters.Invert()] : [];
       img.applyFilters();
     },
-    markPathAutoInk({ path }) {
-      path.mathboardInkMode = INK_MODE_AUTO;
+    markPathInk({ path }) {
+      if (!path) return;
+      path.mathboardInkMode = this.inkMode;
+    },
+    applyBrushColor() {
+      if (this.canvas?.freeDrawingBrush) {
+        this.canvas.freeDrawingBrush.color = this.activeInk;
+      }
     },
     createEvents() {
       CANVAS_EVENTS.forEach((event) => {
@@ -444,7 +451,7 @@ export default {
     createShape(x, y, width, height) {
       const commonProps = {
         fill: 'transparent',
-        stroke: this.boardThemeConfig.defaultInk,
+        stroke: this.activeInk,
         strokeWidth: 2,
         selectable: true
       };
@@ -474,8 +481,8 @@ export default {
         });
       }
 
-      // Created with the board default ink: it must follow future board changes.
-      shape.mathboardInkMode = INK_MODE_AUTO;
+      // Explicit palette ink stays fixed. Automatic ink still follows the board theme.
+      shape.mathboardInkMode = this.inkMode;
       return shape;
     },
     addText(opt) {
@@ -486,7 +493,7 @@ export default {
         left: pointer.x,
         top: pointer.y,
         fontSize: DEFAULT_TEXT_CONFIG.fontSize,
-        fill: this.boardThemeConfig.defaultInk,
+        fill: this.activeInk,
         fontFamily: DEFAULT_TEXT_CONFIG.fontFamily,
         editable: true,
         selectable: true,
@@ -503,8 +510,8 @@ export default {
         lockSkewingY: false
       });
       
-      // Created with the board default ink: it must follow future board changes.
-      text.mathboardInkMode = INK_MODE_AUTO;
+      // Explicit palette ink stays fixed. Automatic ink still follows the board theme.
+      text.mathboardInkMode = this.inkMode;
       
       this.canvas.add(text);
       this.canvas.setActiveObject(text);
@@ -664,8 +671,8 @@ export default {
     },
     initializeBrush() {
       const brush = new PencilBrush(this.canvas);
-      // Ink for new strokes follows the active board theme.
-      brush.color = this.boardThemeConfig.defaultInk;
+      // Explicit palette ink wins; otherwise new strokes follow the board theme.
+      brush.color = this.activeInk;
       brush.width = DEFAULT_BRUSH_CONFIG.width;
       brush.shadow = new Shadow({
         blur: DEFAULT_BRUSH_CONFIG.shadowBlur,
@@ -680,7 +687,7 @@ export default {
       // Pencil strokes are Path objects built by the brush. "before:path:created"
       // fires before the path is added to the canvas, so the ink mode is already
       // set when "object:added" triggers the history snapshot.
-      this.canvas.on('before:path:created', this.markPathAutoInk);
+      this.canvas.on('before:path:created', this.markPathInk);
 
       this.canvas.on('object:added', this.saveState);
       this.canvas.on('object:modified', this.saveState);
@@ -723,11 +730,18 @@ export default {
     boardThemeConfig() {
       return BOARD_THEMES[normalizeBoardTheme(this.boardTheme)];
     },
+    activeInk() {
+      return this.selectedColor || this.boardThemeConfig.defaultInk;
+    },
+    inkMode() {
+      return this.selectedColor ? INK_MODE_FIXED : INK_MODE_AUTO;
+    },
     definedProps() {
       const obj = { ...this.$props };
       // boardTheme is a presentation-only prop; it must never reach the Fabric
       // Canvas constructor options.
       delete obj.boardTheme;
+      delete obj.selectedColor;
       Object.keys(obj).forEach((key) => {
         if (obj[key] === undefined) {
           delete obj[key];
@@ -753,7 +767,7 @@ export default {
       this.canvas.off(event);
     });
     
-    this.canvas.off('before:path:created', this.markPathAutoInk);
+    this.canvas.off('before:path:created', this.markPathInk);
     this.canvas.off('object:added', this.saveState);
     this.canvas.off('object:modified', this.saveState);
     this.canvas.off('object:removed', this.saveState);
@@ -778,6 +792,9 @@ export default {
       this.canvas.renderAll();
       this.canvas.calcOffset();
     },
+    selectedColor() {
+      this.applyBrushColor();
+    },
     boardTheme() {
       if (!this.canvas) return;
       
@@ -786,9 +803,7 @@ export default {
       // default ink. Explicitly colored objects are never touched and no history
       // entry is pushed.
       this.setBackgroundPattern();
-      if (this.canvas.freeDrawingBrush) {
-        this.canvas.freeDrawingBrush.color = this.boardThemeConfig.defaultInk;
-      }
+      this.applyBrushColor();
       this.syncAutoInk(this.boardThemeConfig);
       this.canvas.requestRenderAll();
     },

@@ -27,12 +27,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       :selectedTool="selectedTool" 
       :selectedShape="selectedShape" 
       :board-theme="boardTheme"
+      :selected-color="selectedColor"
       ref="drawBoardRef"
       @request-formula="onRequestFormula"
       @edit-formula="onEditFormula"
       @text-editing-completed="onTextEditingCompleted"
     />
-    <ToolsPanel :selectedTool="selectedTool" @tool-selected="onToolSelected" @shape-selected="onShapeSelected" @undo="onUndo" @redo="onRedo" />
+    <ToolsPanel :selectedTool="selectedTool" :selected-color="selectedColor" :display-color="displayColor" @tool-selected="onToolSelected" @shape-selected="onShapeSelected" @color-selected="onColorSelected" @undo="onUndo" @redo="onRedo" />
     
     <FormulaModal 
       :isVisible="showFormulaModal"
@@ -59,7 +60,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 import FormulaModal from './components/FormulaModal.vue'
@@ -67,12 +68,15 @@ import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import CookieBanner from './components/CookieBanner.vue'
 import {
+  BOARD_THEMES,
   loadThemePreferences,
+  normalizeBoardTheme,
   saveUiTheme,
   saveBoardTheme,
   cycleBoardTheme,
   uiThemeForBoardTheme,
 } from './config/themes'
+import { normalizeHexColor } from './config/colors'
 import {
   isDeleteShortcut,
   isEscapeShortcut,
@@ -98,6 +102,15 @@ export default {
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
     const uiTheme = ref(initialUiTheme)
     const boardTheme = ref(initialBoardTheme)
+    const selectedColor = ref(null)
+    const displayColor = computed(() => (
+      selectedColor.value
+      ?? BOARD_THEMES[normalizeBoardTheme(boardTheme.value)].defaultInk
+    ))
+    const onColorSelected = (value) => {
+      const normalized = normalizeHexColor(value)
+      if (normalized) selectedColor.value = normalized
+    }
 
     const selectedTool = ref('select')
     const selectedShape = ref('rectangle')
@@ -142,7 +155,7 @@ export default {
         return
       }
 
-      if (shouldIgnoreGlobalShortcut(event) || drawBoardRef.value?.isTextEditing()) return
+      if (showFormulaModal.value || shouldIgnoreGlobalShortcut(event) || drawBoardRef.value?.isTextEditing()) return
 
       const toolId = isPlainToolKey(event)
       if (toolId) {
@@ -264,6 +277,9 @@ export default {
       onResetZoom,
       uiTheme,
       boardTheme,
+      selectedColor,
+      displayColor,
+      onColorSelected,
       onCycleTheme,
     }
   }
