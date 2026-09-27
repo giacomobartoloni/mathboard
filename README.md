@@ -11,7 +11,6 @@ MathBoard is an innovative digital whiteboard application specifically designed 
 - **Freehand Drawing**: Intuitive drawing tools for sketching mathematical diagrams and graphs
 - **LaTeX Formula Support**: Full LaTeX integration for professional mathematical notation
 - **Interactive Canvas**: Zoom, pan, and organize your mathematical content
-- **Export Functionality**: Save and share your work in various formats
 - **User-Friendly Interface**: Clean, modern design optimized for mathematical work
 
 ## Who Is It For?
@@ -25,27 +24,35 @@ MathBoard is specifically crafted for:
 ## Getting Started
 
 ### Project setup
+
+Install dependencies from the lockfile:
 ```
-yarn install
+npm ci
 ```
 
 ### Compiles and hot-reloads for development
 ```
-yarn serve
+npm run dev
 ```
 
 ### Compiles and minifies for production
 ```
-yarn build
+npm run build
 ```
 
-### Lints and fixes files
+The production build is written to `dist/`, the static asset directory Cloudflare serves (see `wrangler.json`).
+
+### Lints files
 ```
-yarn lint
+npm run lint
 ```
 
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+Reports lint errors without modifying files.
+
+### Preview production build
+```
+npm run preview
+```
 
 ## License
 
