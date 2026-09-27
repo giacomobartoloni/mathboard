@@ -48,28 +48,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button
       type="button"
       class="zoom-button theme-toggle"
-      :title="uiTheme === 'dark' ? 'Switch to light UI' : 'Switch to dark UI'"
-      :aria-label="uiTheme === 'dark' ? 'Switch to light UI' : 'Switch to dark UI'"
-      @click="$emit('toggle-ui-theme')"
+      :title="themeToggleLabel"
+      :aria-label="themeToggleLabel"
+      @click="$emit('cycle-theme')"
     >
-      <font-awesome-icon :icon="['fas', uiTheme === 'dark' ? 'sun' : 'moon']" />
+      <font-awesome-icon :icon="['fas', themeIcon]" />
     </button>
-    <select
-      class="board-theme-select"
-      :value="boardTheme"
-      title="Board theme"
-      aria-label="Board theme"
-      @change="$emit('board-theme-change', $event.target.value)"
-    >
-      <option v-for="option in boardThemeOptions" :key="option.value" :value="option.value">
-        {{ option.label }}
-      </option>
-    </select>
   </div>
 </template>
 
 <script>
-import { BOARD_THEMES, BOARD_THEME_ORDER } from '../config/themes'
+import { BOARD_THEMES, cycleBoardTheme, normalizeBoardTheme } from '../config/themes'
+
+const THEME_ICONS = {
+  light: 'sun',
+  dark: 'moon',
+  chalkboard: 'chalkboard',
+}
 
 export default {
   name: 'ZoomPanel',
@@ -78,25 +73,26 @@ export default {
       type: Number,
       default: 1
     },
-    uiTheme: {
-      type: String,
-      default: 'light'
-    },
     boardTheme: {
       type: String,
       default: 'light'
     }
   },
-  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'toggle-ui-theme', 'board-theme-change'],
+  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'cycle-theme'],
   computed: {
     zoomPercentage() {
       return Math.round(this.zoomLevel * 100)
     },
-    boardThemeOptions() {
-      return BOARD_THEME_ORDER.map((value) => ({
-        value,
-        label: BOARD_THEMES[value].label
-      }))
+    currentBoardTheme() {
+      return normalizeBoardTheme(this.boardTheme)
+    },
+    themeIcon() {
+      return THEME_ICONS[this.currentBoardTheme]
+    },
+    themeToggleLabel() {
+      const current = BOARD_THEMES[this.currentBoardTheme].label
+      const next = BOARD_THEMES[cycleBoardTheme(this.currentBoardTheme)].label
+      return `Theme: ${current} — click for ${next}`
     }
   }
 }
@@ -176,21 +172,5 @@ export default {
 
 .theme-toggle {
   color: var(--icon-color);
-}
-
-.board-theme-select {
-  background: var(--surface-muted);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.board-theme-select option {
-  background: var(--surface-muted);
-  color: var(--text-primary);
 }
 </style>

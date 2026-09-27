@@ -43,13 +43,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     
     <ZoomPanel 
       :zoomLevel="zoomLevel"
-      :ui-theme="uiTheme"
       :board-theme="boardTheme"
       @zoom-in="onZoomIn"
       @zoom-out="onZoomOut"
       @reset-zoom="onResetZoom"
-      @toggle-ui-theme="onToggleUiTheme"
-      @board-theme-change="onBoardThemeChange"
+      @cycle-theme="onCycleTheme"
     />
     
     <SupportPanel />
@@ -68,7 +66,13 @@ import FormulaModal from './components/FormulaModal.vue'
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import CookieBanner from './components/CookieBanner.vue'
-import { loadThemePreferences, saveUiTheme, saveBoardTheme } from './config/themes'
+import {
+  loadThemePreferences,
+  saveUiTheme,
+  saveBoardTheme,
+  cycleBoardTheme,
+  uiThemeForBoardTheme,
+} from './config/themes'
 
 export default {
   name: 'App',
@@ -81,7 +85,8 @@ export default {
     CookieBanner,
   },
   setup() {
-    // Presentation preferences only: they never modify Fabric document objects.
+    // Persisted presentation preferences. DrawBoard adapts objects authored with
+    // the automatic board ink when boardTheme changes; explicit ink stays put.
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
     const uiTheme = ref(initialUiTheme)
     const boardTheme = ref(initialBoardTheme)
@@ -103,14 +108,12 @@ export default {
       selectedShape.value = shape
     }
 
-    const onToggleUiTheme = () => {
-      uiTheme.value = uiTheme.value === 'dark' ? 'light' : 'dark'
+    const onCycleTheme = () => {
+      const nextBoard = cycleBoardTheme(boardTheme.value)
+      boardTheme.value = nextBoard
+      uiTheme.value = uiThemeForBoardTheme(nextBoard)
+      saveBoardTheme(nextBoard)
       saveUiTheme(uiTheme.value)
-    }
-
-    const onBoardThemeChange = (theme) => {
-      boardTheme.value = theme
-      saveBoardTheme(theme)
     }
 
     const onUndo = () => {
@@ -208,8 +211,7 @@ export default {
       onResetZoom,
       uiTheme,
       boardTheme,
-      onToggleUiTheme,
-      onBoardThemeChange,
+      onCycleTheme,
     }
   }
 }

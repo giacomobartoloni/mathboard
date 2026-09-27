@@ -20,11 +20,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /**
  * Theme configuration and preference persistence for Dark Mode v2.
  *
- * Two independent concepts:
- * - uiTheme: application chrome (panels, modals, controls). Never touches Fabric objects.
- * - boardTheme: canvas appearance (background, grid) and the DEFAULT ink used for
- *   objects created while that board theme is active. Existing document objects keep
- *   their own colors regardless of theme changes.
+ * Presentation is driven by boardTheme (light / dark / chalkboard). The chrome
+ * UI theme is derived from it (chalkboard uses dark chrome) so the two stay in
+ * sync via the single theme-toggle control.
+ *
+ * Board ink authorship is tracked per Fabric object via the custom property
+ * "mathboardInkMode" (see INK_MODE_AUTO / INK_MODE_FIXED). Objects authored with
+ * the board default ink follow the board theme; objects whose ink the user chose
+ * explicitly must never be rewritten by a theme change.
  *
  * Preferences are stored as explicit string values, never booleans.
  */
@@ -32,29 +35,62 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 export const UI_THEMES = ['light', 'dark'];
 export const DEFAULT_UI_THEME = 'light';
 
+/**
+ * Ink authorship stored on Fabric objects as the custom property "mathboardInkMode".
+ *
+ * - AUTO: the object was created with the board default ink and must follow the
+ *   board theme whenever it changes.
+ * - FIXED: the ink was chosen explicitly (pen palette, imported document); a board
+ *   theme change must leave it untouched.
+ */
+export const INK_MODE_AUTO = 'auto';
+export const INK_MODE_FIXED = 'fixed';
+
+/**
+ * `inkIsLight` states whether `defaultInk` is a light ink. Formula images are
+ * rasterized with the board ink and cannot be recolored, so they are adapted
+ * through a non-destructive Invert filter that depends on ink polarity.
+ */
 export const BOARD_THEMES = {
   light: {
     label: 'Light',
     background: '#f9f9f9',
     grid: '#e0e0e0',
     defaultInk: '#000000',
+    inkIsLight: false,
   },
   dark: {
     label: 'Dark',
     background: '#1e1e22',
     grid: '#333338',
     defaultInk: '#f5f5f5',
+    inkIsLight: true,
   },
   chalkboard: {
     label: 'Chalkboard',
     background: '#244a3b',
     grid: '#315e4c',
     defaultInk: '#f4f1de',
+    inkIsLight: true,
   },
 };
 
 export const BOARD_THEME_ORDER = ['light', 'dark', 'chalkboard'];
 export const DEFAULT_BOARD_THEME = 'light';
+
+/**
+ * Chrome UI paired with each board theme. Chalkboard keeps the dark chrome
+ * so panels stay readable against the green canvas.
+ */
+export function uiThemeForBoardTheme(boardTheme) {
+  return normalizeBoardTheme(boardTheme) === 'light' ? 'light' : 'dark';
+}
+
+export function cycleBoardTheme(current) {
+  const normalized = normalizeBoardTheme(current);
+  const index = BOARD_THEME_ORDER.indexOf(normalized);
+  return BOARD_THEME_ORDER[(index + 1) % BOARD_THEME_ORDER.length];
+}
 
 export const THEME_STORAGE_KEYS = {
   uiTheme: 'mathboard_ui_theme',
@@ -104,13 +140,13 @@ export function loadThemePreferences() {
   const storedUiTheme = readStoredValue(THEME_STORAGE_KEYS.uiTheme);
   const storedBoardTheme = readStoredValue(THEME_STORAGE_KEYS.boardTheme);
 
-  const uiTheme = storedUiTheme === null
-    ? (legacyDarkMode ? 'dark' : DEFAULT_UI_THEME)
-    : normalizeUiTheme(storedUiTheme);
-
   const boardTheme = storedBoardTheme === null
     ? (legacyDarkMode ? 'dark' : DEFAULT_BOARD_THEME)
     : normalizeBoardTheme(storedBoardTheme);
+
+  // Presentation is driven by boardTheme; chrome UI is derived so the two
+  // never drift (e.g. after the old independent toggle + select controls).
+  const uiTheme = uiThemeForBoardTheme(boardTheme);
 
   if (storedUiTheme !== uiTheme) {
     writeStoredValue(THEME_STORAGE_KEYS.uiTheme, uiTheme);
