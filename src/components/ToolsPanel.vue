@@ -335,7 +335,7 @@ export default {
 .color-popover {
   position: absolute;
   left: 100%;
-  top: 0;
+  bottom: 0;
   margin-left: 10px;
   background: var(--surface-primary);
   border-radius: 8px;
