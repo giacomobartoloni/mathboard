@@ -542,7 +542,9 @@ export default {
       const active = this.canvas.getActiveObject();
       if (!active || active.isEditing) return;
 
-      const targets = active.type === 'ActiveSelection'
+      // Fabric's type getter lowercases the class name, so a multi-selection
+      // reports "activeselection" rather than the ActiveSelection class name.
+      const targets = active.type === 'activeselection'
         ? [...active.getObjects()]
         : [active];
       if (targets.length === 0) return;
