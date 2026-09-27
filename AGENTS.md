@@ -6,16 +6,17 @@
 - **Vite 6** (`vite`), **npm** (migrated from Vue CLI 5 in feature/vite-migration)
 - **Fabric.js 6** (canvas drawing), **KaTeX** (LaTeX rendering), **html2canvas** (formula→canvas conversion)
 - **FontAwesome 6** global registration in `main.js`, used as `<font-awesome-icon :icon="['fas', 'name']" />`
-- **Firebase Hosting** (CI deploys hosting only) + **Cloudflare Workers** (wrangler.json serves `./dist` as static assets)
-- **No TypeScript, no tests, no typecheck** — lint is the only verification step
+- **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets. Firebase is not used in the runtime, build, or deploy
+- **No TypeScript, no tests, no typecheck** — verification is `npm run lint` plus `npm run build`
 
 ## Commands
 
 ```sh
-npm install          # install deps (not yarn)
+npm ci               # install deps from the lockfile (not yarn)
 npm run dev          # dev server with HMR (Vite)
 npm run build        # production build to dist/
-npm run lint         # eslint (vue3-essential + eslint:recommended)
+npm run preview      # serve the dist/ build locally
+npm run lint         # eslint (vue3-essential + eslint:recommended); reports, does not fix
 ```
 
 ## Architecture
@@ -38,9 +39,9 @@ npm run lint         # eslint (vue3-essential + eslint:recommended)
 
 ## Deployment
 
-- **GitHub Actions** (`.github/workflows/main.yml`): on push to master → `npm install && npm build` → `firebase deploy --only hosting`
-- Firebase functions (`functions/`) are legacy/stub on **Node 8** — not deployed, not used
-- Cloudflare Workers: `wrangler.json` configures `./dist` as static assets (manual deploy)
+- **GitHub Actions** (`.github/workflows/main.yml`) runs CI checks only, on push and pull request for `main` and `feature/vite-migration`: `npm ci`, `npm run lint`, `npm run build`. No deploy job, no secrets.
+- **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets.
+- Firebase is not used: no dependency, runtime import, or deploy step.
 
 ## Licensing
 
