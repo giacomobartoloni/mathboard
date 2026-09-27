@@ -125,7 +125,6 @@ export default {
         })
       };
       
-      console.log('FormulaModal emitting insert-formula:', formulaData);
       this.$emit('insert-formula', formulaData)
       
       this.closeModal()
@@ -177,7 +176,7 @@ export default {
 }
 
 .modal-content {
-  background: white;
+  background: var(--surface-secondary);
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
@@ -189,7 +188,7 @@ export default {
 
 .modal-header {
   padding: 20px 24px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -197,7 +196,7 @@ export default {
 
 .modal-header h3 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 20px;
   font-weight: 600;
 }
@@ -206,7 +205,7 @@ export default {
   background: none;
   border: none;
   font-size: 32px;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -219,8 +218,8 @@ export default {
 }
 
 .close-button:hover {
-  background-color: #f0f0f0;
-  color: #333;
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -237,20 +236,22 @@ export default {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #555;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 textarea {
   width: 100%;
   padding: 12px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 8px;
   font-family: 'Courier New', monospace;
   font-size: 14px;
   resize: vertical;
   transition: border-color 0.2s;
   box-sizing: border-box;
+  background: var(--surface-muted);
+  color: var(--text-primary);
 }
 
 textarea:focus {
@@ -268,40 +269,41 @@ textarea:focus {
 
 .example-label {
   font-size: 12px;
-  color: #777;
+  color: var(--text-muted);
   margin-right: 4px;
 }
 
 .example-btn {
   padding: 6px 12px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
-  color: #555;
+  color: var(--text-secondary);
 }
 
 .example-btn:hover {
-  background: #e8e8e8;
-  border-color: #ccc;
+  background: var(--hover-bg);
+  border-color: var(--border-color);
 }
 
 .preview-section label {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #555;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
 .preview-box {
   min-height: 100px;
   padding: 20px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-color);
   border-radius: 8px;
-  background-color: #fafafa;
+  background-color: var(--surface-muted);
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -309,7 +311,7 @@ textarea:focus {
 }
 
 .placeholder {
-  color: #999;
+  color: var(--text-placeholder);
   font-style: italic;
   font-size: 14px;
 }
@@ -325,7 +327,7 @@ textarea:focus {
 
 .modal-footer {
   padding: 16px 24px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -343,12 +345,12 @@ textarea:focus {
 }
 
 .btn-cancel {
-  background: #f5f5f5;
-  color: #555;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
 }
 
 .btn-cancel:hover {
-  background: #e8e8e8;
+  background: var(--hover-bg);
 }
 
 .btn-insert {
