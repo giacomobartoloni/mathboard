@@ -367,7 +367,19 @@ body {
 .copyright {
   position: absolute;
   bottom: 12px;
+  left: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  z-index: 1000;
+  white-space: nowrap;
+}
 
-[You have received this identical output 3 times. Re-reading '/Users/gbartoloni/projects/learning/mathboard/src/App.vue:raw' will not change it — use a narrower selector (path:A-B), or proceed with the edit.]
-
-[Showing lines 1-300 of 317. Use :301 to continue]
+@media (max-width: 768px) {
+  .copyright {
+    position: absolute;
+    bottom: 3px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+</style>
