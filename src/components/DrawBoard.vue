@@ -28,6 +28,7 @@ import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, util, 
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
+import { BOARD_THEMES, normalizeBoardTheme } from "../config/themes";
 
 // Constants
 const CANVAS_EVENTS = [
@@ -42,8 +43,9 @@ const CANVAS_EVENTS = [
 
 const GRID_SIZE = 40;
 const HISTORY_LIMIT = 50;
+// Ink colors deliberately omitted: the default ink follows the active board theme
+// for objects created afterwards (see boardThemeConfig().defaultInk).
 const DEFAULT_BRUSH_CONFIG = {
-  color: "#000000",
   width: 2,
   shadowBlur: 0,
   shadowOffsetX: 0,
@@ -54,7 +56,6 @@ const DEFAULT_BRUSH_CONFIG = {
 const DEFAULT_TEXT_CONFIG = {
   content: 'Text',
   fontSize: 32,
-  fill: '#000000',
   fontFamily: 'Arial'
 };
 
@@ -72,6 +73,7 @@ export default {
     id: { type: String, required: false, default: "c" },
     selectedTool: { type: String, default: "pencil" },
     selectedShape: { type: String, default: "rectangle" },
+    boardTheme: { type: String, default: "light" },
   },
   data() {
     return {
@@ -109,14 +111,15 @@ export default {
     createGridPattern() {
       const patternCanvas = document.createElement('canvas');
       const ctx = patternCanvas.getContext('2d');
-      
+
       patternCanvas.width = GRID_SIZE;
       patternCanvas.height = GRID_SIZE;
-      
-      ctx.fillStyle = '#f9f9f9';
+
+      // Board theme drives the board background and grid colors.
+      ctx.fillStyle = this.boardThemeConfig.background;
       ctx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
-      
-      ctx.strokeStyle = '#e0e0e0';
+
+      ctx.strokeStyle = this.boardThemeConfig.grid;
       ctx.lineWidth = 1;
       
       ctx.beginPath();
@@ -251,12 +254,9 @@ export default {
       if (this.selectedTool !== 'formula' || opt.target) return;
       
       const pointer = this.canvas.getPointer(opt.e);
-      console.log('Requesting formula at position:', pointer);
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
     addFormulaToCanvas(formulaData, position) {
-      console.log('addFormulaToCanvas called with:', formulaData, position);
-      
       // Create a temporary div to render the formula
       const tempDiv = document.createElement('div');
       tempDiv.style.position = 'absolute';
@@ -264,6 +264,9 @@ export default {
       tempDiv.style.fontSize = '15px';
       tempDiv.style.padding = '10px';
       tempDiv.style.backgroundColor = 'transparent';
+      // Ink for the newly created formula follows the active board theme.
+      // Existing formula objects are never recolored by theme switches.
+      tempDiv.style.color = this.boardThemeConfig.defaultInk;
       tempDiv.innerHTML = formulaData.html;
       document.body.appendChild(tempDiv);
       
@@ -271,16 +274,12 @@ export default {
       this.$nextTick(() => {
         setTimeout(async () => {
           try {
-            console.log('Rendering formula with html2canvas...');
-            
             // Use html2canvas to convert the div to a canvas
             const renderedCanvas = await html2canvas(tempDiv, {
               backgroundColor: null,
               scale: 2, // Higher quality
               logging: false
             });
-            
-            console.log('Canvas rendered:', renderedCanvas.width, 'x', renderedCanvas.height);
             
             // Create fabric image directly from the canvas element
             const img = new FabricImage(renderedCanvas, {
@@ -300,9 +299,6 @@ export default {
               lockSkewingY: false
             });
             
-            console.log('Fabric image created:', img.width, 'x', img.height);
-            console.log('Image controls:', img.hasControls, 'hasBorders:', img.hasBorders);
-            
             // Store latex data as custom property
             img.latex = formulaData.latex;
             img.formulaType = 'katex-formula';
@@ -310,10 +306,6 @@ export default {
             this.canvas.add(img);
             this.canvas.setActiveObject(img);
             this.canvas.requestRenderAll();
-            
-            console.log('Active object:', this.canvas.getActiveObject());
-            
-            console.log('Formula added successfully to canvas');
             
             // Clean up
             document.body.removeChild(tempDiv);
@@ -397,7 +389,9 @@ export default {
     createShape(x, y, width, height) {
       const commonProps = {
         fill: 'transparent',
-        stroke: '#000000',
+        // Ink for new shapes follows the active board theme. Existing shapes
+        // keep their document stroke colors; theme changes never rewrite them.
+        stroke: this.boardThemeConfig.defaultInk,
         strokeWidth: 2,
         selectable: true
       };
@@ -434,7 +428,9 @@ export default {
         left: pointer.x,
         top: pointer.y,
         fontSize: DEFAULT_TEXT_CONFIG.fontSize,
-        fill: DEFAULT_TEXT_CONFIG.fill,
+        // Ink for new text follows the active board theme. Existing text keeps
+        // its document fill; theme changes never rewrite it.
+        fill: this.boardThemeConfig.defaultInk,
         fontFamily: DEFAULT_TEXT_CONFIG.fontFamily,
         editable: true,
         selectable: true,
@@ -587,7 +583,8 @@ export default {
     },
     initializeBrush() {
       const brush = new PencilBrush(this.canvas);
-      brush.color = DEFAULT_BRUSH_CONFIG.color;
+      // Ink for new strokes follows the active board theme.
+      brush.color = this.boardThemeConfig.defaultInk;
       brush.width = DEFAULT_BRUSH_CONFIG.width;
       brush.shadow = new Shadow({
         blur: DEFAULT_BRUSH_CONFIG.shadowBlur,
@@ -638,8 +635,14 @@ export default {
     },
   },
   computed: {
+    boardThemeConfig() {
+      return BOARD_THEMES[normalizeBoardTheme(this.boardTheme)];
+    },
     definedProps() {
       const obj = { ...this.$props };
+      // boardTheme is a presentation-only prop; it must never reach the Fabric
+      // Canvas constructor options.
+      delete obj.boardTheme;
       Object.keys(obj).forEach((key) => {
         if (obj[key] === undefined) {
           delete obj[key];
@@ -689,6 +692,18 @@ export default {
       this.canvas.setWidth(newValue);
       this.canvas.renderAll();
       this.canvas.calcOffset();
+    },
+    boardTheme() {
+      if (!this.canvas) return;
+      
+      // Presentation-only update: repaint the grid/background and refresh the
+      // brush ink for FUTURE strokes. Existing objects keep their document
+      // colors and are never touched, and no history entry is pushed.
+      this.setBackgroundPattern();
+      if (this.canvas.freeDrawingBrush) {
+        this.canvas.freeDrawingBrush.color = this.boardThemeConfig.defaultInk;
+      }
+      this.canvas.requestRenderAll();
     },
     selectedTool(newTool) {
       if (!this.canvas) return;
