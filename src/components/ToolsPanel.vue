@@ -21,19 +21,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div>
     <div class="tools-panel">
       <!--     <img alt="Vue logo" src="../assets/logo.png" width="30px" /> -->
-      <div :class="{ selected: selected === 'select' }" @click="select('select')" title="Select">
+      <div :class="{ selected: selected === 'select' }" @click="select('select')" title="Select (V)">
         <font-awesome-icon :icon="['fas', 'mouse-pointer']" />
       </div>
-      <div :class="{ selected: selected === 'pan' }" @click="select('pan')" title="Pan">
+      <div :class="{ selected: selected === 'pan' }" @click="select('pan')" title="Pan (H)">
         <font-awesome-icon :icon="['far', 'hand-paper']" />
       </div>
-      <div :class="{ selected: selected === 'pencil' }" @click="select('pencil')" title="Pencil">
+      <div :class="{ selected: selected === 'pencil' }" @click="select('pencil')" title="Pen (P)">
         <font-awesome-icon :icon="['fas', 'pencil-alt']" />
       </div>
-      <div :class="{ selected: selected === 'font' }" @click="select('font')" title="Text">
+      <div :class="{ selected: selected === 'font' }" @click="select('font')" title="Text (T)">
         <font-awesome-icon :icon="['fas', 'font']" />
       </div>
-      <div :class="{ selected: selected === 'formula' }" @click="select('formula')" title="Formula">
+      <div :class="{ selected: selected === 'formula' }" @click="select('formula')" title="Formula (F)">
         <font-awesome-icon :icon="['fas', 'square-root-alt']" />
       </div>
       <div 
@@ -41,7 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @click="select('shapes')"
         @mouseenter="showShapesSubmenu = true"
         @mouseleave="showShapesSubmenu = false"
-        title="Shapes"
+        title="Shapes (S)"
       >
         <font-awesome-icon :icon="['fas', 'shapes']" />
         
@@ -79,7 +79,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <div @click="$emit('undo')" title="Undo (Ctrl+Z)">
         <font-awesome-icon :icon="['fas', 'undo']" />
       </div>
-      <div @click="$emit('redo')" title="Redo (Ctrl+Y)">
+      <div @click="$emit('redo')" title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
         <font-awesome-icon :icon="['fas', 'redo']" />
       </div>
     </div>

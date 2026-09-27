@@ -59,7 +59,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 import FormulaModal from './components/FormulaModal.vue'
@@ -73,6 +73,14 @@ import {
   cycleBoardTheme,
   uiThemeForBoardTheme,
 } from './config/themes'
+import {
+  isDeleteShortcut,
+  isEscapeShortcut,
+  isPlainToolKey,
+  isRedoShortcut,
+  isUndoShortcut,
+  shouldIgnoreGlobalShortcut,
+} from './config/shortcuts'
 
 export default {
   name: 'App',
@@ -115,6 +123,51 @@ export default {
       saveBoardTheme(nextBoard)
       saveUiTheme(uiTheme.value)
     }
+
+    const onKeyDown = (event) => {
+      if (isEscapeShortcut(event)) {
+        if (showFormulaModal.value) {
+          showFormulaModal.value = false
+          event.preventDefault()
+          return
+        }
+        if (drawBoardRef.value?.isTextEditing()) {
+          drawBoardRef.value.exitTextEditing()
+          event.preventDefault()
+          return
+        }
+        if (shouldIgnoreGlobalShortcut(event)) return
+        drawBoardRef.value?.cancelTransientAction()
+        event.preventDefault()
+        return
+      }
+
+      if (shouldIgnoreGlobalShortcut(event) || drawBoardRef.value?.isTextEditing()) return
+
+      const toolId = isPlainToolKey(event)
+      if (toolId) {
+        event.preventDefault()
+        onToolSelected(toolId)
+        return
+      }
+      if (isDeleteShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.deleteSelection()
+        return
+      }
+      if (isUndoShortcut(event)) {
+        event.preventDefault()
+        onUndo()
+        return
+      }
+      if (isRedoShortcut(event)) {
+        event.preventDefault()
+        onRedo()
+      }
+    }
+
+    onMounted(() => window.addEventListener('keydown', onKeyDown))
+    onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
     const onUndo = () => {
       drawBoardRef.value?.undo()
@@ -298,19 +351,7 @@ body {
 .copyright {
   position: absolute;
   bottom: 12px;
-  left: 12px;
-  color: var(--text-muted);
-  font-size: 12px;
-  z-index: 1000;
-  white-space: nowrap;
-}
 
-@media (max-width: 768px) {
-  .copyright {
-    position: absolute;
-    bottom: 3px;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-}
-</style>
+[You have received this identical output 3 times. Re-reading '/Users/gbartoloni/projects/learning/mathboard/src/App.vue:raw' will not change it — use a narrower selector (path:A-B), or proceed with the edit.]
+
+[Showing lines 1-300 of 317. Use :301 to continue]

@@ -103,6 +103,7 @@ export default {
       historyStep: 0,
       isRedoing: false,
       isUndoing: false,
+      suspendHistory: false,
       isDrawingShape: false,
       shapeStartX: 0,
       shapeStartY: 0,
@@ -529,50 +530,66 @@ export default {
         this.$emit('text-editing-completed');
       });
     },
-    handleDelete(activeObject) {
-      if (!activeObject) return;
-      
-      // Don't delete if text is being edited
-      if (activeObject.isEditing) {
-        return;
+    deleteSelection() {
+      if (!this.canvas) return;
+      const active = this.canvas.getActiveObject();
+      if (!active || active.isEditing) return;
+
+      const targets = active.type === 'ActiveSelection'
+        ? [...active.getObjects()]
+        : [active];
+      if (targets.length === 0) return;
+
+      this.canvas.discardActiveObject();
+      this.suspendHistory = true;
+      try {
+        targets.forEach((obj) => this.canvas.remove(obj));
+      } finally {
+        this.suspendHistory = false;
       }
-      
-      this.canvas.remove(activeObject);
+      this.saveState();
       this.canvas.requestRenderAll();
     },
-    isUndoShortcut(e) {
-      return (e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey;
+    isTextEditing() {
+      const active = this.canvas?.getActiveObject();
+      return Boolean(active && active.isEditing);
     },
-    isRedoShortcut(e) {
-      return (e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey));
+    exitTextEditing() {
+      const active = this.canvas?.getActiveObject();
+      if (!active?.isEditing) return false;
+      active.exitEditing();
+      return true;
     },
-    handleKeyDown(e) {
-      // Don't interfere with input fields or textareas
-      const target = e.target;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-        return;
+    cancelInProgressShape() {
+      if (!this.isDrawingShape || !this.currentShape || !this.canvas) return false;
+      const shape = this.currentShape;
+      this.isDrawingShape = false;
+      this.currentShape = null;
+      this.suspendHistory = true;
+      try {
+        this.canvas.remove(shape);
+      } finally {
+        this.suspendHistory = false;
       }
-      
-      const activeObject = this.canvas.getActiveObject();
-      
-      // Don't interfere with text editing on canvas
-      if (activeObject && activeObject.isEditing) {
-        return;
+      if (this.history.length > 1) {
+        this.history.pop();
+        this.historyStep = this.history.length - 1;
       }
-      
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        this.handleDelete(activeObject);
-      } else if (this.isUndoShortcut(e)) {
-        e.preventDefault();
-        this.undo();
-      } else if (this.isRedoShortcut(e)) {
-        e.preventDefault();
-        this.redo();
-      }
+      this.canvas.requestRenderAll();
+      return true;
+    },
+    clearSelection() {
+      if (!this.canvas?.getActiveObject()) return false;
+      this.canvas.discardActiveObject();
+      this.canvas.requestRenderAll();
+      return true;
+    },
+    cancelTransientAction() {
+      if (this.cancelInProgressShape()) return true;
+      return this.clearSelection();
     },
     saveState() {
-      if (this.isUndoing || this.isRedoing) return;
+      if (this.isUndoing || this.isRedoing || this.suspendHistory) return;
       
       // Canvas.toJSON() ignores arguments in Fabric 6; toObject() forwards the
       // custom properties to every child object.
@@ -686,7 +703,6 @@ export default {
       });
       
       window.addEventListener('resize', this.updateCanvasSize);
-      window.addEventListener('keydown', this.handleKeyDown);
     },
     initializeCanvas() {
       const canvasElement = document.querySelector('canvas');
@@ -743,7 +759,6 @@ export default {
     this.canvas.off('object:removed', this.saveState);
     
     window.removeEventListener('resize', this.updateCanvasSize);
-    window.removeEventListener('keydown', this.handleKeyDown);
   },
   watch: {
     canvas: {
