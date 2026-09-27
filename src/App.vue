@@ -107,9 +107,11 @@ export default {
       selectedColor.value
       ?? BOARD_THEMES[normalizeBoardTheme(boardTheme.value)].defaultInk
     ))
-    const onColorSelected = (value) => {
+    const onColorSelected = (value, options = {}) => {
       const normalized = normalizeHexColor(value)
-      if (normalized) selectedColor.value = normalized
+      if (!normalized) return
+      selectedColor.value = normalized
+      drawBoardRef.value?.recolorSelection(normalized, options)
     }
 
     const selectedTool = ref('select')

@@ -28,6 +28,7 @@ import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, util, 
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
+import { applyExplicitInk } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
 
 // Custom Fabric properties that must be serialized with canvas state (history).
@@ -109,6 +110,7 @@ export default {
       shapeStartX: 0,
       shapeStartY: 0,
       currentShape: null,
+      historyTipKind: "snapshot",
     };
   },
   provide() {
@@ -537,6 +539,42 @@ export default {
         this.$emit('text-editing-completed');
       });
     },
+    /**
+     * Recolor the active selection with an explicit palette color.
+     * Unselected objects are not visited. A custom-color drag coalesces into
+     * one history entry; a swatch click is its own undo step.
+     */
+    recolorSelection(color, options = {}) {
+      if (!this.canvas) return false;
+      const active = this.canvas.getActiveObject();
+      if (!active) return false;
+
+      const targets = active.type === "activeselection"
+        ? active.getObjects()
+        : [active];
+
+      let changed = false;
+      targets.forEach((obj) => {
+        if (applyExplicitInk(obj, color)) changed = true;
+      });
+      if (!changed) return false;
+
+      if (active.type === "activeselection") active.set("dirty", true);
+
+      const coalesce = Boolean(options.coalesce);
+      const replaceTip = coalesce
+        && this.historyTipKind === "recolor-coalesce"
+        && this.historyStep === this.history.length - 1;
+      if (replaceTip) {
+        this.history[this.historyStep] = JSON.stringify(this.canvas.toObject(SERIALIZED_CUSTOM_PROPS));
+      } else {
+        this.saveState();
+        if (coalesce) this.historyTipKind = "recolor-coalesce";
+      }
+      this.canvas.requestRenderAll();
+      return true;
+    },
+
     deleteSelection() {
       if (!this.canvas) return;
       const active = this.canvas.getActiveObject();
@@ -615,6 +653,7 @@ export default {
         this.history.shift();
         this.historyStep--;
       }
+      this.historyTipKind = "snapshot";
     },
     async loadHistoryState(state) {
       // Remove all objects but preserve background
@@ -634,6 +673,7 @@ export default {
     },
     async undo() {
       if (this.historyStep <= 0) return;
+      this.historyTipKind = "snapshot";
       
       this.isUndoing = true;
       this.historyStep--;
@@ -642,6 +682,7 @@ export default {
     },
     async redo() {
       if (this.historyStep >= this.history.length - 1) return;
+      this.historyTipKind = "snapshot";
       
       this.isRedoing = true;
       this.historyStep++;
@@ -795,6 +836,8 @@ export default {
       this.canvas.calcOffset();
     },
     selectedColor() {
+      // Brush only. The current selection is recolored from the palette event,
+      // including a second click on the color that is already active.
       this.applyBrushColor();
     },
     boardTheme() {

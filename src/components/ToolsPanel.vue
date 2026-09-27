@@ -175,7 +175,7 @@ export default {
     },
     chooseCustomColor(value) {
       const normalized = normalizeHexColor(value);
-      if (normalized) this.$emit('color-selected', normalized);
+      if (normalized) this.$emit('color-selected', normalized, { coalesce: true });
     }
   },
   watch: {

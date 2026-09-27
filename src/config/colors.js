@@ -17,6 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { INK_MODE_FIXED } from './themes.js'
+
 /**
  * Pen palette presets. These are document colors, not theme tokens.
  */
@@ -36,4 +38,39 @@ export function normalizeHexColor(value) {
   if (typeof value !== 'string') return null
   const match = /^#([0-9a-fA-F]{6})$/.exec(value.trim())
   return match ? `#${match[1].toLowerCase()}` : null
+}
+
+const STROKE_INK_TYPES = ['path', 'rect', 'circle', 'line']
+const FILL_INK_TYPES = ['i-text', 'text']
+
+/**
+ * Ink change for one selected object. Strokes and shapes keep a transparent
+ * fill; text uses fill. Formulas and anything else are left untouched.
+ * Returns null when this object cannot take an explicit palette color.
+ */
+export function explicitInkPatch(object, color) {
+  const normalized = normalizeHexColor(color)
+  if (!object || typeof object !== 'object' || !normalized) return null
+  if (object.formulaType) return null
+  if (STROKE_INK_TYPES.includes(object.type)) {
+    return { stroke: normalized, mathboardInkMode: INK_MODE_FIXED }
+  }
+  if (FILL_INK_TYPES.includes(object.type)) {
+    return { fill: normalized, mathboardInkMode: INK_MODE_FIXED }
+  }
+  return null
+}
+
+/**
+ * Apply a palette color to one object and lock it as explicit ink.
+ * Returns false when nothing changed, so callers can skip a history entry.
+ */
+export function applyExplicitInk(object, color) {
+  const patch = explicitInkPatch(object, color)
+  if (!patch) return false
+  const changed = Object.keys(patch).some((key) => object[key] !== patch[key])
+  if (!changed) return false
+  if (typeof object.set === 'function') object.set(patch)
+  else Object.assign(object, patch)
+  return true
 }
