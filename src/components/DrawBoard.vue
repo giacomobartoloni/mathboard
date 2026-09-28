@@ -39,11 +39,15 @@ const SERIALIZED_CUSTOM_PROPS = [
 ];
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
-const STROKE_INK_TYPES = ["path", "rect", "circle", "line"];
+// Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
+const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
 // Objects whose board ink lives on "fill".
-const FILL_INK_TYPES = ["i-text", "text"];
+const FILL_INK_TYPES = ["IText", "Text"];
 
 const FORMULA_TYPE = "katex-formula";
+
+// Fabric 7 defaults origin to center/center; keep left/top for click-to-place UX.
+const LEFT_TOP_ORIGIN = { originX: "left", originY: "top" };
 
 // Constants
 const CANVAS_EVENTS = [
@@ -169,9 +173,9 @@ export default {
 
         if (obj.formulaType === FORMULA_TYPE) {
           this.syncFormulaInk(obj, config);
-        } else if (STROKE_INK_TYPES.includes(obj.type)) {
+        } else if (obj.isType(...STROKE_INK_TYPES)) {
           obj.set('stroke', config.defaultInk);
-        } else if (FILL_INK_TYPES.includes(obj.type)) {
+        } else if (obj.isType(...FILL_INK_TYPES)) {
           obj.set('fill', config.defaultInk);
         }
       });
@@ -201,8 +205,11 @@ export default {
     updateCanvasSize() {
       this.windowWidth = document.documentElement.clientWidth;
       this.windowHeight = document.documentElement.clientHeight;
-      this.canvas.setWidth(this.windowWidth);
-      this.canvas.setHeight(this.windowHeight);
+      // Fabric 7 removed setWidth/setHeight; use setDimensions.
+      this.canvas.setDimensions({
+        width: this.windowWidth,
+        height: this.windowHeight
+      });
       this.canvas.renderAll();
       this.canvas.calcOffset();
     },
@@ -302,7 +309,7 @@ export default {
     requestFormulaInput(opt) {
       if (this.selectedTool !== 'formula' || opt.target) return;
       
-      const pointer = this.canvas.getPointer(opt.e);
+      const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
     addFormulaToCanvas(formulaData, position) {
@@ -334,6 +341,7 @@ export default {
             const img = new FabricImage(renderedCanvas, {
               left: position.x,
               top: position.y,
+              ...LEFT_TOP_ORIGIN,
               selectable: true,
               evented: true,
               hasControls: true,
@@ -393,7 +401,7 @@ export default {
     startDrawingShape(opt) {
       if (this.selectedTool !== 'shapes') return;
       
-      const pointer = this.canvas.getPointer(opt.e);
+      const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
       this.isDrawingShape = true;
       this.shapeStartX = pointer.x;
       this.shapeStartY = pointer.y;
@@ -406,7 +414,7 @@ export default {
     continueDrawingShape(opt) {
       if (!this.isDrawingShape || !this.currentShape) return;
       
-      const pointer = this.canvas.getPointer(opt.e);
+      const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
       const width = pointer.x - this.shapeStartX;
       const height = pointer.y - this.shapeStartY;
       
@@ -455,6 +463,7 @@ export default {
           top: y,
           width: width,
           height: height,
+          ...LEFT_TOP_ORIGIN,
           ...commonProps
         });
       } else if (this.selectedShape === 'circle') {
@@ -468,6 +477,7 @@ export default {
         });
       } else if (this.selectedShape === 'arrow') {
         shape = new Line([x, y, x, y], {
+          ...LEFT_TOP_ORIGIN,
           ...commonProps,
           strokeWidth: 3
         });
@@ -480,10 +490,11 @@ export default {
     addText(opt) {
       if (this.selectedTool !== 'font' || opt.target) return;
       
-      const pointer = this.canvas.getPointer(opt.e);
+      const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
       const text = new IText(DEFAULT_TEXT_CONFIG.content, {
         left: pointer.x,
         top: pointer.y,
+        ...LEFT_TOP_ORIGIN,
         fontSize: DEFAULT_TEXT_CONFIG.fontSize,
         fill: this.boardThemeConfig.defaultInk,
         fontFamily: DEFAULT_TEXT_CONFIG.fontFamily,
@@ -574,8 +585,7 @@ export default {
     saveState() {
       if (this.isUndoing || this.isRedoing) return;
       
-      // Canvas.toJSON() ignores arguments in Fabric 6; toObject() forwards the
-      // custom properties to every child object.
+      // Prefer toObject(propertiesToInclude) so custom props reach every child.
       const json = JSON.stringify(this.canvas.toObject(SERIALIZED_CUSTOM_PROPS));
       
       if (this.historyStep < this.history.length - 1) {
@@ -672,7 +682,7 @@ export default {
       // Enable double-click editing for text objects and formulas
       this.canvas.on('mouse:dblclick', (opt) => {
         const target = opt.target;
-        if (target && (target.type === 'i-text' || target.type === 'text') && target.editable) {
+        if (target && target.isType(...FILL_INK_TYPES) && target.editable) {
           target.enterEditing();
           target.selectAll();
         } else if (target && target.formulaType === FORMULA_TYPE) {
@@ -754,12 +764,12 @@ export default {
       initial: true,
     },
     height(newValue) {
-      this.canvas.setHeight(newValue);
+      this.canvas.setDimensions({ height: newValue });
       this.canvas.renderAll();
       this.canvas.calcOffset();
     },
     width(newValue) {
-      this.canvas.setWidth(newValue);
+      this.canvas.setDimensions({ width: newValue });
       this.canvas.renderAll();
       this.canvas.calcOffset();
     },
@@ -792,7 +802,7 @@ export default {
           this.setObjectsSelectable(true);
           // Keep text objects editable
           this.canvas.forEachObject((obj) => {
-            if (obj.type === 'i-text' || obj.type === 'text') {
+            if (obj.isType(...FILL_INK_TYPES)) {
               obj.editable = true;
             }
           });
