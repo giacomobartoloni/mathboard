@@ -746,12 +746,11 @@ export default {
     window.removeEventListener('keydown', this.handleKeyDown);
   },
   watch: {
-    canvas: {
-      handler() {
-        this.$emit('canvas-updated', this.canvas);
-      },
-      deep: true,
-      initial: true,
+    // Shallow on purpose. A deep watch traverses the whole Fabric graph and
+    // re-runs on pan, undo, and every proxied mutation. Nothing consumes the
+    // nested fields; canvas-updated only signals that the instance changed.
+    canvas() {
+      this.$emit('canvas-updated', this.canvas);
     },
     height(newValue) {
       this.canvas.setHeight(newValue);
