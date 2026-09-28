@@ -32,7 +32,7 @@ const FILL_INK_TYPES = ['i-text', 'text']
 export const COLOR_PRESETS = [
   { id: 'main', label: 'Main', value: null },
   { id: 'red', label: 'Red', value: '#d32f2f' },
-  { id: 'yellow', label: 'Yellow', value: '#f9a825' },
+  { id: 'yellow', label: 'Yellow', value: '#ffeb3b' },
   { id: 'blue', label: 'Blue', value: '#1976d2' },
   { id: 'green', label: 'Green', value: '#2e7d32' },
 ]

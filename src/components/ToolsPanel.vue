@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div>
+  <div class="left-chrome">
     <div class="tools-panel">
       <!--     <img alt="Vue logo" src="../assets/logo.png" width="30px" /> -->
       <div :class="{ selected: selected === 'select' }" @click="select('select')" title="Select (V)">
@@ -73,47 +73,46 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </div>
         </transition>
       </div>
+    </div>
 
-      <div
-        class="color-control"
-        @mouseenter="showColorPopover = true"
-        @mouseleave="showColorPopover = false"
-        title="Pen color"
-      >
-        <span
-          class="color-indicator"
-          :class="{ white: isLightDisplayColor }"
-          :style="{ background: displayColor }"
-          role="img"
-          aria-label="Pen color"
-        ></span>
+    <div
+      class="color-panel"
+      @mouseenter="showColorPopover = true"
+      @mouseleave="showColorPopover = false"
+      title="Pen color"
+    >
+      <span
+        class="color-indicator"
+        :class="{ white: isLightDisplayColor }"
+        :style="{ background: displayColor }"
+        role="img"
+        aria-label="Pen color"
+      ></span>
 
-        <transition name="fade">
-          <div
-            v-if="showColorPopover"
-            class="color-popover"
-            role="group"
-            aria-label="Pen colors"
-            @click.stop
-          >
-            <button
-              v-for="preset in colorPresets"
-              :key="preset.id"
-              type="button"
-              class="swatch"
+      <transition name="fade">
+        <div
+          v-if="showColorPopover"
+          class="color-popover"
+          role="group"
+          aria-label="Pen colors"
+          @click.stop
+        >
+          <button
+            v-for="preset in colorPresets"
+            :key="preset.id"
+            type="button"
+            class="swatch"
               :class="{
                 selected: isPresetSelected(preset),
-                white: preset.id === 'main' && mainInkIsLight,
+                white: (preset.id === 'main' && mainInkIsLight) || preset.id === 'yellow',
               }"
-              :style="{ background: swatchColor(preset) }"
-              :aria-label="preset.label"
-              :aria-pressed="isPresetSelected(preset)"
-              @click="chooseColor(preset.value)"
-            ></button>
-          </div>
-        </transition>
-      </div>
-
+            :style="{ background: swatchColor(preset) }"
+            :aria-label="preset.label"
+            :aria-pressed="isPresetSelected(preset)"
+            @click="chooseColor(preset.value)"
+          ></button>
+        </div>
+      </transition>
     </div>
     
     <div class="history-panel">
@@ -209,12 +208,18 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-.tools-panel {
+.left-chrome {
   position: absolute;
   z-index: 10;
   left: 12px;
   top: max(15vh, 100px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
 
+.tools-panel {
   background: var(--surface-primary);
   color: var(--text-primary);
   border-radius: 8px;
@@ -247,11 +252,6 @@ export default {
 }
 
 .history-panel {
-  position: absolute;
-  z-index: 10;
-  left: 12px;
-  top: calc(max(15vh, 100px) + 360px);
-
   background: var(--surface-primary);
   color: var(--text-primary);
   border-radius: 8px;
@@ -328,6 +328,20 @@ export default {
   opacity: 0;
 }
 
+.color-panel {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--surface-primary);
+  box-shadow: var(--panel-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .color-indicator {
   display: block;
   width: 22px;
@@ -346,6 +360,7 @@ export default {
   position: absolute;
   left: 100%;
   top: -2px;
+  transform: none;
   margin-left: 10px;
   background: var(--surface-primary);
   border: none;
@@ -353,8 +368,8 @@ export default {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 0;
+  padding: 6px 4px;
   white-space: nowrap;
   box-shadow: var(--panel-shadow);
 }
@@ -362,6 +377,7 @@ export default {
 .swatch {
   width: 22px;
   height: 22px;
+  margin: 6px 4px;
   border-radius: 50%;
   border: none;
   padding: 0;

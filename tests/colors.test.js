@@ -12,7 +12,7 @@ import {
 const EXPECTED = [
   ['main', 'Main', null],
   ['red', 'Red', '#d32f2f'],
-  ['yellow', 'Yellow', '#f9a825'],
+  ['yellow', 'Yellow', '#ffeb3b'],
   ['blue', 'Blue', '#1976d2'],
   ['green', 'Green', '#2e7d32'],
 ]
@@ -55,8 +55,8 @@ test('applyExplicitInk recolors a selected stroke, shape, or text and locks it',
   assert.equal(text.mathboardInkMode, 'fixed')
 
   const plainText = { type: 'text', fill: '#000000', mathboardInkMode: 'auto' }
-  assert.equal(applyExplicitInk(plainText, '#f9a825'), true)
-  assert.equal(plainText.fill, '#f9a825')
+  assert.equal(applyExplicitInk(plainText, '#ffeb3b'), true)
+  assert.equal(plainText.fill, '#ffeb3b')
 })
 
 test('applyExplicitInk leaves formulas and unselected-style objects alone', () => {
