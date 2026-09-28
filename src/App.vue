@@ -33,6 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       :selectedShape="selectedShape" 
       :board-theme="boardTheme"
       :selected-color="selectedColor"
+      :selection-panel-suspended="showFormulaModal"
       ref="drawBoardRef"
       @request-formula="onRequestFormula"
       @edit-formula="onEditFormula"
@@ -383,6 +384,8 @@ body {
   --panel-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
   --hover-bg: rgba(0, 0, 0, 0.05);
   --icon-color: #555;
+  --danger: #c62828;
+  --danger-hover: rgba(198, 40, 40, 0.12);
   --selected-bg: tan;
   --selected-text: rgb(61, 61, 61);
   --selected-shadow: 0 2px 8px rgba(210, 180, 140, 0.5);
@@ -403,6 +406,8 @@ body {
   --panel-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
   --hover-bg: rgba(255, 255, 255, 0.08);
   --icon-color: #b0b0b0;
+  --danger: #ef9a9a;
+  --danger-hover: rgba(239, 154, 154, 0.16);
   --selected-bg: #8b6914;
   --selected-text: #f0e6d0;
   --selected-shadow: 0 2px 8px rgba(139, 105, 20, 0.5);

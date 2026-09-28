@@ -18,19 +18,43 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div id="boardcontainer">
+  <div id="boardcontainer" ref="boardRoot">
     <canvas :id="id"></canvas>
+    <div ref="selectionOverlay" class="selection-overlay">
+      <SelectionActionsPanel
+        :visible="selectionPanel.visible"
+        :x="selectionPanel.x"
+        :y="selectionPanel.y"
+        :placement="selectionPanel.placement"
+        :selection-type="selectionPanel.selectionType"
+        :selection-count="selectionPanel.selectionCount"
+        :actions="selectionPanel.actions"
+        @action="onSelectionAction"
+      />
+    </div>
   </div>
 </template>
 
 <script>
 import { markRaw } from "vue";
-import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters } from "fabric";
+import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters, InteractiveFabricObject, ActiveSelection } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
 import { applyAutoInk, applyExplicitInk, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
+import { selectionChromeForBoard } from "../config/selectionChrome";
+import {
+  ACTION_DELETE,
+  ACTION_DUPLICATE,
+  ACTION_EDIT,
+  DUPLICATE_OFFSET,
+  panelSize,
+  sceneBoxToViewport,
+  selectionMeta,
+  selectionPanelPosition,
+} from "../config/selectionActions";
+import SelectionActionsPanel from "./SelectionActionsPanel.vue";
 import {
   HISTORY_LIMIT,
   snapshotObject,
@@ -82,11 +106,21 @@ const CURSOR_TYPES = {
   grab: 'grab',
   grabbing: 'grabbing',
   default: 'default',
-  move: 'move'
+  move: 'move',
+  crosshair: 'crosshair',
+  text: 'text'
 };
+
+const FORMULA_CLONE_PROPS = [
+  "latex",
+  "formulaType",
+  "mathboardInkMode",
+  "mathboardRenderedInkIsLight",
+];
 
 export default {
   name: "DrawBoard",
+  components: { SelectionActionsPanel },
   mixins: [fabricStaticCanvas],
   props: {
     id: { type: String, required: false, default: "c" },
@@ -94,6 +128,7 @@ export default {
     selectedShape: { type: String, default: "rectangle" },
     boardTheme: { type: String, default: "light" },
     selectedColor: { type: String, default: null },
+    selectionPanelSuspended: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -108,6 +143,15 @@ export default {
       shapeStartX: 0,
       shapeStartY: 0,
       currentShape: null,
+      selectionPanel: {
+        visible: false,
+        x: 0,
+        y: 0,
+        placement: "top",
+        selectionType: null,
+        selectionCount: 0,
+        actions: [],
+      },
     };
   },
   provide() {
@@ -127,6 +171,7 @@ export default {
     this._pendingText = null;
     this._uncommittedText = null;
     this._historyTipKind = "command";
+    this._selectionGesture = false;
   },
   methods: {
     fitToContainer(canvas) {
@@ -236,6 +281,7 @@ export default {
       });
       this.canvas.renderAll();
       this.canvas.calcOffset();
+      this.refreshSelectionPanel();
     },
     getWindowWidth() {
       this.updateCanvasSize();
@@ -255,6 +301,235 @@ export default {
         this.canvas.setCursor(cursor);
       }
     },
+    applyToolCursor(tool) {
+      if (!this.canvas) return;
+      if (tool === 'pan') {
+        if (!this.isPanning) this.setCursor(CURSOR_TYPES.grab);
+        return;
+      }
+      if (tool === 'pencil' || tool === 'shapes') {
+        this.canvas.freeDrawingCursor = CURSOR_TYPES.crosshair;
+        this.setCursor(CURSOR_TYPES.crosshair);
+        return;
+      }
+      if (tool === 'font') {
+        this.setCursor(CURSOR_TYPES.text);
+        return;
+      }
+      if (tool === 'formula') {
+        this.setCursor(CURSOR_TYPES.crosshair);
+        return;
+      }
+      this.setCursor(CURSOR_TYPES.default, CURSOR_TYPES.move);
+    },
+    /**
+     * Selection outline and handles follow the board theme. Object ink is not
+     * part of this patch, and the command log is not touched.
+     */
+    applySelectionChrome() {
+      if (!this.canvas) return;
+      const chrome = selectionChromeForBoard(this.boardTheme);
+      const {
+        selectionColor,
+        selectionBorderColor,
+        selectionLineWidth,
+        ...objectChrome
+      } = chrome;
+      Object.assign(InteractiveFabricObject.ownDefaults, objectChrome);
+      this.canvas.selectionColor = selectionColor;
+      this.canvas.selectionBorderColor = selectionBorderColor;
+      this.canvas.selectionLineWidth = selectionLineWidth;
+
+      this._suspendHistory = true;
+      try {
+        this.canvas.forEachObject((obj) => obj.set(objectChrome));
+        const active = this.canvas.getActiveObject();
+        if (active?.isType?.('ActiveSelection')) active.set(objectChrome);
+      } finally {
+        this._suspendHistory = false;
+      }
+      this.canvas.requestRenderAll();
+    },
+    _panelAllowed() {
+      if (this.selectionPanelSuspended || this._selectionGesture || this.isPanning) return false;
+      return this.selectedTool === "select" || this.selectedTool === "pan";
+    },
+    _hideSelectionPanel() {
+      if (!this.selectionPanel.visible) return;
+      this.selectionPanel = {
+        ...this.selectionPanel,
+        visible: false,
+        actions: [],
+      };
+    },
+    _selectionClientBox(active) {
+      const canvasEl = this.canvas?.upperCanvasEl;
+      if (!active || !canvasEl) return null;
+      const scene = sceneBoxToViewport(active.getBoundingRect(), this.canvas.viewportTransform);
+      if (!scene) return null;
+      const bounds = canvasEl.getBoundingClientRect();
+      const logicalW = this.canvas.getWidth() || bounds.width;
+      const logicalH = this.canvas.getHeight() || bounds.height;
+      const scaleX = logicalW ? bounds.width / logicalW : 1;
+      const scaleY = logicalH ? bounds.height / logicalH : 1;
+      return {
+        left: bounds.left + scene.left * scaleX,
+        top: bounds.top + scene.top * scaleY,
+        width: scene.width * scaleX,
+        height: scene.height * scaleY,
+      };
+    },
+    refreshSelectionPanel() {
+      if (!this.canvas || !this._panelAllowed()) {
+        this._hideSelectionPanel();
+        return;
+      }
+      const active = this.canvas.getActiveObject();
+      if (!active || active.isEditing) {
+        this._hideSelectionPanel();
+        return;
+      }
+      const meta = selectionMeta(active);
+      const overlay = this.$refs.selectionOverlay;
+      const client = this._selectionClientBox(active);
+      if (!meta.hasSelection || !overlay || !client) {
+        this._hideSelectionPanel();
+        return;
+      }
+      const overlayBounds = overlay.getBoundingClientRect();
+      const position = selectionPanelPosition({
+        frame: {
+          left: client.left - overlayBounds.left,
+          top: client.top - overlayBounds.top,
+          width: client.width,
+          height: client.height,
+        },
+        viewport: { left: 0, top: 0, width: overlayBounds.width, height: overlayBounds.height },
+        panel: panelSize(meta.actions.length),
+      });
+      if (!position) {
+        this._hideSelectionPanel();
+        return;
+      }
+      const next = {
+        visible: true,
+        x: position.x,
+        y: position.y,
+        placement: position.placement,
+        selectionType: meta.selectionType,
+        selectionCount: meta.selectionCount,
+        actions: meta.actions,
+      };
+      const prev = this.selectionPanel;
+      const same = prev.visible === next.visible
+        && prev.x === next.x
+        && prev.y === next.y
+        && prev.placement === next.placement
+        && prev.selectionType === next.selectionType
+        && prev.selectionCount === next.selectionCount
+        && prev.actions.join() === next.actions.join();
+      if (!same) this.selectionPanel = next;
+    },
+    onSelectionChanged() {
+      this.emitSelectionColor();
+      this.refreshSelectionPanel();
+    },
+    onSelectionCleared() {
+      this.refreshSelectionPanel();
+    },
+    onSelectionPointerUp() {
+      if (!this._selectionGesture) return;
+      this._selectionGesture = false;
+      this.refreshSelectionPanel();
+    },
+    onSelectionAction(actionId) {
+      if (actionId === ACTION_DELETE) {
+        this.deleteSelection();
+        this.$nextTick(() => this._focusBoard());
+        return;
+      }
+      if (actionId === ACTION_DUPLICATE) {
+        this.duplicateSelection();
+        return;
+      }
+      if (actionId === ACTION_EDIT) this.editSelection();
+    },
+    _focusBoard() {
+      const root = this.$refs.boardRoot;
+      if (!root || typeof root.focus !== "function") return;
+      if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
+      root.focus({ preventScroll: true });
+    },
+    async _cloneForDuplicate(object) {
+      const placed = snapshotObject(object);
+      const clone = await object.clone(FORMULA_CLONE_PROPS);
+      clone.set({
+        ...placed,
+        left: placed.left + DUPLICATE_OFFSET,
+        top: placed.top + DUPLICATE_OFFSET,
+      });
+      FORMULA_CLONE_PROPS.forEach((key) => {
+        if (object[key] !== undefined) clone[key] = object[key];
+      });
+      clone.setCoords();
+      return clone;
+    },
+    _selectDuplicates(clones) {
+      if (clones.length === 1) {
+        this.canvas.setActiveObject(clones[0]);
+        return;
+      }
+      const selection = new ActiveSelection(clones, { canvas: this.canvas });
+      this.canvas.setActiveObject(selection);
+    },
+    async duplicateSelection() {
+      if (!this.canvas) return;
+      const active = this.canvas.getActiveObject();
+      if (!active || active.isEditing) return;
+      const sources = this.canvas.getActiveObjects().slice();
+      if (!sources.length) return;
+
+      let clones;
+      try {
+        clones = await Promise.all(sources.map((object) => this._cloneForDuplicate(object)));
+      } catch (error) {
+        console.error("Duplicate failed", error);
+        return;
+      }
+      if (!this.canvas || clones.some((clone) => !clone)) return;
+      const stillThere = sources.every((object) => this.canvas.getObjects().includes(object));
+      if (!stillThere) return;
+
+      this._suspendHistory = true;
+      try {
+        clones.forEach((clone) => this.canvas.add(clone));
+        this._selectDuplicates(clones);
+      } catch (error) {
+        clones.forEach((clone) => {
+          if (this.canvas.getObjects().includes(clone)) this.canvas.remove(clone);
+        });
+        console.error("Duplicate failed", error);
+        return;
+      } finally {
+        this._suspendHistory = false;
+      }
+
+      const entries = clones
+        .map((object) => ({ object, index: this.canvas.getObjects().indexOf(object) }))
+        .filter((entry) => entry.index >= 0);
+      if (entries.length) this._pushCommand({ type: "duplicate", entries });
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+    },
+    editSelection() {
+      const active = this.canvas?.getActiveObject();
+      if (!active || active.isEditing || active.formulaType !== FORMULA_TYPE) return;
+      this.$emit("edit-formula", {
+        latex: active.latex,
+        position: { x: active.left, y: active.top },
+        fabricObject: active,
+      });
+    },
     enablePanning() {
       this.canvas.isDrawingMode = false;
       this.canvas.selection = false;
@@ -270,6 +545,7 @@ export default {
       this.canvas.on('touch:end', this.stopPanning);
     },
     disablePanning() {
+      this.isPanning = false;
       this.canvas.off('mouse:down', this.startPanning);
       this.canvas.off('mouse:move', this.continuePanning);
       this.canvas.off('mouse:up', this.stopPanning);
@@ -277,10 +553,11 @@ export default {
       this.canvas.off('touch:move', this.continuePanning);
       this.canvas.off('touch:end', this.stopPanning);
       
-      this.setCursor(CURSOR_TYPES.default, CURSOR_TYPES.move);
       this.canvas.selection = true;
       this.setObjectsSelectable(true);
-      this.canvas.allowTouchScrolling = true;
+      // The board fills the viewport. Touch drags select and move; they do not
+      // scroll the page. Pan uses the same flag and moves the viewport itself.
+      this.canvas.allowTouchScrolling = false;
     },
     startPanning(opt) {
       if (this.selectedTool !== 'pan') return;
@@ -288,6 +565,7 @@ export default {
       const evt = opt.e;
       evt.preventDefault();
       this.isPanning = true;
+      this._hideSelectionPanel();
       this.lastPosX = evt.touches ? evt.touches[0].clientX : evt.clientX;
       this.lastPosY = evt.touches ? evt.touches[0].clientY : evt.clientY;
       this.canvas.selection = false;
@@ -311,6 +589,7 @@ export default {
       if (this.selectedTool === 'pan') {
         this.setCursor(CURSOR_TYPES.grab);
       }
+      this.refreshSelectionPanel();
     },
     enableTextInsertion() {
       this.canvas.isDrawingMode = false;
@@ -711,6 +990,8 @@ export default {
       entries.forEach(({ object }) => this.canvas.remove(object));
       this.canvas.requestRenderAll();
       this._pushCommand({ type: 'delete', entries });
+      this.refreshSelectionPanel();
+      this._focusBoard();
     },
     isTextEditing() {
       const active = this.canvas?.getActiveObject();
@@ -796,6 +1077,16 @@ export default {
           return;
         }
 
+        if (command.type === 'duplicate') {
+          if (direction === 'forward') {
+            command.entries.forEach(({ object, index }) => this._insertRetained(object, index));
+          } else {
+            canvas.discardActiveObject();
+            command.entries.forEach(({ object }) => this._removeRetained(object));
+          }
+          return;
+        }
+
         if (command.type === 'delete') {
           if (direction === 'forward') {
             canvas.discardActiveObject();
@@ -857,6 +1148,7 @@ export default {
         this._suspendHistory = false;
       }
       this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
     },
     undo() {
       this._runHistory('undo');
@@ -868,6 +1160,10 @@ export default {
       this._recordAdd(path);
     },
     onBeforeTransform({ transform }) {
+      if (!this._selectionGesture) {
+        this._selectionGesture = true;
+        this._hideSelectionPanel();
+      }
       if (this._suspendHistory || !transform || !transform.target) return;
       // A text edit commits on exit, before a later drag can start. Drop a
       // snapshot left behind by an edit that did not change the text.
@@ -878,36 +1174,45 @@ export default {
       }));
     },
     onTextEditingEntered({ target }) {
+      this._hideSelectionPanel();
       if (!target || target === this._uncommittedText) return;
       this._pendingText = { object: target, before: snapshotObject(target) };
     },
+    onTextEditingExited() {
+      this.refreshSelectionPanel();
+    },
     onObjectModified(opt) {
-      if (this._suspendHistory || !opt) return;
+      this._selectionGesture = false;
+      try {
+        if (this._suspendHistory || !opt) return;
 
-      if (opt.transform) {
-        const pending = this._pendingTransform;
-        this._pendingTransform = null;
-        if (!pending) return;
-        const entries = pending
-          .map(({ object, before }) => ({
-            object,
-            before,
-            after: snapshotObject(object)
-          }))
-          .filter((entry) => !snapshotsEqual(entry.before, entry.after));
-        if (entries.length) this._pushCommand({ type: 'modify', entries });
-        return;
+        if (opt.transform) {
+          const pending = this._pendingTransform;
+          this._pendingTransform = null;
+          if (!pending) return;
+          const entries = pending
+            .map(({ object, before }) => ({
+              object,
+              before,
+              after: snapshotObject(object)
+            }))
+            .filter((entry) => !snapshotsEqual(entry.before, entry.after));
+          if (entries.length) this._pushCommand({ type: 'modify', entries });
+          return;
+        }
+
+        const pendingText = this._pendingText;
+        if (!pendingText || pendingText.object !== opt.target) return;
+        this._pendingText = null;
+        const after = snapshotObject(opt.target);
+        if (snapshotsEqual(pendingText.before, after)) return;
+        this._pushCommand({
+          type: 'modify',
+          entries: [{ object: opt.target, before: pendingText.before, after }]
+        });
+      } finally {
+        this.refreshSelectionPanel();
       }
-
-      const pendingText = this._pendingText;
-      if (!pendingText || pendingText.object !== opt.target) return;
-      this._pendingText = null;
-      const after = snapshotObject(opt.target);
-      if (snapshotsEqual(pendingText.before, after)) return;
-      this._pushCommand({
-        type: 'modify',
-        entries: [{ object: opt.target, before: pendingText.before, after }]
-      });
     },
     zoomIn() {
       const currentZoom = this.canvas.getZoom();
@@ -915,6 +1220,7 @@ export default {
       if (newZoom > 5) return; // Limite massimo di zoom
       this.canvas.setZoom(newZoom);
       this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
     },
     zoomOut() {
       const currentZoom = this.canvas.getZoom();
@@ -922,12 +1228,14 @@ export default {
       if (newZoom < 0.1) return; // Limite minimo di zoom
       this.canvas.setZoom(newZoom);
       this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
     },
     resetZoom() {
       this.canvas.setZoom(1);
       this.canvas.viewportTransform[4] = 0; // Reset pan X
       this.canvas.viewportTransform[5] = 0; // Reset pan Y
       this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
     },
     getZoom() {
       return this.canvas.getZoom();
@@ -955,9 +1263,12 @@ export default {
       this.canvas.on('before:transform', this.onBeforeTransform);
       this.canvas.on('object:modified', this.onObjectModified);
       this.canvas.on('text:editing:entered', this.onTextEditingEntered);
-      
-      this.canvas.on('selection:created', this.emitSelectionColor);
-      this.canvas.on('selection:updated', this.emitSelectionColor);
+      this.canvas.on('text:editing:exited', this.onTextEditingExited);
+
+      this.canvas.on('selection:created', this.onSelectionChanged);
+      this.canvas.on('selection:updated', this.onSelectionChanged);
+      this.canvas.on('selection:cleared', this.onSelectionCleared);
+      this.canvas.on('mouse:up', this.onSelectionPointerUp);
 
       // Enable double-click editing for text objects and formulas
       this.canvas.on('mouse:dblclick', (opt) => {
@@ -989,8 +1300,10 @@ export default {
       
       this.initializeBrush();
       this.setBackgroundPattern();
+      this.applySelectionChrome();
       this.createEvents();
       this.setupEventListeners();
+      this.applyToolCursor(this.selectedTool);
     },
   },
   computed: {
@@ -1009,6 +1322,7 @@ export default {
       // Canvas constructor options.
       delete obj.boardTheme;
       delete obj.selectedColor;
+      delete obj.selectionPanelSuspended;
       Object.keys(obj).forEach((key) => {
         if (obj[key] === undefined) {
           delete obj[key];
@@ -1039,8 +1353,11 @@ export default {
     this.canvas.off('before:transform', this.onBeforeTransform);
     this.canvas.off('object:modified', this.onObjectModified);
     this.canvas.off('text:editing:entered', this.onTextEditingEntered);
-    this.canvas.off('selection:created', this.emitSelectionColor);
-    this.canvas.off('selection:updated', this.emitSelectionColor);
+    this.canvas.off('text:editing:exited', this.onTextEditingExited);
+    this.canvas.off('selection:created', this.onSelectionChanged);
+    this.canvas.off('selection:updated', this.onSelectionChanged);
+    this.canvas.off('selection:cleared', this.onSelectionCleared);
+    this.canvas.off('mouse:up', this.onSelectionPointerUp);
     
     window.removeEventListener('resize', this.updateCanvasSize);
   },
@@ -1075,6 +1392,7 @@ export default {
       // entry is pushed.
       this.setBackgroundPattern();
       this.applyBrushColor();
+      this.applySelectionChrome();
       this.syncAutoInk(this.boardThemeConfig);
       this.canvas.requestRenderAll();
     },
@@ -1117,6 +1435,11 @@ export default {
           this.enableShapeDrawing();
           break;
       }
+      this.applyToolCursor(newTool);
+      this.refreshSelectionPanel();
+    },
+    selectionPanelSuspended() {
+      this.refreshSelectionPanel();
     },
   },
 };
@@ -1132,6 +1455,15 @@ div#boardcontainer {
   bottom: 0;
   left: 0;
   z-index: -1000;
+}
+div#boardcontainer:focus {
+  outline: none;
+}
+.selection-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
 }
 canvas {
   width: 100%;
