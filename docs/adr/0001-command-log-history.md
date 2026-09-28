@@ -45,7 +45,7 @@ Commands:
 - Delete. One command for `getActiveObjects()`, with each canvas index. Discard the selection, then remove. Restore from the lowest index.
 - Move, scale, rotate. Snapshot on `before:transform`, compare on `object:modified`, and record only objects whose whitelist changed.
 
-The stack is capped at 50. A new gesture drops the redo tail. The stack is not in Vue `data()`, so the retained instances are not proxied. Theme ink updates (`syncAutoInk`) are not history.
+The stack is capped at 50. A new gesture drops the redo tail. The stack is not in Vue `data()`. The canvas is created with `markRaw`: it does live in `data()`, and a deep proxy wraps every object added to it, so `getObjects().indexOf` misses the raw instance and the add command is never pushed. Theme ink updates (`syncAutoInk`) are not history.
 
 ## Consequences
 
@@ -54,7 +54,7 @@ The stack is capped at 50. A new gesture drops the redo tail. The stack is not i
 - Objects that are not retained by a command can be collected. Objects in the log cannot, until the entry falls off the cap of 50.
 - Persisting the log is a different design. It needs serialization and `enlivenObjects` on load. This ADR does not cover it.
 - Selective undo is out of scope. MathBoard undo is linear, last-in first-out.
-- The Fabric 6.9.1 undo time was not remeasured after this change.
+- Measured undo times are in the 2026-09-28 session-profiling activity. This decision does not restate them.
 
 ## Alternatives considered
 

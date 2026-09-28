@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
+import { markRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
@@ -877,9 +878,11 @@ export default {
       const canvasElement = document.querySelector('canvas');
       this.fitToContainer(canvasElement);
       
-      this.canvas = new Canvas(this.id, {
+      // data() would deep-proxy the canvas and wrap every added object. indexOf
+      // on the raw instance then misses, and the add command is dropped.
+      this.canvas = markRaw(new Canvas(this.id, {
         ...this.definedProps,
-      });
+      }));
       
       this.initializeBrush();
       this.setBackgroundPattern();
