@@ -166,16 +166,9 @@ export default {
 
     const onInsertFormula = (formulaData) => {
       if (editingElement.value) {
-        // Update existing formula - remove old and add new
-        const canvas = drawBoardRef.value?.canvas
-        if (canvas && editingElement.value) {
-          const oldPos = {
-            x: editingElement.value.left,
-            y: editingElement.value.top
-          }
-          canvas.remove(editingElement.value)
-          drawBoardRef.value.addFormulaToCanvas(formulaData, oldPos)
-        }
+        // One gesture: swap the bitmap on the command log, do not remove first.
+        // Removing here used to drop the formula if the new bitmap failed.
+        drawBoardRef.value?.replaceFormula(editingElement.value, formulaData)
         editingElement.value = null
       } else if (drawBoardRef.value && drawBoardRef.value.addFormulaToCanvas) {
         // Add new formula
