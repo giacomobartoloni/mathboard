@@ -17,6 +17,7 @@ npm run dev          # dev server with HMR (Vite)
 npm run build        # production build to dist/
 npm run preview      # serve the dist/ build locally
 npm run lint         # eslint (vue3-essential + eslint:recommended); reports, does not fix
+npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x512.png from tools/icon-template.html
 ```
 
 ## Architecture
