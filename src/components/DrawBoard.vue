@@ -24,10 +24,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, util, FabricImage } from "fabric";
+import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, util, FabricImage, filters } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
+import { BOARD_THEMES, INK_MODE_AUTO, normalizeBoardTheme } from "../config/themes";
+
+// Custom Fabric properties that must be serialized with canvas state (history).
+const SERIALIZED_CUSTOM_PROPS = [
+  "latex",
+  "formulaType",
+  "mathboardInkMode",
+  "mathboardRenderedInkIsLight"
+];
+
+// Objects whose board ink lives on "stroke" (pencil strokes, shapes).
+const STROKE_INK_TYPES = ["path", "rect", "circle", "line"];
+// Objects whose board ink lives on "fill".
+const FILL_INK_TYPES = ["i-text", "text"];
+
+const FORMULA_TYPE = "katex-formula";
 
 // Constants
 const CANVAS_EVENTS = [
@@ -42,8 +58,9 @@ const CANVAS_EVENTS = [
 
 const GRID_SIZE = 40;
 const HISTORY_LIMIT = 50;
+// Ink colors deliberately omitted: the default ink follows the active board theme
+// for objects created afterwards (see boardThemeConfig().defaultInk).
 const DEFAULT_BRUSH_CONFIG = {
-  color: "#000000",
   width: 2,
   shadowBlur: 0,
   shadowOffsetX: 0,
@@ -54,7 +71,6 @@ const DEFAULT_BRUSH_CONFIG = {
 const DEFAULT_TEXT_CONFIG = {
   content: 'Text',
   fontSize: 32,
-  fill: '#000000',
   fontFamily: 'Arial'
 };
 
@@ -72,6 +88,7 @@ export default {
     id: { type: String, required: false, default: "c" },
     selectedTool: { type: String, default: "pencil" },
     selectedShape: { type: String, default: "rectangle" },
+    boardTheme: { type: String, default: "light" },
   },
   data() {
     return {
@@ -109,14 +126,15 @@ export default {
     createGridPattern() {
       const patternCanvas = document.createElement('canvas');
       const ctx = patternCanvas.getContext('2d');
-      
+
       patternCanvas.width = GRID_SIZE;
       patternCanvas.height = GRID_SIZE;
-      
-      ctx.fillStyle = '#f9f9f9';
+
+      // Board theme drives the board background and grid colors.
+      ctx.fillStyle = this.boardThemeConfig.background;
       ctx.fillRect(0, 0, GRID_SIZE, GRID_SIZE);
-      
-      ctx.strokeStyle = '#e0e0e0';
+
+      ctx.strokeStyle = this.boardThemeConfig.grid;
       ctx.lineWidth = 1;
       
       ctx.beginPath();
@@ -139,6 +157,40 @@ export default {
       
       this.canvas.backgroundColor = pattern;
       this.canvas.renderAll();
+    },
+    /**
+     * Recolor every object authored with the board default ink to the given board
+     * theme. Objects without the AUTO ink mode (explicit user colors, imported
+     * documents) are left untouched, and no history entry is pushed.
+     */
+    syncAutoInk(config) {
+      this.canvas.forEachObject((obj) => {
+        if (obj.mathboardInkMode !== INK_MODE_AUTO) return;
+
+        if (obj.formulaType === FORMULA_TYPE) {
+          this.syncFormulaInk(obj, config);
+        } else if (STROKE_INK_TYPES.includes(obj.type)) {
+          obj.set('stroke', config.defaultInk);
+        } else if (FILL_INK_TYPES.includes(obj.type)) {
+          obj.set('fill', config.defaultInk);
+        }
+      });
+    },
+    /**
+     * Adapt a formula bitmap to the board ink polarity. Fabric filters never mutate
+     * the source element, so dropping the filter restores the original rendering.
+     */
+    syncFormulaInk(img, config) {
+      const shouldInvert = Boolean(img.mathboardRenderedInkIsLight) !== config.inkIsLight;
+      const isInverted = img.filters?.some((filter) => filter.type === 'Invert') ?? false;
+
+      if (shouldInvert === isInverted) return;
+
+      img.filters = shouldInvert ? [new filters.Invert()] : [];
+      img.applyFilters();
+    },
+    markPathAutoInk({ path }) {
+      path.mathboardInkMode = INK_MODE_AUTO;
     },
     createEvents() {
       CANVAS_EVENTS.forEach((event) => {
@@ -251,12 +303,9 @@ export default {
       if (this.selectedTool !== 'formula' || opt.target) return;
       
       const pointer = this.canvas.getPointer(opt.e);
-      console.log('Requesting formula at position:', pointer);
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
     addFormulaToCanvas(formulaData, position) {
-      console.log('addFormulaToCanvas called with:', formulaData, position);
-      
       // Create a temporary div to render the formula
       const tempDiv = document.createElement('div');
       tempDiv.style.position = 'absolute';
@@ -264,6 +313,9 @@ export default {
       tempDiv.style.fontSize = '15px';
       tempDiv.style.padding = '10px';
       tempDiv.style.backgroundColor = 'transparent';
+      // The bitmap is rendered with the active board ink; it is marked as auto
+      // so theme switches can adapt it (rasterized text cannot be recolored).
+      tempDiv.style.color = this.boardThemeConfig.defaultInk;
       tempDiv.innerHTML = formulaData.html;
       document.body.appendChild(tempDiv);
       
@@ -271,16 +323,12 @@ export default {
       this.$nextTick(() => {
         setTimeout(async () => {
           try {
-            console.log('Rendering formula with html2canvas...');
-            
             // Use html2canvas to convert the div to a canvas
             const renderedCanvas = await html2canvas(tempDiv, {
               backgroundColor: null,
               scale: 2, // Higher quality
               logging: false
             });
-            
-            console.log('Canvas rendered:', renderedCanvas.width, 'x', renderedCanvas.height);
             
             // Create fabric image directly from the canvas element
             const img = new FabricImage(renderedCanvas, {
@@ -300,20 +348,18 @@ export default {
               lockSkewingY: false
             });
             
-            console.log('Fabric image created:', img.width, 'x', img.height);
-            console.log('Image controls:', img.hasControls, 'hasBorders:', img.hasBorders);
-            
             // Store latex data as custom property
             img.latex = formulaData.latex;
-            img.formulaType = 'katex-formula';
+            img.formulaType = FORMULA_TYPE;
+            // Auto ink: follow the board theme. The polarity recorded here is the
+            // one the bitmap was rasterized with, so later board changes can decide
+            // whether an Invert filter is needed.
+            img.mathboardInkMode = INK_MODE_AUTO;
+            img.mathboardRenderedInkIsLight = this.boardThemeConfig.inkIsLight;
             
             this.canvas.add(img);
             this.canvas.setActiveObject(img);
             this.canvas.requestRenderAll();
-            
-            console.log('Active object:', this.canvas.getActiveObject());
-            
-            console.log('Formula added successfully to canvas');
             
             // Clean up
             document.body.removeChild(tempDiv);
@@ -397,13 +443,14 @@ export default {
     createShape(x, y, width, height) {
       const commonProps = {
         fill: 'transparent',
-        stroke: '#000000',
+        stroke: this.boardThemeConfig.defaultInk,
         strokeWidth: 2,
         selectable: true
       };
       
+      let shape;
       if (this.selectedShape === 'rectangle') {
-        return new Rect({
+        shape = new Rect({
           left: x,
           top: y,
           width: width,
@@ -411,7 +458,7 @@ export default {
           ...commonProps
         });
       } else if (this.selectedShape === 'circle') {
-        return new Circle({
+        shape = new Circle({
           left: x,
           top: y,
           radius: 0,
@@ -420,11 +467,15 @@ export default {
           originY: 'center'
         });
       } else if (this.selectedShape === 'arrow') {
-        return new Line([x, y, x, y], {
+        shape = new Line([x, y, x, y], {
           ...commonProps,
           strokeWidth: 3
         });
       }
+
+      // Created with the board default ink: it must follow future board changes.
+      shape.mathboardInkMode = INK_MODE_AUTO;
+      return shape;
     },
     addText(opt) {
       if (this.selectedTool !== 'font' || opt.target) return;
@@ -434,7 +485,7 @@ export default {
         left: pointer.x,
         top: pointer.y,
         fontSize: DEFAULT_TEXT_CONFIG.fontSize,
-        fill: DEFAULT_TEXT_CONFIG.fill,
+        fill: this.boardThemeConfig.defaultInk,
         fontFamily: DEFAULT_TEXT_CONFIG.fontFamily,
         editable: true,
         selectable: true,
@@ -450,6 +501,9 @@ export default {
         lockSkewingX: false,
         lockSkewingY: false
       });
+      
+      // Created with the board default ink: it must follow future board changes.
+      text.mathboardInkMode = INK_MODE_AUTO;
       
       this.canvas.add(text);
       this.canvas.setActiveObject(text);
@@ -520,7 +574,9 @@ export default {
     saveState() {
       if (this.isUndoing || this.isRedoing) return;
       
-      const json = JSON.stringify(this.canvas.toJSON(['objects']));
+      // Canvas.toJSON() ignores arguments in Fabric 6; toObject() forwards the
+      // custom properties to every child object.
+      const json = JSON.stringify(this.canvas.toObject(SERIALIZED_CUSTOM_PROPS));
       
       if (this.historyStep < this.history.length - 1) {
         this.history = this.history.slice(0, this.historyStep + 1);
@@ -543,6 +599,10 @@ export default {
         const enlivenedObjects = await util.enlivenObjects(state.objects);
         enlivenedObjects.forEach(obj => this.canvas.add(obj));
       }
+
+      // Snapshots store the ink authored at the time; auto objects must be shown
+      // with the ink of the board that is currently active.
+      this.syncAutoInk(this.boardThemeConfig);
       
       this.canvas.renderAll();
     },
@@ -587,7 +647,8 @@ export default {
     },
     initializeBrush() {
       const brush = new PencilBrush(this.canvas);
-      brush.color = DEFAULT_BRUSH_CONFIG.color;
+      // Ink for new strokes follows the active board theme.
+      brush.color = this.boardThemeConfig.defaultInk;
       brush.width = DEFAULT_BRUSH_CONFIG.width;
       brush.shadow = new Shadow({
         blur: DEFAULT_BRUSH_CONFIG.shadowBlur,
@@ -599,6 +660,11 @@ export default {
       this.canvas.freeDrawingBrush = brush;
     },
     setupEventListeners() {
+      // Pencil strokes are Path objects built by the brush. "before:path:created"
+      // fires before the path is added to the canvas, so the ink mode is already
+      // set when "object:added" triggers the history snapshot.
+      this.canvas.on('before:path:created', this.markPathAutoInk);
+
       this.canvas.on('object:added', this.saveState);
       this.canvas.on('object:modified', this.saveState);
       this.canvas.on('object:removed', this.saveState);
@@ -609,7 +675,7 @@ export default {
         if (target && (target.type === 'i-text' || target.type === 'text') && target.editable) {
           target.enterEditing();
           target.selectAll();
-        } else if (target && target.formulaType === 'katex-formula') {
+        } else if (target && target.formulaType === FORMULA_TYPE) {
           // Edit formula
           this.$emit('edit-formula', { 
             latex: target.latex, 
@@ -638,8 +704,14 @@ export default {
     },
   },
   computed: {
+    boardThemeConfig() {
+      return BOARD_THEMES[normalizeBoardTheme(this.boardTheme)];
+    },
     definedProps() {
       const obj = { ...this.$props };
+      // boardTheme is a presentation-only prop; it must never reach the Fabric
+      // Canvas constructor options.
+      delete obj.boardTheme;
       Object.keys(obj).forEach((key) => {
         if (obj[key] === undefined) {
           delete obj[key];
@@ -665,6 +737,7 @@ export default {
       this.canvas.off(event);
     });
     
+    this.canvas.off('before:path:created', this.markPathAutoInk);
     this.canvas.off('object:added', this.saveState);
     this.canvas.off('object:modified', this.saveState);
     this.canvas.off('object:removed', this.saveState);
@@ -689,6 +762,20 @@ export default {
       this.canvas.setWidth(newValue);
       this.canvas.renderAll();
       this.canvas.calcOffset();
+    },
+    boardTheme() {
+      if (!this.canvas) return;
+      
+      // Presentation-only update: repaint the grid/background, refresh the brush
+      // ink for FUTURE strokes and recolor the objects authored with the board
+      // default ink. Explicitly colored objects are never touched and no history
+      // entry is pushed.
+      this.setBackgroundPattern();
+      if (this.canvas.freeDrawingBrush) {
+        this.canvas.freeDrawingBrush.color = this.boardThemeConfig.defaultInk;
+      }
+      this.syncAutoInk(this.boardThemeConfig);
+      this.canvas.requestRenderAll();
     },
     selectedTool(newTool) {
       if (!this.canvas) return;

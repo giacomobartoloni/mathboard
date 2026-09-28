@@ -44,21 +44,55 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </button>
     
     <div class="zoom-level">{{ zoomPercentage }}%</div>
+    <div class="divider"></div>
+    <button
+      type="button"
+      class="zoom-button theme-toggle"
+      :title="themeToggleLabel"
+      :aria-label="themeToggleLabel"
+      @click="$emit('cycle-theme')"
+    >
+      <font-awesome-icon :icon="['fas', themeIcon]" />
+    </button>
   </div>
 </template>
 
 <script>
+import { BOARD_THEMES, cycleBoardTheme, normalizeBoardTheme } from '../config/themes'
+
+const THEME_ICONS = {
+  light: 'sun',
+  dark: 'moon',
+  chalkboard: 'chalkboard',
+}
+
 export default {
   name: 'ZoomPanel',
   props: {
     zoomLevel: {
       type: Number,
       default: 1
+    },
+    boardTheme: {
+      type: String,
+      default: 'light'
     }
   },
+  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'cycle-theme'],
   computed: {
     zoomPercentage() {
       return Math.round(this.zoomLevel * 100)
+    },
+    currentBoardTheme() {
+      return normalizeBoardTheme(this.boardTheme)
+    },
+    themeIcon() {
+      return THEME_ICONS[this.currentBoardTheme]
+    },
+    themeToggleLabel() {
+      const current = BOARD_THEMES[this.currentBoardTheme].label
+      const next = BOARD_THEMES[cycleBoardTheme(this.currentBoardTheme)].label
+      return `Theme: ${current} — click for ${next}`
     }
   }
 }
@@ -71,11 +105,10 @@ export default {
   right: 150px;
   bottom: 12px;
   
-  background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  background: var(--surface-primary);
   border-radius: 8px;
   padding: 8px 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-              0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--panel-shadow);
   display: flex;
   gap: 6px;
   align-items: center;
@@ -96,6 +129,7 @@ export default {
   border-radius: 6px;
   transition: all 0.2s ease;
   font-size: 16px;
+  color: var(--icon-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -103,7 +137,7 @@ export default {
 }
 
 .zoom-button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: var(--hover-bg);
   transform: translateY(-1px);
 }
 
@@ -114,18 +148,29 @@ export default {
 .zoom-button.reset {
   font-size: 12px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-secondary);
 }
 
 .zoom-level {
   font-size: 12px;
   font-weight: 600;
-  color: #666;
+  color: var(--text-muted);
   padding: 0 8px;
   min-width: 45px;
   text-align: center;
-  background-color: rgba(0, 0, 0, 0.03);
+  background-color: var(--surface-tertiary);
   border-radius: 4px;
   padding: 4px 8px;
+}
+
+.divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background-color: var(--border-color);
+}
+
+.theme-toggle {
+  color: var(--icon-color);
 }
 </style>

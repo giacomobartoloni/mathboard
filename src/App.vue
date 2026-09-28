@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div id="app">
+  <div id="app" :data-theme="uiTheme">
     <span class="logo">MathBoard</span>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       :id="'board'" 
       :selectedTool="selectedTool" 
       :selectedShape="selectedShape" 
+      :board-theme="boardTheme"
       ref="drawBoardRef"
       @request-formula="onRequestFormula"
       @edit-formula="onEditFormula"
@@ -42,9 +43,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     
     <ZoomPanel 
       :zoomLevel="zoomLevel"
+      :board-theme="boardTheme"
       @zoom-in="onZoomIn"
       @zoom-out="onZoomOut"
       @reset-zoom="onResetZoom"
+      @cycle-theme="onCycleTheme"
     />
     
     <SupportPanel />
@@ -63,6 +66,13 @@ import FormulaModal from './components/FormulaModal.vue'
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import CookieBanner from './components/CookieBanner.vue'
+import {
+  loadThemePreferences,
+  saveUiTheme,
+  saveBoardTheme,
+  cycleBoardTheme,
+  uiThemeForBoardTheme,
+} from './config/themes'
 
 export default {
   name: 'App',
@@ -75,6 +85,12 @@ export default {
     CookieBanner,
   },
   setup() {
+    // Persisted presentation preferences. DrawBoard adapts objects authored with
+    // the automatic board ink when boardTheme changes; explicit ink stays put.
+    const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
+    const uiTheme = ref(initialUiTheme)
+    const boardTheme = ref(initialBoardTheme)
+
     const selectedTool = ref('select')
     const selectedShape = ref('rectangle')
     const drawBoardRef = ref(null)
@@ -92,6 +108,14 @@ export default {
       selectedShape.value = shape
     }
 
+    const onCycleTheme = () => {
+      const nextBoard = cycleBoardTheme(boardTheme.value)
+      boardTheme.value = nextBoard
+      uiTheme.value = uiThemeForBoardTheme(nextBoard)
+      saveBoardTheme(nextBoard)
+      saveUiTheme(uiTheme.value)
+    }
+
     const onUndo = () => {
       drawBoardRef.value?.undo()
     }
@@ -101,7 +125,6 @@ export default {
     }
 
     const onRequestFormula = (position) => {
-      console.log('onRequestFormula called:', position);
       formulaPosition.value = position
       editingLatex.value = ''
       editingElement.value = null
@@ -109,7 +132,6 @@ export default {
     }
 
     const onEditFormula = ({ latex, position, fabricObject }) => {
-      console.log('onEditFormula called:', latex, position);
       formulaPosition.value = position
       editingLatex.value = latex
       editingElement.value = fabricObject
@@ -143,9 +165,6 @@ export default {
     }
 
     const onInsertFormula = (formulaData) => {
-      console.log('onInsertFormula called:', formulaData, formulaPosition.value);
-      console.log('drawBoardRef.value:', drawBoardRef.value);
-      
       if (editingElement.value) {
         // Update existing formula - remove old and add new
         const canvas = drawBoardRef.value?.canvas
@@ -190,6 +209,9 @@ export default {
       onZoomIn,
       onZoomOut,
       onResetZoom,
+      uiTheme,
+      boardTheme,
+      onCycleTheme,
     }
   }
 }
@@ -205,7 +227,47 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
-  color: #2c3e50;
+  color: var(--text-primary);
+
+  /* Dark Mode v2 semantic tokens: light defaults. Components consume these
+     inherited variables and must not receive theme props. */
+  --surface-primary: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+  --surface-secondary: #ffffff;
+  --surface-tertiary: rgba(0, 0, 0, 0.03);
+  --surface-muted: #f5f5f5;
+  --text-primary: #2c3e50;
+  --text-secondary: #555;
+  --text-muted: #666;
+  --text-placeholder: #999;
+  --border-color: #e0e0e0;
+  --panel-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  --hover-bg: rgba(0, 0, 0, 0.05);
+  --icon-color: #555;
+  --selected-bg: tan;
+  --selected-text: rgb(61, 61, 61);
+  --selected-shadow: 0 2px 8px rgba(210, 180, 140, 0.5);
+  --callout-info-bg: linear-gradient(135deg, #f0f7ff 0%, #e3f0ff 100%);
+  --callout-neutral-bg: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+#app[data-theme="dark"] {
+  --surface-primary: linear-gradient(135deg, #2a2a2e 0%, #1e1e22 100%);
+  --surface-secondary: #2a2a2e;
+  --surface-tertiary: rgba(255, 255, 255, 0.06);
+  --surface-muted: #1e1e22;
+  --text-primary: #e0e0e0;
+  --text-secondary: #bbb;
+  --text-muted: #888;
+  --text-placeholder: #777;
+  --border-color: #444;
+  --panel-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --hover-bg: rgba(255, 255, 255, 0.08);
+  --icon-color: #b0b0b0;
+  --selected-bg: #8b6914;
+  --selected-text: #f0e6d0;
+  --selected-shadow: 0 2px 8px rgba(139, 105, 20, 0.5);
+  --callout-info-bg: linear-gradient(135deg, #1a2a3a 0%, #1e2e40 100%);
+  --callout-neutral-bg: linear-gradient(135deg, #2a2a2e 0%, #333338 100%);
 }
 .logo {
   font-family: 'Satisfy', cursive;
@@ -237,7 +299,7 @@ body {
   position: absolute;
   bottom: 12px;
   left: 12px;
-  color: #666;
+  color: var(--text-muted);
   font-size: 12px;
   z-index: 1000;
   white-space: nowrap;
