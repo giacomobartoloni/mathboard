@@ -1,20 +1,24 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { applyExplicitInk, COLOR_PRESETS, normalizeHexColor } from '../src/config/colors.js'
+import {
+  applyAutoInk,
+  applyExplicitInk,
+  COLOR_PRESETS,
+  normalizeHexColor,
+  paletteColorFromObject,
+  paletteColorFromSelection,
+} from '../src/config/colors.js'
 
 const EXPECTED = [
-  ['black', 'Black', '#000000'],
-  ['white', 'White', '#ffffff'],
+  ['main', 'Main', null],
   ['red', 'Red', '#d32f2f'],
+  ['yellow', 'Yellow', '#f9a825'],
   ['blue', 'Blue', '#1976d2'],
   ['green', 'Green', '#2e7d32'],
-  ['orange', 'Orange', '#ef6c00'],
-  ['purple', 'Purple', '#6a1b9a'],
-  ['yellow', 'Yellow', '#f9a825'],
 ]
 
-test('COLOR_PRESETS lists the eight teaching colors in order', () => {
-  assert.equal(COLOR_PRESETS.length, 8)
+test('COLOR_PRESETS lists main plus four teaching colors in order', () => {
+  assert.equal(COLOR_PRESETS.length, 5)
   EXPECTED.forEach(([id, label, value], index) => {
     assert.deepEqual(COLOR_PRESETS[index], { id, label, value })
   })
@@ -89,4 +93,82 @@ test('applyExplicitInk prefers the object set method', () => {
   }
   assert.equal(applyExplicitInk(path, '#ffffff'), true)
   assert.deepEqual(calls, [{ stroke: '#ffffff', mathboardInkMode: 'fixed' }])
+})
+
+test('applyAutoInk restores board default ink and unlocks theme follow', () => {
+  const path = { type: 'path', stroke: '#d32f2f', mathboardInkMode: 'fixed' }
+  assert.equal(applyAutoInk(path, '#000000'), true)
+  assert.equal(path.stroke, '#000000')
+  assert.equal(path.mathboardInkMode, 'auto')
+
+  assert.equal(applyAutoInk(path, '#000000'), false)
+
+  const text = { type: 'i-text', fill: '#1976d2', mathboardInkMode: 'fixed' }
+  assert.equal(applyAutoInk(text, '#f5f5f5'), true)
+  assert.equal(text.fill, '#f5f5f5')
+  assert.equal(text.mathboardInkMode, 'auto')
+
+  assert.equal(applyAutoInk({ type: 'image', formulaType: 'katex-formula' }, '#000000'), false)
+})
+
+test('paletteColorFromObject maps fixed stroke/fill to hex and auto to null', () => {
+  assert.equal(
+    paletteColorFromObject({ type: 'path', stroke: '#D32F2F', mathboardInkMode: 'fixed' }),
+    '#d32f2f',
+  )
+  assert.equal(
+    paletteColorFromObject({ type: 'rect', stroke: '#1976d2', mathboardInkMode: 'fixed' }),
+    '#1976d2',
+  )
+  assert.equal(
+    paletteColorFromObject({ type: 'i-text', fill: '#2e7d32', mathboardInkMode: 'fixed' }),
+    '#2e7d32',
+  )
+  assert.equal(
+    paletteColorFromObject({ type: 'path', stroke: '#000000', mathboardInkMode: 'auto' }),
+    null,
+  )
+  assert.equal(
+    paletteColorFromObject({ type: 'path', stroke: '#000000' }),
+    null,
+  )
+  assert.equal(
+    paletteColorFromObject({ type: 'image', formulaType: 'katex-formula', stroke: '#d32f2f' }),
+    undefined,
+  )
+  assert.equal(paletteColorFromObject({ type: 'group', stroke: '#d32f2f' }), undefined)
+  assert.equal(paletteColorFromObject(null), undefined)
+})
+
+test('paletteColorFromSelection agrees on one palette value or abstains', () => {
+  assert.equal(
+    paletteColorFromSelection([
+      { type: 'path', stroke: '#d32f2f', mathboardInkMode: 'fixed' },
+      { type: 'rect', stroke: '#D32F2F', mathboardInkMode: 'fixed' },
+    ]),
+    '#d32f2f',
+  )
+  assert.equal(
+    paletteColorFromSelection([
+      { type: 'path', stroke: '#000000', mathboardInkMode: 'auto' },
+      { type: 'i-text', fill: '#ffffff', mathboardInkMode: 'auto' },
+    ]),
+    null,
+  )
+  assert.equal(
+    paletteColorFromSelection([
+      { type: 'path', stroke: '#d32f2f', mathboardInkMode: 'fixed' },
+      { type: 'path', stroke: '#1976d2', mathboardInkMode: 'fixed' },
+    ]),
+    undefined,
+  )
+  assert.equal(
+    paletteColorFromSelection([
+      { type: 'path', stroke: '#d32f2f', mathboardInkMode: 'fixed' },
+      { type: 'image', formulaType: 'katex-formula' },
+    ]),
+    '#d32f2f',
+  )
+  assert.equal(paletteColorFromSelection([]), undefined)
+  assert.equal(paletteColorFromSelection(null), undefined)
 })

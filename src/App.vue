@@ -32,8 +32,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @request-formula="onRequestFormula"
       @edit-formula="onEditFormula"
       @text-editing-completed="onTextEditingCompleted"
+      @selection-color="onSelectionColor"
     />
-    <ToolsPanel :selectedTool="selectedTool" :selected-color="selectedColor" :display-color="displayColor" @tool-selected="onToolSelected" @shape-selected="onShapeSelected" @color-selected="onColorSelected" @undo="onUndo" @redo="onRedo" />
+    <ToolsPanel :selectedTool="selectedTool" :selected-color="selectedColor" :display-color="displayColor" :main-color="boardThemeConfig.defaultInk" :main-ink-is-light="mainInkIsLight" @tool-selected="onToolSelected" @shape-selected="onShapeSelected" @color-selected="onColorSelected" @undo="onUndo" @redo="onRedo" />
     
     <FormulaModal 
       :isVisible="showFormulaModal"
@@ -103,15 +104,26 @@ export default {
     const uiTheme = ref(initialUiTheme)
     const boardTheme = ref(initialBoardTheme)
     const selectedColor = ref(null)
+    const boardThemeConfig = computed(() => BOARD_THEMES[normalizeBoardTheme(boardTheme.value)])
     const displayColor = computed(() => (
-      selectedColor.value
-      ?? BOARD_THEMES[normalizeBoardTheme(boardTheme.value)].defaultInk
+      selectedColor.value ?? boardThemeConfig.value.defaultInk
     ))
+    const mainInkIsLight = computed(() => boardThemeConfig.value.inkIsLight)
     const onColorSelected = (value, options = {}) => {
+      if (value === null) {
+        selectedColor.value = null
+        drawBoardRef.value?.recolorSelection(null, options)
+        return
+      }
       const normalized = normalizeHexColor(value)
       if (!normalized) return
       selectedColor.value = normalized
       drawBoardRef.value?.recolorSelection(normalized, options)
+    }
+
+    // Mirror selection ink into the palette only. Never recolor here.
+    const onSelectionColor = (value) => {
+      selectedColor.value = value
     }
 
     const selectedTool = ref('select')
@@ -281,7 +293,10 @@ export default {
       boardTheme,
       selectedColor,
       displayColor,
+      boardThemeConfig,
+      mainInkIsLight,
       onColorSelected,
+      onSelectionColor,
       onCycleTheme,
     }
   }

@@ -74,38 +74,44 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         </transition>
       </div>
 
-      <div class="color-control">
-        <button
-          type="button"
+      <div
+        class="color-control"
+        @mouseenter="showColorPopover = true"
+        @mouseleave="showColorPopover = false"
+        title="Pen color"
+      >
+        <span
           class="color-indicator"
-          :class="{ white: displayColor === '#ffffff' }"
+          :class="{ white: isLightDisplayColor }"
           :style="{ background: displayColor }"
+          role="img"
           aria-label="Pen color"
-          :aria-expanded="paletteOpen ? 'true' : 'false'"
-          @click="paletteOpen = !paletteOpen"
-        ></button>
-        <div v-if="paletteOpen" class="color-popover" role="group" aria-label="Pen colors">
-          <button
-            v-for="preset in colorPresets"
-            :key="preset.id"
-            type="button"
-            class="swatch"
-            :class="{ selected: selectedColor === preset.value, white: preset.value === '#ffffff' }"
-            :style="{ background: preset.value }"
-            :aria-label="preset.label"
-            :aria-pressed="selectedColor === preset.value"
-            @click="chooseColor(preset.value)"
-          ></button>
-          <label class="custom-color">
-            Custom
-            <input
-              type="color"
-              :value="displayColor"
-              aria-label="Custom color"
-              @input="chooseCustomColor($event.target.value)"
-            />
-          </label>
-        </div>
+        ></span>
+
+        <transition name="fade">
+          <div
+            v-if="showColorPopover"
+            class="color-popover"
+            role="group"
+            aria-label="Pen colors"
+            @click.stop
+          >
+            <button
+              v-for="preset in colorPresets"
+              :key="preset.id"
+              type="button"
+              class="swatch"
+              :class="{
+                selected: isPresetSelected(preset),
+                white: preset.id === 'main' && mainInkIsLight,
+              }"
+              :style="{ background: swatchColor(preset) }"
+              :aria-label="preset.label"
+              :aria-pressed="isPresetSelected(preset)"
+              @click="chooseColor(preset.value)"
+            ></button>
+          </div>
+        </transition>
       </div>
 
     </div>
@@ -122,7 +128,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { COLOR_PRESETS, normalizeHexColor } from '../config/colors.js'
+import { COLOR_PRESETS } from '../config/colors.js'
 
 export default {
   name: "ToolsPanel",
@@ -138,6 +144,14 @@ export default {
     displayColor: {
       type: String,
       default: '#000000'
+    },
+    mainColor: {
+      type: String,
+      default: '#000000'
+    },
+    mainInkIsLight: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -145,7 +159,7 @@ export default {
       selected: "select",
       selectedShape: "rectangle",
       showShapesSubmenu: false,
-      paletteOpen: false,
+      showColorPopover: false,
       colorPresets: COLOR_PRESETS,
       pencil: {
         width: 10,
@@ -156,6 +170,11 @@ export default {
       text: {
       },
     };
+  },
+  computed: {
+    isLightDisplayColor() {
+      return this.selectedColor === null && this.mainInkIsLight;
+    },
   },
   methods: {
     select: function (element) {
@@ -169,14 +188,16 @@ export default {
       this.selectedShape = shape;
       this.$emit('shape-selected', shape);
     },
+    swatchColor(preset) {
+      return preset.value ?? this.mainColor;
+    },
+    isPresetSelected(preset) {
+      if (preset.value === null) return this.selectedColor === null;
+      return this.selectedColor === preset.value;
+    },
     chooseColor(value) {
       this.$emit('color-selected', value);
-      this.paletteOpen = false;
     },
-    chooseCustomColor(value) {
-      const normalized = normalizeHexColor(value);
-      if (normalized) this.$emit('color-selected', normalized, { coalesce: true });
-    }
   },
   watch: {
     selectedTool(newTool) {
@@ -307,43 +328,34 @@ export default {
   opacity: 0;
 }
 
-.tools-panel > div.color-control:hover {
-  transform: none;
-  background: transparent;
-}
-
-.color-control {
-  position: relative;
-  display: flex;
-  justify-content: center;
-}
-
 .color-indicator {
+  display: block;
   width: 22px;
   height: 22px;
   border-radius: 50%;
   border: none;
-  padding: 0;
-  cursor: pointer;
 }
 
 .color-indicator.white,
 .swatch.white {
   border: 1px solid var(--border-color);
+  box-sizing: border-box;
 }
 
 .color-popover {
   position: absolute;
   left: 100%;
-  bottom: 0;
+  top: -2px;
   margin-left: 10px;
   background: var(--surface-primary);
+  border: none;
   border-radius: 8px;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: row;
+  align-items: center;
   gap: 6px;
-  padding: 8px;
-  width: 148px;
+  padding: 6px 8px;
+  white-space: nowrap;
   box-shadow: var(--panel-shadow);
 }
 
@@ -354,28 +366,11 @@ export default {
   border: none;
   padding: 0;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .swatch.selected {
   outline: 2px solid var(--text-primary);
   outline-offset: 2px;
-}
-
-.custom-color {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.custom-color input[type="color"] {
-  width: 28px;
-  height: 22px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
 }
 </style>

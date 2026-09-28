@@ -28,7 +28,7 @@ import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, util, 
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
-import { applyExplicitInk } from "../config/colors";
+import { applyAutoInk, applyExplicitInk, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
 
 // Custom Fabric properties that must be serialized with canvas state (history).
@@ -540,9 +540,27 @@ export default {
       });
     },
     /**
-     * Recolor the active selection with an explicit palette color.
-     * Unselected objects are not visited. A custom-color drag coalesces into
-     * one history entry; a swatch click is its own undo step.
+     * Mirror the active selection into the toolbar palette. Automatic ink
+     * emits null; fixed ink emits its hex. Mixed or unreadable selections
+     * leave the palette alone. Does not recolor or push history.
+     */
+    emitSelectionColor() {
+      if (!this.canvas) return;
+      const active = this.canvas.getActiveObject();
+      if (!active) return;
+
+      const targets = active.type === "activeselection"
+        ? active.getObjects()
+        : [active];
+      const color = paletteColorFromSelection(targets);
+      if (color === undefined) return;
+      this.$emit("selection-color", color);
+    },
+
+    /**
+     * Recolor the active selection. A hex locks explicit ink; null restores
+     * automatic board ink. Unselected objects are not visited. A custom-color
+     * drag coalesces into one history entry; a swatch click is its own undo step.
      */
     recolorSelection(color, options = {}) {
       if (!this.canvas) return false;
@@ -553,9 +571,15 @@ export default {
         ? active.getObjects()
         : [active];
 
+      const useAuto = color === null;
+      const ink = useAuto ? this.boardThemeConfig.defaultInk : color;
+
       let changed = false;
       targets.forEach((obj) => {
-        if (applyExplicitInk(obj, color)) changed = true;
+        const applied = useAuto
+          ? applyAutoInk(obj, ink)
+          : applyExplicitInk(obj, ink);
+        if (applied) changed = true;
       });
       if (!changed) return false;
 
@@ -736,6 +760,9 @@ export default {
       this.canvas.on('object:modified', this.saveState);
       this.canvas.on('object:removed', this.saveState);
       
+      this.canvas.on('selection:created', this.emitSelectionColor);
+      this.canvas.on('selection:updated', this.emitSelectionColor);
+
       // Enable double-click editing for text objects and formulas
       this.canvas.on('mouse:dblclick', (opt) => {
         const target = opt.target;
@@ -814,6 +841,8 @@ export default {
     this.canvas.off('object:added', this.saveState);
     this.canvas.off('object:modified', this.saveState);
     this.canvas.off('object:removed', this.saveState);
+    this.canvas.off('selection:created', this.emitSelectionColor);
+    this.canvas.off('selection:updated', this.emitSelectionColor);
     
     window.removeEventListener('resize', this.updateCanvasSize);
   },
