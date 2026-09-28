@@ -49,6 +49,13 @@ npm run lint
 
 Reports lint errors without modifying files.
 
+### Regenerates PWA icons
+```
+npm run generate:icons
+```
+
+Renders `tools/icon-template.html` in headless Chromium and overwrites `public/icon-192x192.png` and `public/icon-512x512.png`. Needs network access: Puppeteer downloads Chrome when the package is installed, and the generator loads Satisfy from Google Fonts. It aborts if that font does not load.
+
 ### Preview production build
 ```
 npm run preview
