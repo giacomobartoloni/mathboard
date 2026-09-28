@@ -40,7 +40,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 
 ## Deployment
 
-- **GitHub Actions** (`.github/workflows/main.yml`) runs CI checks only, on push and pull request for `main` and `feature/vite-migration`: `npm ci`, `npm run lint`, `npm run build`. No deploy job, no secrets.
+- **GitHub Actions** (`.github/workflows/main.yml`) runs CI checks only, on push and pull request for `main` and `develop`: `npm ci`, `npm run lint`, `npm run build`. No deploy job, no secrets.
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets.
 - Firebase is not used: no dependency, runtime import, or deploy step.
 
