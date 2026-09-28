@@ -1,0 +1,130 @@
+<!--
+MathBoard
+
+Copyright (C) 2026 Giacomo Bartoloni
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Satisfy&display=swap"
+    rel="stylesheet"
+  >
+
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      overflow: hidden;
+    }
+
+    :root {
+      --icon-size: 512px;
+
+      /*
+       * MathBoard brand colors.
+       *
+       * Keep these synchronized with the MathBoard logo styling
+       * in the application.
+       */
+      --mathboard-background: rgb(61, 61, 61);
+      --mathboard-border: tan;
+      --mathboard-foreground: whitesmoke;
+
+      /*
+       * Geometry is expressed proportionally through calc() so
+       * the same template renders correctly at 192 and 512 px.
+       */
+      --outer-padding: calc(var(--icon-size) * 0.045);
+      --border-width: calc(var(--icon-size) * 0.035);
+      --corner-radius: calc(var(--icon-size) * 0.16);
+      --mark-size: calc(var(--icon-size) * 0.64);
+    }
+
+    #capture {
+      width: var(--icon-size);
+      height: var(--icon-size);
+
+      box-sizing: border-box;
+      padding: var(--outer-padding);
+
+      display: grid;
+      place-items: center;
+
+      /*
+       * Important:
+       * the area outside .mathboard-icon remains transparent.
+       */
+      background: transparent;
+    }
+
+    .mathboard-icon {
+      box-sizing: border-box;
+
+      width: 100%;
+      height: 100%;
+
+      display: grid;
+      place-items: center;
+
+      background: var(--mathboard-background);
+
+      border:
+        var(--border-width)
+        solid
+        var(--mathboard-border);
+
+      border-radius: var(--corner-radius);
+
+      overflow: hidden;
+    }
+
+    .mathboard-mark {
+      font-family: "Satisfy", cursive;
+      font-size: var(--mark-size);
+      font-weight: 400;
+      line-height: 1;
+
+      color: var(--mathboard-foreground);
+
+      user-select: none;
+
+      /*
+       * Minor optical correction.
+       * Adjust only after visually comparing with the actual MathBoard logo.
+       */
+      transform: translateY(-2%);
+
+      -webkit-font-smoothing: antialiased;
+      text-rendering: geometricPrecision;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="capture">
+    <div class="mathboard-icon">
+      <div class="mathboard-mark">M</div>
+    </div>
+  </div>
+</body>
+</html>
