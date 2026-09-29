@@ -34,6 +34,22 @@ test('normalizeHexColor accepts only six-digit hex', () => {
   assert.equal(normalizeHexColor('red'), null)
 })
 
+test('applyExplicitInk accepts Fabric class types and isType', () => {
+  const byClassName = { type: 'Rect', stroke: '#000000', fill: 'transparent', mathboardInkMode: 'auto' }
+  assert.equal(applyExplicitInk(byClassName, '#1976d2'), true)
+  assert.equal(byClassName.stroke, '#1976d2')
+  assert.equal(byClassName.mathboardInkMode, 'fixed')
+
+  const byIsType = {
+    type: 'deprecated',
+    isType: (...types) => types.includes('IText'),
+    fill: '#000000',
+    mathboardInkMode: 'auto',
+  }
+  assert.equal(applyExplicitInk(byIsType, '#d32f2f'), true)
+  assert.equal(byIsType.fill, '#d32f2f')
+})
+
 test('applyExplicitInk recolors a selected stroke, shape, or text and locks it', () => {
   const path = { type: 'path', stroke: '#000000', fill: null, mathboardInkMode: 'auto' }
   assert.equal(applyExplicitInk(path, '#D32F2F'), true)

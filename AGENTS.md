@@ -4,7 +4,7 @@
 
 - **Vue 3** (Options API with `setup()` — not `<script setup>`, not Composition API exclusively)
 - **Vite 6** (`vite`), **npm** (migrated from Vue CLI 5 in feature/vite-migration)
-- **Fabric.js 6** (canvas drawing), **KaTeX** (LaTeX rendering), **html2canvas** (formula→canvas conversion)
+- **Fabric.js 7** (canvas drawing), **KaTeX** (LaTeX rendering), **html2canvas** (formula→canvas conversion)
 - **FontAwesome 6** global registration in `main.js`, used as `<font-awesome-icon :icon="['fas', 'name']" />`
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets. Firebase is not used in the runtime, build, or deploy
 - **No TypeScript, no tests, no typecheck** — verification is `npm run lint` plus `npm run build`
@@ -33,14 +33,14 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 ## Key implementation details
 
 - **Formulas**: entered in `FormulaModal` (KaTeX render preview), emitted as `{ latex, html }`, converted to canvas image via html2canvas on a temp div
-- **Undo/redo**: JSON-serialized canvas state history (limit 50), uses `util.enlivenObjects` on restore
+- **Undo/redo**: command log, one entry per gesture, limit 50. Decision: `docs/adr/0001-command-log-history.md`
 - **Pan**: manipulates `viewportTransform[4/5]` directly
 - **Zoom**: `canvas.setZoom()`, clamp 0.1–5x
 - **Shapes**: submenu in ToolsPanel; Rect, Circle, Line drawn via mouse drag
 
 ## Deployment
 
-- **GitHub Actions** (`.github/workflows/main.yml`) runs CI checks only, on push and pull request for `main` and `feature/vite-migration`: `npm ci`, `npm run lint`, `npm run build`. No deploy job, no secrets.
+- **GitHub Actions** (`.github/workflows/main.yml`) runs CI checks only, on push and pull request for `main` and `develop`: `npm ci`, `npm run lint`, `npm run build`. No deploy job, no secrets.
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets.
 - Firebase is not used: no dependency, runtime import, or deploy step.
 

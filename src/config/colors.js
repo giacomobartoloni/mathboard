@@ -20,9 +20,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { INK_MODE_AUTO, INK_MODE_FIXED } from './themes.js'
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
-const STROKE_INK_TYPES = ['path', 'rect', 'circle', 'line']
+// Fabric 7 class type is PascalCase; the deprecated instance getter is lowercase.
+const STROKE_INK_TYPES = ['path', 'Path', 'rect', 'Rect', 'circle', 'Circle', 'line', 'Line']
 // Objects whose board ink lives on "fill".
-const FILL_INK_TYPES = ['i-text', 'text']
+const FILL_INK_TYPES = ['i-text', 'IText', 'text', 'Text']
+
+function isInkType(object, types) {
+  if (typeof object.isType === 'function') return object.isType(...types)
+  return types.includes(object.type)
+}
 
 /**
  * Pen palette presets. `main` is automatic board ink (null value): black on
@@ -54,8 +60,8 @@ export function paletteColorFromObject(object) {
   if (object.formulaType) return undefined
 
   let raw = null
-  if (STROKE_INK_TYPES.includes(object.type)) raw = object.stroke
-  else if (FILL_INK_TYPES.includes(object.type)) raw = object.fill
+  if (isInkType(object, STROKE_INK_TYPES)) raw = object.stroke
+  else if (isInkType(object, FILL_INK_TYPES)) raw = object.fill
   else return undefined
 
   if (object.mathboardInkMode !== INK_MODE_FIXED) return null
@@ -90,10 +96,10 @@ function inkPatchForType(object, color, inkMode) {
   const normalized = normalizeHexColor(color)
   if (!object || typeof object !== 'object' || !normalized) return null
   if (object.formulaType) return null
-  if (STROKE_INK_TYPES.includes(object.type)) {
+  if (isInkType(object, STROKE_INK_TYPES)) {
     return { stroke: normalized, mathboardInkMode: inkMode }
   }
-  if (FILL_INK_TYPES.includes(object.type)) {
+  if (isInkType(object, FILL_INK_TYPES)) {
     return { fill: normalized, mathboardInkMode: inkMode }
   }
   return null

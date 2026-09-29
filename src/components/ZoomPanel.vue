@@ -54,6 +54,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     >
       <font-awesome-icon :icon="['fas', themeIcon]" />
     </button>
+    <button
+      v-if="fullscreenSupported"
+      type="button"
+      class="zoom-button fullscreen-toggle"
+      :title="fullscreenLabel"
+      :aria-label="fullscreenLabel"
+      :aria-pressed="isFullscreen ? 'true' : 'false'"
+      @click="$emit('toggle-fullscreen')"
+    >
+      <font-awesome-icon :icon="['fas', fullscreenIcon]" />
+    </button>
   </div>
 </template>
 
@@ -76,9 +87,17 @@ export default {
     boardTheme: {
       type: String,
       default: 'light'
+    },
+    isFullscreen: {
+      type: Boolean,
+      default: false
+    },
+    fullscreenSupported: {
+      type: Boolean,
+      default: true
     }
   },
-  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'cycle-theme'],
+  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'cycle-theme', 'toggle-fullscreen'],
   computed: {
     zoomPercentage() {
       return Math.round(this.zoomLevel * 100)
@@ -93,6 +112,12 @@ export default {
       const current = BOARD_THEMES[this.currentBoardTheme].label
       const next = BOARD_THEMES[cycleBoardTheme(this.currentBoardTheme)].label
       return `Theme: ${current} — click for ${next}`
+    },
+    fullscreenIcon() {
+      return this.isFullscreen ? 'compress' : 'expand'
+    },
+    fullscreenLabel() {
+      return this.isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'
     }
   }
 }
@@ -145,6 +170,11 @@ export default {
   transform: translateY(0);
 }
 
+.zoom-button:focus-visible {
+  outline: 2px solid var(--selected-bg);
+  outline-offset: 2px;
+}
+
 .zoom-button.reset {
   font-size: 12px;
   font-weight: 600;
@@ -170,7 +200,8 @@ export default {
   background-color: var(--border-color);
 }
 
-.theme-toggle {
+.theme-toggle,
+.fullscreen-toggle {
   color: var(--icon-color);
 }
 </style>

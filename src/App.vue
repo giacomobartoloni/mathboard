@@ -18,8 +18,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div id="app" :data-theme="uiTheme">
-    <span class="logo">MathBoard</span>
+  <div
+    id="app"
+    ref="fullscreenRootRef"
+    :data-theme="uiTheme"
+    :data-fullscreen="isFullscreen ? 'true' : 'false'"
+  >
+    <span class="logo secondary-chrome">MathBoard</span>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
     <DrawBoard 
@@ -46,22 +51,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <ZoomPanel 
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
+      :is-fullscreen="isFullscreen"
+      :fullscreen-supported="fullscreenSupported"
       @zoom-in="onZoomIn"
       @zoom-out="onZoomOut"
       @reset-zoom="onResetZoom"
       @cycle-theme="onCycleTheme"
+      @toggle-fullscreen="toggleFullscreen"
     />
     
-    <SupportPanel />
+    <SupportPanel class="secondary-chrome" />
     
-    <CookieBanner />
+    <CookieBanner v-show="!isFullscreen" />
     
-    <span class="copyright">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
+    <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
 </template>
 
 <script>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 import FormulaModal from './components/FormulaModal.vue'
@@ -86,6 +94,13 @@ import {
   isUndoShortcut,
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
+
+function detectFullscreenSupport() {
+  return typeof document !== 'undefined'
+    && typeof Element !== 'undefined'
+    && typeof document.exitFullscreen === 'function'
+    && typeof Element.prototype.requestFullscreen === 'function'
+}
 
 export default {
   name: 'App',
@@ -129,11 +144,51 @@ export default {
     const selectedTool = ref('select')
     const selectedShape = ref('rectangle')
     const drawBoardRef = ref(null)
+    const fullscreenRootRef = ref(null)
     const showFormulaModal = ref(false)
     const formulaPosition = ref({ x: 0, y: 0 })
     const editingLatex = ref('')
     const editingElement = ref(null)
     const zoomLevel = ref(1)
+    // Mirror of document.fullscreenElement only — never invent a parallel flag.
+    const isFullscreen = ref(false)
+    const fullscreenSupported = ref(detectFullscreenSupport())
+
+    const syncFullscreenState = () => {
+      isFullscreen.value = Boolean(document.fullscreenElement)
+      // Fullscreen changes layout size; reuse DrawBoard's existing resize path
+      // so viewportTransform / zoom / pan stay intact.
+      nextTick(() => {
+        drawBoardRef.value?.updateCanvasSize?.()
+      })
+    }
+
+    const toggleFullscreen = async () => {
+      if (!fullscreenSupported.value) return
+      try {
+        if (!document.fullscreenElement) {
+          const root = fullscreenRootRef.value
+          if (!root?.requestFullscreen) return
+          await root.requestFullscreen()
+        } else {
+          await document.exitFullscreen()
+        }
+      } catch (err) {
+        // Policy rejection / unsupported — keep the app usable.
+        console.warn('Fullscreen request failed:', err)
+        syncFullscreenState()
+      }
+    }
+
+    onMounted(() => {
+      fullscreenSupported.value = detectFullscreenSupport()
+      document.addEventListener('fullscreenchange', syncFullscreenState)
+      syncFullscreenState()
+    })
+
+    onBeforeUnmount(() => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState)
+    })
 
     const onToolSelected = (tool) => {
       selectedTool.value = tool
@@ -153,6 +208,8 @@ export default {
 
     const onKeyDown = (event) => {
       if (isEscapeShortcut(event)) {
+        // The browser uses Escape to leave fullscreen. Do not cancel that.
+        if (document.fullscreenElement) return
         if (showFormulaModal.value) {
           showFormulaModal.value = false
           event.preventDefault()
@@ -246,16 +303,9 @@ export default {
 
     const onInsertFormula = (formulaData) => {
       if (editingElement.value) {
-        // Update existing formula - remove old and add new
-        const canvas = drawBoardRef.value?.canvas
-        if (canvas && editingElement.value) {
-          const oldPos = {
-            x: editingElement.value.left,
-            y: editingElement.value.top
-          }
-          canvas.remove(editingElement.value)
-          drawBoardRef.value.addFormulaToCanvas(formulaData, oldPos)
-        }
+        // One gesture: swap the bitmap on the command log, do not remove first.
+        // Removing here used to drop the formula if the new bitmap failed.
+        drawBoardRef.value?.replaceFormula(editingElement.value, formulaData)
         editingElement.value = null
       } else if (drawBoardRef.value && drawBoardRef.value.addFormulaToCanvas) {
         // Add new formula
@@ -275,9 +325,13 @@ export default {
       selectedTool,
       selectedShape,
       drawBoardRef,
+      fullscreenRootRef,
       showFormulaModal,
       editingLatex,
       zoomLevel,
+      isFullscreen,
+      fullscreenSupported,
+      toggleFullscreen,
       onToolSelected,
       onShapeSelected,
       onUndo,
@@ -355,6 +409,28 @@ body {
   --callout-info-bg: linear-gradient(135deg, #1a2a3a 0%, #1e2e40 100%);
   --callout-neutral-bg: linear-gradient(135deg, #2a2a2e 0%, #333338 100%);
 }
+
+/* Fullscreen shell: fill the fullscreen element; do not introduce scrollbars. */
+#app:fullscreen,
+#app[data-fullscreen="true"] {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--surface-muted);
+}
+
+#app[data-fullscreen="true"] .secondary-chrome,
+#app:fullscreen .secondary-chrome {
+  display: none !important;
+}
+
+/* Support panel is hidden in fullscreen; reclaim its bottom-right space. */
+#app[data-fullscreen="true"] .zoom-panel,
+#app:fullscreen .zoom-panel {
+  right: 12px;
+}
+
 .logo {
   font-family: 'Satisfy', cursive;
   font-size: normal;
