@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     >
       <span>+</span>
     </button>
+    <font-awesome-icon class="zoom-search-icon" :icon="['fas', 'search']" aria-hidden="true" />
     <button 
       class="zoom-button" 
       @click="$emit('zoom-out')" 
@@ -126,7 +127,7 @@ export default {
 .zoom-panel {
   position: absolute;
   z-index: 10;
-  right: 12px;
+  right: 150px;
   bottom: 12px;
   
   background: var(--surface-primary);
@@ -141,7 +142,12 @@ export default {
 
 @media (max-width: 768px) {
   .zoom-panel {
+    right: 12px;
     bottom: 25px;
+  }
+
+  .zoom-search-icon {
+    display: none;
   }
 
   .zoom-level {

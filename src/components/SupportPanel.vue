@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       aria-label="About"
     >
       <font-awesome-icon :icon="['fas', 'info-circle']" />
+      <span class="about-label">About</span>
     </button>
     
 
@@ -115,7 +116,7 @@ export default {
   position: absolute;
   z-index: 10;
   right: 12px;
-  top: 12px;
+  bottom: 12px;
   
   background: var(--surface-primary);
   border-radius: 8px;
@@ -131,16 +132,15 @@ export default {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px;
+  padding: 8px 12px;
   border-radius: 6px;
   transition: all 0.2s ease;
-  font-size: 16px;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   color: var(--icon-color);
-  min-width: 40px;
-  min-height: 40px;
 }
 
 .about-button:hover {
@@ -151,6 +151,25 @@ export default {
 .about-button:focus-visible {
   outline: 2px solid var(--selected-bg);
   outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .support-panel {
+    top: 12px;
+    bottom: auto;
+  }
+
+  .about-label {
+    display: none;
+  }
+
+  .about-button {
+    padding: 8px;
+    font-size: 16px;
+    min-width: 40px;
+    min-height: 40px;
+    gap: 0;
+  }
 }
 
 .support-panel a {

@@ -441,6 +441,12 @@ body {
   display: none !important;
 }
 
+/* Support panel is hidden in fullscreen; reclaim its bottom-right space. */
+#app[data-fullscreen="true"] .zoom-panel,
+#app:fullscreen .zoom-panel {
+  right: 12px;
+}
+
 .logo {
   font-family: 'Satisfy', cursive;
   font-size: normal;
