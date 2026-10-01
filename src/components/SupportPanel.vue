@@ -19,9 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <template>
   <div class="support-panel">
-    <button class="about-button" @click="openAbout" title="About">
+    <button
+      type="button"
+      class="about-button"
+      @click="openAbout"
+      title="About"
+      aria-label="About"
+    >
       <font-awesome-icon :icon="['fas', 'info-circle']" />
-      <span>About</span>
     </button>
     
 
@@ -110,7 +115,7 @@ export default {
   position: absolute;
   z-index: 10;
   right: 12px;
-  bottom: 12px;
+  top: 12px;
   
   background: var(--surface-primary);
   border-radius: 8px;
@@ -122,30 +127,30 @@ export default {
   min-height: 40px;
 }
 
-@media (max-width: 768px) {
-  .support-panel {
-    bottom: 25px;
-  }
-}
-
 .about-button {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 8px;
   border-radius: 6px;
   transition: all 0.2s ease;
-  font-size: 14px;
+  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   color: var(--icon-color);
+  min-width: 40px;
+  min-height: 40px;
 }
 
 .about-button:hover {
   background-color: var(--hover-bg);
   transform: translateY(-1px);
+}
+
+.about-button:focus-visible {
+  outline: 2px solid var(--selected-bg);
+  outline-offset: 2px;
 }
 
 .support-panel a {
