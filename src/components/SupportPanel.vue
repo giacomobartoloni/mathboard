@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <template>
   <div class="support-panel">
-    <button class="about-button" @click="showAbout = true" title="About">
+    <button class="about-button" @click="openAbout" title="About">
       <font-awesome-icon :icon="['fas', 'info-circle']" />
       <span>About</span>
     </button>
@@ -82,6 +82,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { ref } from 'vue'
 import packageInfo from '../../package.json'
+import { trackEvent } from '../analytics'
+import { ANALYTICS_EVENTS } from '../analytics/events.js'
 
 export default {
   name: 'SupportPanel',
@@ -89,9 +91,15 @@ export default {
     const showAbout = ref(false)
     const version = packageInfo.version
 
+    const openAbout = () => {
+      showAbout.value = true
+      trackEvent(ANALYTICS_EVENTS.SUPPORT_OPENED)
+    }
+
     return {
       showAbout,
-      version
+      version,
+      openAbout,
     }
   }
 }

@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { createApp } from 'vue'
 import App from './App.vue'
+import { initializeAnalytics } from './analytics/index.js'
 
 import { library } from '@fortawesome/fontawesome-svg-core'
 import { faMousePointer } from '@fortawesome/free-solid-svg-icons'
@@ -69,6 +70,8 @@ library.add(faCopy)
 library.add(faTrash)
 library.add(faPenToSquare)
 library.add(faGithub)
+
+initializeAnalytics()
 
 const app = createApp(App)
 app.component('font-awesome-icon', FontAwesomeIcon)
