@@ -41,6 +41,11 @@ import { faCompress } from '@fortawesome/free-solid-svg-icons'
 import { faCopy } from '@fortawesome/free-solid-svg-icons'
 import { faTrash } from '@fortawesome/free-solid-svg-icons'
 import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
+import { faObjectGroup } from '@fortawesome/free-solid-svg-icons'
+import { faObjectUngroup } from '@fortawesome/free-solid-svg-icons'
+import { faBorderAll } from '@fortawesome/free-solid-svg-icons'
+import { faCircleNotch } from '@fortawesome/free-solid-svg-icons'
+import { faFile } from '@fortawesome/free-solid-svg-icons'
 import { faHandPaper } from '@fortawesome/free-regular-svg-icons'
 import { faSquare } from '@fortawesome/free-regular-svg-icons'
 import { faCircle } from '@fortawesome/free-regular-svg-icons'
@@ -69,6 +74,11 @@ library.add(faCompress)
 library.add(faCopy)
 library.add(faTrash)
 library.add(faPenToSquare)
+library.add(faObjectGroup)
+library.add(faObjectUngroup)
+library.add(faBorderAll)
+library.add(faCircleNotch)
+library.add(faFile)
 library.add(faGithub)
 
 initializeAnalytics()

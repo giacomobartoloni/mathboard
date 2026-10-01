@@ -88,6 +88,11 @@ function keysFor(object) {
     // The path commands stay on the instance. A move must not copy them.
     return TRANSFORM_KEYS;
   }
+  if (object.isType("Group", "ActiveSelection")) {
+    // Permanent groups and temporary selections: layout only. Children stay
+    // on the instance; undo of a move does not rebuild the tree.
+    return ["width", "height", ...TRANSFORM_KEYS];
+  }
   return ["width", "height", ...TRANSFORM_KEYS];
 }
 
