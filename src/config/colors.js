@@ -30,6 +30,28 @@ function isInkType(object, types) {
   return types.includes(object.type)
 }
 
+const CONTAINER_INK_TYPES = ['Group', 'group', 'ActiveSelection', 'activeSelection']
+
+/**
+ * Expand Groups / ActiveSelection into leaf objects that can carry board ink.
+ * Formulas and other non-ink types stay in the list; callers skip them.
+ */
+export function flattenInkTargets(objects) {
+  const out = []
+  const walk = (object) => {
+    if (!object || typeof object !== 'object') return
+    if (isInkType(object, CONTAINER_INK_TYPES)) {
+      const members = typeof object.getObjects === 'function' ? object.getObjects() : []
+      members.forEach(walk)
+      return
+    }
+    out.push(object)
+  }
+  if (!Array.isArray(objects)) return out
+  objects.forEach(walk)
+  return out
+}
+
 /**
  * Pen palette presets. `main` is automatic board ink (null value): black on
  * the light board, a light ink on dark and chalkboard. The other presets are
@@ -75,11 +97,12 @@ export function paletteColorFromObject(object) {
  * unreadable, or mixed so the toolbar should keep its current color.
  */
 export function paletteColorFromSelection(objects) {
-  if (!Array.isArray(objects) || objects.length === 0) return undefined
+  const targets = flattenInkTargets(objects)
+  if (targets.length === 0) return undefined
 
   let agreed
   let hasReadable = false
-  for (const object of objects) {
+  for (const object of targets) {
     const color = paletteColorFromObject(object)
     if (color === undefined) continue
     if (!hasReadable) {
@@ -97,7 +120,16 @@ function inkPatchForType(object, color, inkMode) {
   if (!object || typeof object !== 'object' || !normalized) return null
   if (object.formulaType) return null
   if (isInkType(object, STROKE_INK_TYPES)) {
-    return { stroke: normalized, mathboardInkMode: inkMode }
+    const patch = { stroke: normalized, mathboardInkMode: inkMode }
+    // Filled circles (e.g. stamp dots) keep fill in sync with stroke ink.
+    if (
+      isInkType(object, ['circle', 'Circle'])
+      && object.fill
+      && object.fill !== 'transparent'
+    ) {
+      patch.fill = normalized
+    }
+    return patch
   }
   if (isInkType(object, FILL_INK_TYPES)) {
     return { fill: normalized, mathboardInkMode: inkMode }

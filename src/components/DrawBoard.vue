@@ -43,7 +43,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
-import { applyAutoInk, applyExplicitInk, paletteColorFromSelection } from "../config/colors";
+import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
 import { selectionChromeForBoard } from "../config/selectionChrome";
 import {
@@ -239,19 +239,35 @@ export default {
      * Recolor every object authored with the board default ink to the given board
      * theme. Objects without the AUTO ink mode (explicit user colors, imported
      * documents) are left untouched, and no history entry is pushed.
+     * Walks into permanent Groups (and ActiveSelection) so stamp kits follow theme.
      */
     syncAutoInk(config) {
-      this.canvas.forEachObject((obj) => {
+      const apply = (obj) => {
+        if (!obj) return;
+        if (obj.isType?.("Group") || obj.isType?.("ActiveSelection")) {
+          const members = typeof obj.getObjects === "function" ? obj.getObjects() : [];
+          members.forEach(apply);
+          return;
+        }
         if (obj.mathboardInkMode !== INK_MODE_AUTO) return;
 
         if (obj.formulaType === FORMULA_TYPE) {
           this.syncFormulaInk(obj, config);
         } else if (obj.isType(...STROKE_INK_TYPES)) {
-          obj.set('stroke', config.defaultInk);
+          const patch = { stroke: config.defaultInk };
+          if (
+            obj.isType("Circle")
+            && obj.fill
+            && obj.fill !== "transparent"
+          ) {
+            patch.fill = config.defaultInk;
+          }
+          obj.set(patch);
         } else if (obj.isType(...FILL_INK_TYPES)) {
-          obj.set('fill', config.defaultInk);
+          obj.set("fill", config.defaultInk);
         }
-      });
+      };
+      this.canvas.forEachObject(apply);
     },
     /**
      * Adapt a formula bitmap to the board ink polarity. Fabric filters never mutate
@@ -273,7 +289,15 @@ export default {
     _inkSnapshot(object) {
       if (!object || object.formulaType) return null;
       if (object.isType(...STROKE_INK_TYPES)) {
-        return { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
+        const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
+        if (
+          object.isType("Circle")
+          && object.fill
+          && object.fill !== "transparent"
+        ) {
+          snapshot.fill = object.fill;
+        }
+        return snapshot;
       }
       if (object.isType(...FILL_INK_TYPES)) {
         return { fill: object.fill, mathboardInkMode: object.mathboardInkMode };
@@ -1296,9 +1320,8 @@ export default {
       const active = this.canvas.getActiveObject();
       if (!active) return false;
 
-      const targets = active.isType("ActiveSelection")
-        ? active.getObjects()
-        : [active];
+      // Permanent Groups (stamps) and ActiveSelection: recolor leaf members.
+      const targets = flattenInkTargets([active]);
 
       const useAuto = color === null;
       const ink = useAuto ? this.boardThemeConfig.defaultInk : color;
@@ -1315,7 +1338,9 @@ export default {
       });
       if (entries.length === 0) return false;
 
-      if (active.isType("ActiveSelection")) active.set("dirty", true);
+      if (active.isType("ActiveSelection") || active.isType("Group")) {
+        active.set("dirty", true);
+      }
 
       const coalesce = Boolean(options.coalesce);
       const tip = this._history[this._historyStep];

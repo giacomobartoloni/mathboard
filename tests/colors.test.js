@@ -4,6 +4,7 @@ import {
   applyAutoInk,
   applyExplicitInk,
   COLOR_PRESETS,
+  flattenInkTargets,
   normalizeHexColor,
   paletteColorFromObject,
   paletteColorFromSelection,
@@ -187,4 +188,38 @@ test('paletteColorFromSelection agrees on one palette value or abstains', () => 
   )
   assert.equal(paletteColorFromSelection([]), undefined)
   assert.equal(paletteColorFromSelection(null), undefined)
+})
+
+test('flattenInkTargets walks Groups and ActiveSelection', () => {
+  const line = { type: 'line', stroke: '#000000', mathboardInkMode: 'auto' }
+  const text = { type: 'text', fill: '#000000', mathboardInkMode: 'auto' }
+  const nested = {
+    type: 'group',
+    getObjects: () => [text],
+  }
+  const stamp = {
+    type: 'Group',
+    isType: (...types) => types.includes('Group'),
+    getObjects: () => [line, nested],
+  }
+  assert.deepEqual(flattenInkTargets([stamp]), [line, text])
+  assert.deepEqual(flattenInkTargets([line]), [line])
+})
+
+test('paletteColorFromSelection reads Group members', () => {
+  const group = {
+    type: 'group',
+    getObjects: () => [
+      { type: 'line', stroke: '#d32f2f', mathboardInkMode: 'fixed' },
+      { type: 'text', fill: '#d32f2f', mathboardInkMode: 'fixed' },
+    ],
+  }
+  assert.equal(paletteColorFromSelection([group]), '#d32f2f')
+})
+
+test('applyExplicitInk updates solid circle fill with stroke', () => {
+  const dot = { type: 'circle', stroke: '#000000', fill: '#000000', mathboardInkMode: 'auto' }
+  assert.equal(applyExplicitInk(dot, '#1976d2'), true)
+  assert.equal(dot.stroke, '#1976d2')
+  assert.equal(dot.fill, '#1976d2')
 })
