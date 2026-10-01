@@ -37,8 +37,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <script>
 import { markRaw } from "vue";
-import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters, InteractiveFabricObject, ActiveSelection } from "fabric";
+import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
 import { applyAutoInk, applyExplicitInk, paletteColorFromSelection } from "../config/colors";
@@ -48,6 +50,8 @@ import {
   ACTION_DELETE,
   ACTION_DUPLICATE,
   ACTION_EDIT,
+  ACTION_GROUP,
+  ACTION_UNGROUP,
   DUPLICATE_OFFSET,
   panelSize,
   sceneBoxToViewport,
@@ -71,6 +75,13 @@ import {
   ANALYTICS_EVENTS,
   ANALYTICS_OBJECT_TYPES,
 } from "../analytics/events.js";
+import {
+  StampError,
+  STAMP_ERROR_CODES,
+  decodeStampString,
+  materializeStampDocument,
+  encodeObjectsAsStamp,
+} from "../stamps/index.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -461,6 +472,14 @@ export default {
         this.duplicateSelection();
         return;
       }
+      if (actionId === ACTION_GROUP) {
+        this.groupSelection();
+        return;
+      }
+      if (actionId === ACTION_UNGROUP) {
+        this.ungroupSelection();
+        return;
+      }
       if (actionId === ACTION_EDIT) this.editSelection();
     },
     _focusBoard() {
@@ -538,6 +557,289 @@ export default {
         position: { x: active.left, y: active.top },
         fabricObject: active,
       });
+    },
+    isBoardEmpty() {
+      return !this.canvas || this.canvas.getObjects().length === 0;
+    },
+    _viewportCenterScenePoint() {
+      const vpt = this.canvas.viewportTransform;
+      const width = this.canvas.getWidth();
+      const height = this.canvas.getHeight();
+      return {
+        x: (width / 2 - vpt[4]) / vpt[0],
+        y: (height / 2 - vpt[5]) / vpt[3],
+      };
+    },
+    async _buildFormulaFromStamp(spec) {
+      let html;
+      try {
+        html = katex.renderToString(spec.latex, {
+          displayMode: true,
+          throwOnError: true,
+          strict: false,
+        });
+      } catch (error) {
+        console.error("Stamp formula render failed", error);
+        return null;
+      }
+      const img = await this._buildFormulaImage(
+        { latex: spec.latex, html },
+        { x: spec.left ?? 0, y: spec.top ?? 0 },
+      );
+      if (!img) return null;
+      const next = {};
+      [
+        "left",
+        "top",
+        "scaleX",
+        "scaleY",
+        "skewX",
+        "skewY",
+        "angle",
+        "flipX",
+        "flipY",
+        "originX",
+        "originY",
+        "opacity",
+      ].forEach((key) => {
+        if (spec[key] !== undefined && spec[key] !== null) next[key] = spec[key];
+      });
+      if (Object.keys(next).length) {
+        img.set(next);
+        img.setCoords();
+      }
+      if (spec.mathboardInkMode !== undefined) {
+        img.mathboardInkMode = spec.mathboardInkMode;
+      }
+      if (spec.mathboardRenderedInkIsLight !== undefined) {
+        img.mathboardRenderedInkIsLight = spec.mathboardRenderedInkIsLight;
+      }
+      return img;
+    },
+    async _materializeStamp(encoded) {
+      const doc = decodeStampString(encoded);
+      return materializeStampDocument(doc, {
+        buildFormula: (spec) => this._buildFormulaFromStamp(spec),
+      });
+    },
+    _wrapAsStampGroup(objects) {
+      if (objects.length === 1 && objects[0]?.isType?.("Group")) {
+        return objects[0];
+      }
+      return new Group(objects, {
+        subTargetCheck: false,
+        interactive: false,
+      });
+    },
+    _placeGroupAtViewportCenter(group) {
+      const center = this._viewportCenterScenePoint();
+      group.set({
+        left: center.x,
+        top: center.y,
+        originX: "center",
+        originY: "center",
+      });
+      group.setCoords();
+    },
+    /**
+     * Insert a stamp without clearing the board. One history `add` for the group.
+     * @returns {Promise<{ ok: true, group: object } | { ok: false, message: string }>}
+     */
+    async insertStamp(encoded) {
+      if (!this.canvas) {
+        return { ok: false, message: "Board is not ready." };
+      }
+      let objects;
+      try {
+        objects = await this._materializeStamp(encoded);
+      } catch (error) {
+        const message = error instanceof StampError
+          ? error.message
+          : "Could not recreate stamp objects.";
+        console.error("insertStamp failed", error);
+        return { ok: false, message };
+      }
+      if (!this.canvas) {
+        return { ok: false, message: "Board is not ready." };
+      }
+
+      const group = this._wrapAsStampGroup(objects);
+      this._placeGroupAtViewportCenter(group);
+      this.canvas.add(group);
+      this.canvas.setActiveObject(group);
+      this.canvas.requestRenderAll();
+      this._recordAdd(group);
+      this.refreshSelectionPanel();
+      trackBoardEngaged();
+      recordProductAction();
+      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+        object_type: "stamp",
+      });
+      return { ok: true, group };
+    },
+    _resetHistory() {
+      this._history = [];
+      this._historyStep = -1;
+      this._pendingTransform = null;
+      this._pendingText = null;
+      this._uncommittedText = null;
+      this._historyTipKind = "command";
+    },
+    _clearBoardContents() {
+      if (!this.canvas) return;
+      this.canvas.discardActiveObject();
+      const objects = this.canvas.getObjects().slice();
+      this._suspendHistory = true;
+      try {
+        objects.forEach((object) => this.canvas.remove(object));
+      } finally {
+        this._suspendHistory = false;
+      }
+      this._resetHistory();
+      this.refreshSelectionPanel();
+    },
+    /**
+     * Clear the board, reset history, then insert a stamp (template / URL).
+     * Materializes before clearing so a failed stamp leaves the board intact.
+     */
+    async bootstrapFromStamp(encoded) {
+      if (!this.canvas) {
+        return { ok: false, message: "Board is not ready." };
+      }
+      let objects;
+      try {
+        objects = await this._materializeStamp(encoded);
+      } catch (error) {
+        const message = error instanceof StampError
+          ? error.message
+          : "Could not recreate stamp objects.";
+        console.error("bootstrapFromStamp failed", error);
+        return { ok: false, message };
+      }
+      if (!this.canvas) {
+        return { ok: false, message: "Board is not ready." };
+      }
+
+      this._clearBoardContents();
+      const group = this._wrapAsStampGroup(objects);
+      this._placeGroupAtViewportCenter(group);
+      this.canvas.add(group);
+      this.canvas.setActiveObject(group);
+      this.canvas.requestRenderAll();
+      this._recordAdd(group);
+      this.refreshSelectionPanel();
+      trackBoardEngaged();
+      recordProductAction();
+      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+        object_type: "stamp_template",
+      });
+      return { ok: true, group };
+    },
+    exportSelectionToStamp() {
+      if (!this.canvas) {
+        throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, "Board is not ready.");
+      }
+      const active = this.canvas.getActiveObject();
+      if (!active) {
+        throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, "Nothing is selected.");
+      }
+      const sources = active.isType("ActiveSelection")
+        ? active.getObjects().slice()
+        : [active];
+      return encodeObjectsAsStamp(sources);
+    },
+    groupSelection() {
+      if (!this.canvas) return false;
+      const active = this.canvas.getActiveObject();
+      if (!active || !active.isType("ActiveSelection")) return false;
+      const members = active.getObjects().slice();
+      if (members.length < 2) return false;
+
+      const memberEntries = members
+        .map((object) => ({
+          object,
+          index: this.canvas.getObjects().indexOf(object),
+        }))
+        .filter((entry) => entry.index >= 0)
+        .sort((a, b) => a.index - b.index);
+      if (memberEntries.length < 2) return false;
+
+      this.canvas.discardActiveObject();
+      this._suspendHistory = true;
+      let group;
+      try {
+        memberEntries.forEach(({ object }) => this.canvas.remove(object));
+        group = new Group(
+          memberEntries.map((entry) => entry.object),
+          { subTargetCheck: false, interactive: false },
+        );
+        this.canvas.add(group);
+        this.canvas.setActiveObject(group);
+      } finally {
+        this._suspendHistory = false;
+      }
+
+      const index = this.canvas.getObjects().indexOf(group);
+      if (index < 0) return false;
+      this._pushCommand({
+        type: "group",
+        group,
+        index,
+        members: memberEntries,
+      });
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      trackBoardEngaged();
+      recordProductAction();
+      return true;
+    },
+    ungroupSelection() {
+      if (!this.canvas) return false;
+      const active = this.canvas.getActiveObject();
+      if (!active || active.isType("ActiveSelection") || !active.isType("Group")) {
+        return false;
+      }
+
+      const group = active;
+      const groupIndex = this.canvas.getObjects().indexOf(group);
+      if (groupIndex < 0) return false;
+
+      this._suspendHistory = true;
+      let items;
+      try {
+        items = group.removeAll();
+        this.canvas.remove(group);
+        items.forEach((object) => this.canvas.add(object));
+      } finally {
+        this._suspendHistory = false;
+      }
+
+      const members = items
+        .map((object) => ({
+          object,
+          index: this.canvas.getObjects().indexOf(object),
+        }))
+        .filter((entry) => entry.index >= 0);
+
+      this._pushCommand({
+        type: "ungroup",
+        group,
+        index: groupIndex,
+        members,
+      });
+
+      if (items.length > 1) {
+        this.canvas.setActiveObject(new ActiveSelection(items, { canvas: this.canvas }));
+      } else if (items.length === 1) {
+        this.canvas.setActiveObject(items[0]);
+      } else {
+        this.canvas.discardActiveObject();
+      }
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      trackBoardEngaged();
+      recordProductAction();
+      return true;
     },
     enablePanning() {
       this.canvas.isDrawingMode = false;
@@ -1151,6 +1453,44 @@ export default {
             object.set(direction === 'forward' ? after : before);
             object.dirty = true;
           });
+          return;
+        }
+
+        if (command.type === 'group') {
+          if (direction === 'forward') {
+            canvas.discardActiveObject();
+            command.members.forEach(({ object }) => this._removeRetained(object));
+            if (typeof command.group.size === 'function' && command.group.size() === 0) {
+              command.group.add(...command.members.map((entry) => entry.object));
+            }
+            this._insertRetained(command.group, command.index);
+          } else {
+            canvas.discardActiveObject();
+            if (typeof command.group.size === 'function' && command.group.size() > 0) {
+              command.group.removeAll();
+            }
+            this._removeRetained(command.group);
+            command.members.forEach(({ object, index }) => this._insertRetained(object, index));
+          }
+          return;
+        }
+
+        if (command.type === 'ungroup') {
+          if (direction === 'forward') {
+            canvas.discardActiveObject();
+            if (typeof command.group.size === 'function' && command.group.size() > 0) {
+              command.group.removeAll();
+            }
+            this._removeRetained(command.group);
+            command.members.forEach(({ object, index }) => this._insertRetained(object, index));
+          } else {
+            canvas.discardActiveObject();
+            command.members.forEach(({ object }) => this._removeRetained(object));
+            if (typeof command.group.size === 'function' && command.group.size() === 0) {
+              command.group.add(...command.members.map((entry) => entry.object));
+            }
+            this._insertRetained(command.group, command.index);
+          }
           return;
         }
 
