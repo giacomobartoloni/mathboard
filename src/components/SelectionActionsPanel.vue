@@ -65,7 +65,7 @@ const ACTION_CATALOG = {
   },
   duplicate: {
     label: 'Duplicate',
-    title: 'Duplicate',
+    title: 'Duplicate (Ctrl+D)',
     icon: ['fas', 'copy'],
   },
   delete: {
