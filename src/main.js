@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { createApp } from 'vue'
 import App from './App.vue'
+import '@fontsource/satisfy/400.css'
 
 import { library } from '@fortawesome/fontawesome-svg-core'
 import { faMousePointer } from '@fortawesome/free-solid-svg-icons'
