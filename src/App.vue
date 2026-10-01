@@ -33,7 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       :selectedShape="selectedShape" 
       :board-theme="boardTheme"
       :selected-color="selectedColor"
-      :selection-panel-suspended="showFormulaModal"
+      :selection-panel-suspended="showFormulaModal || showShareStampModal"
       ref="drawBoardRef"
       @request-formula="onRequestFormula"
       @edit-formula="onEditFormula"
@@ -65,6 +65,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @close="showFormulaModal = false"
       @insert-formula="onInsertFormula"
     />
+
+    <ShareStampModal
+      :isVisible="showShareStampModal"
+      :url="shareStampUrl"
+      @close="closeShareStampModal"
+    />
     
     <ZoomPanel 
       :zoomLevel="zoomLevel"
@@ -91,6 +97,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from
 import DrawBoard from './components/DrawBoard.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 import FormulaModal from './components/FormulaModal.vue'
+import ShareStampModal from './components/ShareStampModal.vue'
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import CookieBanner from './components/CookieBanner.vue'
@@ -110,6 +117,7 @@ import {
   isGroupShortcut,
   isPlainToolKey,
   isRedoShortcut,
+  isShareStampLinkShortcut,
   isUngroupShortcut,
   isUndoShortcut,
   shouldIgnoreGlobalShortcut,
@@ -117,7 +125,7 @@ import {
 import { trackEvent } from './analytics'
 import { ANALYTICS_EVENTS } from './analytics/events.js'
 import { getKitById } from './stamps/registry.js'
-import { clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
+import { buildStampShareUrl, clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
 
 function detectFullscreenSupport() {
   return typeof document !== 'undefined'
@@ -132,6 +140,7 @@ export default {
     DrawBoard,
     ToolsPanel,
     FormulaModal,
+    ShareStampModal,
     SupportPanel,
     ZoomPanel,
     CookieBanner,
@@ -170,6 +179,8 @@ export default {
     const drawBoardRef = ref(null)
     const fullscreenRootRef = ref(null)
     const showFormulaModal = ref(false)
+    const showShareStampModal = ref(false)
+    const shareStampUrl = ref('')
     const formulaPosition = ref({ x: 0, y: 0 })
     const editingLatex = ref('')
     const editingElement = ref(null)
@@ -275,12 +286,42 @@ export default {
       trackEvent(ANALYTICS_EVENTS.THEME_CHANGED, { theme: nextBoard })
     }
 
+    const closeShareStampModal = () => {
+      showShareStampModal.value = false
+      shareStampUrl.value = ''
+    }
+
+    const openShareStampLink = () => {
+      stampError.value = null
+      if (!drawBoardRef.value) return
+      let payload
+      try {
+        payload = drawBoardRef.value.exportSelectionToStamp()
+      } catch (error) {
+        // No selection is a silent no-op; other failures surface in English.
+        if (/Nothing is selected/i.test(error?.message || '')) return
+        stampError.value = error?.message || 'Could not create a share link.'
+        return
+      }
+      try {
+        shareStampUrl.value = buildStampShareUrl(payload)
+        showShareStampModal.value = true
+      } catch (error) {
+        stampError.value = error?.message || 'Could not create a share link.'
+      }
+    }
+
     const onKeyDown = (event) => {
       if (isEscapeShortcut(event)) {
         // The browser uses Escape to leave fullscreen. Do not cancel that.
         if (document.fullscreenElement) return
         if (showFormulaModal.value) {
           showFormulaModal.value = false
+          event.preventDefault()
+          return
+        }
+        if (showShareStampModal.value) {
+          closeShareStampModal()
           event.preventDefault()
           return
         }
@@ -295,7 +336,12 @@ export default {
         return
       }
 
-      if (showFormulaModal.value || shouldIgnoreGlobalShortcut(event) || drawBoardRef.value?.isTextEditing()) return
+      if (
+        showFormulaModal.value
+        || showShareStampModal.value
+        || shouldIgnoreGlobalShortcut(event)
+        || drawBoardRef.value?.isTextEditing()
+      ) return
 
       const toolId = isPlainToolKey(event)
       if (toolId) {
@@ -316,6 +362,11 @@ export default {
       if (isUngroupShortcut(event)) {
         event.preventDefault()
         drawBoardRef.value?.ungroupSelection()
+        return
+      }
+      if (isShareStampLinkShortcut(event)) {
+        event.preventDefault()
+        openShareStampLink()
         return
       }
       if (isUndoShortcut(event)) {
@@ -423,6 +474,9 @@ export default {
       drawBoardRef,
       fullscreenRootRef,
       showFormulaModal,
+      showShareStampModal,
+      shareStampUrl,
+      closeShareStampModal,
       editingLatex,
       zoomLevel,
       isFullscreen,
