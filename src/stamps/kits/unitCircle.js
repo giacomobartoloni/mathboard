@@ -21,7 +21,7 @@ import { STAMP_VERSION } from '../schema.js'
 
 // Placeholder ink. DrawBoard replaces AUTO ink with the board default on insert.
 const INK = '#000000'
-const RADIUS = 120
+const RADIUS = 150
 
 function axisLine(x1, y1, x2, y2, strokeWidth = 2) {
   return {
@@ -74,8 +74,8 @@ export function buildUnitCircleDocument() {
     axisLine(-extent, 0, extent, 0),
     axisLine(0, extent, 0, -extent),
     // Sample ray at 60° (π/3).
-    axisLine(0, 0, RADIUS * 0.5, -RADIUS * Math.sqrt(3) / 2),
-    {
+    // axisLine(0, 0, RADIUS * 0.5, -RADIUS * Math.sqrt(3) / 2),
+    /* {
       type: 'circle',
       left: RADIUS * 0.5,
       top: -RADIUS * Math.sqrt(3) / 2,
@@ -86,18 +86,18 @@ export function buildUnitCircleDocument() {
       originX: 'center',
       originY: 'center',
       mathboardInkMode: 'auto',
-    },
+    }, */
     // Quadrant tick marks.
     axisLine(RADIUS - 6, 0, RADIUS + 6, 0, 1),
     axisLine(-RADIUS - 6, 0, -RADIUS + 6, 0, 1),
     axisLine(0, -RADIUS - 6, 0, -RADIUS + 6, 1),
     axisLine(0, RADIUS - 6, 0, RADIUS + 6, 1),
-    label('1', RADIUS + 16, 0),
-    label('-1', -RADIUS - 18, 0),
-    label('1', 0, -RADIUS - 16),
-    label('-1', 0, RADIUS + 16),
+    label('1', RADIUS + 16, 14),
+    label('-1', -RADIUS - 18, 14),
+    label('1', 14, -RADIUS - 16),
+    label('-1', 14, RADIUS + 16),
     label('0', -12, 12),
-    {
+    /* {
       type: 'formula',
       latex: '\\frac{\\pi}{3}',
       left: RADIUS * 0.35,
@@ -105,7 +105,7 @@ export function buildUnitCircleDocument() {
       originX: 'center',
       originY: 'center',
       mathboardInkMode: 'auto',
-    },
+    }, */
   ]
 
   return {
