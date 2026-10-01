@@ -25,24 +25,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <div class="cookie-text">
           <h3>Cookie Policy</h3>
           <p>
-            We use essential cookies to ensure the proper functioning of MathBoard. 
-            These cookies store your preferences and session data locally. 
-            We do not use tracking or advertising cookies.
+            We use essential local storage so MathBoard can remember preferences and session data on your device.
+            We do not use advertising cookies.
+            Product analytics on the live site is cookieless and described in our Privacy Policy.
             <button class="learn-more-link" @click="showDetails = !showDetails">
               {{ showDetails ? 'Show less' : 'Learn more' }}
             </button>
           </p>
           
           <div v-if="showDetails" class="cookie-details">
-            <p><strong>Essential cookies:</strong></p>
+            <p><strong>Essential local storage:</strong></p>
             <ul>
               <li>Session storage for your drawing board state</li>
               <li>User preferences (zoom level, tool selection)</li>
               <li>Cookie consent preference</li>
             </ul>
             <p>
-              By clicking "Accept", you consent to our use of essential cookies. 
-              For more information, read our 
+              This banner records your local preference choice only; it does not control product analytics loading.
+              On the live site, MathBoard uses cookieless Simple Analytics as described in our
               <a href="/privacy-policy.html" target="_blank">Privacy Policy</a>.
             </p>
           </div>
