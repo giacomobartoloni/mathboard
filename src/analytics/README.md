@@ -30,13 +30,23 @@ Use **snake_case** event names from `ANALYTICS_EVENTS` (for example `object_crea
 
 ## Metadata rules
 
-Allowed values are **flat primitives only**: `string`, `boolean`, or finite `number`.
+### What the adapter enforces
 
-Forbidden (dropped by the adapter if passed):
+`trackEvent` keeps only **flat primitives**: `string`, `boolean`, or finite `number`. Nested objects, arrays, `null`, `undefined`, and functions are dropped. That is a shape check, not a content filter: any string key/value that is a primitive will still be sent.
 
-- Nested objects or arrays
-- `null` / `undefined` / functions
-- LaTeX source, free-text content, coordinates, canvas JSON, object IDs, stack traces, or any other PII / high-cardinality payloads
+### What call sites should never send
+
+Product policy (not enforced by the adapter): do not pass board or user content as metadata. Prefer taxonomy enums and aggregate counts from `events.js` (for example `object_type`, `shape`, `selection_count`, `command_type`, `theme`, `actions`).
+
+Avoid in particular:
+
+- LaTeX source or formula HTML
+- Free text from the board
+- Coordinates, path/stroke data, canvas JSON, or bitmaps
+- Emails, user IDs, fingerprints, or other persistent identifiers
+- Full error stacks or messages that may contain user input
+
+If a future event needs metadata, choose a small set of controlled values; do not rely on the adapter to strip sensitive strings.
 
 ## Frequency
 

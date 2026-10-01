@@ -108,9 +108,32 @@
             text-decoration: none;
         }
     </style>
-    <!-- Simple Analytics: pageviews for this static privacy page.
-         The MathBoard SPA loads Simple Analytics dynamically only on mathboard.app. -->
-    <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
+    <!-- Simple Analytics: load only on the canonical production host, same gate as the SPA adapter. -->
+    <script>
+      (function () {
+        var PRODUCTION_HOSTS = { 'mathboard.app': true };
+        if (typeof location === 'undefined' || !PRODUCTION_HOSTS[location.hostname]) {
+          return;
+        }
+        window.sa_metadata = window.sa_metadata || { runtime: 'web' };
+        window.sa_event = window.sa_event || function () {
+          var args = Array.prototype.slice.call(arguments);
+          if (window.sa_event.q) {
+            window.sa_event.q.push(args);
+          } else {
+            window.sa_event.q = [args];
+          }
+        };
+        if (document.getElementById('simple-analytics-script')) {
+          return;
+        }
+        var script = document.createElement('script');
+        script.id = 'simple-analytics-script';
+        script.async = true;
+        script.src = 'https://scripts.simpleanalyticscdn.com/latest.js';
+        document.head.appendChild(script);
+      })();
+    </script>
 </head>
 <body>
     <div class="container">
