@@ -1,0 +1,33 @@
+# Contributing
+
+Setup, scripts, and icon generation are in the [README](README.md).
+
+## Changes
+
+Open an issue before a change that alters behavior or the public interface. Small fixes can go straight to a pull request.
+
+1. Fork the repository and create a branch from `main`.
+2. Install dependencies with `npm ci`.
+3. Run `npm run dev` while you work.
+4. Before opening the pull request, run:
+
+```sh
+npm run lint
+npm run build
+```
+
+`npm run lint` reports problems and leaves files unchanged. There is no test suite: those two commands are the check.
+
+Regenerate the PWA icons with `npm run generate:icons` only when `tools/icon-template.html` changes. The script needs network access and stops if the Satisfy font does not load.
+
+## Code
+
+Match the existing sources:
+
+- Vue 3 components use the Options API with a `setup()` function. Component files are PascalCase.
+- JavaScript only. Dependencies come from `package-lock.json` through npm.
+- New and modified source files keep the AGPL header already present in `src/main.js`. Keep the copyright line `Copyright (C) 2026 Giacomo Bartoloni`.
+
+## License
+
+MathBoard is licensed under the GNU Affero General Public License v3.0. Contributions are licensed under the same terms. See [LICENSE.md](LICENSE.md).
