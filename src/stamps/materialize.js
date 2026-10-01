@@ -107,8 +107,7 @@ async function materializeNode(node, buildFormula) {
         ...transform,
         width: node.width ?? 0,
         height: node.height ?? 0,
-        rx: node.rx,
-        ry: node.ry,
+        ...pickDefined(node, ['rx', 'ry']),
       })
       applyInkMetadata(object, node)
       return object
@@ -139,19 +138,24 @@ async function materializeNode(node, buildFormula) {
       return object
     }
     case 'text': {
+      // Only pass defined text props. Explicit `fontStyle: undefined` (etc.)
+      // overwrites Fabric defaults and crashes getFontCache(...toLowerCase()).
+      const textProps = pickDefined(node, [
+        'fontSize',
+        'fontFamily',
+        'fontWeight',
+        'fontStyle',
+        'textAlign',
+        'lineHeight',
+        'charSpacing',
+        'underline',
+        'linethrough',
+        'overline',
+      ])
       const object = new IText(node.text, {
         ...style,
         ...transform,
-        fontSize: node.fontSize,
-        fontFamily: node.fontFamily,
-        fontWeight: node.fontWeight,
-        fontStyle: node.fontStyle,
-        textAlign: node.textAlign,
-        lineHeight: node.lineHeight,
-        charSpacing: node.charSpacing,
-        underline: node.underline,
-        linethrough: node.linethrough,
-        overline: node.overline,
+        ...textProps,
       })
       applyInkMetadata(object, node)
       return object
