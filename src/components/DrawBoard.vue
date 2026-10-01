@@ -45,7 +45,11 @@ import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
 import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
-import { selectionChromeForBoard } from "../config/selectionChrome";
+import {
+  applySelectionObjectChrome,
+  selectionChromeForBoard,
+  selectionObjectChromeForBoard,
+} from "../config/selectionChrome";
 import {
   ACTION_DELETE,
   ACTION_DUPLICATE,
@@ -377,8 +381,8 @@ export default {
         selectionColor,
         selectionBorderColor,
         selectionLineWidth,
-        ...objectChrome
       } = chrome;
+      const objectChrome = selectionObjectChromeForBoard(this.boardTheme);
       Object.assign(InteractiveFabricObject.ownDefaults, objectChrome);
       this.canvas.selectionColor = selectionColor;
       this.canvas.selectionBorderColor = selectionBorderColor;
@@ -386,9 +390,11 @@ export default {
 
       this._suspendHistory = true;
       try {
-        this.canvas.forEachObject((obj) => obj.set(objectChrome));
+        this.canvas.forEachObject((obj) => applySelectionObjectChrome(obj, objectChrome));
         const active = this.canvas.getActiveObject();
-        if (active?.isType?.('ActiveSelection')) active.set(objectChrome);
+        if (active?.isType?.("ActiveSelection")) {
+          applySelectionObjectChrome(active, objectChrome);
+        }
       } finally {
         this._suspendHistory = false;
       }
@@ -891,6 +897,9 @@ export default {
         index: groupIndex,
         members,
       });
+
+      const objectChrome = selectionObjectChromeForBoard(this.boardTheme);
+      items.forEach((object) => applySelectionObjectChrome(object, objectChrome));
 
       if (items.length > 1) {
         this.canvas.setActiveObject(new ActiveSelection(items, { canvas: this.canvas }));
