@@ -63,7 +63,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     
     <SupportPanel class="secondary-chrome" />
     
-    <CookieBanner v-show="!isFullscreen" />
+    <CookieBanner v-if="!desktopRuntime" v-show="!isFullscreen" />
     
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
@@ -95,6 +95,7 @@ import {
   isUndoShortcut,
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
+import { isDesktopRuntime } from './platform/runtime'
 
 function detectFullscreenSupport() {
   return typeof document !== 'undefined'
@@ -114,6 +115,8 @@ export default {
     CookieBanner,
   },
   setup() {
+    const desktopRuntime = isDesktopRuntime()
+
     // Persisted presentation preferences. DrawBoard adapts objects authored with
     // the automatic board ink when boardTheme changes; explicit ink stays put.
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
@@ -327,6 +330,7 @@ export default {
       selectedShape,
       drawBoardRef,
       fullscreenRootRef,
+      desktopRuntime,
       showFormulaModal,
       editingLatex,
       zoomLevel,
