@@ -91,3 +91,9 @@ export function isUngroupShortcut(event) {
   if (!event || !hasCommandModifier(event) || event.altKey || !event.shiftKey) return false
   return event.key?.toLowerCase() === 'g'
 }
+
+/** Ctrl/Cmd+Shift+L — share the active selection as a stamp URL. */
+export function isShareStampLinkShortcut(event) {
+  if (!event || !hasCommandModifier(event) || event.altKey || !event.shiftKey) return false
+  return event.key?.toLowerCase() === 'l'
+}

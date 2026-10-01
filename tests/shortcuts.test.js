@@ -6,6 +6,7 @@ import {
   isGroupShortcut,
   isPlainToolKey,
   isRedoShortcut,
+  isShareStampLinkShortcut,
   isUngroupShortcut,
   isUndoShortcut,
   shouldIgnoreGlobalShortcut,
@@ -83,4 +84,12 @@ test('group and ungroup shortcuts', () => {
   assert.equal(isUngroupShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), true)
   assert.equal(isUngroupShortcut({ key: 'G', metaKey: true, shiftKey: true }), true)
   assert.equal(isUngroupShortcut({ key: 'g', ctrlKey: true }), false)
+})
+
+test('share stamp link is ctrl or meta plus shift-l', () => {
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true, shiftKey: true }), true)
+  assert.equal(isShareStampLinkShortcut({ key: 'L', metaKey: true, shiftKey: true }), true)
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true }), false)
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true, shiftKey: true, altKey: true }), false)
+  assert.equal(isShareStampLinkShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), false)
 })
