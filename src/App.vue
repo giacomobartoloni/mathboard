@@ -18,7 +18,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div id="app" :data-theme="uiTheme">
+  <div
+    id="app"
+    ref="fullscreenRootRef"
+    :data-theme="uiTheme"
+    :data-fullscreen="isFullscreen ? 'true' : 'false'"
+  >
     <span class="logo">MathBoard</span>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
@@ -27,12 +32,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       :selectedTool="selectedTool" 
       :selectedShape="selectedShape" 
       :board-theme="boardTheme"
+      :selected-color="selectedColor"
+      :selection-panel-suspended="showFormulaModal"
       ref="drawBoardRef"
       @request-formula="onRequestFormula"
       @edit-formula="onEditFormula"
       @text-editing-completed="onTextEditingCompleted"
+      @selection-color="onSelectionColor"
     />
-    <ToolsPanel :selectedTool="selectedTool" @tool-selected="onToolSelected" @shape-selected="onShapeSelected" @undo="onUndo" @redo="onRedo" />
+    <ToolsPanel :selectedTool="selectedTool" :selected-color="selectedColor" :display-color="displayColor" :main-color="boardThemeConfig.defaultInk" :main-ink-is-light="mainInkIsLight" @tool-selected="onToolSelected" @shape-selected="onShapeSelected" @color-selected="onColorSelected" @undo="onUndo" @redo="onRedo" />
     
     <FormulaModal 
       :isVisible="showFormulaModal"
@@ -44,22 +52,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <ZoomPanel 
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
+      :is-fullscreen="isFullscreen"
+      :fullscreen-supported="fullscreenSupported"
       @zoom-in="onZoomIn"
       @zoom-out="onZoomOut"
       @reset-zoom="onResetZoom"
       @cycle-theme="onCycleTheme"
+      @toggle-fullscreen="toggleFullscreen"
     />
     
-    <SupportPanel />
+    <SupportPanel class="secondary-chrome" />
     
-    <CookieBanner />
+    <CookieBanner v-show="!isFullscreen" />
     
-    <span class="copyright">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
+    <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
 </template>
 
 <script>
-import { ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 import FormulaModal from './components/FormulaModal.vue'
@@ -67,12 +78,30 @@ import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import CookieBanner from './components/CookieBanner.vue'
 import {
+  BOARD_THEMES,
   loadThemePreferences,
+  normalizeBoardTheme,
   saveUiTheme,
   saveBoardTheme,
   cycleBoardTheme,
   uiThemeForBoardTheme,
 } from './config/themes'
+import { normalizeHexColor } from './config/colors'
+import {
+  isDeleteShortcut,
+  isEscapeShortcut,
+  isPlainToolKey,
+  isRedoShortcut,
+  isUndoShortcut,
+  shouldIgnoreGlobalShortcut,
+} from './config/shortcuts'
+
+function detectFullscreenSupport() {
+  return typeof document !== 'undefined'
+    && typeof Element !== 'undefined'
+    && typeof document.exitFullscreen === 'function'
+    && typeof Element.prototype.requestFullscreen === 'function'
+}
 
 export default {
   name: 'App',
@@ -90,15 +119,77 @@ export default {
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
     const uiTheme = ref(initialUiTheme)
     const boardTheme = ref(initialBoardTheme)
+    const selectedColor = ref(null)
+    const boardThemeConfig = computed(() => BOARD_THEMES[normalizeBoardTheme(boardTheme.value)])
+    const displayColor = computed(() => (
+      selectedColor.value ?? boardThemeConfig.value.defaultInk
+    ))
+    const mainInkIsLight = computed(() => boardThemeConfig.value.inkIsLight)
+    const onColorSelected = (value, options = {}) => {
+      if (value === null) {
+        selectedColor.value = null
+        drawBoardRef.value?.recolorSelection(null, options)
+        return
+      }
+      const normalized = normalizeHexColor(value)
+      if (!normalized) return
+      selectedColor.value = normalized
+      drawBoardRef.value?.recolorSelection(normalized, options)
+    }
+
+    // Mirror selection ink into the palette only. Never recolor here.
+    const onSelectionColor = (value) => {
+      selectedColor.value = value
+    }
 
     const selectedTool = ref('select')
     const selectedShape = ref('rectangle')
     const drawBoardRef = ref(null)
+    const fullscreenRootRef = ref(null)
     const showFormulaModal = ref(false)
     const formulaPosition = ref({ x: 0, y: 0 })
     const editingLatex = ref('')
     const editingElement = ref(null)
     const zoomLevel = ref(1)
+    // Mirror of document.fullscreenElement only — never invent a parallel flag.
+    const isFullscreen = ref(false)
+    const fullscreenSupported = ref(detectFullscreenSupport())
+
+    const syncFullscreenState = () => {
+      isFullscreen.value = Boolean(document.fullscreenElement)
+      // Fullscreen changes layout size; reuse DrawBoard's existing resize path
+      // so viewportTransform / zoom / pan stay intact.
+      nextTick(() => {
+        drawBoardRef.value?.updateCanvasSize?.()
+      })
+    }
+
+    const toggleFullscreen = async () => {
+      if (!fullscreenSupported.value) return
+      try {
+        if (!document.fullscreenElement) {
+          const root = fullscreenRootRef.value
+          if (!root?.requestFullscreen) return
+          await root.requestFullscreen()
+        } else {
+          await document.exitFullscreen()
+        }
+      } catch (err) {
+        // Policy rejection / unsupported — keep the app usable.
+        console.warn('Fullscreen request failed:', err)
+        syncFullscreenState()
+      }
+    }
+
+    onMounted(() => {
+      fullscreenSupported.value = detectFullscreenSupport()
+      document.addEventListener('fullscreenchange', syncFullscreenState)
+      syncFullscreenState()
+    })
+
+    onBeforeUnmount(() => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState)
+    })
 
     const onToolSelected = (tool) => {
       selectedTool.value = tool
@@ -115,6 +206,53 @@ export default {
       saveBoardTheme(nextBoard)
       saveUiTheme(uiTheme.value)
     }
+
+    const onKeyDown = (event) => {
+      if (isEscapeShortcut(event)) {
+        // The browser uses Escape to leave fullscreen. Do not cancel that.
+        if (document.fullscreenElement) return
+        if (showFormulaModal.value) {
+          showFormulaModal.value = false
+          event.preventDefault()
+          return
+        }
+        if (drawBoardRef.value?.isTextEditing()) {
+          drawBoardRef.value.exitTextEditing()
+          event.preventDefault()
+          return
+        }
+        if (shouldIgnoreGlobalShortcut(event)) return
+        drawBoardRef.value?.cancelTransientAction()
+        event.preventDefault()
+        return
+      }
+
+      if (showFormulaModal.value || shouldIgnoreGlobalShortcut(event) || drawBoardRef.value?.isTextEditing()) return
+
+      const toolId = isPlainToolKey(event)
+      if (toolId) {
+        event.preventDefault()
+        onToolSelected(toolId)
+        return
+      }
+      if (isDeleteShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.deleteSelection()
+        return
+      }
+      if (isUndoShortcut(event)) {
+        event.preventDefault()
+        onUndo()
+        return
+      }
+      if (isRedoShortcut(event)) {
+        event.preventDefault()
+        onRedo()
+      }
+    }
+
+    onMounted(() => window.addEventListener('keydown', onKeyDown))
+    onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
 
     const onUndo = () => {
       drawBoardRef.value?.undo()
@@ -166,16 +304,9 @@ export default {
 
     const onInsertFormula = (formulaData) => {
       if (editingElement.value) {
-        // Update existing formula - remove old and add new
-        const canvas = drawBoardRef.value?.canvas
-        if (canvas && editingElement.value) {
-          const oldPos = {
-            x: editingElement.value.left,
-            y: editingElement.value.top
-          }
-          canvas.remove(editingElement.value)
-          drawBoardRef.value.addFormulaToCanvas(formulaData, oldPos)
-        }
+        // One gesture: swap the bitmap on the command log, do not remove first.
+        // Removing here used to drop the formula if the new bitmap failed.
+        drawBoardRef.value?.replaceFormula(editingElement.value, formulaData)
         editingElement.value = null
       } else if (drawBoardRef.value && drawBoardRef.value.addFormulaToCanvas) {
         // Add new formula
@@ -195,9 +326,13 @@ export default {
       selectedTool,
       selectedShape,
       drawBoardRef,
+      fullscreenRootRef,
       showFormulaModal,
       editingLatex,
       zoomLevel,
+      isFullscreen,
+      fullscreenSupported,
+      toggleFullscreen,
       onToolSelected,
       onShapeSelected,
       onUndo,
@@ -211,6 +346,12 @@ export default {
       onResetZoom,
       uiTheme,
       boardTheme,
+      selectedColor,
+      displayColor,
+      boardThemeConfig,
+      mainInkIsLight,
+      onColorSelected,
+      onSelectionColor,
       onCycleTheme,
     }
   }
@@ -243,6 +384,8 @@ body {
   --panel-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
   --hover-bg: rgba(0, 0, 0, 0.05);
   --icon-color: #555;
+  --danger: #c62828;
+  --danger-hover: rgba(198, 40, 40, 0.12);
   --selected-bg: tan;
   --selected-text: rgb(61, 61, 61);
   --selected-shadow: 0 2px 8px rgba(210, 180, 140, 0.5);
@@ -263,12 +406,36 @@ body {
   --panel-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
   --hover-bg: rgba(255, 255, 255, 0.08);
   --icon-color: #b0b0b0;
+  --danger: #ef9a9a;
+  --danger-hover: rgba(239, 154, 154, 0.16);
   --selected-bg: #8b6914;
   --selected-text: #f0e6d0;
   --selected-shadow: 0 2px 8px rgba(139, 105, 20, 0.5);
   --callout-info-bg: linear-gradient(135deg, #1a2a3a 0%, #1e2e40 100%);
   --callout-neutral-bg: linear-gradient(135deg, #2a2a2e 0%, #333338 100%);
 }
+
+/* Fullscreen shell: fill the fullscreen element; do not introduce scrollbars. */
+#app:fullscreen,
+#app[data-fullscreen="true"] {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--surface-muted);
+}
+
+#app[data-fullscreen="true"] .secondary-chrome,
+#app:fullscreen .secondary-chrome {
+  display: none !important;
+}
+
+/* Support panel is hidden in fullscreen; reclaim its bottom-right space. */
+#app[data-fullscreen="true"] .zoom-panel,
+#app:fullscreen .zoom-panel {
+  right: 12px;
+}
+
 .logo {
   font-family: 'Satisfy', cursive;
   font-size: normal;

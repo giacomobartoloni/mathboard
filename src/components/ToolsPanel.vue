@@ -18,22 +18,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div>
+  <div class="left-chrome">
     <div class="tools-panel">
       <!--     <img alt="Vue logo" src="../assets/logo.png" width="30px" /> -->
-      <div :class="{ selected: selected === 'select' }" @click="select('select')" title="Select">
+      <div :class="{ selected: selected === 'select' }" @click="select('select')" title="Select (V)">
         <font-awesome-icon :icon="['fas', 'mouse-pointer']" />
       </div>
-      <div :class="{ selected: selected === 'pan' }" @click="select('pan')" title="Pan">
+      <div :class="{ selected: selected === 'pan' }" @click="select('pan')" title="Pan (H)">
         <font-awesome-icon :icon="['far', 'hand-paper']" />
       </div>
-      <div :class="{ selected: selected === 'pencil' }" @click="select('pencil')" title="Pencil">
+      <div :class="{ selected: selected === 'pencil' }" @click="select('pencil')" title="Pen (P)">
         <font-awesome-icon :icon="['fas', 'pencil-alt']" />
       </div>
-      <div :class="{ selected: selected === 'font' }" @click="select('font')" title="Text">
+      <div :class="{ selected: selected === 'font' }" @click="select('font')" title="Text (T)">
         <font-awesome-icon :icon="['fas', 'font']" />
       </div>
-      <div :class="{ selected: selected === 'formula' }" @click="select('formula')" title="Formula">
+      <div :class="{ selected: selected === 'formula' }" @click="select('formula')" title="Formula (F)">
         <font-awesome-icon :icon="['fas', 'square-root-alt']" />
       </div>
       <div 
@@ -41,7 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @click="select('shapes')"
         @mouseenter="showShapesSubmenu = true"
         @mouseleave="showShapesSubmenu = false"
-        title="Shapes"
+        title="Shapes (S)"
       >
         <font-awesome-icon :icon="['fas', 'shapes']" />
         
@@ -74,12 +74,52 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         </transition>
       </div>
     </div>
+
+    <div
+      class="color-panel"
+      @mouseenter="showColorPopover = true"
+      @mouseleave="showColorPopover = false"
+      title="Pen color"
+    >
+      <span
+        class="color-indicator"
+        :class="{ white: isLightDisplayColor }"
+        :style="{ background: displayColor }"
+        role="img"
+        aria-label="Pen color"
+      ></span>
+
+      <transition name="fade">
+        <div
+          v-if="showColorPopover"
+          class="color-popover"
+          role="group"
+          aria-label="Pen colors"
+          @click.stop
+        >
+          <button
+            v-for="preset in colorPresets"
+            :key="preset.id"
+            type="button"
+            class="swatch"
+              :class="{
+                selected: isPresetSelected(preset),
+                white: (preset.id === 'main' && mainInkIsLight) || preset.id === 'yellow',
+              }"
+            :style="{ background: swatchColor(preset) }"
+            :aria-label="preset.label"
+            :aria-pressed="isPresetSelected(preset)"
+            @click="chooseColor(preset.value)"
+          ></button>
+        </div>
+      </transition>
+    </div>
     
     <div class="history-panel">
       <div @click="$emit('undo')" title="Undo (Ctrl+Z)">
         <font-awesome-icon :icon="['fas', 'undo']" />
       </div>
-      <div @click="$emit('redo')" title="Redo (Ctrl+Y)">
+      <div @click="$emit('redo')" title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
         <font-awesome-icon :icon="['fas', 'redo']" />
       </div>
     </div>
@@ -87,12 +127,30 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
+import { COLOR_PRESETS } from '../config/colors.js'
+
 export default {
   name: "ToolsPanel",
   props: {
     selectedTool: {
       type: String,
       default: 'select'
+    },
+    selectedColor: {
+      type: String,
+      default: null
+    },
+    displayColor: {
+      type: String,
+      default: '#000000'
+    },
+    mainColor: {
+      type: String,
+      default: '#000000'
+    },
+    mainInkIsLight: {
+      type: Boolean,
+      default: false
     }
   },
   data() {
@@ -100,6 +158,8 @@ export default {
       selected: "select",
       selectedShape: "rectangle",
       showShapesSubmenu: false,
+      showColorPopover: false,
+      colorPresets: COLOR_PRESETS,
       pencil: {
         width: 10,
         color: "(187, 187, 187)",
@@ -109,6 +169,11 @@ export default {
       text: {
       },
     };
+  },
+  computed: {
+    isLightDisplayColor() {
+      return this.selectedColor === null && this.mainInkIsLight;
+    },
   },
   methods: {
     select: function (element) {
@@ -121,7 +186,17 @@ export default {
     selectShape: function (shape) {
       this.selectedShape = shape;
       this.$emit('shape-selected', shape);
-    }
+    },
+    swatchColor(preset) {
+      return preset.value ?? this.mainColor;
+    },
+    isPresetSelected(preset) {
+      if (preset.value === null) return this.selectedColor === null;
+      return this.selectedColor === preset.value;
+    },
+    chooseColor(value) {
+      this.$emit('color-selected', value);
+    },
   },
   watch: {
     selectedTool(newTool) {
@@ -133,12 +208,18 @@ export default {
 
 <!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-.tools-panel {
+.left-chrome {
   position: absolute;
   z-index: 10;
   left: 12px;
   top: max(15vh, 100px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
 
+.tools-panel {
   background: var(--surface-primary);
   color: var(--text-primary);
   border-radius: 8px;
@@ -171,11 +252,6 @@ export default {
 }
 
 .history-panel {
-  position: absolute;
-  z-index: 10;
-  left: 12px;
-  top: calc(max(15vh, 100px) + 300px);
-
   background: var(--surface-primary);
   color: var(--text-primary);
   border-radius: 8px;
@@ -250,5 +326,67 @@ export default {
 
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+.color-panel {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--surface-primary);
+  box-shadow: var(--panel-shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.color-indicator {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+}
+
+.color-indicator.white,
+.swatch.white {
+  border: 1px solid var(--border-color);
+  box-sizing: border-box;
+}
+
+.color-popover {
+  position: absolute;
+  left: 100%;
+  top: -2px;
+  transform: none;
+  margin-left: 10px;
+  background: var(--surface-primary);
+  border: none;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0;
+  padding: 6px 4px;
+  white-space: nowrap;
+  box-shadow: var(--panel-shadow);
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  margin: 6px 4px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.swatch.selected {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
 }
 </style>
