@@ -642,6 +642,44 @@ export default {
       group.setCoords();
     },
     /**
+     * Native kits mark ink as AUTO. Apply the board default ink so stamps
+     * follow the theme Main color instead of baked placeholder hex values.
+     * Explicit FIXED colors from imported stamps are left alone.
+     */
+    _applyBoardDefaultInkToStampTree(root) {
+      if (!root) return;
+      const ink = this.boardThemeConfig.defaultInk;
+      const walk = (object) => {
+        if (!object) return;
+        if (object.isType?.("Group")) {
+          const members = typeof object.getObjects === "function" ? object.getObjects() : [];
+          members.forEach(walk);
+          return;
+        }
+        if (object.mathboardInkMode === INK_MODE_FIXED) return;
+        if (object.formulaType === FORMULA_TYPE) {
+          object.mathboardInkMode = INK_MODE_AUTO;
+          return;
+        }
+        if (object.isType?.(...STROKE_INK_TYPES)) {
+          const patch = { stroke: ink, mathboardInkMode: INK_MODE_AUTO };
+          if (
+            object.isType("Circle")
+            && object.fill
+            && object.fill !== "transparent"
+          ) {
+            patch.fill = ink;
+          }
+          object.set(patch);
+          return;
+        }
+        if (object.isType?.(...FILL_INK_TYPES)) {
+          object.set({ fill: ink, mathboardInkMode: INK_MODE_AUTO });
+        }
+      };
+      walk(root);
+    },
+    /**
      * Insert a stamp without clearing the board. One history `add` for the group.
      * @returns {Promise<{ ok: true, group: object } | { ok: false, message: string }>}
      */
@@ -664,6 +702,7 @@ export default {
       }
 
       const group = this._wrapAsStampGroup(objects);
+      this._applyBoardDefaultInkToStampTree(group);
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
@@ -722,6 +761,7 @@ export default {
 
       this._clearBoardContents();
       const group = this._wrapAsStampGroup(objects);
+      this._applyBoardDefaultInkToStampTree(group);
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
       this.canvas.setActiveObject(group);

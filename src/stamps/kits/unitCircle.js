@@ -19,21 +19,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { STAMP_VERSION } from '../schema.js'
 
-const INK = '#2c3e50'
-const LIGHT = '#8a96a3'
+// Placeholder ink. DrawBoard replaces AUTO ink with the board default on insert.
+const INK = '#000000'
 const RADIUS = 120
 
-function axisLine(x1, y1, x2, y2, stroke = INK, strokeWidth = 2) {
+function axisLine(x1, y1, x2, y2, strokeWidth = 2) {
   return {
     type: 'line',
     x1,
     y1,
     x2,
     y2,
-    stroke,
+    stroke: INK,
     strokeWidth,
     originX: 'center',
     originY: 'center',
+    mathboardInkMode: 'auto',
   }
 }
 
@@ -48,6 +49,7 @@ function label(text, left, top, fontSize = 14) {
     fill: INK,
     originX: 'center',
     originY: 'center',
+    mathboardInkMode: 'auto',
   }
 }
 
@@ -67,11 +69,12 @@ export function buildUnitCircleDocument() {
       strokeWidth: 2,
       originX: 'center',
       originY: 'center',
+      mathboardInkMode: 'auto',
     },
     axisLine(-extent, 0, extent, 0),
     axisLine(0, extent, 0, -extent),
     // Sample ray at 60° (π/3).
-    axisLine(0, 0, RADIUS * 0.5, -RADIUS * Math.sqrt(3) / 2, INK, 2),
+    axisLine(0, 0, RADIUS * 0.5, -RADIUS * Math.sqrt(3) / 2),
     {
       type: 'circle',
       left: RADIUS * 0.5,
@@ -82,12 +85,13 @@ export function buildUnitCircleDocument() {
       strokeWidth: 1,
       originX: 'center',
       originY: 'center',
+      mathboardInkMode: 'auto',
     },
     // Quadrant tick marks.
-    axisLine(RADIUS - 6, 0, RADIUS + 6, 0, LIGHT, 1),
-    axisLine(-RADIUS - 6, 0, -RADIUS + 6, 0, LIGHT, 1),
-    axisLine(0, -RADIUS - 6, 0, -RADIUS + 6, LIGHT, 1),
-    axisLine(0, RADIUS - 6, 0, RADIUS + 6, LIGHT, 1),
+    axisLine(RADIUS - 6, 0, RADIUS + 6, 0, 1),
+    axisLine(-RADIUS - 6, 0, -RADIUS + 6, 0, 1),
+    axisLine(0, -RADIUS - 6, 0, -RADIUS + 6, 1),
+    axisLine(0, RADIUS - 6, 0, RADIUS + 6, 1),
     label('1', RADIUS + 16, 0),
     label('-1', -RADIUS - 18, 0),
     label('1', 0, -RADIUS - 16),

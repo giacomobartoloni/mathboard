@@ -79,7 +79,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @mouseleave="showKitsSubmenu = false"
         title="Stamps"
       >
-        <font-awesome-icon :icon="['fas', 'border-all']" />
+        <font-awesome-icon :icon="['fas', 'wand-magic-sparkles']" />
         <transition name="fade">
           <div v-if="showKitsSubmenu" class="shapes-submenu kits-submenu" @click.stop>
             <div
@@ -87,28 +87,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               :key="kit.id"
               @click="insertKit(kit.id)"
               :title="kit.label"
-            >
-              <font-awesome-icon
-                :icon="kit.id === 'unitCircle' ? ['fas', 'circle-notch'] : ['fas', 'border-all']"
-              />
-            </div>
-          </div>
-        </transition>
-      </div>
-
-      <div
-        @mouseenter="showTemplatesSubmenu = true"
-        @mouseleave="showTemplatesSubmenu = false"
-        title="Templates"
-      >
-        <font-awesome-icon :icon="['fas', 'file']" />
-        <transition name="fade">
-          <div v-if="showTemplatesSubmenu" class="shapes-submenu kits-submenu" @click.stop>
-            <div
-              v-for="kit in stampKits"
-              :key="`template-${kit.id}`"
-              @click="applyTemplate(kit.id)"
-              :title="`New from ${kit.label}`"
             >
               <font-awesome-icon
                 :icon="kit.id === 'unitCircle' ? ['fas', 'circle-notch'] : ['fas', 'border-all']"
@@ -205,7 +183,6 @@ export default {
     'undo',
     'redo',
     'insert-kit',
-    'apply-template',
   ],
   data() {
     return {
@@ -213,7 +190,6 @@ export default {
       selectedShape: "rectangle",
       showShapesSubmenu: false,
       showKitsSubmenu: false,
-      showTemplatesSubmenu: false,
       showColorPopover: false,
       colorPresets: COLOR_PRESETS,
       stampKits: listKits(),
@@ -247,10 +223,6 @@ export default {
     insertKit(kitId) {
       this.$emit('insert-kit', kitId);
       this.showKitsSubmenu = false;
-    },
-    applyTemplate(kitId) {
-      this.$emit('apply-template', kitId);
-      this.showTemplatesSubmenu = false;
     },
     swatchColor(preset) {
       return preset.value ?? this.mainColor;

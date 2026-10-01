@@ -19,14 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { STAMP_VERSION } from '../schema.js'
 
-const INK = '#2c3e50'
-const GRID = '#c8d0d8'
+// Placeholder ink. DrawBoard replaces AUTO ink with the board default on insert.
+const INK = '#000000'
 const SIZE = 320
 const HALF = SIZE / 2
 const TICK = 8
 const STEP = 40
 
-function axisLine(x1, y1, x2, y2) {
+function axisLine(x1, y1, x2, y2, strokeWidth = 2) {
   return {
     type: 'line',
     x1,
@@ -34,23 +34,10 @@ function axisLine(x1, y1, x2, y2) {
     x2,
     y2,
     stroke: INK,
-    strokeWidth: 2,
+    strokeWidth,
     originX: 'center',
     originY: 'center',
-  }
-}
-
-function gridLine(x1, y1, x2, y2) {
-  return {
-    type: 'line',
-    x1,
-    y1,
-    x2,
-    y2,
-    stroke: GRID,
-    strokeWidth: 1,
-    originX: 'center',
-    originY: 'center',
+    mathboardInkMode: 'auto',
   }
 }
 
@@ -65,6 +52,7 @@ function tickLabel(text, left, top) {
     fill: INK,
     originX: 'center',
     originY: 'center',
+    mathboardInkMode: 'auto',
   }
 }
 
@@ -76,11 +64,11 @@ export function buildCartesianPlaneDocument() {
 
   for (let x = -HALF + STEP; x < HALF; x += STEP) {
     if (x === 0) continue
-    objects.push(gridLine(x, -HALF, x, HALF))
+    objects.push(axisLine(x, -HALF, x, HALF, 1))
   }
   for (let y = -HALF + STEP; y < HALF; y += STEP) {
     if (y === 0) continue
-    objects.push(gridLine(-HALF, y, HALF, y))
+    objects.push(axisLine(-HALF, y, HALF, y, 1))
   }
 
   objects.push(axisLine(-HALF, 0, HALF, 0))

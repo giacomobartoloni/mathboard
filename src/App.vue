@@ -52,7 +52,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @undo="onUndo"
       @redo="onRedo"
       @insert-kit="onInsertKit"
-      @apply-template="onApplyTemplate"
     />
 
     <div v-if="stampError" class="stamp-error" role="alert">
@@ -358,29 +357,6 @@ export default {
       selectedTool.value = 'select'
     }
 
-    const onApplyTemplate = async (kitId) => {
-      stampError.value = null
-      if (drawBoardRef.value && !drawBoardRef.value.isBoardEmpty()) {
-        const confirmed = window.confirm(
-          'Replace the current board with this template? Existing content will be lost.',
-        )
-        if (!confirmed) return
-      }
-      let encoded
-      try {
-        encoded = getKitById(kitId)
-      } catch (error) {
-        stampError.value = error?.message || 'Unknown kit.'
-        return
-      }
-      const result = await drawBoardRef.value?.bootstrapFromStamp(encoded)
-      if (!result?.ok) {
-        stampError.value = result?.message || 'Could not apply template.'
-        return
-      }
-      selectedTool.value = 'select'
-    }
-
     const onRequestFormula = (position) => {
       formulaPosition.value = position
       editingLatex.value = ''
@@ -457,7 +433,6 @@ export default {
       onUndo,
       onRedo,
       onInsertKit,
-      onApplyTemplate,
       stampError,
       onRequestFormula,
       onEditFormula,
