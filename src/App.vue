@@ -40,7 +40,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @text-editing-completed="onTextEditingCompleted"
       @selection-color="onSelectionColor"
     />
-    <ToolsPanel :selectedTool="selectedTool" :selected-color="selectedColor" :display-color="displayColor" :main-color="boardThemeConfig.defaultInk" :main-ink-is-light="mainInkIsLight" @tool-selected="onToolSelected" @shape-selected="onShapeSelected" @color-selected="onColorSelected" @undo="onUndo" @redo="onRedo" />
+    <ToolsPanel
+      :selectedTool="selectedTool"
+      :selected-color="selectedColor"
+      :display-color="displayColor"
+      :main-color="boardThemeConfig.defaultInk"
+      :main-ink-is-light="mainInkIsLight"
+      @tool-selected="onToolSelected"
+      @shape-selected="onShapeSelected"
+      @color-selected="onColorSelected"
+      @undo="onUndo"
+      @redo="onRedo"
+      @insert-kit="onInsertKit"
+      @apply-template="onApplyTemplate"
+    />
+
+    <div v-if="stampError" class="stamp-error" role="alert">
+      <span>{{ stampError }}</span>
+      <button type="button" @click="stampError = null" aria-label="Dismiss">×</button>
+    </div>
     
     <FormulaModal 
       :isVisible="showFormulaModal"
@@ -90,13 +108,17 @@ import { normalizeHexColor } from './config/colors'
 import {
   isDeleteShortcut,
   isEscapeShortcut,
+  isGroupShortcut,
   isPlainToolKey,
   isRedoShortcut,
+  isUngroupShortcut,
   isUndoShortcut,
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
 import { trackEvent } from './analytics'
 import { ANALYTICS_EVENTS } from './analytics/events.js'
+import { getKitById } from './stamps/registry.js'
+import { clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
 
 function detectFullscreenSupport() {
   return typeof document !== 'undefined'
@@ -156,6 +178,7 @@ export default {
     // Mirror of document.fullscreenElement only — never invent a parallel flag.
     const isFullscreen = ref(false)
     const fullscreenSupported = ref(detectFullscreenSupport())
+    const stampError = ref(null)
     let fullscreenInitialized = false
     let previousFullscreen = false
 
@@ -191,10 +214,45 @@ export default {
       }
     }
 
+    const waitForBoardReady = () => new Promise((resolve) => {
+      const start = performance.now()
+      const tick = () => {
+        if (drawBoardRef.value?.canvas) {
+          resolve(true)
+          return
+        }
+        if (performance.now() - start > 5000) {
+          resolve(false)
+          return
+        }
+        requestAnimationFrame(tick)
+      }
+      nextTick(tick)
+    })
+
+    const bootstrapStampFromUrl = async () => {
+      const payload = readStampFromLocation()
+      if (!payload) return
+      const ready = await waitForBoardReady()
+      if (!ready || !drawBoardRef.value) {
+        stampError.value = 'Board is not ready to load the stamp link.'
+        clearStampFromLocation()
+        return
+      }
+      const result = await drawBoardRef.value.bootstrapFromStamp(payload)
+      clearStampFromLocation()
+      if (!result?.ok) {
+        stampError.value = result?.message || 'Could not load stamp from the link.'
+        return
+      }
+      selectedTool.value = 'select'
+    }
+
     onMounted(() => {
       fullscreenSupported.value = detectFullscreenSupport()
       document.addEventListener('fullscreenchange', syncFullscreenState)
       syncFullscreenState()
+      bootstrapStampFromUrl()
     })
 
     onBeforeUnmount(() => {
@@ -251,6 +309,16 @@ export default {
         drawBoardRef.value?.deleteSelection()
         return
       }
+      if (isGroupShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.groupSelection()
+        return
+      }
+      if (isUngroupShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.ungroupSelection()
+        return
+      }
       if (isUndoShortcut(event)) {
         event.preventDefault()
         onUndo()
@@ -271,6 +339,46 @@ export default {
 
     const onRedo = () => {
       drawBoardRef.value?.redo()
+    }
+
+    const onInsertKit = async (kitId) => {
+      stampError.value = null
+      let encoded
+      try {
+        encoded = getKitById(kitId)
+      } catch (error) {
+        stampError.value = error?.message || 'Unknown kit.'
+        return
+      }
+      const result = await drawBoardRef.value?.insertStamp(encoded)
+      if (!result?.ok) {
+        stampError.value = result?.message || 'Could not insert stamp.'
+        return
+      }
+      selectedTool.value = 'select'
+    }
+
+    const onApplyTemplate = async (kitId) => {
+      stampError.value = null
+      if (drawBoardRef.value && !drawBoardRef.value.isBoardEmpty()) {
+        const confirmed = window.confirm(
+          'Replace the current board with this template? Existing content will be lost.',
+        )
+        if (!confirmed) return
+      }
+      let encoded
+      try {
+        encoded = getKitById(kitId)
+      } catch (error) {
+        stampError.value = error?.message || 'Unknown kit.'
+        return
+      }
+      const result = await drawBoardRef.value?.bootstrapFromStamp(encoded)
+      if (!result?.ok) {
+        stampError.value = result?.message || 'Could not apply template.'
+        return
+      }
+      selectedTool.value = 'select'
     }
 
     const onRequestFormula = (position) => {
@@ -348,6 +456,9 @@ export default {
       onShapeSelected,
       onUndo,
       onRedo,
+      onInsertKit,
+      onApplyTemplate,
+      stampError,
       onRequestFormula,
       onEditFormula,
       onInsertFormula,
@@ -481,6 +592,37 @@ body {
   font-size: 12px;
   z-index: 1000;
   white-space: nowrap;
+}
+
+.stamp-error {
+  position: absolute;
+  z-index: 1200;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--panel-shadow);
+  font-size: 14px;
+  text-align: left;
+}
+
+.stamp-error button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 2px;
 }
 
 @media (max-width: 768px) {
