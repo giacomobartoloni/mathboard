@@ -62,6 +62,15 @@ import {
   snapshotsEqual,
   gestureObjects,
 } from "../history/commandLog";
+import {
+  trackEvent,
+  trackBoardEngaged,
+  recordProductAction,
+} from "../analytics";
+import {
+  ANALYTICS_EVENTS,
+  ANALYTICS_OBJECT_TYPES,
+} from "../analytics/events.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -691,6 +700,11 @@ export default {
       this.canvas.setActiveObject(img);
       this.canvas.requestRenderAll();
       this._recordAdd(img);
+      trackBoardEngaged();
+      recordProductAction();
+      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+        object_type: ANALYTICS_OBJECT_TYPES.FORMULA,
+      });
     },
     async replaceFormula(existing, formulaData) {
       if (!existing || !this.canvas) return;
@@ -723,6 +737,9 @@ export default {
         removed: existing,
         added: img
       });
+      trackBoardEngaged();
+      recordProductAction();
+      trackEvent(ANALYTICS_EVENTS.FORMULA_EDITED);
     },
     enableShapeDrawing() {
       this.canvas.isDrawingMode = false;
@@ -796,7 +813,15 @@ export default {
       this.currentShape = null;
       // One gesture, including a click that leaves a 0×0 shape. The add at
       // mouse-down is not a command; object:added is not a history hook.
-      if (shape) this._recordAdd(shape);
+      if (shape) {
+        this._recordAdd(shape);
+        trackBoardEngaged();
+        recordProductAction();
+        trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+          object_type: ANALYTICS_OBJECT_TYPES.SHAPE,
+          shape: this.selectedShape,
+        });
+      }
     },
     createShape(x, y, width, height) {
       const commonProps = {
@@ -886,6 +911,11 @@ export default {
           this._removeRetained(text);
         } else {
           this._recordAdd(text);
+          trackBoardEngaged();
+          recordProductAction();
+          trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+            object_type: ANALYTICS_OBJECT_TYPES.TEXT,
+          });
         }
         this.canvas.requestRenderAll();
         
@@ -990,6 +1020,11 @@ export default {
       entries.forEach(({ object }) => this.canvas.remove(object));
       this.canvas.requestRenderAll();
       this._pushCommand({ type: 'delete', entries });
+      trackBoardEngaged();
+      recordProductAction();
+      trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, {
+        selection_count: entries.length,
+      });
       this.refreshSelectionPanel();
       this._focusBoard();
     },
@@ -1132,9 +1167,9 @@ export default {
       }
     },
     _runHistory(direction) {
-      if (!this.canvas) return;
-      if (direction === 'undo' && this._historyStep < 0) return;
-      if (direction === 'redo' && this._historyStep >= this._history.length - 1) return;
+      if (!this.canvas) return null;
+      if (direction === 'undo' && this._historyStep < 0) return null;
+      if (direction === 'redo' && this._historyStep >= this._history.length - 1) return null;
 
       const index = direction === 'undo' ? this._historyStep : this._historyStep + 1;
       const command = this._history[index];
@@ -1149,15 +1184,25 @@ export default {
       }
       this.canvas.requestRenderAll();
       this.refreshSelectionPanel();
+      return command;
     },
     undo() {
-      this._runHistory('undo');
+      const command = this._runHistory('undo');
+      if (!command) return;
+      trackEvent(ANALYTICS_EVENTS.UNDO_USED, { command_type: command.type });
     },
     redo() {
-      this._runHistory('redo');
+      const command = this._runHistory('redo');
+      if (!command) return;
+      trackEvent(ANALYTICS_EVENTS.REDO_USED, { command_type: command.type });
     },
     onPathCreated({ path }) {
       this._recordAdd(path);
+      trackBoardEngaged();
+      recordProductAction();
+      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+        object_type: ANALYTICS_OBJECT_TYPES.PATH,
+      });
     },
     onBeforeTransform({ transform }) {
       if (!this._selectionGesture) {

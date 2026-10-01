@@ -96,6 +96,8 @@ import {
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
 import { isDesktopRuntime } from './platform/runtime'
+import { trackEvent } from './analytics'
+import { ANALYTICS_EVENTS } from './analytics/events.js'
 
 function detectFullscreenSupport() {
   return typeof document !== 'undefined'
@@ -157,9 +159,17 @@ export default {
     // Mirror of document.fullscreenElement only — never invent a parallel flag.
     const isFullscreen = ref(false)
     const fullscreenSupported = ref(detectFullscreenSupport())
+    let fullscreenInitialized = false
+    let previousFullscreen = false
 
     const syncFullscreenState = () => {
-      isFullscreen.value = Boolean(document.fullscreenElement)
+      const next = Boolean(document.fullscreenElement)
+      isFullscreen.value = next
+      if (fullscreenInitialized && next !== previousFullscreen) {
+        trackEvent(next ? ANALYTICS_EVENTS.FULLSCREEN_ENTERED : ANALYTICS_EVENTS.FULLSCREEN_EXITED)
+      }
+      previousFullscreen = next
+      fullscreenInitialized = true
       // Fullscreen changes layout size; reuse DrawBoard's existing resize path
       // so viewportTransform / zoom / pan stay intact.
       nextTick(() => {
@@ -208,6 +218,7 @@ export default {
       uiTheme.value = uiThemeForBoardTheme(nextBoard)
       saveBoardTheme(nextBoard)
       saveUiTheme(uiTheme.value)
+      trackEvent(ANALYTICS_EVENTS.THEME_CHANGED, { theme: nextBoard })
     }
 
     const onKeyDown = (event) => {
