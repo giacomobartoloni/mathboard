@@ -26,6 +26,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 export const ACTION_EDIT = 'edit'
 export const ACTION_DUPLICATE = 'duplicate'
 export const ACTION_DELETE = 'delete'
+export const ACTION_GROUP = 'group'
+export const ACTION_UNGROUP = 'ungroup'
 
 export const DUPLICATE_OFFSET = 16
 export const PANEL_GAP = 20
@@ -73,9 +75,15 @@ function isFormula(object) {
  * Semantic kind. Multi-selection is one kind: no per-type action is added
  * when the selection mixes objects.
  */
+function isPermanentGroup(object) {
+  if (!object || isActiveSelection(object)) return false
+  return isType(object, ['Group'])
+}
+
 export function selectionKind(object) {
   if (!object) return null
   if (isActiveSelection(object)) return 'activeSelection'
+  if (isPermanentGroup(object)) return 'group'
   if (isFormula(object)) return 'formula'
   if (isType(object, TEXT_TYPES)) return 'text'
   if (isType(object, PATH_TYPES)) return 'path'
@@ -86,6 +94,8 @@ export function selectionKind(object) {
 export function selectionActions(kind) {
   if (!kind) return []
   if (kind === 'formula') return [ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE]
+  if (kind === 'activeSelection') return [ACTION_GROUP, ACTION_DUPLICATE, ACTION_DELETE]
+  if (kind === 'group') return [ACTION_UNGROUP, ACTION_DUPLICATE, ACTION_DELETE]
   return [ACTION_DUPLICATE, ACTION_DELETE]
 }
 
