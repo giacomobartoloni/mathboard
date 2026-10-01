@@ -97,3 +97,43 @@ export function isShareStampLinkShortcut(event) {
   if (!event || !hasCommandModifier(event) || event.altKey || !event.shiftKey) return false
   return event.key?.toLowerCase() === 'l'
 }
+
+/**
+ * Human-readable shortcut map for the About panel.
+ * Keep in sync with classifiers above and with shipped App.vue handlers only.
+ */
+export const SHORTCUT_HELP = [
+  {
+    group: 'Tools',
+    items: [
+      { id: 'select', label: 'Select', keys: 'V' },
+      { id: 'pan', label: 'Pan', keys: 'H' },
+      { id: 'pen', label: 'Pen', keys: 'P' },
+      { id: 'text', label: 'Text', keys: 'T' },
+      { id: 'formula', label: 'Formula', keys: 'F' },
+      { id: 'shapes', label: 'Shapes', keys: 'S' },
+    ],
+  },
+  {
+    group: 'Edit',
+    items: [
+      { id: 'undo', label: 'Undo', keys: 'Ctrl/Cmd+Z' },
+      { id: 'redo', label: 'Redo', keys: 'Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y' },
+      { id: 'delete', label: 'Delete', keys: 'Delete / Backspace' },
+      { id: 'group', label: 'Group', keys: 'Ctrl/Cmd+G' },
+      { id: 'ungroup', label: 'Ungroup', keys: 'Ctrl/Cmd+Shift+G' },
+      {
+        id: 'share',
+        label: 'Share link',
+        keys: 'Ctrl/Cmd+Shift+L',
+        hint: 'Select objects first. Opens a copyable board link.',
+      },
+    ],
+  },
+  {
+    group: 'Other',
+    items: [
+      { id: 'escape', label: 'Cancel / close', keys: 'Esc' },
+    ],
+  },
+]

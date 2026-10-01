@@ -50,6 +50,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </p>
         </div>
 
+        <div class="shortcuts-section" aria-labelledby="shortcuts-heading">
+          <p id="shortcuts-heading"><strong>Keyboard shortcuts</strong></p>
+          <div
+            v-for="section in shortcutHelp"
+            :key="section.group"
+            class="shortcut-group"
+          >
+            <p class="shortcut-group-title">{{ section.group }}</p>
+            <ul class="shortcut-list">
+              <li v-for="item in section.items" :key="item.id" class="shortcut-row">
+                <div class="shortcut-main">
+                  <span class="shortcut-label">{{ item.label }}</span>
+                  <kbd class="shortcut-keys">{{ item.keys }}</kbd>
+                </div>
+                <p v-if="item.hint" class="shortcut-hint">{{ item.hint }}</p>
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <div class="opensource-section">
           <p><font-awesome-icon :icon="['fas', 'code-branch']" /> <strong>Open Source</strong></p>
           <p>MathBoard is licensed under the <strong>GNU AGPL v3</strong>. The source code is freely available on GitHub. Contributions, issues, and suggestions are welcome!</p>
@@ -88,6 +108,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { ref } from 'vue'
 import packageInfo from '../../package.json'
+import { SHORTCUT_HELP } from '../config/shortcuts.js'
 import { trackEvent } from '../analytics'
 import { ANALYTICS_EVENTS } from '../analytics/events.js'
 
@@ -96,6 +117,7 @@ export default {
   setup() {
     const showAbout = ref(false)
     const version = packageInfo.version
+    const shortcutHelp = SHORTCUT_HELP
 
     const openAbout = () => {
       showAbout.value = true
@@ -105,6 +127,7 @@ export default {
     return {
       showAbout,
       version,
+      shortcutHelp,
       openAbout,
     }
   }
@@ -280,6 +303,81 @@ export default {
   border-radius: 8px;
   text-align: left;
   margin-top: 20px;
+}
+
+.shortcuts-section {
+  background: var(--callout-neutral-bg);
+  padding: 20px;
+  border-radius: 8px;
+  text-align: left;
+  margin-top: 20px;
+}
+
+.shortcuts-section > p {
+  margin: 0 0 12px 0;
+  color: var(--text-primary);
+}
+
+.shortcut-group + .shortcut-group {
+  margin-top: 14px;
+}
+
+.shortcut-group-title {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shortcut-row {
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.shortcut-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.shortcut-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shortcut-label {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.shortcut-keys {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.shortcut-hint {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .opensource-section p {

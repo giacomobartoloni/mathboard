@@ -29,7 +29,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 - **`fabricStaticCanvas.js`** is a **mixin** (not a component), provides `isDrawingMode` prop
 - **Event naming**: kebab-case (`@request-formula`, `@edit-formula`, `@text-editing-completed`)
 - **Tools** (select/pan/pencil/font/formula/shapes/stamps) communicate via props+events from ToolsPanel through App to DrawBoard
-- **Stamps**: portable base64url JSON in `src/stamps/`; `insertStamp` adds a Group at viewport center with board-default AUTO ink for kit objects; `bootstrapFromStamp` clears board + resets history (URL `#s=`). Share selection: Ctrl/Cmd+Shift+L opens a modal with `#s=` URL (`exportSelectionToStamp`). ADR: `docs/adr/0003-stamp-transfer-format.md`
+- **Stamps**: portable base64url JSON in `src/stamps/`; `insertStamp` adds a Group at viewport center with board-default AUTO ink for kit objects; `bootstrapFromStamp` clears board + resets history (URL `#s=`). Share selection: Ctrl/Cmd+Shift+L opens a modal with `#s=` URL (`exportSelectionToStamp`). About lists shipped shortcuts from `SHORTCUT_HELP` in `src/config/shortcuts.js`. ADR: `docs/adr/0003-stamp-transfer-format.md`
 - **Grouping**: permanent Fabric `Group`; selection panel + Ctrl/Cmd+G / Ctrl/Cmd+Shift+G; history commands `group` / `ungroup`
 
 ## Key implementation details
