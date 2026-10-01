@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
   >
-    <span class="logo secondary-chrome">MathBoard</span>
+    <span class="logo">MathBoard</span>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
     <DrawBoard 
