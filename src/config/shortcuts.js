@@ -126,6 +126,12 @@ export function isDuplicateShortcut(event) {
   return event.key?.toLowerCase() === 'd'
 }
 
+/** Ctrl/Cmd+A — select all top-level board objects. */
+export function isSelectAllShortcut(event) {
+  if (!event || !hasCommandModifier(event) || event.altKey || event.shiftKey) return false
+  return event.key?.toLowerCase() === 'a'
+}
+
 /**
  * Ctrl/Cmd++ or Ctrl/Cmd+= — zoom in.
  * Shift is allowed because many layouts produce `+` via Shift+=.

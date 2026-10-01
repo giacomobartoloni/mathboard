@@ -114,6 +114,7 @@ import {
   isPlainShapeKey,
   isPlainToolKey,
   isRedoShortcut,
+  isSelectAllShortcut,
   isUngroupShortcut,
   isUndoShortcut,
   isZoomInShortcut,
@@ -341,6 +342,11 @@ export default {
       if (isDuplicateShortcut(event)) {
         event.preventDefault()
         drawBoardRef.value?.duplicateSelection()
+        return
+      }
+      if (isSelectAllShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.selectAll()
         return
       }
       if (isDeleteShortcut(event)) {

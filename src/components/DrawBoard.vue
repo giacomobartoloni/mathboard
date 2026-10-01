@@ -540,6 +540,20 @@ export default {
       const selection = new ActiveSelection(clones, { canvas: this.canvas });
       this.canvas.setActiveObject(selection);
     },
+    selectAll() {
+      if (!this.canvas) return false;
+      const objects = this.canvas.getObjects().slice();
+      if (!objects.length) return false;
+
+      if (objects.length === 1) {
+        this.canvas.setActiveObject(objects[0]);
+      } else {
+        this.canvas.setActiveObject(new ActiveSelection(objects, { canvas: this.canvas }));
+      }
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      return true;
+    },
     async duplicateSelection() {
       if (!this.canvas) return;
       const active = this.canvas.getActiveObject();

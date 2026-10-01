@@ -10,6 +10,7 @@ import {
   isPlainShapeKey,
   isPlainToolKey,
   isRedoShortcut,
+  isSelectAllShortcut,
   isUngroupShortcut,
   isUndoShortcut,
   isZoomInShortcut,
@@ -124,6 +125,14 @@ test('duplicate is ctrl or meta plus d', () => {
   assert.equal(isDuplicateShortcut({ key: 'd', ctrlKey: true, shiftKey: true }), false)
   assert.equal(isDuplicateShortcut({ key: 'd', ctrlKey: true, altKey: true }), false)
   assert.equal(isDuplicateShortcut({ key: 'd' }), false)
+})
+
+test('select all is ctrl or meta plus a', () => {
+  assert.equal(isSelectAllShortcut({ key: 'a', ctrlKey: true }), true)
+  assert.equal(isSelectAllShortcut({ key: 'A', metaKey: true }), true)
+  assert.equal(isSelectAllShortcut({ key: 'a', ctrlKey: true, shiftKey: true }), false)
+  assert.equal(isSelectAllShortcut({ key: 'a', ctrlKey: true, altKey: true }), false)
+  assert.equal(isSelectAllShortcut({ key: 'a' }), false)
 })
 
 test('plain shape keys map to shape ids', () => {
