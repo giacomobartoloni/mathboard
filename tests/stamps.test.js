@@ -9,6 +9,7 @@ import {
   validateStampDocument,
   getKitById,
   readStampFromLocation,
+  buildStampShareUrl,
 } from '../src/stamps/index.js'
 
 test('round-trips a minimal stamp document', () => {
@@ -87,4 +88,11 @@ test('readStampFromLocation prefers hash over query', () => {
     'fromQuery',
   )
   assert.equal(readStampFromLocation({ hash: '', search: '' }), null)
+})
+
+test('buildStampShareUrl puts the payload in the hash', () => {
+  assert.equal(
+    buildStampShareUrl('abc123', { origin: 'https://mathboard.app', pathname: '/' }),
+    'https://mathboard.app/#s=abc123',
+  )
 })

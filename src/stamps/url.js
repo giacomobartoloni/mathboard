@@ -78,3 +78,17 @@ export function clearStampFromLocation(loc = typeof window !== 'undefined' ? win
     history.replaceState(null, '', next)
   }
 }
+
+/**
+ * Build a deep-link URL that bootstraps a stamp on load.
+ * @param {string} payload base64url stamp string
+ * @param {{ origin?: string, pathname?: string }} [loc]
+ */
+export function buildStampShareUrl(payload, loc = typeof window !== 'undefined' ? window.location : null) {
+  if (!payload || typeof payload !== 'string') {
+    throw new Error('Stamp payload is required.')
+  }
+  const origin = loc?.origin || ''
+  const pathname = loc?.pathname || '/'
+  return `${origin}${pathname}#s=${payload}`
+}

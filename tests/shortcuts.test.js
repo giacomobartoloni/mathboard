@@ -10,12 +10,14 @@ import {
   isPlainShapeKey,
   isPlainToolKey,
   isRedoShortcut,
+  isShareStampLinkShortcut,
   isSelectAllShortcut,
   isUngroupShortcut,
   isUndoShortcut,
   isZoomInShortcut,
   isZoomOutShortcut,
   isZoomResetShortcut,
+  SHORTCUT_HELP,
   shouldIgnoreGlobalShortcut,
 } from '../src/config/shortcuts.js'
 
@@ -91,6 +93,26 @@ test('group and ungroup shortcuts', () => {
   assert.equal(isUngroupShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), true)
   assert.equal(isUngroupShortcut({ key: 'G', metaKey: true, shiftKey: true }), true)
   assert.equal(isUngroupShortcut({ key: 'g', ctrlKey: true }), false)
+})
+
+test('share stamp link is ctrl or meta plus shift-l', () => {
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true, shiftKey: true }), true)
+  assert.equal(isShareStampLinkShortcut({ key: 'L', metaKey: true, shiftKey: true }), true)
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true }), false)
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true, shiftKey: true, altKey: true }), false)
+  assert.equal(isShareStampLinkShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), false)
+})
+
+test('SHORTCUT_HELP lists shipped groups and share link', () => {
+  assert.deepEqual(
+    SHORTCUT_HELP.map((section) => section.group),
+    ['Tools', 'Edit', 'View', 'Colors', 'Other'],
+  )
+  const edit = SHORTCUT_HELP.find((section) => section.group === 'Edit')
+  const share = edit?.items.find((item) => item.id === 'share')
+  assert.equal(share?.label, 'Share link')
+  assert.equal(share?.keys, 'Ctrl/Cmd+Shift+L')
+  assert.match(share?.hint || '', /Select objects first/)
 })
 
 test('zoom in is ctrl or meta plus + or = (shift allowed for +)', () => {

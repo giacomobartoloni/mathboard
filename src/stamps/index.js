@@ -34,4 +34,4 @@ export {
   encodeObjectsAsStamp,
 } from './serialize.js'
 export { getKitById, getKitMeta, listKits } from './registry.js'
-export { readStampFromLocation, clearStampFromLocation } from './url.js'
+export { readStampFromLocation, clearStampFromLocation, buildStampShareUrl } from './url.js'

@@ -120,6 +120,12 @@ export function isUngroupShortcut(event) {
   return event.key?.toLowerCase() === 'g'
 }
 
+/** Ctrl/Cmd+Shift+L — share the active selection as a stamp URL. */
+export function isShareStampLinkShortcut(event) {
+  if (!event || !hasCommandModifier(event) || event.altKey || !event.shiftKey) return false
+  return event.key?.toLowerCase() === 'l'
+}
+
 /** Ctrl/Cmd+D — duplicate the active selection. */
 export function isDuplicateShortcut(event) {
   if (!event || !hasCommandModifier(event) || event.altKey || event.shiftKey) return false
@@ -154,3 +160,66 @@ export function isZoomResetShortcut(event) {
   if (!event || !hasCommandModifier(event) || event.altKey || event.shiftKey) return false
   return event.key === '0'
 }
+
+/**
+ * Human-readable shortcut map for the About panel.
+ * Keep in sync with classifiers above and with shipped App.vue handlers only.
+ */
+export const SHORTCUT_HELP = [
+  {
+    group: 'Tools',
+    items: [
+      { id: 'select', label: 'Select', keys: 'V' },
+      { id: 'pan', label: 'Pan', keys: 'H' },
+      { id: 'pen', label: 'Pen', keys: 'P' },
+      { id: 'text', label: 'Text', keys: 'T' },
+      { id: 'formula', label: 'Formula', keys: 'F' },
+      { id: 'shapes', label: 'Shapes', keys: 'S' },
+      { id: 'rectangle', label: 'Rectangle', keys: 'R' },
+      { id: 'circle', label: 'Circle', keys: 'C' },
+      { id: 'line', label: 'Line', keys: 'L' },
+    ],
+  },
+  {
+    group: 'Edit',
+    items: [
+      { id: 'undo', label: 'Undo', keys: 'Ctrl/Cmd+Z' },
+      { id: 'redo', label: 'Redo', keys: 'Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y' },
+      { id: 'duplicate', label: 'Duplicate', keys: 'Ctrl/Cmd+D' },
+      { id: 'selectAll', label: 'Select all', keys: 'Ctrl/Cmd+A' },
+      { id: 'delete', label: 'Delete', keys: 'Delete / Backspace' },
+      { id: 'group', label: 'Group', keys: 'Ctrl/Cmd+G' },
+      { id: 'ungroup', label: 'Ungroup', keys: 'Ctrl/Cmd+Shift+G' },
+      {
+        id: 'share',
+        label: 'Share link',
+        keys: 'Ctrl/Cmd+Shift+L',
+        hint: 'Select objects first. Opens a copyable board link.',
+      },
+    ],
+  },
+  {
+    group: 'View',
+    items: [
+      { id: 'zoomIn', label: 'Zoom in', keys: 'Ctrl/Cmd++' },
+      { id: 'zoomOut', label: 'Zoom out', keys: 'Ctrl/Cmd+-' },
+      { id: 'zoomReset', label: 'Reset zoom', keys: 'Ctrl/Cmd+0' },
+    ],
+  },
+  {
+    group: 'Colors',
+    items: [
+      { id: 'colorMain', label: 'Main ink', keys: '1' },
+      { id: 'colorRed', label: 'Red', keys: '2' },
+      { id: 'colorYellow', label: 'Yellow', keys: '3' },
+      { id: 'colorBlue', label: 'Blue', keys: '4' },
+      { id: 'colorGreen', label: 'Green', keys: '5' },
+    ],
+  },
+  {
+    group: 'Other',
+    items: [
+      { id: 'escape', label: 'Cancel / close', keys: 'Esc' },
+    ],
+  },
+]

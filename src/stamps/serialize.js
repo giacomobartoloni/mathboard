@@ -56,6 +56,20 @@ function pickDefined(source, keys) {
   return out
 }
 
+/**
+ * Style props where `null` is meaningful (no paint). Dropping null lets Fabric
+ * Path/Object defaults reintroduce a solid black fill on materialize.
+ */
+function pickStyle(source) {
+  const out = {}
+  STYLE_KEYS.forEach((key) => {
+    const value = source[key]
+    if (value === undefined) return
+    out[key] = Array.isArray(value) ? value.slice() : value
+  })
+  return out
+}
+
 function isType(object, ...types) {
   if (!object) return false
   if (typeof object.isType === 'function') return object.isType(...types)
@@ -73,7 +87,7 @@ function isFormula(object) {
 function commonProps(object) {
   const props = {
     ...pickDefined(object, TRANSFORM_KEYS),
-    ...pickDefined(object, STYLE_KEYS),
+    ...pickStyle(object),
   }
   if (object.mathboardInkMode !== undefined) {
     props.mathboardInkMode = object.mathboardInkMode

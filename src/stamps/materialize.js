@@ -54,6 +54,17 @@ function pickDefined(source, keys) {
   return out
 }
 
+/** Keep `null` fill/stroke — Fabric Path defaults fill to solid black otherwise. */
+function pickStyle(source) {
+  const out = {}
+  STYLE_KEYS.forEach((key) => {
+    if (source[key] !== undefined) {
+      out[key] = source[key]
+    }
+  })
+  return out
+}
+
 function applyInkMetadata(object, node) {
   if (node.mathboardInkMode !== undefined) {
     object.mathboardInkMode = node.mathboardInkMode
@@ -98,7 +109,11 @@ export async function materializeStampDocument(doc, options = {}) {
 
 async function materializeNode(node, buildFormula) {
   const transform = pickDefined(node, TRANSFORM_KEYS)
-  const style = pickDefined(node, STYLE_KEYS)
+  const style = pickStyle(node)
+  // Pencil strokes omit fill historically; Fabric Path would otherwise paint solid black.
+  if (node.type === 'path' && style.fill === undefined) {
+    style.fill = null
+  }
 
   switch (node.type) {
     case 'rect': {
