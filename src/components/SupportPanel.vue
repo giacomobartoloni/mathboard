@@ -54,7 +54,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><font-awesome-icon :icon="['fas', 'code-branch']" /> <strong>Open Source</strong></p>
           <p>MathBoard is licensed under the <strong>GNU AGPL v3</strong>. The source code is freely available on GitHub. Contributions, issues, and suggestions are welcome!</p>
           <div class="contact-links">
-            <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer">
+            <a :href="githubUrl" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink(githubUrl)">
               <font-awesome-icon :icon="['fab', 'github']" /> GitHub Repository
             </a>
           </div>
@@ -64,21 +64,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><strong>Get in touch</strong></p>
           <p>Send your feedback, suggestions, or bug reports:</p>
           <div class="contact-links">
-            <a href="mailto:gbartoloni@proton.me">Email me</a>
-            <a href="https://www.linkedin.com/in/giacomobartoloni/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+            <a :href="emailUrl" @click.prevent="onExternalLink(emailUrl)">Email me</a>
+            <a :href="linkedInUrl" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink(linkedInUrl)">LinkedIn</a>
           </div>
         </div>
 
         <div class="coffee-section">
           <p>If you find MathBoard useful, consider supporting the project:</p>
-          <a href="https://www.buymeacoffee.com/gbartoloni" target="_blank" rel="noopener noreferrer" class="coffee-link">
+          <a :href="coffeeUrl" target="_blank" rel="noopener noreferrer" class="coffee-link" @click.prevent="onExternalLink(coffeeUrl)">
             <img src="../assets/bmc.png" alt="Buy Me A Coffee" />
             <span>Buy me a coffee</span>
           </a>
         </div>
 
         <div class="legal-links">
-          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" @click="onPrivacyPolicy">Privacy Policy</a>
         </div>
       </div>
     </div>
@@ -88,14 +88,38 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { ref } from 'vue'
 import packageInfo from '../../package.json'
+import { openExternalUrl } from '../platform/externalLinks'
+import { isDesktopRuntime } from '../platform/runtime'
 import { trackEvent } from '../analytics'
 import { ANALYTICS_EVENTS } from '../analytics/events.js'
+
+const GITHUB_URL = 'https://github.com/giacomobartoloni/mathboard'
+const EMAIL_URL = 'mailto:gbartoloni@proton.me'
+const LINKEDIN_URL = 'https://www.linkedin.com/in/giacomobartoloni/'
+const COFFEE_URL = 'https://www.buymeacoffee.com/gbartoloni'
+const PRIVACY_POLICY_URL = 'https://mathboard.app/privacy-policy.html'
 
 export default {
   name: 'SupportPanel',
   setup() {
     const showAbout = ref(false)
     const version = packageInfo.version
+    const desktopRuntime = isDesktopRuntime()
+
+    const onExternalLink = async (url) => {
+      try {
+        await openExternalUrl(url)
+      } catch (error) {
+        console.warn('Could not open external URL:', error)
+      }
+    }
+
+    const onPrivacyPolicy = (event) => {
+      if (!desktopRuntime) return
+
+      event.preventDefault()
+      onExternalLink(PRIVACY_POLICY_URL)
+    }
 
     const openAbout = () => {
       showAbout.value = true
@@ -105,6 +129,12 @@ export default {
     return {
       showAbout,
       version,
+      githubUrl: GITHUB_URL,
+      emailUrl: EMAIL_URL,
+      linkedInUrl: LINKEDIN_URL,
+      coffeeUrl: COFFEE_URL,
+      onExternalLink,
+      onPrivacyPolicy,
       openAbout,
     }
   }
