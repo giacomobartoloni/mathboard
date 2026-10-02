@@ -42,6 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     />
     <ToolsPanel
       :selectedTool="selectedTool"
+      :selected-shape="selectedShape"
       :selected-color="selectedColor"
       :display-color="displayColor"
       :main-color="boardThemeConfig.defaultInk"
@@ -113,13 +114,20 @@ import {
 import { normalizeHexColor } from './config/colors'
 import {
   isDeleteShortcut,
+  isDuplicateShortcut,
   isEscapeShortcut,
   isGroupShortcut,
+  isPlainColorDigit,
+  isPlainShapeKey,
   isPlainToolKey,
   isRedoShortcut,
   isShareStampLinkShortcut,
+  isSelectAllShortcut,
   isUngroupShortcut,
   isUndoShortcut,
+  isZoomInShortcut,
+  isZoomOutShortcut,
+  isZoomResetShortcut,
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
 import { trackEvent } from './analytics'
@@ -347,6 +355,44 @@ export default {
       if (toolId) {
         event.preventDefault()
         onToolSelected(toolId)
+        return
+      }
+      const shapeId = isPlainShapeKey(event)
+      if (shapeId) {
+        event.preventDefault()
+        onToolSelected('shapes')
+        onShapeSelected(shapeId)
+        return
+      }
+      const colorPreset = isPlainColorDigit(event)
+      if (colorPreset) {
+        event.preventDefault()
+        onColorSelected(colorPreset.value)
+        return
+      }
+      if (isZoomInShortcut(event)) {
+        event.preventDefault()
+        onZoomIn()
+        return
+      }
+      if (isZoomOutShortcut(event)) {
+        event.preventDefault()
+        onZoomOut()
+        return
+      }
+      if (isZoomResetShortcut(event)) {
+        event.preventDefault()
+        onResetZoom()
+        return
+      }
+      if (isDuplicateShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.duplicateSelection()
+        return
+      }
+      if (isSelectAllShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.selectAll()
         return
       }
       if (isDeleteShortcut(event)) {

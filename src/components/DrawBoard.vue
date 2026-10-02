@@ -36,7 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { markRaw } from "vue";
+import { markRaw, toRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
 import katex from "katex";
@@ -539,6 +539,24 @@ export default {
       }
       const selection = new ActiveSelection(clones, { canvas: this.canvas });
       this.canvas.setActiveObject(selection);
+    },
+    selectAll() {
+      if (!this.canvas) return false;
+      // toRaw: shapes assigned through data() may be Vue proxies; Fabric's
+      // ActiveSelection layout uses === on group membership and mis-transforms
+      // proxied objects (visible jump on Cmd/Ctrl+A).
+      const objects = this.canvas.getObjects().map((object) => toRaw(object));
+      if (!objects.length) return false;
+
+      this.canvas.discardActiveObject();
+      if (objects.length === 1) {
+        this.canvas.setActiveObject(objects[0]);
+      } else {
+        this.canvas.setActiveObject(new ActiveSelection(objects, { canvas: this.canvas }));
+      }
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      return true;
     },
     async duplicateSelection() {
       if (!this.canvas) return;
@@ -1144,8 +1162,9 @@ export default {
       this.shapeStartX = pointer.x;
       this.shapeStartY = pointer.y;
       
-      // Crea la forma iniziale
-      this.currentShape = this.createShape(pointer.x, pointer.y, 0, 0);
+      // markRaw: currentShape lives in data(); a Vue proxy on the canvas
+      // breaks Fabric ActiveSelection identity checks (objects jump on select-all).
+      this.currentShape = markRaw(this.createShape(pointer.x, pointer.y, 0, 0));
       this.canvas.add(this.currentShape);
       this.canvas.renderAll();
     },
@@ -1189,6 +1208,7 @@ export default {
       // One gesture, including a click that leaves a 0×0 shape. The add at
       // mouse-down is not a command; object:added is not a history hook.
       if (shape) {
+        shape.setCoords();
         this._recordAdd(shape);
         trackBoardEngaged();
         recordProductAction();

@@ -51,14 +51,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <div 
               :class="{ 'selected-shape': selectedShape === 'rectangle' }"
               @click="selectShape('rectangle')"
-              title="Rectangle"
+              title="Rectangle (R)"
             >
               <font-awesome-icon :icon="['far', 'square']" />
             </div>
             <div 
               :class="{ 'selected-shape': selectedShape === 'circle' }"
               @click="selectShape('circle')"
-              title="Circle"
+              title="Circle (C)"
             >
               <font-awesome-icon :icon="['far', 'circle']" />
             </div>
@@ -66,7 +66,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               :class="{ 'selected-shape': selectedShape === 'arrow' }"
               @click="selectShape('arrow')"
               class="line-icon"
-              title="Line"
+              title="Line (L)"
             >
               |
             </div>
@@ -130,6 +130,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               }"
             :style="{ background: swatchColor(preset) }"
             :aria-label="preset.label"
+            :title="`${preset.label} (${presetShortcut(preset)})`"
             :aria-pressed="isPresetSelected(preset)"
             @click="chooseColor(preset.value)"
           ></button>
@@ -159,6 +160,10 @@ export default {
       type: String,
       default: 'select'
     },
+    selectedShape: {
+      type: String,
+      default: 'rectangle'
+    },
     selectedColor: {
       type: String,
       default: null
@@ -187,7 +192,6 @@ export default {
   data() {
     return {
       selected: "select",
-      selectedShape: "rectangle",
       showShapesSubmenu: false,
       showKitsSubmenu: false,
       showColorPopover: false,
@@ -217,7 +221,6 @@ export default {
       }
     },
     selectShape: function (shape) {
-      this.selectedShape = shape;
       this.$emit('shape-selected', shape);
     },
     insertKit(kitId) {
@@ -233,6 +236,10 @@ export default {
     },
     chooseColor(value) {
       this.$emit('color-selected', value);
+    },
+    presetShortcut(preset) {
+      const index = this.colorPresets.findIndex((entry) => entry.id === preset.id);
+      return index >= 0 ? String(index + 1) : '';
     },
   },
   watch: {

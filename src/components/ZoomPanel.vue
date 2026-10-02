@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button 
       class="zoom-button" 
       @click="$emit('zoom-in')" 
-      title="Zoom In"
+      title="Zoom In (Ctrl+=)"
     >
       <span>+</span>
     </button>
@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button 
       class="zoom-button" 
       @click="$emit('zoom-out')" 
-      title="Zoom Out"
+      title="Zoom Out (Ctrl+-)"
     >
     <span>−</span>
     </button>
@@ -38,7 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button 
       class="zoom-button reset" 
       @click="$emit('reset-zoom')" 
-      title="Reset Zoom"
+      title="Reset Zoom (Ctrl+0)"
     >
       <span>100%</span>
     </button>
