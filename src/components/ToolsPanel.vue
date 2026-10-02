@@ -73,6 +73,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </div>
         </transition>
       </div>
+
+      <div
+        @mouseenter="showKitsSubmenu = true"
+        @mouseleave="showKitsSubmenu = false"
+        title="Stamps"
+      >
+        <font-awesome-icon :icon="['fas', 'wand-magic-sparkles']" />
+        <transition name="fade">
+          <div v-if="showKitsSubmenu" class="shapes-submenu kits-submenu" @click.stop>
+            <div
+              v-for="kit in stampKits"
+              :key="kit.id"
+              @click="insertKit(kit.id)"
+              :title="kit.label"
+            >
+              <font-awesome-icon
+                :icon="kit.id === 'unitCircle' ? ['fas', 'circle-notch'] : ['fas', 'border-all']"
+              />
+            </div>
+          </div>
+        </transition>
+      </div>
     </div>
 
     <div
@@ -128,6 +150,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <script>
 import { COLOR_PRESETS } from '../config/colors.js'
+import { listKits } from '../stamps/registry.js'
 
 export default {
   name: "ToolsPanel",
@@ -153,13 +176,23 @@ export default {
       default: false
     }
   },
+  emits: [
+    'tool-selected',
+    'shape-selected',
+    'color-selected',
+    'undo',
+    'redo',
+    'insert-kit',
+  ],
   data() {
     return {
       selected: "select",
       selectedShape: "rectangle",
       showShapesSubmenu: false,
+      showKitsSubmenu: false,
       showColorPopover: false,
       colorPresets: COLOR_PRESETS,
+      stampKits: listKits(),
       pencil: {
         width: 10,
         color: "(187, 187, 187)",
@@ -186,6 +219,10 @@ export default {
     selectShape: function (shape) {
       this.selectedShape = shape;
       this.$emit('shape-selected', shape);
+    },
+    insertKit(kitId) {
+      this.$emit('insert-kit', kitId);
+      this.showKitsSubmenu = false;
     },
     swatchColor(preset) {
       return preset.value ?? this.mainColor;

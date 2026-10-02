@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import {
   isDeleteShortcut,
   isEscapeShortcut,
+  isGroupShortcut,
   isPlainToolKey,
   isRedoShortcut,
+  isUngroupShortcut,
   isUndoShortcut,
   shouldIgnoreGlobalShortcut,
 } from '../src/config/shortcuts.js'
@@ -72,4 +74,13 @@ test('delete and escape classification', () => {
   assert.equal(isDeleteShortcut({ key: 'Delete', metaKey: true }), false)
   assert.equal(isEscapeShortcut({ key: 'Escape' }), true)
   assert.equal(isEscapeShortcut({ key: 'Esc' }), false)
+})
+
+test('group and ungroup shortcuts', () => {
+  assert.equal(isGroupShortcut({ key: 'g', ctrlKey: true }), true)
+  assert.equal(isGroupShortcut({ key: 'G', metaKey: true }), true)
+  assert.equal(isGroupShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), false)
+  assert.equal(isUngroupShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), true)
+  assert.equal(isUngroupShortcut({ key: 'G', metaKey: true, shiftKey: true }), true)
+  assert.equal(isUngroupShortcut({ key: 'g', ctrlKey: true }), false)
 })

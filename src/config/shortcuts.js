@@ -79,3 +79,15 @@ export function isDeleteShortcut(event) {
 export function isEscapeShortcut(event) {
   return event?.key === 'Escape'
 }
+
+/** Ctrl/Cmd+G — group the active multi-selection. */
+export function isGroupShortcut(event) {
+  if (!event || !hasCommandModifier(event) || event.altKey || event.shiftKey) return false
+  return event.key?.toLowerCase() === 'g'
+}
+
+/** Ctrl/Cmd+Shift+G — ungroup the active permanent group. */
+export function isUngroupShortcut(event) {
+  if (!event || !hasCommandModifier(event) || event.altKey || !event.shiftKey) return false
+  return event.key?.toLowerCase() === 'g'
+}
