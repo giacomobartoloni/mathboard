@@ -34,7 +34,7 @@ export function renderHeader() {
   return `
     <header class="site-header">
       <a href="/" class="brand" aria-label="MathBoard home">
-        <span class="brand-mark" aria-hidden="true">MathBoard</span>
+        <span class="logo">MathBoard</span>
       </a>
       <nav aria-label="Primary">
         <a href="/resources/">Resources</a>
