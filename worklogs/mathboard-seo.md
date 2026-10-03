@@ -16,12 +16,12 @@
 - Static SEO sidecar pages around the MathBoard app without changing `/` board UX.
 
 ## Current goal
-- Finish review/commit of Phase 1 SEO implementation per the plan in this worklog folder.
+- Land Phase 1 SEO via PR review/merge.
 
 ## Current status
-- Phase 1 code is in the worktree. `npm run lint` and `npm run build` pass.
-- Activity is tracked here under `worklogs/`, not under `docs/superpowers/`.
-- Not committed yet (awaiting go-ahead).
+- Committed and pushed on `feature/seo`.
+- PR: https://github.com/giacomobartoloni/mathboard/pull/29 (base `develop`).
+- Commit: `170936c feat(seo): add static SEO sidecar pages around the board`.
 
 ## Key decisions
 - Keep `/` as the Vue app; SEO pages are post-`vite build` static HTML in `dist/`.
