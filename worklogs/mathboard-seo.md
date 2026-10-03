@@ -44,7 +44,7 @@
 - Capture dedicated WebP screenshots for product pages (optional polish before merge).
 
 ## Next steps
-- Review + commit when asked
+- Review/merge PR #29
 - Deploy / Search Console: submit sitemap
 - Replace `/og-image.png` figures with dedicated WebP screenshots when ready
 
@@ -57,10 +57,10 @@
 ## Update history
 
 ### 2026-10-04
-- Changes: Moved plan from `docs/superpowers/plans/` into `worklogs/`; deleted `docs/superpowers/`.
+- Changes: Moved plan into `worklogs/`; committed/pushed; opened PR #29.
 - Decisions: Agent activity/tracking stays in agent-worklog only.
 - Blockers: none
-- Next-step changes: commit when requested
+- Next-step changes: review/merge PR; Search Console after deploy
 
 ### 2026-10-03
 - Changes: Imported plan; implemented Phase 1 SEO sidecar; lint/build pass.
