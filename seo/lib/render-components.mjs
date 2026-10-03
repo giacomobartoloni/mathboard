@@ -33,7 +33,9 @@ export function renderOpenBoardCTA({ placement = 'main' } = {}) {
 export function renderHeader() {
   return `
     <header class="site-header">
-      <a href="/" class="brand">MathBoard</a>
+      <a href="/" class="brand" aria-label="MathBoard home">
+        <span class="brand-mark" aria-hidden="true">MathBoard</span>
+      </a>
       <nav aria-label="Primary">
         <a href="/resources/">Resources</a>
         <a href="https://github.com/giacomobartoloni/mathboard">GitHub</a>

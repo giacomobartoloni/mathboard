@@ -68,10 +68,24 @@ main {
 }
 
 .brand {
-  font-weight: 700;
-  font-size: 1.25rem;
   text-decoration: none;
-  color: var(--brand-dark);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Matches the in-app MathBoard logo badge (App.vue .logo). */
+.brand-mark {
+  font-family: "Satisfy", cursive;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: whitesmoke;
+  background-color: rgb(61, 61, 61);
+  border: 3px solid tan;
+  border-radius: 5px;
+  padding: 5px 10px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .site-header nav {

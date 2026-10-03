@@ -10,7 +10,7 @@
 - 2026-10-03
 
 ## Last updated
-- 2026-10-04
+- 2026-10-04 (logo fix pending commit)
 
 ## Topic
 - Static SEO sidecar pages around the MathBoard app without changing `/` board UX.
@@ -19,9 +19,8 @@
 - Land Phase 1 SEO via PR review/merge.
 
 ## Current status
-- Committed and pushed on `feature/seo`.
-- PR: https://github.com/giacomobartoloni/mathboard/pull/29 (base `develop`).
-- Commit: `170936c feat(seo): add static SEO sidecar pages around the board`.
+- PR open: https://github.com/giacomobartoloni/mathboard/pull/29
+- Local fix: SEO header brand now uses the Satisfy badge logo (same as the app).
 
 ## Key decisions
 - Keep `/` as the Vue app; SEO pages are post-`vite build` static HTML in `dist/`.
