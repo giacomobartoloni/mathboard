@@ -14,7 +14,9 @@
 ```sh
 npm ci               # install deps from the lockfile (not yarn)
 npm run dev          # dev server with HMR (Vite)
-npm run build        # production build to dist/
+npm run build        # vite build + tools/build-seo.mjs → dist/ (app + static SEO pages)
+npm run build:app    # Vite only
+npm run build:seo    # SEO sidecar into dist/ (requires prior build:app)
 npm run preview      # serve the dist/ build locally
 npm run lint         # eslint (vue3-essential + eslint:recommended); reports, does not fix
 npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x512.png from tools/icon-template.html
