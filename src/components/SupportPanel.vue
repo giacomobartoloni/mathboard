@@ -90,6 +90,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><font-awesome-icon :icon="['fas', 'code-branch']" /> <strong>Open Source</strong></p>
           <p>MathBoard is licensed under the <strong>GNU AGPL v3</strong>. The source code is freely available on GitHub. Contributions, issues, and suggestions are welcome!</p>
           <div class="contact-links">
+            <a href="/resources/">
+              Resources &amp; shortcuts
+            </a>
             <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer">
               <font-awesome-icon :icon="['fab', 'github']" /> GitHub Repository
             </a>
@@ -114,6 +117,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         </div>
 
         <div class="legal-links">
+          <a href="/resources/">Resources</a>
+          <span class="separator" aria-hidden="true">·</span>
           <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
         </div>
       </div>

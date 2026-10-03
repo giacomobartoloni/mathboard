@@ -61,6 +61,14 @@ Renders `tools/icon-template.html` in headless Chromium and overwrites `public/i
 npm run preview
 ```
 
+`npm run build` runs the Vite app build, then `tools/build-seo.mjs`, which writes static resource/docs pages into `dist/` and regenerates `sitemap.xml` plus `404.html`.
+
+## Documentation
+
+- [MathBoard resources](https://mathboard.app/resources/)
+- [LaTeX formulas](https://mathboard.app/docs/latex/)
+- [Keyboard shortcuts](https://mathboard.app/docs/keyboard-shortcuts/)
+
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE.md) file for details.
