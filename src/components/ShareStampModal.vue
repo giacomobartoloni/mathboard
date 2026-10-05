@@ -54,6 +54,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 export default {
   name: 'ShareStampModal',
+  emits: ['close', 'copied', 'copy-failed'],
   props: {
     isVisible: {
       type: Boolean,
@@ -79,22 +80,30 @@ export default {
     },
     async copyUrl() {
       const text = this.url
-      if (!text) return
+      if (!text) {
+        this.$emit('copy-failed')
+        return
+      }
       try {
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(text)
         } else {
           this.selectUrl()
-          document.execCommand('copy')
+          const copied = document.execCommand('copy')
+          if (!copied) {
+            throw new Error('Copy command failed')
+          }
         }
         this.copyLabel = 'Copied'
+        this.$emit('copied')
         if (this.copyResetTimer) clearTimeout(this.copyResetTimer)
         this.copyResetTimer = setTimeout(() => {
           this.copyLabel = 'Copy'
           this.copyResetTimer = null
         }, 1500)
-      } catch (error) {
+      } catch {
         this.selectUrl()
+        this.$emit('copy-failed')
       }
     },
     closeModal() {

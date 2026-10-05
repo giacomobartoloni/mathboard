@@ -36,6 +36,11 @@ export const ANALYTICS_EVENTS = Object.freeze({
   FORMULA_MODAL_CANCELLED: 'formula_modal_cancelled',
   FORMULA_RENDER_FAILED: 'formula_render_failed',
 
+  STAMP_SHARE_CREATED: 'stamp_share_created',
+  STAMP_SHARE_COPIED: 'stamp_share_copied',
+  STAMP_SHARE_OPENED: 'stamp_share_opened',
+  STAMP_SHARE_FAILED: 'stamp_share_failed',
+
   OBJECT_DELETED: 'object_deleted',
   UNDO_USED: 'undo_used',
   REDO_USED: 'redo_used',
@@ -86,6 +91,13 @@ export const ANALYTICS_FORMULA_PALETTE_GROUPS = Object.freeze({
   SYMBOLS: 'symbols',
   GREEK: 'greek',
   RELATIONS: 'relations',
+})
+
+export const ANALYTICS_STAMP_SHARE_FAILURE_STAGES = Object.freeze({
+  EXPORT_SELECTION: 'export_selection',
+  BUILD_URL: 'build_url',
+  COPY: 'copy',
+  OPEN: 'open',
 })
 
 export const ANALYTICS_MILESTONES = Object.freeze([5, 20, 50])

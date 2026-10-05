@@ -12,7 +12,7 @@ Thin adapter over [Simple Analytics](https://www.simpleanalytics.com/) for produ
 | `recordProductAction()` | In-memory action counter; emits `usage_milestone` at 5 / 20 / 50. |
 | `isAnalyticsEnabled()` | Production host gate (exported for clarity). |
 
-Event name and payload constants live in `events.js` (`ANALYTICS_EVENTS`, `ANALYTICS_OBJECT_TYPES`, `ANALYTICS_SHAPES`, `ANALYTICS_FORMULA_MODES`, `ANALYTICS_FORMULA_CLOSE_REASONS`, `ANALYTICS_FORMULA_ASSIST_SOURCES`, `ANALYTICS_FORMULA_PALETTE_GROUPS`, `ANALYTICS_MILESTONES`).
+Event name and payload constants live in `events.js` (`ANALYTICS_EVENTS`, `ANALYTICS_OBJECT_TYPES`, `ANALYTICS_SHAPES`, `ANALYTICS_FORMULA_MODES`, `ANALYTICS_FORMULA_CLOSE_REASONS`, `ANALYTICS_FORMULA_ASSIST_SOURCES`, `ANALYTICS_FORMULA_PALETTE_GROUPS`, `ANALYTICS_STAMP_SHARE_FAILURE_STAGES`, `ANALYTICS_MILESTONES`).
 
 ## Enablement gate
 
@@ -163,6 +163,57 @@ formula_edited
 - `formula_assist_used` counts assisted **clicks**, not assisted formula sessions. Do not treat assist count / submit count as a per-session conversion rate.
 - Do not emit live KaTeX preview errors, keystrokes, hover, or palette-tab browsing events.
 - Interpret counts as aggregates (Simple Analytics). Do not stitch events with user or session IDs.
+
+## Stamp share funnel
+
+Measure share-link generation → Copy button → shared-link open, plus technical failures by workflow stage. Do **not** send share URLs, Stamp payloads, board content, coordinates, error messages, or share/session IDs. There is no causal stitching between sender `created`/`copied` and receiver `opened`.
+
+| User action | Event | Metadata |
+| --- | --- | --- |
+| Share link generated and modal opened | `stamp_share_created` | none |
+| Copy button succeeds | `stamp_share_copied` | none |
+| Incoming `#s=` / `?s=` materializes successfully | `stamp_share_opened` | none |
+| Export/serialize selection fails | `stamp_share_failed` | `stage=export_selection` |
+| Payload → URL build fails | `stamp_share_failed` | `stage=build_url` |
+| Copy button fails | `stamp_share_failed` | `stage=copy` |
+| Incoming payload fails to materialize | `stamp_share_failed` | `stage=open` |
+
+`stage` values come from `ANALYTICS_STAMP_SHARE_FAILURE_STAGES`: `export_selection`, `build_url`, `copy`, `open`.
+
+### Share generation funnel
+
+```text
+export selection
+    ↓
+build share URL
+    ↓
+stamp_share_created
+    ↓
+Copy button
+    ↓
+stamp_share_copied
+```
+
+### Shared open funnel
+
+```text
+incoming #s= / ?s=
+    ↓
+bootstrapFromStamp
+    ↓
+stamp_share_opened
+    ↓
+object_created { object_type: stamp_template }
+```
+
+### Semantics
+
+- `stamp_share_created` means a share URL was generated and shown in the modal, not that the link was externally shared.
+- `stamp_share_copied` means the modal **Copy** button succeeded. Manual selection / Cmd+C / context-menu copies are not tracked.
+- `stamp_share_opened` means successful materialization of an incoming Stamp deep link. Presence of `#s=` alone is not enough.
+- `stamp_share_failed` is a technical reliability signal for the named stage. `Nothing is selected` remains a silent precondition no-op and is **not** counted as failure.
+- Keep `object_created` with `object_type=stamp_template` on successful open; do not replace it with `stamp_share_opened`.
+- Do not emit modal open/close, hover, or share-attempted events in this funnel.
 
 ## Ownership
 
