@@ -287,6 +287,9 @@ export default {
 
     const onToolSelected = (tool) => {
       selectedTool.value = tool
+      if (tool === 'font') {
+        trackEvent(ANALYTICS_EVENTS.TEXT_TOOL_SELECTED)
+      }
       if (tool === 'formula') {
         trackEvent(ANALYTICS_EVENTS.FORMULA_TOOL_SELECTED)
       }

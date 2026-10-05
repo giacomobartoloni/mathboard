@@ -41,7 +41,7 @@ Product policy (not enforced by the adapter): do not pass board or user content 
 Avoid in particular:
 
 - LaTeX source or formula HTML
-- Free text from the board
+- Free text from the board (including Text tool content, selected text, text length, word count, or character count)
 - Coordinates, path/stroke data, canvas JSON, or bitmaps
 - Emails, user IDs, fingerprints, or other persistent identifiers
 - Full error stacks or messages that may contain user input
@@ -51,6 +51,53 @@ If a future event needs metadata, choose a small set of controlled values; do no
 ## Frequency
 
 Do **not** emit high-frequency events (pointer moves, pan/zoom ticks, per-frame updates, keystrokes). Prefer discrete product actions and milestones.
+
+## Text funnel
+
+Measure Text intent → create start → commit or cancel, and edit start → real change. Events carry **no metadata**. Do **not** send text content, length, word/character counts, selection content, coordinates, or canvas data.
+
+| User action | Event | Metadata |
+| --- | --- | --- |
+| Select Text tool (toolbar or `T`) | `text_tool_selected` | none |
+| Click empty board; placeholder IText added | `text_creation_started` | none |
+| Exit initial editing with real text | `object_created` | `object_type=text` |
+| Exit initial editing empty/default placeholder | `text_creation_cancelled` | none |
+| Enter editing on committed text | `text_edit_started` | none |
+| Exit editing with a real snapshot change | `text_edited` | none |
+
+### Create funnel
+
+```text
+text_tool_selected
+    ↓
+text_creation_started
+    ↓
+object_created { object_type: text }
+```
+
+Cancellation:
+
+```text
+text_creation_started
+    ↓
+text_creation_cancelled
+```
+
+### Edit funnel
+
+```text
+text_edit_started
+    ↓
+text_edited
+```
+
+### Semantics
+
+- `text_tool_selected` counts explicit selections (including shortcut `T`), not unique users. Auto-switch to Select after create must **not** emit it.
+- `object_created` with `object_type=text` means first commit of a new text object only. Later edits must not re-emit it.
+- `text_edit_started` is for committed text only (skips the initial create editing session).
+- `text_edited` requires a real snapshot change; transform/recolor/duplicate are not text edits.
+- Do not emit keystrokes, cursor, or selection events.
 
 ## Formula funnel
 
