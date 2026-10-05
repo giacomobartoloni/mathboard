@@ -63,8 +63,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <FormulaModal 
       :isVisible="showFormulaModal"
       :initialLatex="editingLatex"
-      @close="showFormulaModal = false"
+      @close="onFormulaModalClose"
       @insert-formula="onInsertFormula"
+      @assist-used="onFormulaAssistUsed"
     />
 
     <ShareStampModal
@@ -131,7 +132,13 @@ import {
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
 import { trackEvent } from './analytics'
-import { ANALYTICS_EVENTS } from './analytics/events.js'
+import {
+  ANALYTICS_EVENTS,
+  ANALYTICS_FORMULA_MODES,
+  ANALYTICS_FORMULA_CLOSE_REASONS,
+  ANALYTICS_FORMULA_ASSIST_SOURCES,
+  ANALYTICS_FORMULA_PALETTE_GROUPS,
+} from './analytics/events.js'
 import { getKitById } from './stamps/registry.js'
 import { buildStampShareUrl, clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
 
@@ -187,6 +194,7 @@ export default {
     const drawBoardRef = ref(null)
     const fullscreenRootRef = ref(null)
     const showFormulaModal = ref(false)
+    const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
     const showShareStampModal = ref(false)
     const shareStampUrl = ref('')
     const formulaPosition = ref({ x: 0, y: 0 })
@@ -279,6 +287,9 @@ export default {
 
     const onToolSelected = (tool) => {
       selectedTool.value = tool
+      if (tool === 'formula') {
+        trackEvent(ANALYTICS_EVENTS.FORMULA_TOOL_SELECTED)
+      }
     }
 
     const onShapeSelected = (shape) => {
@@ -324,7 +335,7 @@ export default {
         // The browser uses Escape to leave fullscreen. Do not cancel that.
         if (document.fullscreenElement) return
         if (showFormulaModal.value) {
-          showFormulaModal.value = false
+          onFormulaModalClose(ANALYTICS_FORMULA_CLOSE_REASONS.ESCAPE)
           event.preventDefault()
           return
         }
@@ -458,14 +469,52 @@ export default {
       formulaPosition.value = position
       editingLatex.value = ''
       editingElement.value = null
+      formulaModalMode.value = ANALYTICS_FORMULA_MODES.CREATE
       showFormulaModal.value = true
+      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_OPENED, {
+        mode: ANALYTICS_FORMULA_MODES.CREATE,
+      })
     }
 
     const onEditFormula = ({ latex, position, fabricObject }) => {
       formulaPosition.value = position
       editingLatex.value = latex
       editingElement.value = fabricObject
+      formulaModalMode.value = ANALYTICS_FORMULA_MODES.EDIT
       showFormulaModal.value = true
+      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_OPENED, {
+        mode: ANALYTICS_FORMULA_MODES.EDIT,
+      })
+    }
+
+    const onFormulaModalClose = (reason) => {
+      const allowed = Object.values(ANALYTICS_FORMULA_CLOSE_REASONS)
+      const closeReason = allowed.includes(reason)
+        ? reason
+        : ANALYTICS_FORMULA_CLOSE_REASONS.CANCEL_BUTTON
+      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_CANCELLED, {
+        mode: formulaModalMode.value,
+        reason: closeReason,
+      })
+      showFormulaModal.value = false
+    }
+
+    const onFormulaAssistUsed = ({ source, group } = {}) => {
+      const allowedSources = Object.values(ANALYTICS_FORMULA_ASSIST_SOURCES)
+      if (!allowedSources.includes(source)) return
+
+      const metadata = {
+        mode: formulaModalMode.value,
+        source,
+      }
+
+      if (source === ANALYTICS_FORMULA_ASSIST_SOURCES.PALETTE) {
+        const allowedGroups = Object.values(ANALYTICS_FORMULA_PALETTE_GROUPS)
+        if (!allowedGroups.includes(group)) return
+        metadata.group = group
+      }
+
+      trackEvent(ANALYTICS_EVENTS.FORMULA_ASSIST_USED, metadata)
     }
 
     const onTextEditingCompleted = () => {
@@ -495,6 +544,9 @@ export default {
     }
 
     const onInsertFormula = (formulaData) => {
+      const mode = formulaModalMode.value
+      trackEvent(ANALYTICS_EVENTS.FORMULA_SUBMITTED, { mode })
+
       if (editingElement.value) {
         // One gesture: swap the bitmap on the command log, do not remove first.
         // Removing here used to drop the formula if the new bitmap failed.
@@ -537,6 +589,8 @@ export default {
       onRequestFormula,
       onEditFormula,
       onInsertFormula,
+      onFormulaModalClose,
+      onFormulaAssistUsed,
       onTextEditingCompleted,
       onZoomIn,
       onZoomOut,

@@ -78,6 +78,7 @@ import {
 import {
   ANALYTICS_EVENTS,
   ANALYTICS_OBJECT_TYPES,
+  ANALYTICS_FORMULA_MODES,
 } from "../analytics/events.js";
 import {
   StampError,
@@ -1087,7 +1088,13 @@ export default {
     },
     async addFormulaToCanvas(formulaData, position) {
       const img = await this._buildFormulaImage(formulaData, position);
-      if (!img || !this.canvas) return;
+      if (!img) {
+        trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
+          mode: ANALYTICS_FORMULA_MODES.CREATE,
+        });
+        return false;
+      }
+      if (!this.canvas) return false;
 
       this.canvas.add(img);
       this.canvas.setActiveObject(img);
@@ -1098,9 +1105,10 @@ export default {
       trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
         object_type: ANALYTICS_OBJECT_TYPES.FORMULA,
       });
+      return true;
     },
     async replaceFormula(existing, formulaData) {
-      if (!existing || !this.canvas) return;
+      if (!existing || !this.canvas) return false;
 
       // Read canvas coordinates before the bitmap is ready. A selected formula
       // may still be in group space; the snapshot converts and restores it.
@@ -1109,7 +1117,13 @@ export default {
         x: placed.left,
         y: placed.top
       });
-      if (!img || !this.canvas || !this.canvas.getObjects().includes(existing)) return;
+      if (!img) {
+        trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
+          mode: ANALYTICS_FORMULA_MODES.EDIT,
+        });
+        return false;
+      }
+      if (!this.canvas || !this.canvas.getObjects().includes(existing)) return false;
 
       // The bitmap is built asynchronously. Place it where the formula is now.
       const current = snapshotObject(existing);
@@ -1133,6 +1147,7 @@ export default {
       trackBoardEngaged();
       recordProductAction();
       trackEvent(ANALYTICS_EVENTS.FORMULA_EDITED);
+      return true;
     },
     enableShapeDrawing() {
       this.canvas.isDrawingMode = false;
