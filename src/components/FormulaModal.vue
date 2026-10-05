@@ -18,32 +18,101 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div v-if="isVisible" class="modal-overlay" @click="closeModal">
+  <div v-if="isVisible" class="modal-overlay" @click="closeModal(closeReasons.BACKDROP)">
     <div class="modal-content" @click.stop>
       <div class="modal-header">
         <h3>Insert Formula (LaTeX)</h3>
-        <button class="close-button" @click="closeModal">&times;</button>
+        <button
+          type="button"
+          class="close-button"
+          aria-label="Close formula editor"
+          @click="closeModal(closeReasons.CLOSE_BUTTON)"
+        >&times;</button>
       </div>
-      
+
       <div class="modal-body">
         <div class="input-section">
           <label for="latex-input">LaTeX Formula:</label>
-          <textarea 
+          <textarea
+            ref="latexInput"
             id="latex-input"
             v-model="latexInput"
             placeholder="E.g., E = mc^2, \frac{a}{b}, \sqrt{x}"
-            rows="3"
+            rows="4"
             @input="updatePreview"
+            @keydown.ctrl.enter.prevent="insertFormula"
+            @keydown.meta.enter.prevent="insertFormula"
           ></textarea>
-          <div class="examples">
-            <span class="example-label">Examples:</span>
-            <button class="example-btn" @click="setExample('E = mc^2')">E = mc²</button>
-            <button class="example-btn" @click="setExample('\\frac{a}{b}')">Fraction</button>
-            <button class="example-btn" @click="setExample('\\sqrt{x^2 + y^2}')">Square Root</button>
-            <button class="example-btn" @click="setExample('\\int_{a}^{b} f(x)dx')">Integral</button>
+
+          <div class="latex-tools">
+            <div class="quick-insert-section">
+              <div class="tools-label">Quick insert</div>
+              <div class="quick-insert-grid">
+                <button
+                  v-for="item in quickInsertItems"
+                  :key="item.id"
+                  type="button"
+                  class="latex-symbol-btn"
+                  :title="`${item.label} — ${item.preview}`"
+                  :aria-label="item.ariaLabel"
+                  @mousedown.prevent
+                  @click="insertLatex(item, { source: assistSources.QUICK_INSERT })"
+                >
+                  <span
+                    class="latex-symbol-preview"
+                    v-html="renderSymbol(item.preview)"
+                  ></span>
+                </button>
+              </div>
+              <p class="tools-hint">
+                Tip: select an expression before choosing √, fraction, parentheses, or |x|.
+              </p>
+            </div>
+
+            <div class="symbol-palette">
+              <div class="palette-tabs" role="tablist" aria-label="Symbol categories">
+                <button
+                  v-for="group in paletteGroups"
+                  :key="group.id"
+                  type="button"
+                  role="tab"
+                  class="palette-tab"
+                  :class="{ active: activePaletteGroup === group.id }"
+                  :aria-selected="activePaletteGroup === group.id"
+                  @click="activePaletteGroup = group.id"
+                >
+                  {{ group.label }}
+                </button>
+              </div>
+
+              <div
+                class="palette-items"
+                role="tabpanel"
+                :aria-label="activePaletteLabel"
+              >
+                <button
+                  v-for="item in activePaletteItems"
+                  :key="item.id"
+                  type="button"
+                  class="latex-symbol-btn"
+                  :title="`${item.label} — ${item.preview}`"
+                  :aria-label="item.ariaLabel"
+                  @mousedown.prevent
+                  @click="insertLatex(item, {
+                    source: assistSources.PALETTE,
+                    group: activePaletteGroup
+                  })"
+                >
+                  <span
+                    class="latex-symbol-preview"
+                    v-html="renderSymbol(item.preview)"
+                  ></span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-        
+
         <div class="preview-section">
           <label>Preview:</label>
           <div class="preview-box">
@@ -53,10 +122,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </div>
         </div>
       </div>
-      
+
       <div class="modal-footer">
-        <button class="btn-cancel" @click="closeModal">Cancel</button>
-        <button class="btn-insert" @click="insertFormula" :disabled="!isValidFormula">Insert</button>
+        <button type="button" class="btn-cancel" @click="closeModal(closeReasons.CANCEL_BUTTON)">Cancel</button>
+        <button
+          type="button"
+          class="btn-insert"
+          @click="insertFormula"
+          :disabled="!isValidFormula"
+        >Insert</button>
       </div>
     </div>
   </div>
@@ -65,6 +139,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import {
+  CURSOR,
+  SELECTION,
+  QUICK_INSERT_ITEMS,
+  LATEX_PALETTE_GROUPS
+} from '../config/latexPalette.js'
+import {
+  ANALYTICS_FORMULA_CLOSE_REASONS,
+  ANALYTICS_FORMULA_ASSIST_SOURCES,
+} from '../analytics/events.js'
 
 export default {
   name: 'FormulaModal',
@@ -78,24 +162,51 @@ export default {
       default: ''
     }
   },
+  emits: ['close', 'insert-formula', 'assist-used'],
   data() {
     return {
       latexInput: '',
       renderError: null,
       isValidFormula: false,
-      previewHtml: ''
+      previewHtml: '',
+      activePaletteGroup: 'symbols',
+      quickInsertItems: QUICK_INSERT_ITEMS,
+      paletteGroups: LATEX_PALETTE_GROUPS,
+      closeReasons: ANALYTICS_FORMULA_CLOSE_REASONS,
+      assistSources: ANALYTICS_FORMULA_ASSIST_SOURCES,
+    }
+  },
+  computed: {
+    activePaletteItems() {
+      const group = this.paletteGroups.find(
+        (entry) => entry.id === this.activePaletteGroup
+      )
+      return group ? group.items : []
+    },
+    activePaletteLabel() {
+      const group = this.paletteGroups.find(
+        (entry) => entry.id === this.activePaletteGroup
+      )
+      return group ? group.label : 'Symbols'
     }
   },
   methods: {
+    renderSymbol(latex) {
+      return katex.renderToString(latex, {
+        displayMode: false,
+        throwOnError: false,
+        strict: false
+      })
+    },
     updatePreview() {
       this.renderError = null
       this.isValidFormula = false
       this.previewHtml = ''
-      
+
       if (!this.latexInput.trim()) {
         return
       }
-      
+
       try {
         this.previewHtml = katex.renderToString(this.latexInput, {
           displayMode: true,
@@ -103,56 +214,95 @@ export default {
           errorColor: '#cc0000',
           strict: false
         })
-        
+
         this.isValidFormula = true
       } catch (error) {
         this.renderError = error.message
         this.isValidFormula = false
       }
     },
-    setExample(formula) {
-      this.latexInput = formula
+    insertLatex(item, usage) {
+      const input = this.$refs.latexInput
+      const start = input?.selectionStart ?? this.latexInput.length
+      const end = input?.selectionEnd ?? start
+      const selectedText = this.latexInput.slice(start, end)
+
+      let fragment =
+        selectedText && item.selectionTemplate
+          ? item.selectionTemplate
+          : item.template
+
+      fragment = fragment.replaceAll(SELECTION, selectedText)
+
+      const cursorOffset = fragment.indexOf(CURSOR)
+
+      fragment = fragment
+        .replaceAll(CURSOR, '')
+        .replaceAll(SELECTION, '')
+
+      this.latexInput =
+        this.latexInput.slice(0, start) +
+        fragment +
+        this.latexInput.slice(end)
+
       this.updatePreview()
+
+      if (usage) {
+        this.$emit('assist-used', usage)
+      }
+
+      this.$nextTick(() => {
+        const position =
+          cursorOffset >= 0
+            ? start + cursorOffset
+            : start + fragment.length
+
+        input?.focus()
+        input?.setSelectionRange(position, position)
+      })
     },
     insertFormula() {
       if (!this.isValidFormula) return
-      
+
       const formulaData = {
         latex: this.latexInput,
         html: katex.renderToString(this.latexInput, {
           displayMode: true,
           throwOnError: false
         })
-      };
-      
+      }
+
       this.$emit('insert-formula', formulaData)
-      
-      this.closeModal()
+      this.resetState()
     },
-    closeModal() {
+    resetState() {
       this.latexInput = ''
       this.renderError = null
       this.isValidFormula = false
       this.previewHtml = ''
-      this.$emit('close')
+      this.activePaletteGroup = 'symbols'
+    },
+    closeModal(reason) {
+      this.resetState()
+      this.$emit('close', reason)
     }
   },
   watch: {
     isVisible(newVal) {
       if (newVal) {
         this.$nextTick(() => {
-          if (this.initialLatex) {
-            this.latexInput = this.initialLatex
-          }
+          this.latexInput = this.initialLatex || ''
+          this.activePaletteGroup = 'symbols'
           this.updatePreview()
-          const input = document.getElementById('latex-input')
-          if (input) input.focus()
+
+          const input = this.$refs.latexInput
+          input?.focus()
         })
       }
     },
     initialLatex(newVal) {
-      if (newVal && this.isVisible) {
-        this.latexInput = newVal
+      if (this.isVisible) {
+        this.latexInput = newVal || ''
         this.updatePreview()
       }
     }
@@ -179,7 +329,7 @@ export default {
   background: var(--surface-secondary);
   border-radius: 12px;
   width: 90%;
-  max-width: 600px;
+  max-width: 700px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: column;
@@ -222,6 +372,11 @@ export default {
   color: var(--text-primary);
 }
 
+.close-button:focus-visible {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+}
+
 .modal-body {
   padding: 24px;
   overflow-y: auto;
@@ -259,34 +414,116 @@ textarea:focus {
   border-color: #4a90e2;
 }
 
-.examples {
-  margin-top: 12px;
+.latex-tools {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tools-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.tools-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.quick-insert-grid,
+.palette-items {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  align-items: center;
 }
 
-.example-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-right: 4px;
-}
-
-.example-btn {
-  padding: 6px 12px;
+.latex-symbol-btn {
+  min-width: 44px;
+  height: 40px;
+  padding: 4px 10px;
   background: var(--surface-muted);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: 8px;
+  color: var(--text-primary);
   cursor: pointer;
-  transition: all 0.2s;
-  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
 }
 
-.example-btn:hover {
+.latex-symbol-btn:hover {
   background: var(--hover-bg);
   border-color: var(--border-color);
+}
+
+.latex-symbol-btn:active {
+  transform: translateY(1px);
+}
+
+.latex-symbol-btn:focus-visible {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+}
+
+.latex-symbol-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.latex-symbol-preview :deep(.katex) {
+  font-size: 1em;
+}
+
+.symbol-palette {
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+}
+
+.palette-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.palette-tab {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+
+.palette-tab:hover {
+  color: var(--text-secondary);
+  background: var(--hover-bg);
+}
+
+.palette-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: #4a90e2;
+  background: var(--surface-muted);
+}
+
+.palette-tab:focus-visible {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
 }
 
 .preview-section label {
@@ -298,7 +535,7 @@ textarea:focus {
 }
 
 .preview-box {
-  min-height: 100px;
+  min-height: 120px;
   padding: 20px;
   border: 2px solid var(--border-color);
   border-radius: 8px;
@@ -366,5 +603,29 @@ textarea:focus {
 .btn-insert:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-cancel:focus-visible,
+.btn-insert:focus-visible {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .modal-content {
+    max-width: 100%;
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .latex-symbol-btn {
+    min-width: 40px;
+    height: 36px;
+  }
 }
 </style>

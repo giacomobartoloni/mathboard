@@ -51,14 +51,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <div 
               :class="{ 'selected-shape': selectedShape === 'rectangle' }"
               @click="selectShape('rectangle')"
-              title="Rectangle"
+              title="Rectangle (R)"
             >
               <font-awesome-icon :icon="['far', 'square']" />
             </div>
             <div 
               :class="{ 'selected-shape': selectedShape === 'circle' }"
               @click="selectShape('circle')"
-              title="Circle"
+              title="Circle (C)"
             >
               <font-awesome-icon :icon="['far', 'circle']" />
             </div>
@@ -66,9 +66,31 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               :class="{ 'selected-shape': selectedShape === 'arrow' }"
               @click="selectShape('arrow')"
               class="line-icon"
-              title="Line"
+              title="Line (L)"
             >
               |
+            </div>
+          </div>
+        </transition>
+      </div>
+
+      <div
+        @mouseenter="showKitsSubmenu = true"
+        @mouseleave="showKitsSubmenu = false"
+        title="Stamps"
+      >
+        <font-awesome-icon :icon="['fas', 'wand-magic-sparkles']" />
+        <transition name="fade">
+          <div v-if="showKitsSubmenu" class="shapes-submenu kits-submenu" @click.stop>
+            <div
+              v-for="kit in stampKits"
+              :key="kit.id"
+              @click="insertKit(kit.id)"
+              :title="kit.label"
+            >
+              <font-awesome-icon
+                :icon="kit.id === 'unitCircle' ? ['fas', 'circle-notch'] : ['fas', 'border-all']"
+              />
             </div>
           </div>
         </transition>
@@ -108,6 +130,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               }"
             :style="{ background: swatchColor(preset) }"
             :aria-label="preset.label"
+            :title="`${preset.label} (${presetShortcut(preset)})`"
             :aria-pressed="isPresetSelected(preset)"
             @click="chooseColor(preset.value)"
           ></button>
@@ -128,6 +151,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <script>
 import { COLOR_PRESETS } from '../config/colors.js'
+import { listKits } from '../stamps/registry.js'
 
 export default {
   name: "ToolsPanel",
@@ -135,6 +159,10 @@ export default {
     selectedTool: {
       type: String,
       default: 'select'
+    },
+    selectedShape: {
+      type: String,
+      default: 'rectangle'
     },
     selectedColor: {
       type: String,
@@ -153,13 +181,22 @@ export default {
       default: false
     }
   },
+  emits: [
+    'tool-selected',
+    'shape-selected',
+    'color-selected',
+    'undo',
+    'redo',
+    'insert-kit',
+  ],
   data() {
     return {
       selected: "select",
-      selectedShape: "rectangle",
       showShapesSubmenu: false,
+      showKitsSubmenu: false,
       showColorPopover: false,
       colorPresets: COLOR_PRESETS,
+      stampKits: listKits(),
       pencil: {
         width: 10,
         color: "(187, 187, 187)",
@@ -184,8 +221,11 @@ export default {
       }
     },
     selectShape: function (shape) {
-      this.selectedShape = shape;
       this.$emit('shape-selected', shape);
+    },
+    insertKit(kitId) {
+      this.$emit('insert-kit', kitId);
+      this.showKitsSubmenu = false;
     },
     swatchColor(preset) {
       return preset.value ?? this.mainColor;
@@ -196,6 +236,10 @@ export default {
     },
     chooseColor(value) {
       this.$emit('color-selected', value);
+    },
+    presetShortcut(preset) {
+      const index = this.colorPresets.findIndex((entry) => entry.id === preset.id);
+      return index >= 0 ? String(index + 1) : '';
     },
   },
   watch: {

@@ -65,3 +65,30 @@ export function selectionChromeForBoard(boardTheme) {
     selectionLineWidth: 2,
   }
 }
+
+const CANVAS_MARQUEE_KEYS = [
+  'selectionColor',
+  'selectionBorderColor',
+  'selectionLineWidth',
+]
+
+/** Control colors for one object (excludes canvas marquee fields). */
+export function selectionObjectChromeForBoard(boardTheme) {
+  const objectChrome = { ...selectionChromeForBoard(boardTheme) }
+  CANVAS_MARQUEE_KEYS.forEach((key) => {
+    delete objectChrome[key]
+  })
+  return objectChrome
+}
+
+/**
+ * Apply selection control colors to one Fabric object and nested Group members.
+ * Group children are not canvas top-level objects, so theme changes must walk in.
+ */
+export function applySelectionObjectChrome(object, objectChrome) {
+  if (!object || typeof object.set !== 'function') return
+  object.set(objectChrome)
+  const isGroup = typeof object.isType === 'function' && object.isType('Group')
+  if (!isGroup || typeof object.getObjects !== 'function') return
+  object.getObjects().forEach((child) => applySelectionObjectChrome(child, objectChrome))
+}

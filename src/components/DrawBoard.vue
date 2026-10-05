@@ -36,18 +36,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { markRaw } from "vue";
-import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters, InteractiveFabricObject, ActiveSelection } from "fabric";
+import { markRaw, toRaw } from "vue";
+import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import html2canvas from "html2canvas";
-import { applyAutoInk, applyExplicitInk, paletteColorFromSelection } from "../config/colors";
+import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
-import { selectionChromeForBoard } from "../config/selectionChrome";
+import {
+  applySelectionObjectChrome,
+  selectionChromeForBoard,
+  selectionObjectChromeForBoard,
+} from "../config/selectionChrome";
 import {
   ACTION_DELETE,
   ACTION_DUPLICATE,
   ACTION_EDIT,
+  ACTION_GROUP,
+  ACTION_UNGROUP,
   DUPLICATE_OFFSET,
   panelSize,
   sceneBoxToViewport,
@@ -70,7 +78,15 @@ import {
 import {
   ANALYTICS_EVENTS,
   ANALYTICS_OBJECT_TYPES,
+  ANALYTICS_FORMULA_MODES,
 } from "../analytics/events.js";
+import {
+  StampError,
+  STAMP_ERROR_CODES,
+  decodeStampString,
+  materializeStampDocument,
+  encodeObjectsAsStamp,
+} from "../stamps/index.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -228,19 +244,35 @@ export default {
      * Recolor every object authored with the board default ink to the given board
      * theme. Objects without the AUTO ink mode (explicit user colors, imported
      * documents) are left untouched, and no history entry is pushed.
+     * Walks into permanent Groups (and ActiveSelection) so stamp kits follow theme.
      */
     syncAutoInk(config) {
-      this.canvas.forEachObject((obj) => {
+      const apply = (obj) => {
+        if (!obj) return;
+        if (obj.isType?.("Group") || obj.isType?.("ActiveSelection")) {
+          const members = typeof obj.getObjects === "function" ? obj.getObjects() : [];
+          members.forEach(apply);
+          return;
+        }
         if (obj.mathboardInkMode !== INK_MODE_AUTO) return;
 
         if (obj.formulaType === FORMULA_TYPE) {
           this.syncFormulaInk(obj, config);
         } else if (obj.isType(...STROKE_INK_TYPES)) {
-          obj.set('stroke', config.defaultInk);
+          const patch = { stroke: config.defaultInk };
+          if (
+            obj.isType("Circle")
+            && obj.fill
+            && obj.fill !== "transparent"
+          ) {
+            patch.fill = config.defaultInk;
+          }
+          obj.set(patch);
         } else if (obj.isType(...FILL_INK_TYPES)) {
-          obj.set('fill', config.defaultInk);
+          obj.set("fill", config.defaultInk);
         }
-      });
+      };
+      this.canvas.forEachObject(apply);
     },
     /**
      * Adapt a formula bitmap to the board ink polarity. Fabric filters never mutate
@@ -262,7 +294,15 @@ export default {
     _inkSnapshot(object) {
       if (!object || object.formulaType) return null;
       if (object.isType(...STROKE_INK_TYPES)) {
-        return { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
+        const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
+        if (
+          object.isType("Circle")
+          && object.fill
+          && object.fill !== "transparent"
+        ) {
+          snapshot.fill = object.fill;
+        }
+        return snapshot;
       }
       if (object.isType(...FILL_INK_TYPES)) {
         return { fill: object.fill, mathboardInkMode: object.mathboardInkMode };
@@ -342,8 +382,8 @@ export default {
         selectionColor,
         selectionBorderColor,
         selectionLineWidth,
-        ...objectChrome
       } = chrome;
+      const objectChrome = selectionObjectChromeForBoard(this.boardTheme);
       Object.assign(InteractiveFabricObject.ownDefaults, objectChrome);
       this.canvas.selectionColor = selectionColor;
       this.canvas.selectionBorderColor = selectionBorderColor;
@@ -351,9 +391,11 @@ export default {
 
       this._suspendHistory = true;
       try {
-        this.canvas.forEachObject((obj) => obj.set(objectChrome));
+        this.canvas.forEachObject((obj) => applySelectionObjectChrome(obj, objectChrome));
         const active = this.canvas.getActiveObject();
-        if (active?.isType?.('ActiveSelection')) active.set(objectChrome);
+        if (active?.isType?.("ActiveSelection")) {
+          applySelectionObjectChrome(active, objectChrome);
+        }
       } finally {
         this._suspendHistory = false;
       }
@@ -461,6 +503,14 @@ export default {
         this.duplicateSelection();
         return;
       }
+      if (actionId === ACTION_GROUP) {
+        this.groupSelection();
+        return;
+      }
+      if (actionId === ACTION_UNGROUP) {
+        this.ungroupSelection();
+        return;
+      }
       if (actionId === ACTION_EDIT) this.editSelection();
     },
     _focusBoard() {
@@ -490,6 +540,24 @@ export default {
       }
       const selection = new ActiveSelection(clones, { canvas: this.canvas });
       this.canvas.setActiveObject(selection);
+    },
+    selectAll() {
+      if (!this.canvas) return false;
+      // toRaw: shapes assigned through data() may be Vue proxies; Fabric's
+      // ActiveSelection layout uses === on group membership and mis-transforms
+      // proxied objects (visible jump on Cmd/Ctrl+A).
+      const objects = this.canvas.getObjects().map((object) => toRaw(object));
+      if (!objects.length) return false;
+
+      this.canvas.discardActiveObject();
+      if (objects.length === 1) {
+        this.canvas.setActiveObject(objects[0]);
+      } else {
+        this.canvas.setActiveObject(new ActiveSelection(objects, { canvas: this.canvas }));
+      }
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      return true;
     },
     async duplicateSelection() {
       if (!this.canvas) return;
@@ -538,6 +606,332 @@ export default {
         position: { x: active.left, y: active.top },
         fabricObject: active,
       });
+    },
+    isBoardEmpty() {
+      return !this.canvas || this.canvas.getObjects().length === 0;
+    },
+    _viewportCenterScenePoint() {
+      const vpt = this.canvas.viewportTransform;
+      const width = this.canvas.getWidth();
+      const height = this.canvas.getHeight();
+      return {
+        x: (width / 2 - vpt[4]) / vpt[0],
+        y: (height / 2 - vpt[5]) / vpt[3],
+      };
+    },
+    async _buildFormulaFromStamp(spec) {
+      let html;
+      try {
+        html = katex.renderToString(spec.latex, {
+          displayMode: true,
+          throwOnError: true,
+          strict: false,
+        });
+      } catch (error) {
+        console.error("Stamp formula render failed", error);
+        return null;
+      }
+      const img = await this._buildFormulaImage(
+        { latex: spec.latex, html },
+        { x: spec.left ?? 0, y: spec.top ?? 0 },
+      );
+      if (!img) return null;
+      const next = {};
+      [
+        "left",
+        "top",
+        "scaleX",
+        "scaleY",
+        "skewX",
+        "skewY",
+        "angle",
+        "flipX",
+        "flipY",
+        "originX",
+        "originY",
+        "opacity",
+      ].forEach((key) => {
+        if (spec[key] !== undefined && spec[key] !== null) next[key] = spec[key];
+      });
+      if (Object.keys(next).length) {
+        img.set(next);
+        img.setCoords();
+      }
+      if (spec.mathboardInkMode !== undefined) {
+        img.mathboardInkMode = spec.mathboardInkMode;
+      }
+      if (spec.mathboardRenderedInkIsLight !== undefined) {
+        img.mathboardRenderedInkIsLight = spec.mathboardRenderedInkIsLight;
+      }
+      return img;
+    },
+    async _materializeStamp(encoded) {
+      const doc = decodeStampString(encoded);
+      return materializeStampDocument(doc, {
+        buildFormula: (spec) => this._buildFormulaFromStamp(spec),
+      });
+    },
+    _wrapAsStampGroup(objects) {
+      if (objects.length === 1 && objects[0]?.isType?.("Group")) {
+        return objects[0];
+      }
+      return new Group(objects, {
+        subTargetCheck: false,
+        interactive: false,
+      });
+    },
+    _placeGroupAtViewportCenter(group) {
+      const center = this._viewportCenterScenePoint();
+      group.set({
+        left: center.x,
+        top: center.y,
+        originX: "center",
+        originY: "center",
+      });
+      group.setCoords();
+    },
+    /**
+     * Native kits mark ink as AUTO. Apply the board default ink so stamps
+     * follow the theme Main color instead of baked placeholder hex values.
+     * Explicit FIXED colors from imported stamps are left alone.
+     */
+    _applyBoardDefaultInkToStampTree(root) {
+      if (!root) return;
+      const ink = this.boardThemeConfig.defaultInk;
+      const walk = (object) => {
+        if (!object) return;
+        if (object.isType?.("Group")) {
+          const members = typeof object.getObjects === "function" ? object.getObjects() : [];
+          members.forEach(walk);
+          return;
+        }
+        if (object.mathboardInkMode === INK_MODE_FIXED) return;
+        if (object.formulaType === FORMULA_TYPE) {
+          object.mathboardInkMode = INK_MODE_AUTO;
+          return;
+        }
+        if (object.isType?.(...STROKE_INK_TYPES)) {
+          const patch = { stroke: ink, mathboardInkMode: INK_MODE_AUTO };
+          if (
+            object.isType("Circle")
+            && object.fill
+            && object.fill !== "transparent"
+          ) {
+            patch.fill = ink;
+          }
+          object.set(patch);
+          return;
+        }
+        if (object.isType?.(...FILL_INK_TYPES)) {
+          object.set({ fill: ink, mathboardInkMode: INK_MODE_AUTO });
+        }
+      };
+      walk(root);
+    },
+    /**
+     * Insert a stamp without clearing the board. One history `add` for the group.
+     * @returns {Promise<{ ok: true, group: object } | { ok: false, message: string }>}
+     */
+    async insertStamp(encoded) {
+      if (!this.canvas) {
+        return { ok: false, message: "Board is not ready." };
+      }
+      let objects;
+      try {
+        objects = await this._materializeStamp(encoded);
+      } catch (error) {
+        const message = error instanceof StampError
+          ? error.message
+          : "Could not recreate stamp objects.";
+        console.error("insertStamp failed", error);
+        return { ok: false, message };
+      }
+      if (!this.canvas) {
+        return { ok: false, message: "Board is not ready." };
+      }
+
+      const group = this._wrapAsStampGroup(objects);
+      this._applyBoardDefaultInkToStampTree(group);
+      this._placeGroupAtViewportCenter(group);
+      this.canvas.add(group);
+      this.canvas.setActiveObject(group);
+      this.canvas.requestRenderAll();
+      this._recordAdd(group);
+      this.refreshSelectionPanel();
+      trackBoardEngaged();
+      recordProductAction();
+      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+        object_type: "stamp",
+      });
+      return { ok: true, group };
+    },
+    _resetHistory() {
+      this._history = [];
+      this._historyStep = -1;
+      this._pendingTransform = null;
+      this._pendingText = null;
+      this._uncommittedText = null;
+      this._historyTipKind = "command";
+    },
+    _clearBoardContents() {
+      if (!this.canvas) return;
+      this.canvas.discardActiveObject();
+      const objects = this.canvas.getObjects().slice();
+      this._suspendHistory = true;
+      try {
+        objects.forEach((object) => this.canvas.remove(object));
+      } finally {
+        this._suspendHistory = false;
+      }
+      this._resetHistory();
+      this.refreshSelectionPanel();
+    },
+    /**
+     * Clear the board, reset history, then insert a stamp (template / URL).
+     * Materializes before clearing so a failed stamp leaves the board intact.
+     */
+    async bootstrapFromStamp(encoded) {
+      if (!this.canvas) {
+        return { ok: false, message: "Board is not ready." };
+      }
+      let objects;
+      try {
+        objects = await this._materializeStamp(encoded);
+      } catch (error) {
+        const message = error instanceof StampError
+          ? error.message
+          : "Could not recreate stamp objects.";
+        console.error("bootstrapFromStamp failed", error);
+        return { ok: false, message };
+      }
+      if (!this.canvas) {
+        return { ok: false, message: "Board is not ready." };
+      }
+
+      this._clearBoardContents();
+      const group = this._wrapAsStampGroup(objects);
+      this._applyBoardDefaultInkToStampTree(group);
+      this._placeGroupAtViewportCenter(group);
+      this.canvas.add(group);
+      this.canvas.setActiveObject(group);
+      this.canvas.requestRenderAll();
+      this._recordAdd(group);
+      this.refreshSelectionPanel();
+      trackBoardEngaged();
+      recordProductAction();
+      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+        object_type: "stamp_template",
+      });
+      return { ok: true, group };
+    },
+    exportSelectionToStamp() {
+      if (!this.canvas) {
+        throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, "Board is not ready.");
+      }
+      const active = this.canvas.getActiveObject();
+      if (!active) {
+        throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, "Nothing is selected.");
+      }
+      const sources = active.isType("ActiveSelection")
+        ? active.getObjects().slice()
+        : [active];
+      return encodeObjectsAsStamp(sources);
+    },
+    groupSelection() {
+      if (!this.canvas) return false;
+      const active = this.canvas.getActiveObject();
+      if (!active || !active.isType("ActiveSelection")) return false;
+      const members = active.getObjects().slice();
+      if (members.length < 2) return false;
+
+      const memberEntries = members
+        .map((object) => ({
+          object,
+          index: this.canvas.getObjects().indexOf(object),
+        }))
+        .filter((entry) => entry.index >= 0)
+        .sort((a, b) => a.index - b.index);
+      if (memberEntries.length < 2) return false;
+
+      this.canvas.discardActiveObject();
+      this._suspendHistory = true;
+      let group;
+      try {
+        memberEntries.forEach(({ object }) => this.canvas.remove(object));
+        group = new Group(
+          memberEntries.map((entry) => entry.object),
+          { subTargetCheck: false, interactive: false },
+        );
+        this.canvas.add(group);
+        this.canvas.setActiveObject(group);
+      } finally {
+        this._suspendHistory = false;
+      }
+
+      const index = this.canvas.getObjects().indexOf(group);
+      if (index < 0) return false;
+      this._pushCommand({
+        type: "group",
+        group,
+        index,
+        members: memberEntries,
+      });
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      trackBoardEngaged();
+      recordProductAction();
+      return true;
+    },
+    ungroupSelection() {
+      if (!this.canvas) return false;
+      const active = this.canvas.getActiveObject();
+      if (!active || active.isType("ActiveSelection") || !active.isType("Group")) {
+        return false;
+      }
+
+      const group = active;
+      const groupIndex = this.canvas.getObjects().indexOf(group);
+      if (groupIndex < 0) return false;
+
+      this._suspendHistory = true;
+      let items;
+      try {
+        items = group.removeAll();
+        this.canvas.remove(group);
+        items.forEach((object) => this.canvas.add(object));
+      } finally {
+        this._suspendHistory = false;
+      }
+
+      const members = items
+        .map((object) => ({
+          object,
+          index: this.canvas.getObjects().indexOf(object),
+        }))
+        .filter((entry) => entry.index >= 0);
+
+      this._pushCommand({
+        type: "ungroup",
+        group,
+        index: groupIndex,
+        members,
+      });
+
+      const objectChrome = selectionObjectChromeForBoard(this.boardTheme);
+      items.forEach((object) => applySelectionObjectChrome(object, objectChrome));
+
+      if (items.length > 1) {
+        this.canvas.setActiveObject(new ActiveSelection(items, { canvas: this.canvas }));
+      } else if (items.length === 1) {
+        this.canvas.setActiveObject(items[0]);
+      } else {
+        this.canvas.discardActiveObject();
+      }
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      trackBoardEngaged();
+      recordProductAction();
+      return true;
     },
     enablePanning() {
       this.canvas.isDrawingMode = false;
@@ -694,7 +1088,13 @@ export default {
     },
     async addFormulaToCanvas(formulaData, position) {
       const img = await this._buildFormulaImage(formulaData, position);
-      if (!img || !this.canvas) return;
+      if (!img) {
+        trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
+          mode: ANALYTICS_FORMULA_MODES.CREATE,
+        });
+        return false;
+      }
+      if (!this.canvas) return false;
 
       this.canvas.add(img);
       this.canvas.setActiveObject(img);
@@ -705,9 +1105,10 @@ export default {
       trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
         object_type: ANALYTICS_OBJECT_TYPES.FORMULA,
       });
+      return true;
     },
     async replaceFormula(existing, formulaData) {
-      if (!existing || !this.canvas) return;
+      if (!existing || !this.canvas) return false;
 
       // Read canvas coordinates before the bitmap is ready. A selected formula
       // may still be in group space; the snapshot converts and restores it.
@@ -716,7 +1117,13 @@ export default {
         x: placed.left,
         y: placed.top
       });
-      if (!img || !this.canvas || !this.canvas.getObjects().includes(existing)) return;
+      if (!img) {
+        trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
+          mode: ANALYTICS_FORMULA_MODES.EDIT,
+        });
+        return false;
+      }
+      if (!this.canvas || !this.canvas.getObjects().includes(existing)) return false;
 
       // The bitmap is built asynchronously. Place it where the formula is now.
       const current = snapshotObject(existing);
@@ -740,6 +1147,7 @@ export default {
       trackBoardEngaged();
       recordProductAction();
       trackEvent(ANALYTICS_EVENTS.FORMULA_EDITED);
+      return true;
     },
     enableShapeDrawing() {
       this.canvas.isDrawingMode = false;
@@ -769,8 +1177,9 @@ export default {
       this.shapeStartX = pointer.x;
       this.shapeStartY = pointer.y;
       
-      // Crea la forma iniziale
-      this.currentShape = this.createShape(pointer.x, pointer.y, 0, 0);
+      // markRaw: currentShape lives in data(); a Vue proxy on the canvas
+      // breaks Fabric ActiveSelection identity checks (objects jump on select-all).
+      this.currentShape = markRaw(this.createShape(pointer.x, pointer.y, 0, 0));
       this.canvas.add(this.currentShape);
       this.canvas.renderAll();
     },
@@ -814,6 +1223,7 @@ export default {
       // One gesture, including a click that leaves a 0×0 shape. The add at
       // mouse-down is not a command; object:added is not a history hook.
       if (shape) {
+        shape.setCoords();
         this._recordAdd(shape);
         trackBoardEngaged();
         recordProductAction();
@@ -896,19 +1306,27 @@ export default {
       
       this.canvas.add(text);
       this.canvas.setActiveObject(text);
-      
+
+      trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_STARTED);
+
       // Enter editing mode immediately
       this.$nextTick(() => {
         text.enterEditing();
         text.selectAll();
         text.hiddenTextarea?.focus();
       });
-      
-      // When exiting edit mode, clean up empty text or notify parent to switch to select tool
-      text.on('editing:exited', () => {
+
+      // One-shot: only the initial creation session may commit or cancel.
+      const finalizeInitialText = () => {
+        text.off('editing:exited', finalizeInitialText);
+
+        if (this._uncommittedText !== text) return;
+
         this._uncommittedText = null;
+
         if (text.text.trim() === '' || text.text === DEFAULT_TEXT_CONFIG.content) {
           this._removeRetained(text);
+          trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_CANCELLED);
         } else {
           this._recordAdd(text);
           trackBoardEngaged();
@@ -918,13 +1336,15 @@ export default {
           });
         }
         this.canvas.requestRenderAll();
-        
+
         // Disabilita immediatamente il text insertion per evitare creazione di nuovo testo
         this.disableTextInsertion();
-        
+
         // Emit event to switch to select tool
         this.$emit('text-editing-completed');
-      });
+      };
+
+      text.on('editing:exited', finalizeInitialText);
     },
     /**
      * Mirror the active selection into the toolbar palette. Automatic ink
@@ -954,9 +1374,8 @@ export default {
       const active = this.canvas.getActiveObject();
       if (!active) return false;
 
-      const targets = active.isType("ActiveSelection")
-        ? active.getObjects()
-        : [active];
+      // Permanent Groups (stamps) and ActiveSelection: recolor leaf members.
+      const targets = flattenInkTargets([active]);
 
       const useAuto = color === null;
       const ink = useAuto ? this.boardThemeConfig.defaultInk : color;
@@ -973,7 +1392,9 @@ export default {
       });
       if (entries.length === 0) return false;
 
-      if (active.isType("ActiveSelection")) active.set("dirty", true);
+      if (active.isType("ActiveSelection") || active.isType("Group")) {
+        active.set("dirty", true);
+      }
 
       const coalesce = Boolean(options.coalesce);
       const tip = this._history[this._historyStep];
@@ -1154,6 +1575,44 @@ export default {
           return;
         }
 
+        if (command.type === 'group') {
+          if (direction === 'forward') {
+            canvas.discardActiveObject();
+            command.members.forEach(({ object }) => this._removeRetained(object));
+            if (typeof command.group.size === 'function' && command.group.size() === 0) {
+              command.group.add(...command.members.map((entry) => entry.object));
+            }
+            this._insertRetained(command.group, command.index);
+          } else {
+            canvas.discardActiveObject();
+            if (typeof command.group.size === 'function' && command.group.size() > 0) {
+              command.group.removeAll();
+            }
+            this._removeRetained(command.group);
+            command.members.forEach(({ object, index }) => this._insertRetained(object, index));
+          }
+          return;
+        }
+
+        if (command.type === 'ungroup') {
+          if (direction === 'forward') {
+            canvas.discardActiveObject();
+            if (typeof command.group.size === 'function' && command.group.size() > 0) {
+              command.group.removeAll();
+            }
+            this._removeRetained(command.group);
+            command.members.forEach(({ object, index }) => this._insertRetained(object, index));
+          } else {
+            canvas.discardActiveObject();
+            command.members.forEach(({ object }) => this._removeRetained(object));
+            if (typeof command.group.size === 'function' && command.group.size() === 0) {
+              command.group.add(...command.members.map((entry) => entry.object));
+            }
+            this._insertRetained(command.group, command.index);
+          }
+          return;
+        }
+
         if (command.type === 'modify') {
           // Absolute left/top written while the object is still in a selection
           // are group coordinates, and the object jumps. Leave the selection first.
@@ -1222,6 +1681,7 @@ export default {
       this._hideSelectionPanel();
       if (!target || target === this._uncommittedText) return;
       this._pendingText = { object: target, before: snapshotObject(target) };
+      trackEvent(ANALYTICS_EVENTS.TEXT_EDIT_STARTED);
     },
     onTextEditingExited() {
       this.refreshSelectionPanel();
@@ -1255,6 +1715,7 @@ export default {
           type: 'modify',
           entries: [{ object: opt.target, before: pendingText.before, after }]
         });
+        trackEvent(ANALYTICS_EVENTS.TEXT_EDITED);
       } finally {
         this.refreshSelectionPanel();
       }

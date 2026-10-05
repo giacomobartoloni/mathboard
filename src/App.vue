@@ -33,20 +33,47 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       :selectedShape="selectedShape" 
       :board-theme="boardTheme"
       :selected-color="selectedColor"
-      :selection-panel-suspended="showFormulaModal"
+      :selection-panel-suspended="showFormulaModal || showShareStampModal"
       ref="drawBoardRef"
       @request-formula="onRequestFormula"
       @edit-formula="onEditFormula"
       @text-editing-completed="onTextEditingCompleted"
       @selection-color="onSelectionColor"
     />
-    <ToolsPanel :selectedTool="selectedTool" :selected-color="selectedColor" :display-color="displayColor" :main-color="boardThemeConfig.defaultInk" :main-ink-is-light="mainInkIsLight" @tool-selected="onToolSelected" @shape-selected="onShapeSelected" @color-selected="onColorSelected" @undo="onUndo" @redo="onRedo" />
+    <ToolsPanel
+      :selectedTool="selectedTool"
+      :selected-shape="selectedShape"
+      :selected-color="selectedColor"
+      :display-color="displayColor"
+      :main-color="boardThemeConfig.defaultInk"
+      :main-ink-is-light="mainInkIsLight"
+      @tool-selected="onToolSelected"
+      @shape-selected="onShapeSelected"
+      @color-selected="onColorSelected"
+      @undo="onUndo"
+      @redo="onRedo"
+      @insert-kit="onInsertKit"
+    />
+
+    <div v-if="stampError" class="stamp-error" role="alert">
+      <span>{{ stampError }}</span>
+      <button type="button" @click="stampError = null" aria-label="Dismiss">×</button>
+    </div>
     
     <FormulaModal 
       :isVisible="showFormulaModal"
       :initialLatex="editingLatex"
-      @close="showFormulaModal = false"
+      @close="onFormulaModalClose"
       @insert-formula="onInsertFormula"
+      @assist-used="onFormulaAssistUsed"
+    />
+
+    <ShareStampModal
+      :isVisible="showShareStampModal"
+      :url="shareStampUrl"
+      @close="closeShareStampModal"
+      @copied="onStampShareCopied"
+      @copy-failed="onStampShareCopyFailed"
     />
     
     <ZoomPanel 
@@ -74,6 +101,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from
 import DrawBoard from './components/DrawBoard.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 import FormulaModal from './components/FormulaModal.vue'
+import ShareStampModal from './components/ShareStampModal.vue'
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import CookieBanner from './components/CookieBanner.vue'
@@ -89,14 +117,33 @@ import {
 import { normalizeHexColor } from './config/colors'
 import {
   isDeleteShortcut,
+  isDuplicateShortcut,
   isEscapeShortcut,
+  isGroupShortcut,
+  isPlainColorDigit,
+  isPlainShapeKey,
   isPlainToolKey,
   isRedoShortcut,
+  isShareStampLinkShortcut,
+  isSelectAllShortcut,
+  isUngroupShortcut,
   isUndoShortcut,
+  isZoomInShortcut,
+  isZoomOutShortcut,
+  isZoomResetShortcut,
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
 import { trackEvent } from './analytics'
-import { ANALYTICS_EVENTS } from './analytics/events.js'
+import {
+  ANALYTICS_EVENTS,
+  ANALYTICS_FORMULA_MODES,
+  ANALYTICS_FORMULA_CLOSE_REASONS,
+  ANALYTICS_FORMULA_ASSIST_SOURCES,
+  ANALYTICS_FORMULA_PALETTE_GROUPS,
+  ANALYTICS_STAMP_SHARE_FAILURE_STAGES,
+} from './analytics/events.js'
+import { getKitById } from './stamps/registry.js'
+import { buildStampShareUrl, clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
 
 function detectFullscreenSupport() {
   return typeof document !== 'undefined'
@@ -111,6 +158,7 @@ export default {
     DrawBoard,
     ToolsPanel,
     FormulaModal,
+    ShareStampModal,
     SupportPanel,
     ZoomPanel,
     CookieBanner,
@@ -149,6 +197,9 @@ export default {
     const drawBoardRef = ref(null)
     const fullscreenRootRef = ref(null)
     const showFormulaModal = ref(false)
+    const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
+    const showShareStampModal = ref(false)
+    const shareStampUrl = ref('')
     const formulaPosition = ref({ x: 0, y: 0 })
     const editingLatex = ref('')
     const editingElement = ref(null)
@@ -156,6 +207,7 @@ export default {
     // Mirror of document.fullscreenElement only — never invent a parallel flag.
     const isFullscreen = ref(false)
     const fullscreenSupported = ref(detectFullscreenSupport())
+    const stampError = ref(null)
     let fullscreenInitialized = false
     let previousFullscreen = false
 
@@ -191,10 +243,57 @@ export default {
       }
     }
 
+    const waitForBoardReady = () => new Promise((resolve) => {
+      const start = performance.now()
+      const tick = () => {
+        if (drawBoardRef.value?.canvas) {
+          resolve(true)
+          return
+        }
+        if (performance.now() - start > 5000) {
+          resolve(false)
+          return
+        }
+        requestAnimationFrame(tick)
+      }
+      nextTick(tick)
+    })
+
+    const trackStampShareFailure = (stage) => {
+      trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_FAILED, { stage })
+    }
+
+    const bootstrapStampFromUrl = async () => {
+      const payload = readStampFromLocation()
+      if (!payload) return
+      try {
+        const ready = await waitForBoardReady()
+        if (!ready || !drawBoardRef.value) {
+          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
+          stampError.value = 'Board is not ready to load the stamp link.'
+          return
+        }
+        const result = await drawBoardRef.value.bootstrapFromStamp(payload)
+        if (!result?.ok) {
+          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
+          stampError.value = result?.message || 'Could not load stamp from the link.'
+          return
+        }
+        trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_OPENED)
+        selectedTool.value = 'select'
+      } catch (error) {
+        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
+        stampError.value = error?.message || 'Could not load stamp from the link.'
+      } finally {
+        clearStampFromLocation()
+      }
+    }
+
     onMounted(() => {
       fullscreenSupported.value = detectFullscreenSupport()
       document.addEventListener('fullscreenchange', syncFullscreenState)
       syncFullscreenState()
+      bootstrapStampFromUrl()
     })
 
     onBeforeUnmount(() => {
@@ -203,6 +302,12 @@ export default {
 
     const onToolSelected = (tool) => {
       selectedTool.value = tool
+      if (tool === 'font') {
+        trackEvent(ANALYTICS_EVENTS.TEXT_TOOL_SELECTED)
+      }
+      if (tool === 'formula') {
+        trackEvent(ANALYTICS_EVENTS.FORMULA_TOOL_SELECTED)
+      }
     }
 
     const onShapeSelected = (shape) => {
@@ -218,12 +323,56 @@ export default {
       trackEvent(ANALYTICS_EVENTS.THEME_CHANGED, { theme: nextBoard })
     }
 
+    const closeShareStampModal = () => {
+      showShareStampModal.value = false
+      shareStampUrl.value = ''
+    }
+
+    const onStampShareCopied = () => {
+      trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_COPIED)
+    }
+
+    const onStampShareCopyFailed = () => {
+      trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.COPY)
+    }
+
+    const openShareStampLink = () => {
+      stampError.value = null
+      if (!drawBoardRef.value) {
+        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
+        return
+      }
+      let payload
+      try {
+        payload = drawBoardRef.value.exportSelectionToStamp()
+      } catch (error) {
+        // No selection is a silent no-op; other failures surface in English.
+        if (/Nothing is selected/i.test(error?.message || '')) return
+        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
+        stampError.value = error?.message || 'Could not create a share link.'
+        return
+      }
+      try {
+        shareStampUrl.value = buildStampShareUrl(payload)
+        showShareStampModal.value = true
+        trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_CREATED)
+      } catch (error) {
+        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.BUILD_URL)
+        stampError.value = error?.message || 'Could not create a share link.'
+      }
+    }
+
     const onKeyDown = (event) => {
       if (isEscapeShortcut(event)) {
         // The browser uses Escape to leave fullscreen. Do not cancel that.
         if (document.fullscreenElement) return
         if (showFormulaModal.value) {
-          showFormulaModal.value = false
+          onFormulaModalClose(ANALYTICS_FORMULA_CLOSE_REASONS.ESCAPE)
+          event.preventDefault()
+          return
+        }
+        if (showShareStampModal.value) {
+          closeShareStampModal()
           event.preventDefault()
           return
         }
@@ -238,7 +387,12 @@ export default {
         return
       }
 
-      if (showFormulaModal.value || shouldIgnoreGlobalShortcut(event) || drawBoardRef.value?.isTextEditing()) return
+      if (
+        showFormulaModal.value
+        || showShareStampModal.value
+        || shouldIgnoreGlobalShortcut(event)
+        || drawBoardRef.value?.isTextEditing()
+      ) return
 
       const toolId = isPlainToolKey(event)
       if (toolId) {
@@ -246,9 +400,62 @@ export default {
         onToolSelected(toolId)
         return
       }
+      const shapeId = isPlainShapeKey(event)
+      if (shapeId) {
+        event.preventDefault()
+        onToolSelected('shapes')
+        onShapeSelected(shapeId)
+        return
+      }
+      const colorPreset = isPlainColorDigit(event)
+      if (colorPreset) {
+        event.preventDefault()
+        onColorSelected(colorPreset.value)
+        return
+      }
+      if (isZoomInShortcut(event)) {
+        event.preventDefault()
+        onZoomIn()
+        return
+      }
+      if (isZoomOutShortcut(event)) {
+        event.preventDefault()
+        onZoomOut()
+        return
+      }
+      if (isZoomResetShortcut(event)) {
+        event.preventDefault()
+        onResetZoom()
+        return
+      }
+      if (isDuplicateShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.duplicateSelection()
+        return
+      }
+      if (isSelectAllShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.selectAll()
+        return
+      }
       if (isDeleteShortcut(event)) {
         event.preventDefault()
         drawBoardRef.value?.deleteSelection()
+        return
+      }
+      if (isGroupShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.groupSelection()
+        return
+      }
+      if (isUngroupShortcut(event)) {
+        event.preventDefault()
+        drawBoardRef.value?.ungroupSelection()
+        return
+      }
+      if (isShareStampLinkShortcut(event)) {
+        event.preventDefault()
+        openShareStampLink()
         return
       }
       if (isUndoShortcut(event)) {
@@ -273,18 +480,73 @@ export default {
       drawBoardRef.value?.redo()
     }
 
+    const onInsertKit = async (kitId) => {
+      stampError.value = null
+      let encoded
+      try {
+        encoded = getKitById(kitId)
+      } catch (error) {
+        stampError.value = error?.message || 'Unknown kit.'
+        return
+      }
+      const result = await drawBoardRef.value?.insertStamp(encoded)
+      if (!result?.ok) {
+        stampError.value = result?.message || 'Could not insert stamp.'
+        return
+      }
+      selectedTool.value = 'select'
+    }
+
     const onRequestFormula = (position) => {
       formulaPosition.value = position
       editingLatex.value = ''
       editingElement.value = null
+      formulaModalMode.value = ANALYTICS_FORMULA_MODES.CREATE
       showFormulaModal.value = true
+      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_OPENED, {
+        mode: ANALYTICS_FORMULA_MODES.CREATE,
+      })
     }
 
     const onEditFormula = ({ latex, position, fabricObject }) => {
       formulaPosition.value = position
       editingLatex.value = latex
       editingElement.value = fabricObject
+      formulaModalMode.value = ANALYTICS_FORMULA_MODES.EDIT
       showFormulaModal.value = true
+      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_OPENED, {
+        mode: ANALYTICS_FORMULA_MODES.EDIT,
+      })
+    }
+
+    const onFormulaModalClose = (reason) => {
+      const allowed = Object.values(ANALYTICS_FORMULA_CLOSE_REASONS)
+      const closeReason = allowed.includes(reason)
+        ? reason
+        : ANALYTICS_FORMULA_CLOSE_REASONS.CANCEL_BUTTON
+      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_CANCELLED, {
+        mode: formulaModalMode.value,
+        reason: closeReason,
+      })
+      showFormulaModal.value = false
+    }
+
+    const onFormulaAssistUsed = ({ source, group } = {}) => {
+      const allowedSources = Object.values(ANALYTICS_FORMULA_ASSIST_SOURCES)
+      if (!allowedSources.includes(source)) return
+
+      const metadata = {
+        mode: formulaModalMode.value,
+        source,
+      }
+
+      if (source === ANALYTICS_FORMULA_ASSIST_SOURCES.PALETTE) {
+        const allowedGroups = Object.values(ANALYTICS_FORMULA_PALETTE_GROUPS)
+        if (!allowedGroups.includes(group)) return
+        metadata.group = group
+      }
+
+      trackEvent(ANALYTICS_EVENTS.FORMULA_ASSIST_USED, metadata)
     }
 
     const onTextEditingCompleted = () => {
@@ -314,6 +576,9 @@ export default {
     }
 
     const onInsertFormula = (formulaData) => {
+      const mode = formulaModalMode.value
+      trackEvent(ANALYTICS_EVENTS.FORMULA_SUBMITTED, { mode })
+
       if (editingElement.value) {
         // One gesture: swap the bitmap on the command log, do not remove first.
         // Removing here used to drop the formula if the new bitmap failed.
@@ -339,6 +604,11 @@ export default {
       drawBoardRef,
       fullscreenRootRef,
       showFormulaModal,
+      showShareStampModal,
+      shareStampUrl,
+      closeShareStampModal,
+      onStampShareCopied,
+      onStampShareCopyFailed,
       editingLatex,
       zoomLevel,
       isFullscreen,
@@ -348,9 +618,13 @@ export default {
       onShapeSelected,
       onUndo,
       onRedo,
+      onInsertKit,
+      stampError,
       onRequestFormula,
       onEditFormula,
       onInsertFormula,
+      onFormulaModalClose,
+      onFormulaAssistUsed,
       onTextEditingCompleted,
       onZoomIn,
       onZoomOut,
@@ -481,6 +755,37 @@ body {
   font-size: 12px;
   z-index: 1000;
   white-space: nowrap;
+}
+
+.stamp-error {
+  position: absolute;
+  z-index: 1200;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(520px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--panel-shadow);
+  font-size: 14px;
+  text-align: left;
+}
+
+.stamp-error button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 2px;
 }
 
 @media (max-width: 768px) {

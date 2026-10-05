@@ -53,9 +53,19 @@ const ACTION_CATALOG = {
     title: 'Edit formula',
     icon: ['fas', 'pen-to-square'],
   },
+  group: {
+    label: 'Group',
+    title: 'Group (Ctrl+G)',
+    icon: ['fas', 'object-group'],
+  },
+  ungroup: {
+    label: 'Ungroup',
+    title: 'Ungroup (Ctrl+Shift+G)',
+    icon: ['fas', 'object-ungroup'],
+  },
   duplicate: {
     label: 'Duplicate',
-    title: 'Duplicate',
+    title: 'Duplicate (Ctrl+D)',
     icon: ['fas', 'copy'],
   },
   delete: {
