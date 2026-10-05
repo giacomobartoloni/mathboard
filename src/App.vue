@@ -72,6 +72,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       :isVisible="showShareStampModal"
       :url="shareStampUrl"
       @close="closeShareStampModal"
+      @copied="onStampShareCopied"
+      @copy-failed="onStampShareCopyFailed"
     />
     
     <ZoomPanel 
@@ -138,6 +140,7 @@ import {
   ANALYTICS_FORMULA_CLOSE_REASONS,
   ANALYTICS_FORMULA_ASSIST_SOURCES,
   ANALYTICS_FORMULA_PALETTE_GROUPS,
+  ANALYTICS_STAMP_SHARE_FAILURE_STAGES,
 } from './analytics/events.js'
 import { getKitById } from './stamps/registry.js'
 import { buildStampShareUrl, clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
@@ -256,22 +259,34 @@ export default {
       nextTick(tick)
     })
 
+    const trackStampShareFailure = (stage) => {
+      trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_FAILED, { stage })
+    }
+
     const bootstrapStampFromUrl = async () => {
       const payload = readStampFromLocation()
       if (!payload) return
-      const ready = await waitForBoardReady()
-      if (!ready || !drawBoardRef.value) {
-        stampError.value = 'Board is not ready to load the stamp link.'
+      try {
+        const ready = await waitForBoardReady()
+        if (!ready || !drawBoardRef.value) {
+          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
+          stampError.value = 'Board is not ready to load the stamp link.'
+          return
+        }
+        const result = await drawBoardRef.value.bootstrapFromStamp(payload)
+        if (!result?.ok) {
+          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
+          stampError.value = result?.message || 'Could not load stamp from the link.'
+          return
+        }
+        trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_OPENED)
+        selectedTool.value = 'select'
+      } catch (error) {
+        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
+        stampError.value = error?.message || 'Could not load stamp from the link.'
+      } finally {
         clearStampFromLocation()
-        return
       }
-      const result = await drawBoardRef.value.bootstrapFromStamp(payload)
-      clearStampFromLocation()
-      if (!result?.ok) {
-        stampError.value = result?.message || 'Could not load stamp from the link.'
-        return
-      }
-      selectedTool.value = 'select'
     }
 
     onMounted(() => {
@@ -313,22 +328,36 @@ export default {
       shareStampUrl.value = ''
     }
 
+    const onStampShareCopied = () => {
+      trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_COPIED)
+    }
+
+    const onStampShareCopyFailed = () => {
+      trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.COPY)
+    }
+
     const openShareStampLink = () => {
       stampError.value = null
-      if (!drawBoardRef.value) return
+      if (!drawBoardRef.value) {
+        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
+        return
+      }
       let payload
       try {
         payload = drawBoardRef.value.exportSelectionToStamp()
       } catch (error) {
         // No selection is a silent no-op; other failures surface in English.
         if (/Nothing is selected/i.test(error?.message || '')) return
+        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
         stampError.value = error?.message || 'Could not create a share link.'
         return
       }
       try {
         shareStampUrl.value = buildStampShareUrl(payload)
         showShareStampModal.value = true
+        trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_CREATED)
       } catch (error) {
+        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.BUILD_URL)
         stampError.value = error?.message || 'Could not create a share link.'
       }
     }
@@ -578,6 +607,8 @@ export default {
       showShareStampModal,
       shareStampUrl,
       closeShareStampModal,
+      onStampShareCopied,
+      onStampShareCopyFailed,
       editingLatex,
       zoomLevel,
       isFullscreen,
