@@ -22,6 +22,12 @@ export const ANALYTICS_EVENTS = Object.freeze({
   BOARD_ENGAGED: 'board_engaged',
   OBJECT_CREATED: 'object_created',
 
+  TEXT_TOOL_SELECTED: 'text_tool_selected',
+  TEXT_CREATION_STARTED: 'text_creation_started',
+  TEXT_CREATION_CANCELLED: 'text_creation_cancelled',
+  TEXT_EDIT_STARTED: 'text_edit_started',
+  TEXT_EDITED: 'text_edited',
+
   FORMULA_TOOL_SELECTED: 'formula_tool_selected',
   FORMULA_MODAL_OPENED: 'formula_modal_opened',
   FORMULA_ASSIST_USED: 'formula_assist_used',

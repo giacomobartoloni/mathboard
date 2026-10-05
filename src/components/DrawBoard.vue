@@ -1306,19 +1306,27 @@ export default {
       
       this.canvas.add(text);
       this.canvas.setActiveObject(text);
-      
+
+      trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_STARTED);
+
       // Enter editing mode immediately
       this.$nextTick(() => {
         text.enterEditing();
         text.selectAll();
         text.hiddenTextarea?.focus();
       });
-      
-      // When exiting edit mode, clean up empty text or notify parent to switch to select tool
-      text.on('editing:exited', () => {
+
+      // One-shot: only the initial creation session may commit or cancel.
+      const finalizeInitialText = () => {
+        text.off('editing:exited', finalizeInitialText);
+
+        if (this._uncommittedText !== text) return;
+
         this._uncommittedText = null;
+
         if (text.text.trim() === '' || text.text === DEFAULT_TEXT_CONFIG.content) {
           this._removeRetained(text);
+          trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_CANCELLED);
         } else {
           this._recordAdd(text);
           trackBoardEngaged();
@@ -1328,13 +1336,15 @@ export default {
           });
         }
         this.canvas.requestRenderAll();
-        
+
         // Disabilita immediatamente il text insertion per evitare creazione di nuovo testo
         this.disableTextInsertion();
-        
+
         // Emit event to switch to select tool
         this.$emit('text-editing-completed');
-      });
+      };
+
+      text.on('editing:exited', finalizeInitialText);
     },
     /**
      * Mirror the active selection into the toolbar palette. Automatic ink
@@ -1671,6 +1681,7 @@ export default {
       this._hideSelectionPanel();
       if (!target || target === this._uncommittedText) return;
       this._pendingText = { object: target, before: snapshotObject(target) };
+      trackEvent(ANALYTICS_EVENTS.TEXT_EDIT_STARTED);
     },
     onTextEditingExited() {
       this.refreshSelectionPanel();
@@ -1704,6 +1715,7 @@ export default {
           type: 'modify',
           entries: [{ object: opt.target, before: pendingText.before, after }]
         });
+        trackEvent(ANALYTICS_EVENTS.TEXT_EDITED);
       } finally {
         this.refreshSelectionPanel();
       }
