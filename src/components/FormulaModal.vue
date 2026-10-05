@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div v-if="isVisible" class="modal-overlay" @click="closeModal">
+  <div v-if="isVisible" class="modal-overlay" @click="closeModal(closeReasons.BACKDROP)">
     <div class="modal-content" @click.stop>
       <div class="modal-header">
         <h3>Insert Formula (LaTeX)</h3>
@@ -26,7 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           type="button"
           class="close-button"
           aria-label="Close formula editor"
-          @click="closeModal"
+          @click="closeModal(closeReasons.CLOSE_BUTTON)"
         >&times;</button>
       </div>
 
@@ -56,7 +56,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                   :title="`${item.label} — ${item.preview}`"
                   :aria-label="item.ariaLabel"
                   @mousedown.prevent
-                  @click="insertLatex(item)"
+                  @click="insertLatex(item, { source: assistSources.QUICK_INSERT })"
                 >
                   <span
                     class="latex-symbol-preview"
@@ -98,7 +98,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                   :title="`${item.label} — ${item.preview}`"
                   :aria-label="item.ariaLabel"
                   @mousedown.prevent
-                  @click="insertLatex(item)"
+                  @click="insertLatex(item, {
+                    source: assistSources.PALETTE,
+                    group: activePaletteGroup
+                  })"
                 >
                   <span
                     class="latex-symbol-preview"
@@ -121,7 +124,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn-cancel" @click="closeModal">Cancel</button>
+        <button type="button" class="btn-cancel" @click="closeModal(closeReasons.CANCEL_BUTTON)">Cancel</button>
         <button
           type="button"
           class="btn-insert"
@@ -142,6 +145,10 @@ import {
   QUICK_INSERT_ITEMS,
   LATEX_PALETTE_GROUPS
 } from '../config/latexPalette.js'
+import {
+  ANALYTICS_FORMULA_CLOSE_REASONS,
+  ANALYTICS_FORMULA_ASSIST_SOURCES,
+} from '../analytics/events.js'
 
 export default {
   name: 'FormulaModal',
@@ -155,6 +162,7 @@ export default {
       default: ''
     }
   },
+  emits: ['close', 'insert-formula', 'assist-used'],
   data() {
     return {
       latexInput: '',
@@ -163,7 +171,9 @@ export default {
       previewHtml: '',
       activePaletteGroup: 'symbols',
       quickInsertItems: QUICK_INSERT_ITEMS,
-      paletteGroups: LATEX_PALETTE_GROUPS
+      paletteGroups: LATEX_PALETTE_GROUPS,
+      closeReasons: ANALYTICS_FORMULA_CLOSE_REASONS,
+      assistSources: ANALYTICS_FORMULA_ASSIST_SOURCES,
     }
   },
   computed: {
@@ -211,7 +221,7 @@ export default {
         this.isValidFormula = false
       }
     },
-    insertLatex(item) {
+    insertLatex(item, usage) {
       const input = this.$refs.latexInput
       const start = input?.selectionStart ?? this.latexInput.length
       const end = input?.selectionEnd ?? start
@@ -237,6 +247,10 @@ export default {
 
       this.updatePreview()
 
+      if (usage) {
+        this.$emit('assist-used', usage)
+      }
+
       this.$nextTick(() => {
         const position =
           cursorOffset >= 0
@@ -259,16 +273,18 @@ export default {
       }
 
       this.$emit('insert-formula', formulaData)
-
-      this.closeModal()
+      this.resetState()
     },
-    closeModal() {
+    resetState() {
       this.latexInput = ''
       this.renderError = null
       this.isValidFormula = false
       this.previewHtml = ''
       this.activePaletteGroup = 'symbols'
-      this.$emit('close')
+    },
+    closeModal(reason) {
+      this.resetState()
+      this.$emit('close', reason)
     }
   },
   watch: {
