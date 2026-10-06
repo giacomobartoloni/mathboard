@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div id="boardcontainer" ref="boardRoot" data-testid="board-container">
+  <div id="boardcontainer" ref="boardRoot">
     <canvas :id="id"></canvas>
     <div ref="selectionOverlay" class="selection-overlay">
       <SelectionActionsPanel
