@@ -80,6 +80,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         class="tool-menu"
         @mouseenter="showShapesSubmenu = true"
         @mouseleave="showShapesSubmenu = false"
+        @focusout="onShapesFocusOut"
       >
         <button
           type="button"
@@ -87,10 +88,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           :class="{ selected: selected === 'shapes' }"
           :aria-pressed="selected === 'shapes'"
           aria-label="Shapes"
-          aria-haspopup="true"
+          aria-controls="shape-options"
           :aria-expanded="showShapesSubmenu && selected === 'shapes'"
           title="Shapes (S)"
-          @click="select('shapes')"
+          @click="openShapesMenu"
         >
           <font-awesome-icon :icon="['fas', 'shapes']" />
         </button>
@@ -98,6 +99,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <transition name="fade">
           <div
             v-if="showShapesSubmenu && selected === 'shapes'"
+            id="shape-options"
             class="shapes-submenu"
             role="group"
             aria-label="Shape options"
@@ -144,20 +146,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         class="tool-menu"
         @mouseenter="showKitsSubmenu = true"
         @mouseleave="showKitsSubmenu = false"
+        @focusout="onStampsFocusOut"
       >
         <button
           type="button"
           class="tool-button"
           aria-label="Stamps"
-          aria-haspopup="true"
+          aria-controls="stamp-options"
           :aria-expanded="showKitsSubmenu"
           title="Stamps"
+          @click="openStampsMenu"
         >
           <font-awesome-icon :icon="['fas', 'wand-magic-sparkles']" />
         </button>
         <transition name="fade">
           <div
             v-if="showKitsSubmenu"
+            id="stamp-options"
             class="shapes-submenu kits-submenu"
             role="group"
             aria-label="Stamp kits"
@@ -314,6 +319,23 @@ export default {
       this.$emit('tool-selected', element);
       if (element === 'shapes') {
         this.$emit('shape-selected', this.selectedShape);
+      }
+    },
+    openShapesMenu() {
+      this.select('shapes');
+      this.showShapesSubmenu = true;
+    },
+    openStampsMenu() {
+      this.showKitsSubmenu = true;
+    },
+    onShapesFocusOut(event) {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        this.showShapesSubmenu = false;
+      }
+    },
+    onStampsFocusOut(event) {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        this.showKitsSubmenu = false;
       }
     },
     selectShape: function (shape) {
