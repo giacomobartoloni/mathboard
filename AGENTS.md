@@ -7,7 +7,7 @@
 - **Fabric.js 7** (canvas drawing), **KaTeX** (LaTeX rendering), **html2canvas** (formula→canvas conversion)
 - **FontAwesome 6** global registration in `main.js`, used as `<font-awesome-icon :icon="['fas', 'name']" />`
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets. Firebase is not used in the runtime, build, or deploy
-- **No TypeScript, no tests, no typecheck** — verification is `npm run lint` plus `npm run build`
+- **No TypeScript, no typecheck** — verification is `npm run lint`, `npm run test:unit`, `npm run build`, and `npm run test:e2e`
 
 ## Commands
 
@@ -17,8 +17,13 @@ npm run dev          # dev server with HMR (Vite)
 npm run build        # vite build + tools/build-seo.mjs → dist/ (app + static SEO pages)
 npm run build:app    # Vite only
 npm run build:seo    # SEO sidecar into dist/ (requires prior build:app)
+npm run build:e2e    # Vite build in e2e mode (read-only canvas hook; not for production)
 npm run preview      # serve the dist/ build locally
 npm run lint         # eslint (vue3-essential + eslint:recommended); reports, does not fix
+npm run test         # alias for test:unit
+npm run test:unit    # node:test suite in tests/
+npm run test:e2e     # build:e2e + Playwright Chromium P0 suite
+npm run test:e2e:ui  # same with Playwright UI
 npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x512.png from tools/icon-template.html
 ```
 
@@ -45,7 +50,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 
 ## Deployment
 
-- **GitHub Actions** (`.github/workflows/main.yml`) runs CI checks only, on push and pull request for `main` and `develop`: `npm ci`, `npm run lint`, `npm run build`. No deploy job, no secrets.
+- **GitHub Actions** (`.github/workflows/main.yml`) runs CI on push and pull request for `main` and `develop`: quality job (`npm ci`, lint, `test:unit`, build) plus Chromium E2E (`test:e2e`). No deploy job, no secrets.
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets.
 - Firebase is not used: no dependency, runtime import, or deploy step.
 

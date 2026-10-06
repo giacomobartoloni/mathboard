@@ -13,10 +13,12 @@ Open an issue before a change that alters behavior or the public interface. Smal
 
 ```sh
 npm run lint
+npm run test:unit
 npm run build
+npm run test:e2e
 ```
 
-`npm run lint` reports problems and leaves files unchanged. There is no test suite: those two commands are the check.
+`npm run lint` reports problems and leaves files unchanged. `test:unit` runs the Node module tests; `test:e2e` builds the e2e Vite mode and runs the Playwright Chromium P0 suite.
 
 Regenerate the PWA icons with `npm run generate:icons` only when `tools/icon-template.html` changes. The script needs network access and stops if the Satisfy font does not load.
 

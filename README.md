@@ -49,6 +49,20 @@ npm run lint
 
 Reports lint errors without modifying files.
 
+### Unit / module tests
+```
+npm run test:unit
+```
+
+Runs the `node:test` suite under `tests/`.
+
+### End-to-end tests (Chromium)
+```
+npm run test:e2e
+```
+
+Builds the app with `vite build --mode e2e` (read-only `window.__MATHBOARD_E2E__` hook), then runs the Playwright P0 suite against `vite preview`. Use `npm run test:e2e:ui` for the Playwright UI.
+
 ### Regenerates PWA icons
 ```
 npm run generate:icons
