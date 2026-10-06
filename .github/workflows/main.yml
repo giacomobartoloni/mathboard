@@ -5,39 +5,68 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   quality:
+    name: Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
 
       - run: npm ci
-      - run: npm run lint
-      - run: npm run test:unit
-      - run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Node tests
+        run: npm run test:unit
+
+      - name: Production build
+        run: npm run build
 
   e2e:
+    name: E2E (Chromium)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: quality
+
     steps:
       - uses: actions/checkout@v5
+
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
 
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
 
-      - uses: actions/upload-artifact@v4
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E
+        run: npm run test:e2e
+
+      - name: Upload Playwright diagnostics
         if: failure()
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-artifacts
           path: |
             playwright-report/
             test-results/
+          retention-days: 7

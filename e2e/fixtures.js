@@ -22,6 +22,7 @@ import { getBoardState } from './helpers/canvas.js'
 
 export async function seedBoardStorage(page) {
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
+  await page.route(/simpleanalyticscdn\.com/, (route) => route.abort())
   await page.addInitScript(() => {
     localStorage.setItem('mathboard_cookie_consent', JSON.stringify({
       essential: true,

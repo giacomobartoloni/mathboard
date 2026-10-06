@@ -50,7 +50,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 
 ## Deployment
 
-- **GitHub Actions** (`.github/workflows/main.yml`) runs CI on push and pull request for `main` and `develop`: quality job (`npm ci`, lint, `test:unit`, build) plus Chromium E2E (`test:e2e`). No deploy job, no secrets.
+- **GitHub Actions** (`.github/workflows/main.yml`) — workflow `CI`, jobs `Quality` and `E2E (Chromium)` (`needs: quality`). Triggers: push/PR to `main`/`develop`, plus `workflow_dispatch`. Quality: `npm ci`, lint, `test:unit`, build. E2E: Playwright Chromium; on failure uploads `playwright-report/` + `test-results/` (7-day retention). No `continue-on-error`, no deploy job, no secrets. Progressive gating: require Quality first; make E2E required only after it is stable on `develop`/`main`.
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets.
 - Firebase is not used: no dependency, runtime import, or deploy step.
 
