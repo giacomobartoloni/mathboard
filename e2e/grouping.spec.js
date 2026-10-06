@@ -41,6 +41,27 @@ test('E2E-P0-006 group ungroup reversible', async ({ page }) => {
 
   let state = await waitForState(page, (s) => s.objects.length === 2)
   const before = state.objects.map((o) => ({ type: o.type, left: o.left, top: o.top }))
+  const beforeRel = {
+    dx: before.find((o) => o.type === 'Circle').left - before.find((o) => o.type === 'Rect').left,
+    dy: before.find((o) => o.type === 'Circle').top - before.find((o) => o.type === 'Rect').top,
+  }
+
+  function assertLayout(objects) {
+    expect(objects).toHaveLength(2)
+    expect(objects.some((o) => o.type === 'Group')).toBe(false)
+    for (const obj of before) {
+      const match = objects.find((o) => o.type === obj.type)
+      expect(match).toBeTruthy()
+      expect(Math.abs(match.left - obj.left)).toBeLessThan(40)
+      expect(Math.abs(match.top - obj.top)).toBeLessThan(40)
+    }
+    const rel = {
+      dx: objects.find((o) => o.type === 'Circle').left - objects.find((o) => o.type === 'Rect').left,
+      dy: objects.find((o) => o.type === 'Circle').top - objects.find((o) => o.type === 'Rect').top,
+    }
+    expect(Math.abs(rel.dx - beforeRel.dx)).toBeLessThan(40)
+    expect(Math.abs(rel.dy - beforeRel.dy)).toBeLessThan(40)
+  }
 
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('ControlOrMeta+G')
@@ -51,12 +72,7 @@ test('E2E-P0-006 group ungroup reversible', async ({ page }) => {
 
   await clickUndo(page)
   state = await waitForState(page, (s) => s.objects.length === 2 && !s.objects.some((o) => o.type === 'Group'))
-  for (const obj of before) {
-    const match = state.objects.find((o) => o.type === obj.type)
-    expect(match).toBeTruthy()
-    expect(Math.abs(match.left - obj.left)).toBeLessThan(40)
-    expect(Math.abs(match.top - obj.top)).toBeLessThan(40)
-  }
+  assertLayout(state.objects)
 
   await clickRedo(page)
   state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Group' && o.childCount === 2))
@@ -64,11 +80,12 @@ test('E2E-P0-006 group ungroup reversible', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('ControlOrMeta+Shift+G')
   state = await waitForState(page, (s) => s.history.tipType === 'ungroup' && s.objects.length === 2)
-  expect(state.objects.some((o) => o.type === 'Group')).toBe(false)
+  assertLayout(state.objects)
 
   await clickUndo(page)
   state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Group' && o.childCount === 2))
 
   await clickRedo(page)
   state = await waitForState(page, (s) => s.objects.length === 2 && !s.objects.some((o) => o.type === 'Group'))
+  assertLayout(state.objects)
 })

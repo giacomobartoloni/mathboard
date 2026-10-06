@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { test, expect } from '@playwright/test'
 import { gotoBoard } from './fixtures.js'
 import { selectTool, clickUndo, clickRedo } from './helpers/board.js'
-import { clickOnCanvas, waitForState } from './helpers/canvas.js'
+import { clickOnCanvas, getBoardState, waitForState } from './helpers/canvas.js'
 
 async function createText(page, value) {
   await selectTool(page, 'tool-text')
@@ -32,11 +32,21 @@ async function createText(page, value) {
   return waitForState(page, (s) => s.objects.some((o) => o.type === 'IText' && o.text === value))
 }
 
+async function dblclickFormula(page, formula) {
+  await clickOnCanvas(page, {
+    x: Math.round(formula.left + (formula.width || 40) / 2),
+    y: Math.round(formula.top + (formula.height || 40) / 2),
+    clickCount: 2,
+  })
+}
+
 test('E2E-P0-004 text create and edit survive history', async ({ page }) => {
   await gotoBoard(page)
+  const beforeCreate = await getBoardState(page)
 
   let state = await createText(page, 'equazione')
   expect(state.history.tipType).toBe('add')
+  expect(state.history.length).toBe(beforeCreate.history.length + 1)
   expect(state.objects.filter((o) => o.type === 'IText')).toHaveLength(1)
 
   await clickUndo(page)
@@ -47,6 +57,7 @@ test('E2E-P0-004 text create and edit survive history', async ({ page }) => {
   expect(state.objects[0].text).toBe('equazione')
   expect(state.objects[0].text).not.toBe('Text')
 
+  const beforeEdit = state.history.length
   await selectTool(page, 'tool-select')
   await clickOnCanvas(page, { x: 320, y: 220 })
   await clickOnCanvas(page, { x: 320, y: 220, clickCount: 2 })
@@ -57,6 +68,7 @@ test('E2E-P0-004 text create and edit survive history', async ({ page }) => {
 
   state = await waitForState(page, (s) => s.history.tipType === 'modify' && s.objects.some((o) => o.text === 'equazione 2'))
   expect(state.history.tipType).toBe('modify')
+  expect(state.history.length).toBe(beforeEdit + 1)
 
   await clickUndo(page)
   state = await waitForState(page, (s) => s.objects.some((o) => o.text === 'equazione'))
@@ -69,6 +81,7 @@ test('E2E-P0-004 text create and edit survive history', async ({ page }) => {
 
 test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => {
   await gotoBoard(page)
+  const beforeCreate = await getBoardState(page)
   await selectTool(page, 'tool-formula')
   await clickOnCanvas(page, { x: 340, y: 240 })
 
@@ -82,10 +95,12 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
     { timeout: 15000 },
   )
   expect(state.history.tipType).toBe('add')
+  expect(state.history.length).toBe(beforeCreate.history.length + 1)
   expect(state.objects.filter((o) => o.formulaType === 'katex-formula')).toHaveLength(1)
 
   const formula = state.objects.find((o) => o.formulaType === 'katex-formula')
-  await page.getByRole('button', { name: 'Edit formula' }).click()
+  const beforeEdit = state.history.length
+  await dblclickFormula(page, formula)
   await expect(page.locator('#latex-input')).toHaveValue('x^2')
   await page.locator('#latex-input').fill('x^3')
   await page.locator('.btn-insert').click()
@@ -95,6 +110,7 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
     (s) => s.history.tipType === 'replace' && s.objects.some((o) => o.latex === 'x^3'),
     { timeout: 15000 },
   )
+  expect(state.history.length).toBe(beforeEdit + 1)
 
   await clickUndo(page)
   state = await waitForState(page, (s) => s.objects.some((o) => o.latex === 'x^2'))
@@ -103,7 +119,7 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
   await clickRedo(page)
   state = await waitForState(page, (s) => s.objects.some((o) => o.latex === 'x^3'))
 
-  await page.keyboard.press('ControlOrMeta+A')
-  await page.getByRole('button', { name: 'Edit formula' }).click()
+  const restored = state.objects.find((o) => o.latex === 'x^3')
+  await dblclickFormula(page, restored)
   await expect(page.locator('#latex-input')).toHaveValue('x^3')
 })

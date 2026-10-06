@@ -893,6 +893,9 @@ export default {
       const groupIndex = this.canvas.getObjects().indexOf(group);
       if (groupIndex < 0) return false;
 
+      // Match history undo: discard before removeAll so children return to
+      // canvas plane. getE2eState uses snapshotObject for ActiveSelection locals.
+      this.canvas.discardActiveObject();
       this._suspendHistory = true;
       let items;
       try {
@@ -1760,13 +1763,15 @@ export default {
     },
     _e2eSnapshotObject(obj) {
       const isGroup = obj.isType?.("Group");
+      // snapshotObject converts ActiveSelection-local left/top to canvas plane.
+      const layout = snapshotObject(obj);
       return {
         type: this._e2eObjectType(obj),
-        left: Number(obj.left) || 0,
-        top: Number(obj.top) || 0,
-        width: obj.width != null ? Number(obj.width) : null,
-        height: obj.height != null ? Number(obj.height) : null,
-        radius: obj.radius != null ? Number(obj.radius) : null,
+        left: Number(layout.left) || 0,
+        top: Number(layout.top) || 0,
+        width: layout.width != null ? Number(layout.width) : (obj.width != null ? Number(obj.width) : null),
+        height: layout.height != null ? Number(layout.height) : (obj.height != null ? Number(obj.height) : null),
+        radius: layout.radius != null ? Number(layout.radius) : (obj.radius != null ? Number(obj.radius) : null),
         text: typeof obj.text === "string" ? obj.text : null,
         latex: typeof obj.latex === "string" ? obj.latex : null,
         formulaType: typeof obj.formulaType === "string" ? obj.formulaType : null,
