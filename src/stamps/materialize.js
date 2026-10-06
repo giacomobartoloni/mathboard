@@ -77,7 +77,7 @@ function applyInkMetadata(object, node) {
 /**
  * Build Fabric objects from a validated stamp document.
  * Formula nodes require `buildFormula({ latex, left, top, ... })` which must
- * return a FabricImage (or null / throw on failure).
+ * return a Fabric formula object (or null / throw on failure).
  *
  * @param {object} doc validated stamp document
  * @param {{ buildFormula: Function }} options
