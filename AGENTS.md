@@ -17,13 +17,15 @@ npm run dev          # dev server with HMR (Vite)
 npm run build        # vite build + tools/build-seo.mjs → dist/ (app + static SEO pages)
 npm run build:app    # Vite only
 npm run build:seo    # SEO sidecar into dist/ (requires prior build:app)
-npm run build:e2e    # Vite build in e2e mode (read-only canvas hook; not for production)
+npm run build:e2e    # Vite e2e mode → dist-e2e/ (read-only canvas hook; never deploy)
 npm run preview      # serve the dist/ build locally
 npm run lint         # eslint (vue3-essential + eslint:recommended); reports, does not fix
 npm run test         # alias for test:unit
 npm run test:unit    # node:test suite in tests/
+npm run test:e2e:install # download Playwright Chromium (once per machine / after upgrades)
 npm run test:e2e     # build:e2e + Playwright Chromium P0 suite
 npm run test:e2e:ui  # same with Playwright UI
+npm run assert:no-e2e-hook # fail if dist/ JS/HTML contains __MATHBOARD_E2E__
 npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x512.png from tools/icon-template.html
 ```
 
@@ -50,7 +52,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 
 ## Deployment
 
-- **GitHub Actions** (`.github/workflows/main.yml`) — workflow `CI`, jobs `Quality` and `E2E (Chromium)` (`needs: quality`). Triggers: push/PR to `main`/`develop`, plus `workflow_dispatch`. Quality: `npm ci`, lint, `test:unit`, build. E2E: Playwright Chromium; on failure uploads `playwright-report/` + `test-results/` (7-day retention). No `continue-on-error`, no deploy job, no secrets. Progressive gating: require Quality first; make E2E required only after it is stable on `develop`/`main`.
+- **GitHub Actions** (`.github/workflows/main.yml`) — workflow `CI`, jobs `Quality` and `E2E (Chromium)` (`needs: quality`). Triggers: push/PR to `main`/`develop`, plus `workflow_dispatch`. Quality: `npm ci`, lint, `test:unit`, build, `assert:no-e2e-hook`. E2E: Playwright Chromium against `dist-e2e/`; on failure uploads `playwright-report/` + `test-results/` (7-day retention). No `continue-on-error`, no deploy job, no secrets. Progressive gating: require Quality first; make E2E required only after it is stable on `develop`/`main`.
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets.
 - Firebase is not used: no dependency, runtime import, or deploy step.
 

@@ -30,6 +30,11 @@ Install dependencies from the lockfile:
 npm ci
 ```
 
+For end-to-end tests, also install the Playwright Chromium browser once after `npm ci` (or after upgrading `@playwright/test`):
+```
+npm run test:e2e:install
+```
+
 ### Compiles and hot-reloads for development
 ```
 npm run dev
@@ -61,7 +66,7 @@ Runs the `node:test` suite under `tests/`.
 npm run test:e2e
 ```
 
-Builds the app with `vite build --mode e2e` (read-only `window.__MATHBOARD_E2E__` hook), then runs the Playwright P0 suite against `vite preview`. Use `npm run test:e2e:ui` for the Playwright UI.
+Builds the app with `vite build --mode e2e --outDir dist-e2e` (read-only `window.__MATHBOARD_E2E__` hook in a separate artifact from production `dist/`), then runs the Playwright P0 suite against `vite preview` on that directory. Use `npm run test:e2e:ui` for the Playwright UI. CI installs Chromium with `npx playwright install --with-deps chromium`.
 
 ### Regenerates PWA icons
 ```

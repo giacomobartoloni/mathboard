@@ -8,13 +8,15 @@
     "build:app": "vite build",
     "build:seo": "node tools/build-seo.mjs",
     "build": "npm run build:app && npm run build:seo",
-    "build:e2e": "vite build --mode e2e",
+    "build:e2e": "vite build --mode e2e --outDir dist-e2e",
     "preview": "vite preview",
     "lint": "eslint --ext .js,.vue src/",
     "test": "npm run test:unit",
     "test:unit": "node --test tests/*.test.js",
+    "test:e2e:install": "playwright install chromium",
     "test:e2e": "npm run build:e2e && playwright test",
     "test:e2e:ui": "npm run build:e2e && playwright test --ui",
+    "assert:no-e2e-hook": "node tools/assert-no-e2e-hook.mjs",
     "generate:icons": "node tools/generate-icons.mjs"
   },
   "dependencies": {

@@ -24,11 +24,14 @@ import { dragOnCanvas, getBoardState, safeDrag, waitForState } from './helpers/c
 
 test('E2E-P0-002 pencil draw undo redo', async ({ page }) => {
   await gotoBoard(page)
+  const before = await getBoardState(page)
+
   await selectTool(page, 'tool-pencil')
   await dragOnCanvas(page, safeDrag())
 
   let state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Path'))
   expect(state.objects.filter((o) => o.type === 'Path')).toHaveLength(1)
+  expect(state.history.length).toBe(before.history.length + 1)
   expect(state.history.tipType).toBe('add')
   const afterDraw = state.history.length
 

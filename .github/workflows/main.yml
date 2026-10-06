@@ -39,6 +39,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Assert production has no E2E hook
+        run: npm run assert:no-e2e-hook
+
   e2e:
     name: E2E (Chromium)
     runs-on: ubuntu-latest

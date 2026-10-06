@@ -20,7 +20,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { test, expect } from '@playwright/test'
 import { gotoBoard } from './fixtures.js'
 import { selectShape, clickUndo, clickRedo } from './helpers/board.js'
-import { dragOnCanvas, waitForState } from './helpers/canvas.js'
+import { dragOnCanvas, getBoardState, waitForState } from './helpers/canvas.js'
+
+/** Max canvas-plane drift after group/ungroup round-trips (px). */
+const POSITION_TOLERANCE = 5
 
 async function drawRect(page, drag) {
   await selectShape(page, 'shape-rectangle')
@@ -52,22 +55,24 @@ test('E2E-P0-006 group ungroup reversible', async ({ page }) => {
     for (const obj of before) {
       const match = objects.find((o) => o.type === obj.type)
       expect(match).toBeTruthy()
-      expect(Math.abs(match.left - obj.left)).toBeLessThan(40)
-      expect(Math.abs(match.top - obj.top)).toBeLessThan(40)
+      expect(Math.abs(match.left - obj.left)).toBeLessThan(POSITION_TOLERANCE)
+      expect(Math.abs(match.top - obj.top)).toBeLessThan(POSITION_TOLERANCE)
     }
     const rel = {
       dx: objects.find((o) => o.type === 'Circle').left - objects.find((o) => o.type === 'Rect').left,
       dy: objects.find((o) => o.type === 'Circle').top - objects.find((o) => o.type === 'Rect').top,
     }
-    expect(Math.abs(rel.dx - beforeRel.dx)).toBeLessThan(40)
-    expect(Math.abs(rel.dy - beforeRel.dy)).toBeLessThan(40)
+    expect(Math.abs(rel.dx - beforeRel.dx)).toBeLessThan(POSITION_TOLERANCE)
+    expect(Math.abs(rel.dy - beforeRel.dy)).toBeLessThan(POSITION_TOLERANCE)
   }
 
+  const beforeGroup = await getBoardState(page)
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('ControlOrMeta+G')
 
   state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Group' && o.childCount === 2))
   expect(state.objects).toHaveLength(1)
+  expect(state.history.length).toBe(beforeGroup.history.length + 1)
   expect(state.history.tipType).toBe('group')
 
   await clickUndo(page)
@@ -77,9 +82,11 @@ test('E2E-P0-006 group ungroup reversible', async ({ page }) => {
   await clickRedo(page)
   state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Group' && o.childCount === 2))
 
+  const beforeUngroup = await getBoardState(page)
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('ControlOrMeta+Shift+G')
   state = await waitForState(page, (s) => s.history.tipType === 'ungroup' && s.objects.length === 2)
+  expect(state.history.length).toBe(beforeUngroup.history.length + 1)
   assertLayout(state.objects)
 
   await clickUndo(page)
