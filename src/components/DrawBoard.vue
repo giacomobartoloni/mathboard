@@ -87,6 +87,7 @@ import {
   materializeStampDocument,
   encodeObjectsAsStamp,
 } from "../stamps/index.js";
+import { resolveStampRoot } from "../stamps/resolveStampRoot.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -656,12 +657,14 @@ export default {
       });
     },
     _wrapAsStampGroup(objects) {
-      if (objects.length === 1 && objects[0]?.isType?.("Group")) {
-        return objects[0];
-      }
-      return new Group(objects, {
-        subTargetCheck: false,
-        interactive: false,
+      // A Formula may be implemented as a Fabric Group; only semantic Board Groups
+      // count as an existing Stamp wrapper.
+      return resolveStampRoot(objects, {
+        isBoardGroup: (object) => this._boardObjectPolicy.isBoardGroup(object),
+        wrap: (members) => new Group(members, {
+          subTargetCheck: false,
+          interactive: false,
+        }),
       });
     },
     _placeGroupAtViewportCenter(group) {
