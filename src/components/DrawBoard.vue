@@ -893,6 +893,9 @@ export default {
       const groupIndex = this.canvas.getObjects().indexOf(group);
       if (groupIndex < 0) return false;
 
+      // Match history undo: discard before removeAll so children return to
+      // canvas plane rather than selection/group local coordinates.
+      this.canvas.discardActiveObject();
       this._suspendHistory = true;
       let items;
       try {
@@ -1108,6 +1111,7 @@ export default {
       return true;
     },
     async replaceFormula(existing, formulaData) {
+      existing = toRaw(existing);
       if (!existing || !this.canvas) return false;
 
       // Read canvas coordinates before the bitmap is ready. A selected formula

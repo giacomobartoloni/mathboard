@@ -1,0 +1,70 @@
+/*
+MathBoard
+
+Copyright (C) 2026 Giacomo Bartoloni
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const REQUIRED_MARKERS = [
+  'MATHBOARD_E2E_INSTRUMENTATION_V1',
+  '__MATHBOARD_E2E__',
+]
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const distE2eDir = path.join(root, 'dist-e2e')
+
+async function collectAssetFiles(dir) {
+  const entries = await fs.readdir(dir, { withFileTypes: true })
+  const files = []
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...await collectAssetFiles(full))
+    } else if (entry.isFile() && /\.(js|mjs|cjs|html)$/.test(entry.name)) {
+      files.push(full)
+    }
+  }
+  return files
+}
+
+async function main() {
+  let files
+  try {
+    files = await collectAssetFiles(distE2eDir)
+  } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      console.error(`assert-e2e-hook: missing ${distE2eDir}; run npm run build:e2e first`)
+      process.exit(1)
+    }
+    throw err
+  }
+
+  const blob = (await Promise.all(files.map((f) => fs.readFile(f, 'utf8')))).join('\n')
+  const missing = REQUIRED_MARKERS.filter((marker) => !blob.includes(marker))
+
+  if (missing.length) {
+    console.error('assert-e2e-hook: E2E instrumentation missing from dist-e2e/:')
+    for (const marker of missing) console.error(`  - ${marker}`)
+    process.exit(1)
+  }
+
+  console.log(`assert-e2e-hook: ok (${files.length} files; instrumentation present)`)
+}
+
+main()

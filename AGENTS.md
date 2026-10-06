@@ -7,7 +7,7 @@
 - **Fabric.js 7** (canvas drawing), **KaTeX** (LaTeX rendering), **html2canvas** (formula→canvas conversion)
 - **FontAwesome 6** global registration in `main.js`, used as `<font-awesome-icon :icon="['fas', 'name']" />`
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets. Firebase is not used in the runtime, build, or deploy
-- **No TypeScript, no tests, no typecheck** — verification is `npm run lint` plus `npm run build`
+- **No TypeScript, no typecheck** — verification is `npm run lint`, `npm run test:unit`, `npm run build`, and `npm run test:e2e`
 
 ## Commands
 
@@ -17,8 +17,16 @@ npm run dev          # dev server with HMR (Vite)
 npm run build        # vite build + tools/build-seo.mjs → dist/ (app + static SEO pages)
 npm run build:app    # Vite only
 npm run build:seo    # SEO sidecar into dist/ (requires prior build:app)
+npm run build:e2e    # Vite e2e mode → dist-e2e/ via e2e/main.js (read-only canvas hook; never deploy)
 npm run preview      # serve the dist/ build locally
 npm run lint         # eslint (vue3-essential + eslint:recommended); reports, does not fix
+npm run test         # alias for test:unit
+npm run test:unit    # node:test suite in tests/
+npm run test:e2e:install # download Playwright Chromium (once per machine / after upgrades)
+npm run test:e2e     # build:e2e + Playwright Chromium P0 suite
+npm run test:e2e:ui  # same with Playwright UI
+npm run assert:no-e2e-hook # fail if dist/ contains E2E instrumentation markers
+npm run assert:e2e-hook  # fail if dist-e2e/ is missing the E2E canary
 npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x512.png from tools/icon-template.html
 ```
 
@@ -42,10 +50,11 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 - **Zoom**: `canvas.setZoom()`, clamp 0.1–5x
 - **Shapes**: submenu in ToolsPanel; Rect, Circle, Line drawn via mouse drag
 - **Stamps / kits**: ToolsPanel stamp submenu (magic-wand) inserts built-in kits (`cartesianPlane`, `unitCircle`) with board default ink; URL `#s=<payload>` bootstraps on load then `replaceState`; Ctrl/Cmd+Shift+L shares the active selection as a deep link
+- **E2E selectors**: prefer semantic, user-facing locators (`role`, accessible name, labels). Do not add `data-testid`, `data-e2e`, `data-qa`, or equivalent test-only attributes to application source unless there is a documented architectural exception. Board observability lives in `e2e/instrumentation/` and is mounted only via `e2e/main.js` (Vite MODE=e2e); `src/` must not reference Playwright or `__MATHBOARD_E2E__`
 
 ## Deployment
 
-- **GitHub Actions** (`.github/workflows/main.yml`) runs CI checks only, on push and pull request for `main` and `develop`: `npm ci`, `npm run lint`, `npm run build`. No deploy job, no secrets.
+- **GitHub Actions** (`.github/workflows/main.yml`) — workflow `CI`, jobs `Quality` and `E2E (Chromium)` (`needs: quality`). Triggers: push/PR to `main`/`develop`, plus `workflow_dispatch`. Quality: `npm ci`, lint, `test:unit`, build, `assert:no-e2e-hook`. E2E: Playwright Chromium against `dist-e2e/`; on failure uploads `playwright-report/` + `test-results/` (7-day retention). No `continue-on-error`, no deploy job, no secrets. Progressive gating: require Quality first; make E2E required only after it is stable on `develop`/`main`.
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets.
 - Firebase is not used: no dependency, runtime import, or deploy step.
 
