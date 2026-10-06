@@ -30,9 +30,9 @@ import '@mathjax/src/js/input/tex/newcommand/NewcommandConfiguration.js'
 import '@mathjax/src/js/input/tex/noundefined/NoUndefinedConfiguration.js'
 import '@mathjax/src/js/input/tex/textmacros/TextMacrosConfiguration.js'
 
-/** Board visual size target ≈ previous KaTeX 15px (not the old html2canvas scale:2). */
-export const MATHJAX_EM_PX = 15
-export const MATHJAX_EX_PX = 7.5
+/** Board visual size target (em/ex = 2:1). Not the old html2canvas scale:2. */
+export const MATHJAX_EM_PX = 16
+export const MATHJAX_EX_PX = 8
 
 const TEX_PACKAGES = Object.freeze([
   'base',
