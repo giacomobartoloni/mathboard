@@ -26,7 +26,7 @@ test('E2E-P0-002 pencil draw undo redo', async ({ page }) => {
   await gotoBoard(page)
   const before = await getBoardState(page)
 
-  await selectTool(page, 'tool-pencil')
+  await selectTool(page, 'Pen')
   await dragOnCanvas(page, safeDrag())
 
   let state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Path'))
@@ -47,7 +47,7 @@ test('E2E-P0-002 pencil draw undo redo', async ({ page }) => {
 test('E2E-P0-003 shape geometry survives history', async ({ page }) => {
   await gotoBoard(page)
   const before = await getBoardState(page)
-  await selectShape(page, 'shape-rectangle')
+  await selectShape(page, 'Rectangle')
   await dragOnCanvas(page, safeDrag())
 
   let state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Rect'))

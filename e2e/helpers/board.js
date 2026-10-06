@@ -17,27 +17,27 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-export async function selectTool(page, testId) {
-  await page.getByTestId(testId).click()
+export async function selectTool(page, name) {
+  await page.getByRole('button', { name, exact: true }).click()
 }
 
-export async function selectShape(page, shapeTestId) {
-  const shapes = page.getByTestId('tool-shapes')
-  await shapes.click()
-  await shapes.hover()
-  await page.getByTestId(shapeTestId).click()
+export async function selectShape(page, name) {
+  const trigger = page.getByRole('button', { name: 'Shapes', exact: true })
+  await trigger.click()
+  await trigger.hover()
+  await page.getByRole('button', { name, exact: true }).click()
 }
 
 export async function clickUndo(page) {
-  await page.getByTestId('history-undo').click()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
 }
 
 export async function clickRedo(page) {
-  await page.getByTestId('history-redo').click()
+  await page.getByRole('button', { name: 'Redo', exact: true }).click()
 }
 
-export async function insertStamp(page, stampTestId) {
-  const stamps = page.getByTestId('tool-stamps')
-  await stamps.hover()
-  await page.getByTestId(stampTestId).click()
+export async function insertStamp(page, name) {
+  const trigger = page.getByRole('button', { name: 'Stamps', exact: true })
+  await trigger.hover()
+  await page.getByRole('button', { name, exact: true }).click()
 }

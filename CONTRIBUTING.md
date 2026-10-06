@@ -21,6 +21,8 @@ npm run test:e2e
 
 `npm run lint` reports problems and leaves files unchanged. `test:unit` runs the Node module tests; `test:e2e` builds into `dist-e2e/`, asserts the E2E canary is present, and runs the Playwright Chromium P0 suite. `assert:no-e2e-hook` fails if production `dist/` still contains E2E instrumentation markers.
 
+When adding E2E coverage, prefer accessible selectors (`getByRole`, labels). If an interactive control cannot be selected semantically, improve its HTML semantics before adding a test-only hook.
+
 Regenerate the PWA icons with `npm run generate:icons` only when `tools/icon-template.html` changes. The script needs network access and stops if the Satisfy font does not load.
 
 ## Code

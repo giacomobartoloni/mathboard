@@ -35,7 +35,7 @@ function assertCartesianPlane(state) {
 test('E2E-P0-007 stamp insert undo share bootstrap', async ({ page, context }) => {
   await gotoBoard(page)
   const before = await getBoardState(page)
-  await insertStamp(page, 'stamp-cartesian-plane')
+  await insertStamp(page, 'Cartesian plane')
 
   let state = await waitForState(
     page,
@@ -58,7 +58,9 @@ test('E2E-P0-007 stamp insert undo share bootstrap', async ({ page, context }) =
 
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('ControlOrMeta+Shift+L')
-  const urlInput = page.locator('#share-stamp-url')
+  const urlInput = page.getByRole('dialog', { name: 'Share board link' }).getByLabel(
+    'Anyone with this link opens a board with the current selection:',
+  )
   await expect(urlInput).toBeVisible()
   const shareUrl = await urlInput.inputValue()
   expect(shareUrl).toContain('#s=')

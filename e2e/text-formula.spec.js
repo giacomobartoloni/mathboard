@@ -23,7 +23,7 @@ import { selectTool, clickUndo, clickRedo } from './helpers/board.js'
 import { clickOnCanvas, getBoardState, waitForState } from './helpers/canvas.js'
 
 async function createText(page, value) {
-  await selectTool(page, 'tool-text')
+  await selectTool(page, 'Text')
   await clickOnCanvas(page, { x: 320, y: 220 })
   const textarea = page.locator('textarea').first()
   await expect(textarea).toBeAttached()
@@ -58,7 +58,7 @@ test('E2E-P0-004 text create and edit survive history', async ({ page }) => {
   expect(state.objects[0].text).not.toBe('Text')
 
   const beforeEdit = state.history.length
-  await selectTool(page, 'tool-select')
+  await selectTool(page, 'Select')
   await clickOnCanvas(page, { x: 320, y: 220 })
   await clickOnCanvas(page, { x: 320, y: 220, clickCount: 2 })
   const textarea = page.locator('textarea').first()
@@ -82,12 +82,13 @@ test('E2E-P0-004 text create and edit survive history', async ({ page }) => {
 test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => {
   await gotoBoard(page)
   const beforeCreate = await getBoardState(page)
-  await selectTool(page, 'tool-formula')
+  await selectTool(page, 'Formula')
   await clickOnCanvas(page, { x: 340, y: 240 })
 
-  await expect(page.locator('#latex-input')).toBeVisible()
-  await page.locator('#latex-input').fill('x^2')
-  await page.locator('.btn-insert').click()
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await expect(latexInput).toBeVisible()
+  await latexInput.fill('x^2')
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
 
   let state = await waitForState(
     page,
@@ -101,9 +102,9 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
   const formula = state.objects.find((o) => o.formulaType === 'katex-formula')
   const beforeEdit = state.history.length
   await dblclickFormula(page, formula)
-  await expect(page.locator('#latex-input')).toHaveValue('x^2')
-  await page.locator('#latex-input').fill('x^3')
-  await page.locator('.btn-insert').click()
+  await expect(latexInput).toHaveValue('x^2')
+  await latexInput.fill('x^3')
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
 
   state = await waitForState(
     page,
@@ -121,5 +122,5 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
 
   const restored = state.objects.find((o) => o.latex === 'x^3')
   await dblclickFormula(page, restored)
-  await expect(page.locator('#latex-input')).toHaveValue('x^3')
+  await expect(latexInput).toHaveValue('x^3')
 })

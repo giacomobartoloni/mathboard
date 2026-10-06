@@ -26,13 +26,13 @@ import { dragOnCanvas, getBoardState, waitForState } from './helpers/canvas.js'
 const POSITION_TOLERANCE = 5
 
 async function drawRect(page, drag) {
-  await selectShape(page, 'shape-rectangle')
+  await selectShape(page, 'Rectangle')
   await dragOnCanvas(page, drag)
   await waitForState(page, (s) => s.objects.some((o) => o.type === 'Rect'))
 }
 
 async function drawCircle(page, drag) {
-  await selectShape(page, 'shape-circle')
+  await selectShape(page, 'Circle')
   await dragOnCanvas(page, drag)
   await waitForState(page, (s) => s.objects.filter((o) => o.type === 'Rect' || o.type === 'Circle').length >= 2)
 }

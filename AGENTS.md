@@ -50,7 +50,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 - **Zoom**: `canvas.setZoom()`, clamp 0.1–5x
 - **Shapes**: submenu in ToolsPanel; Rect, Circle, Line drawn via mouse drag
 - **Stamps / kits**: ToolsPanel stamp submenu (magic-wand) inserts built-in kits (`cartesianPlane`, `unitCircle`) with board default ink; URL `#s=<payload>` bootstraps on load then `replaceState`; Ctrl/Cmd+Shift+L shares the active selection as a deep link
-- **E2E selectors**: keep `data-testid` only when Playwright helpers use them (ToolsPanel tools/shapes/stamps/history). Unused testids must not ship. Distinct from `e2e/instrumentation/` (MODE=e2e only), which must stay out of production `dist/`
+- **E2E selectors**: prefer semantic, user-facing locators (`role`, accessible name, labels). Do not add `data-testid`, `data-e2e`, `data-qa`, or equivalent test-only attributes to application source unless there is a documented architectural exception. Board state is observed only via `e2e/instrumentation/` (MODE=e2e), never via production hooks
 
 ## Deployment
 
