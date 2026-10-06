@@ -17,7 +17,7 @@ npm run dev          # dev server with HMR (Vite)
 npm run build        # vite build + tools/build-seo.mjs → dist/ (app + static SEO pages)
 npm run build:app    # Vite only
 npm run build:seo    # SEO sidecar into dist/ (requires prior build:app)
-npm run build:e2e    # Vite e2e mode → dist-e2e/ (read-only canvas hook; never deploy)
+npm run build:e2e    # Vite e2e mode → dist-e2e/ via e2e/main.js (read-only canvas hook; never deploy)
 npm run preview      # serve the dist/ build locally
 npm run lint         # eslint (vue3-essential + eslint:recommended); reports, does not fix
 npm run test         # alias for test:unit
@@ -50,7 +50,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 - **Zoom**: `canvas.setZoom()`, clamp 0.1–5x
 - **Shapes**: submenu in ToolsPanel; Rect, Circle, Line drawn via mouse drag
 - **Stamps / kits**: ToolsPanel stamp submenu (magic-wand) inserts built-in kits (`cartesianPlane`, `unitCircle`) with board default ink; URL `#s=<payload>` bootstraps on load then `replaceState`; Ctrl/Cmd+Shift+L shares the active selection as a deep link
-- **E2E selectors**: prefer semantic, user-facing locators (`role`, accessible name, labels). Do not add `data-testid`, `data-e2e`, `data-qa`, or equivalent test-only attributes to application source unless there is a documented architectural exception. Board state is observed only via `e2e/instrumentation/` (MODE=e2e), never via production hooks
+- **E2E selectors**: prefer semantic, user-facing locators (`role`, accessible name, labels). Do not add `data-testid`, `data-e2e`, `data-qa`, or equivalent test-only attributes to application source unless there is a documented architectural exception. Board observability lives in `e2e/instrumentation/` and is mounted only via `e2e/main.js` (Vite MODE=e2e); `src/` must not reference Playwright or `__MATHBOARD_E2E__`
 
 ## Deployment
 

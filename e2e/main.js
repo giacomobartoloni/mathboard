@@ -17,27 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import { mountMathBoard } from '../src/app-bootstrap.js'
+import { installBoardE2eHook } from './instrumentation/board-hook.js'
 
-function e2eEntryPlugin() {
-  return {
-    name: 'mathboard-e2e-entry',
-    transformIndexHtml: {
-      order: 'pre',
-      handler(html) {
-        return html.replace(
-          'src="/src/main.js"',
-          'src="/e2e/main.js"',
-        )
-      },
-    },
-  }
-}
-
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    vue(),
-    ...(mode === 'e2e' ? [e2eEntryPlugin()] : []),
-  ],
-}))
+const root = mountMathBoard()
+installBoardE2eHook(() => root.drawBoardRef)

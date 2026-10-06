@@ -14,83 +14,9 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { createApp } from 'vue'
-import App from './App.vue'
-import { initializeAnalytics } from './analytics/index.js'
+import { mountMathBoard } from './app-bootstrap.js'
 
-import { library } from '@fortawesome/fontawesome-svg-core'
-import { faMousePointer } from '@fortawesome/free-solid-svg-icons'
-import { faPencilAlt } from '@fortawesome/free-solid-svg-icons'
-import { faUndo } from '@fortawesome/free-solid-svg-icons'
-import { faRedo } from '@fortawesome/free-solid-svg-icons'
-import { faFont } from '@fortawesome/free-solid-svg-icons'
-import { faSearch } from '@fortawesome/free-solid-svg-icons'
-import { faSquareRootAlt } from '@fortawesome/free-solid-svg-icons'
-import { faShapes } from '@fortawesome/free-solid-svg-icons'
-import { faInfoCircle } from '@fortawesome/free-solid-svg-icons'
-import { faHeart } from '@fortawesome/free-solid-svg-icons'
-import { faCodeBranch } from '@fortawesome/free-solid-svg-icons'
-import { faMoon } from '@fortawesome/free-solid-svg-icons'
-import { faSun } from '@fortawesome/free-solid-svg-icons'
-import { faChalkboard } from '@fortawesome/free-solid-svg-icons'
-import { faExpand } from '@fortawesome/free-solid-svg-icons'
-import { faCompress } from '@fortawesome/free-solid-svg-icons'
-import { faCopy } from '@fortawesome/free-solid-svg-icons'
-import { faTrash } from '@fortawesome/free-solid-svg-icons'
-import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
-import { faObjectGroup } from '@fortawesome/free-solid-svg-icons'
-import { faObjectUngroup } from '@fortawesome/free-solid-svg-icons'
-import { faBorderAll } from '@fortawesome/free-solid-svg-icons'
-import { faCircleNotch } from '@fortawesome/free-solid-svg-icons'
-import { faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons'
-import { faHandPaper } from '@fortawesome/free-regular-svg-icons'
-import { faSquare } from '@fortawesome/free-regular-svg-icons'
-import { faCircle } from '@fortawesome/free-regular-svg-icons'
-import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
-import { faGithub } from '@fortawesome/free-brands-svg-icons'
- 
-library.add(faMousePointer)
-library.add(faFont)
-library.add(faSearch)
-library.add(faSquareRootAlt)
-library.add(faShapes)
-library.add(faInfoCircle)
-library.add(faHeart)
-library.add(faHandPaper)
-library.add(faSquare)
-library.add(faCircle)
-library.add(faPencilAlt)
-library.add(faUndo)
-library.add(faRedo)
-library.add(faCodeBranch)
-library.add(faMoon)
-library.add(faSun)
-library.add(faChalkboard)
-library.add(faExpand)
-library.add(faCompress)
-library.add(faCopy)
-library.add(faTrash)
-library.add(faPenToSquare)
-library.add(faObjectGroup)
-library.add(faObjectUngroup)
-library.add(faBorderAll)
-library.add(faCircleNotch)
-library.add(faWandMagicSparkles)
-library.add(faGithub)
-
-initializeAnalytics()
-
-const app = createApp(App)
-app.component('font-awesome-icon', FontAwesomeIcon)
-const root = app.mount('#app')
-
-// Compile-time dead in production; instrumentation lives outside DrawBoard.
-if (import.meta.env.MODE === 'e2e') {
-  import('../e2e/instrumentation/board-hook.js').then(({ installBoardE2eHook }) => {
-    installBoardE2eHook(() => root.drawBoardRef)
-  })
-}
-
+mountMathBoard()
