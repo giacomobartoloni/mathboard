@@ -100,6 +100,11 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
   expect(state.objects.filter((o) => o.formulaType === 'katex-formula')).toHaveLength(1)
 
   const formula = state.objects.find((o) => o.formulaType === 'katex-formula')
+  expect(formula.isVectorFormula).toBe(true)
+  expect(formula.childCount).toBeGreaterThan(0)
+  expect(formula.type).not.toBe('FabricImage')
+  expect(formula.type).not.toBe('Image')
+
   const beforeEdit = state.history.length
   await dblclickFormula(page, formula)
   await expect(latexInput).toHaveValue('x^2')
@@ -123,4 +128,46 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
   const restored = state.objects.find((o) => o.latex === 'x^3')
   await dblclickFormula(page, restored)
   await expect(latexInput).toHaveValue('x^3')
+})
+
+test('E2E-P0-005b formula duplicate keeps vector semantics', async ({ page }) => {
+  await gotoBoard(page)
+  await selectTool(page, 'Formula')
+  await clickOnCanvas(page, { x: 300, y: 220 })
+
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await latexInput.fill('y^2')
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+
+  let state = await waitForState(
+    page,
+    (s) => s.objects.some((o) => o.formulaType === 'katex-formula' && o.latex === 'y^2'),
+    { timeout: 15000 },
+  )
+  const beforeDup = state.history.length
+
+  await page.keyboard.press('ControlOrMeta+D')
+  state = await waitForState(
+    page,
+    (s) => s.objects.filter((o) => o.formulaType === 'katex-formula' && o.latex === 'y^2').length === 2,
+    { timeout: 15000 },
+  )
+  const formulas = state.objects.filter((o) => o.formulaType === 'katex-formula')
+  expect(formulas).toHaveLength(2)
+  expect(formulas.every((f) => f.isVectorFormula)).toBe(true)
+  expect(state.history.length).toBe(beforeDup + 1)
+  expect(state.history.tipType).toBe('duplicate')
+
+  await clickUndo(page)
+  state = await waitForState(
+    page,
+    (s) => s.objects.filter((o) => o.formulaType === 'katex-formula').length === 1,
+  )
+
+  await clickRedo(page)
+  state = await waitForState(
+    page,
+    (s) => s.objects.filter((o) => o.formulaType === 'katex-formula').length === 2,
+  )
+  expect(state.objects.filter((o) => o.isVectorFormula)).toHaveLength(2)
 })

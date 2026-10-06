@@ -82,7 +82,7 @@ test('E2E-P0-007 stamp insert undo share bootstrap', async ({ page, context }) =
   await boot.close()
 })
 
-test('E2E-P0-007b formula stamp keeps rendered polarity across board themes', async ({ page, browser }) => {
+test('E2E-P0-007b formula stamp follows destination board auto ink across themes', async ({ page, browser }) => {
   await gotoBoard(page)
   await selectTool(page, 'Formula')
   await clickOnCanvas(page, { x: 340, y: 240 })
@@ -98,8 +98,9 @@ test('E2E-P0-007b formula stamp keeps rendered polarity across board themes', as
     { timeout: 15000 },
   )
   const sourceFormula = state.objects.find((o) => o.formulaType === 'katex-formula')
-  expect(sourceFormula.renderedInkIsLight).toBe(false)
+  expect(sourceFormula.isVectorFormula).toBe(true)
   expect(sourceFormula.filterTypes).toEqual([])
+  expect(sourceFormula.vectorPaints.every((paint) => paint === '#000000' || paint === 'black')).toBe(true)
 
   await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.press('ControlOrMeta+Shift+L')
@@ -130,10 +131,11 @@ test('E2E-P0-007b formula stamp keeps rendered polarity across board themes', as
     || state.objects.flatMap((o) => o.children || []).find((o) => o.formulaType === 'katex-formula')
   expect(imported).toBeTruthy()
   expect(imported.inkMode).toBe('auto')
-  // Chalkboard ink is light; rematerialized bitmap polarity must match and not
-  // carry a stale Invert from the Light-origin Stamp metadata.
-  expect(imported.renderedInkIsLight).toBe(true)
+  expect(imported.isVectorFormula).toBe(true)
   expect(imported.filterTypes).toEqual([])
+  // Chalkboard default ink; vector recolor, no Invert / polarity metadata.
+  expect(imported.vectorPaints.length).toBeGreaterThan(0)
+  expect(imported.vectorPaints.every((paint) => paint === '#f4f1de')).toBe(true)
   await expect(boot.locator('.stamp-error')).toHaveCount(0)
   expect(errors).toEqual([])
   await bootContext.close()

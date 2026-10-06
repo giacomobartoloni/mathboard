@@ -21,9 +21,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  * Apply Stamp semantic metadata onto a freshly rematerialized formula.
  *
  * `mathboardInkMode` is product state (AUTO/FIXED) and survives rematerialization.
- * `mathboardRenderedInkIsLight` is renderer-artifact polarity for the bitmap just
- * produced; the current renderer owns it. Restoring a stale Stamp value causes
- * syncInk() to Invert an already-correct bitmap on cross-theme import.
+ * `mathboardRenderedInkIsLight` is legacy bitmap-renderer polarity; ignore it so
+ * vector formulas (and rematerialized AUTO ink) are not skewed by old Stamps.
  *
  * @param {object} formula Fabric formula object from the current renderer
  * @param {object} spec Stamp formula node (may still carry legacy polarity)

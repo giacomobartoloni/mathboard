@@ -18,7 +18,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
-import { KaTeXBitmapFormulaRenderer } from '../formulas/KaTeXBitmapFormulaRenderer.js'
+import { MathJaxRuntime } from '../formulas/MathJaxRuntime.js'
+import { MathJaxSvgFormulaRenderer } from '../formulas/MathJaxSvgFormulaRenderer.js'
 
 /**
  * Application services composed at bootstrap. Callers should receive these
@@ -26,7 +27,8 @@ import { KaTeXBitmapFormulaRenderer } from '../formulas/KaTeXBitmapFormulaRender
  */
 export function createMathBoardServices() {
   const boardObjectPolicy = new BoardObjectPolicy()
-  const formulaRenderer = new KaTeXBitmapFormulaRenderer()
+  const mathJaxRuntime = new MathJaxRuntime()
+  const formulaRenderer = new MathJaxSvgFormulaRenderer(mathJaxRuntime)
 
   return {
     boardObjectPolicy,

@@ -41,6 +41,7 @@ function objectType(obj) {
     'ActiveSelection',
     'FabricImage',
     'Image',
+    'MathBoardFormula',
   ]
 
   for (const name of names) {
@@ -50,10 +51,37 @@ function objectType(obj) {
   return obj.constructor?.name || null
 }
 
+function isComposite(obj) {
+  if (typeof obj?.getObjects !== 'function') return false
+  return Boolean(
+    obj.isType?.('Group')
+    || obj.isType?.('ActiveSelection')
+    || obj.isType?.('MathBoardFormula')
+    || obj.formulaType,
+  )
+}
+
+function collectVectorPaints(obj, out = []) {
+  if (!obj) return out
+  if (typeof obj.getObjects === 'function') {
+    for (const child of obj.getObjects()) {
+      collectVectorPaints(child, out)
+    }
+    return out
+  }
+
+  const fill = obj.fill
+  const stroke = obj.stroke
+  if (fill && fill !== 'none' && fill !== 'transparent') out.push(String(fill))
+  if (stroke && stroke !== 'none' && stroke !== 'transparent') out.push(String(stroke))
+  return out
+}
+
 function snapshotForE2e(obj, { includeChildren = true } = {}) {
-  const isGroup = obj.isType?.('Group')
+  const composite = isComposite(obj)
   // snapshotObject converts ActiveSelection-local left/top to canvas plane.
   const layout = snapshotObject(obj)
+  const vectorPaints = obj.formulaType ? collectVectorPaints(obj) : []
 
   const snapshot = {
     type: objectType(obj),
@@ -80,10 +108,18 @@ function snapshotForE2e(obj, { includeChildren = true } = {}) {
     filterTypes: Array.isArray(obj.filters)
       ? obj.filters.map((filter) => filter?.type).filter(Boolean)
       : [],
-    childCount: isGroup ? obj.getObjects().length : null,
+    childCount: composite ? obj.getObjects().length : null,
+    vectorPaints,
+    isVectorFormula: Boolean(
+      obj.formulaType
+      && composite
+      && (obj.getObjects?.().length || 0) > 0
+      && !obj.isType?.('Image')
+      && !obj.isType?.('FabricImage'),
+    ),
   }
 
-  if (includeChildren && isGroup && typeof obj.getObjects === 'function') {
+  if (includeChildren && composite) {
     snapshot.children = obj.getObjects().map((child) => (
       snapshotForE2e(child, { includeChildren: false })
     ))
