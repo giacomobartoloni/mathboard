@@ -1108,6 +1108,7 @@ export default {
       return true;
     },
     async replaceFormula(existing, formulaData) {
+      existing = toRaw(existing);
       if (!existing || !this.canvas) return false;
 
       // Read canvas coordinates before the bitmap is ready. A selected formula

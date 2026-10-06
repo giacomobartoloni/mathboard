@@ -22,7 +22,7 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   retries: 0,
 
   use: {
