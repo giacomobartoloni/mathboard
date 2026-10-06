@@ -19,7 +19,7 @@ npm run assert:no-e2e-hook
 npm run test:e2e
 ```
 
-`npm run lint` reports problems and leaves files unchanged. `test:unit` runs the Node module tests; `test:e2e` builds into `dist-e2e/` and runs the Playwright Chromium P0 suite. `assert:no-e2e-hook` fails if the production `dist/` still contains the E2E observability marker.
+`npm run lint` reports problems and leaves files unchanged. `test:unit` runs the Node module tests; `test:e2e` builds into `dist-e2e/`, asserts the E2E canary is present, and runs the Playwright Chromium P0 suite. `assert:no-e2e-hook` fails if production `dist/` still contains E2E instrumentation markers.
 
 Regenerate the PWA icons with `npm run generate:icons` only when `tools/icon-template.html` changes. The script needs network access and stops if the Satisfy font does not load.
 

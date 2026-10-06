@@ -85,5 +85,12 @@ initializeAnalytics()
 
 const app = createApp(App)
 app.component('font-awesome-icon', FontAwesomeIcon)
-app.mount('#app')
+const root = app.mount('#app')
+
+// Compile-time dead in production; instrumentation lives outside DrawBoard.
+if (import.meta.env.MODE === 'e2e') {
+  import('../e2e/instrumentation/board-hook.js').then(({ installBoardE2eHook }) => {
+    installBoardE2eHook(() => root.drawBoardRef)
+  })
+}
 

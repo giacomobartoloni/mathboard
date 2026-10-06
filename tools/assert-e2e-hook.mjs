@@ -21,19 +21,13 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const FORBIDDEN_MARKERS = [
-  '__MATHBOARD_E2E__',
+const REQUIRED_MARKERS = [
   'MATHBOARD_E2E_INSTRUMENTATION_V1',
-  '_e2eObjectType',
-  '_e2eSnapshotObject',
-  'getE2eState',
-  'installE2eHook',
-  'uninstallE2eHook',
-  'installBoardE2eHook',
+  '__MATHBOARD_E2E__',
 ]
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const distDir = path.join(root, 'dist')
+const distE2eDir = path.join(root, 'dist-e2e')
 
 async function collectAssetFiles(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true })
@@ -52,35 +46,25 @@ async function collectAssetFiles(dir) {
 async function main() {
   let files
   try {
-    files = await collectAssetFiles(distDir)
+    files = await collectAssetFiles(distE2eDir)
   } catch (err) {
     if (err && err.code === 'ENOENT') {
-      console.error(`assert-no-e2e-hook: missing ${distDir}; run npm run build first`)
+      console.error(`assert-e2e-hook: missing ${distE2eDir}; run npm run build:e2e first`)
       process.exit(1)
     }
     throw err
   }
 
-  const hits = []
-  for (const file of files) {
-    const text = await fs.readFile(file, 'utf8')
-    for (const marker of FORBIDDEN_MARKERS) {
-      if (text.includes(marker)) {
-        hits.push({ file: path.relative(root, file), marker })
-      }
-    }
-  }
+  const blob = (await Promise.all(files.map((f) => fs.readFile(f, 'utf8')))).join('\n')
+  const missing = REQUIRED_MARKERS.filter((marker) => !blob.includes(marker))
 
-  if (hits.length) {
-    console.error('production E2E leakage detected:')
-    for (const hit of hits) {
-      console.error(`  ${hit.file}`)
-      console.error(`  marker: ${hit.marker}`)
-    }
+  if (missing.length) {
+    console.error('assert-e2e-hook: E2E instrumentation missing from dist-e2e/:')
+    for (const marker of missing) console.error(`  - ${marker}`)
     process.exit(1)
   }
 
-  console.log(`assert-no-e2e-hook: ok (${files.length} files scanned under dist/)`)
+  console.log(`assert-e2e-hook: ok (${files.length} files; instrumentation present)`)
 }
 
 main()

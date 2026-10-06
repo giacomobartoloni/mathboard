@@ -25,7 +25,8 @@ npm run test:unit    # node:test suite in tests/
 npm run test:e2e:install # download Playwright Chromium (once per machine / after upgrades)
 npm run test:e2e     # build:e2e + Playwright Chromium P0 suite
 npm run test:e2e:ui  # same with Playwright UI
-npm run assert:no-e2e-hook # fail if dist/ JS/HTML contains __MATHBOARD_E2E__
+npm run assert:no-e2e-hook # fail if dist/ contains E2E instrumentation markers
+npm run assert:e2e-hook  # fail if dist-e2e/ is missing the E2E canary
 npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x512.png from tools/icon-template.html
 ```
 

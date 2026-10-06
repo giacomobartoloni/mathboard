@@ -894,7 +894,7 @@ export default {
       if (groupIndex < 0) return false;
 
       // Match history undo: discard before removeAll so children return to
-      // canvas plane. getE2eState uses snapshotObject for ActiveSelection locals.
+      // canvas plane rather than selection/group local coordinates.
       this.canvas.discardActiveObject();
       this._suspendHistory = true;
       let items;
@@ -1750,79 +1750,6 @@ export default {
     getZoom() {
       return this.canvas.getZoom();
     },
-    _e2eObjectType(obj) {
-      if (!obj) return null;
-      const names = [
-        "Path", "Rect", "Circle", "Line", "IText", "Text", "Textbox",
-        "Group", "ActiveSelection", "FabricImage", "Image",
-      ];
-      for (const name of names) {
-        if (obj.isType?.(name)) return name;
-      }
-      return obj.constructor?.name || null;
-    },
-    _e2eSnapshotObject(obj) {
-      const isGroup = obj.isType?.("Group");
-      // snapshotObject converts ActiveSelection-local left/top to canvas plane.
-      const layout = snapshotObject(obj);
-      return {
-        type: this._e2eObjectType(obj),
-        left: Number(layout.left) || 0,
-        top: Number(layout.top) || 0,
-        width: layout.width != null ? Number(layout.width) : (obj.width != null ? Number(obj.width) : null),
-        height: layout.height != null ? Number(layout.height) : (obj.height != null ? Number(obj.height) : null),
-        radius: layout.radius != null ? Number(layout.radius) : (obj.radius != null ? Number(obj.radius) : null),
-        text: typeof obj.text === "string" ? obj.text : null,
-        latex: typeof obj.latex === "string" ? obj.latex : null,
-        formulaType: typeof obj.formulaType === "string" ? obj.formulaType : null,
-        inkMode: obj.mathboardInkMode ?? null,
-        childCount: isGroup ? obj.getObjects().length : null,
-      };
-    },
-    getE2eState() {
-      const canvas = this.canvas;
-      if (!canvas) {
-        return {
-          zoom: 1,
-          viewportTransform: [1, 0, 0, 1, 0, 0],
-          history: { length: 0, step: -1, tipType: null },
-          active: { type: null, selectionCount: 0 },
-          objects: [],
-        };
-      }
-      const tip = this._history[this._historyStep];
-      const active = canvas.getActiveObject();
-      let selectionCount = 0;
-      if (active) {
-        selectionCount = active.isType?.("ActiveSelection")
-          ? active.getObjects().length
-          : 1;
-      }
-      return {
-        zoom: Number(canvas.getZoom()),
-        viewportTransform: [...canvas.viewportTransform],
-        history: {
-          length: this._history.length,
-          step: this._historyStep,
-          tipType: tip?.type ?? null,
-        },
-        active: {
-          type: this._e2eObjectType(active),
-          selectionCount,
-        },
-        objects: canvas.getObjects().map((obj) => this._e2eSnapshotObject(obj)),
-      };
-    },
-    installE2eHook() {
-      if (import.meta.env.MODE !== "e2e") return;
-      window.__MATHBOARD_E2E__ = {
-        getState: () => this.getE2eState(),
-      };
-    },
-    uninstallE2eHook() {
-      if (import.meta.env.MODE !== "e2e") return;
-      if (window.__MATHBOARD_E2E__) delete window.__MATHBOARD_E2E__;
-    },
     initializeBrush() {
       const brush = new PencilBrush(this.canvas);
       // Explicit palette ink wins; otherwise new strokes follow the board theme.
@@ -1916,7 +1843,6 @@ export default {
   },
   mounted() {
     this.initializeCanvas();
-    this.installE2eHook();
     
     this.$nextTick(() => {
       this.updateCanvasSize();
@@ -1928,7 +1854,6 @@ export default {
     });
   },
   beforeUnmount() {
-    this.uninstallE2eHook();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
     });
