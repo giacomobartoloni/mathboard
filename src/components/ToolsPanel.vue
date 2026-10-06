@@ -21,22 +21,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div class="left-chrome">
     <div class="tools-panel">
       <!--     <img alt="Vue logo" src="../assets/logo.png" width="30px" /> -->
-      <div :class="{ selected: selected === 'select' }" @click="select('select')" title="Select (V)">
+      <div data-testid="tool-select" :class="{ selected: selected === 'select' }" @click="select('select')" title="Select (V)">
         <font-awesome-icon :icon="['fas', 'mouse-pointer']" />
       </div>
-      <div :class="{ selected: selected === 'pan' }" @click="select('pan')" title="Pan (H)">
+      <div data-testid="tool-pan" :class="{ selected: selected === 'pan' }" @click="select('pan')" title="Pan (H)">
         <font-awesome-icon :icon="['far', 'hand-paper']" />
       </div>
-      <div :class="{ selected: selected === 'pencil' }" @click="select('pencil')" title="Pen (P)">
+      <div data-testid="tool-pencil" :class="{ selected: selected === 'pencil' }" @click="select('pencil')" title="Pen (P)">
         <font-awesome-icon :icon="['fas', 'pencil-alt']" />
       </div>
-      <div :class="{ selected: selected === 'font' }" @click="select('font')" title="Text (T)">
+      <div data-testid="tool-text" :class="{ selected: selected === 'font' }" @click="select('font')" title="Text (T)">
         <font-awesome-icon :icon="['fas', 'font']" />
       </div>
-      <div :class="{ selected: selected === 'formula' }" @click="select('formula')" title="Formula (F)">
+      <div data-testid="tool-formula" :class="{ selected: selected === 'formula' }" @click="select('formula')" title="Formula (F)">
         <font-awesome-icon :icon="['fas', 'square-root-alt']" />
       </div>
       <div 
+        data-testid="tool-shapes"
         :class="{ selected: selected === 'shapes' }" 
         @click="select('shapes')"
         @mouseenter="showShapesSubmenu = true"
@@ -49,6 +50,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <transition name="fade">
           <div v-if="showShapesSubmenu && selected === 'shapes'" class="shapes-submenu" @click.stop>
             <div 
+              data-testid="shape-rectangle"
               :class="{ 'selected-shape': selectedShape === 'rectangle' }"
               @click="selectShape('rectangle')"
               title="Rectangle (R)"
@@ -56,6 +58,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               <font-awesome-icon :icon="['far', 'square']" />
             </div>
             <div 
+              data-testid="shape-circle"
               :class="{ 'selected-shape': selectedShape === 'circle' }"
               @click="selectShape('circle')"
               title="Circle (C)"
@@ -63,6 +66,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               <font-awesome-icon :icon="['far', 'circle']" />
             </div>
             <div 
+              data-testid="shape-line"
               :class="{ 'selected-shape': selectedShape === 'arrow' }"
               @click="selectShape('arrow')"
               class="line-icon"
@@ -75,6 +79,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </div>
 
       <div
+        data-testid="tool-stamps"
         @mouseenter="showKitsSubmenu = true"
         @mouseleave="showKitsSubmenu = false"
         title="Stamps"
@@ -85,6 +90,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <div
               v-for="kit in stampKits"
               :key="kit.id"
+              :data-testid="kit.id === 'unitCircle' ? 'stamp-unit-circle' : 'stamp-cartesian-plane'"
               @click="insertKit(kit.id)"
               :title="kit.label"
             >
@@ -139,10 +145,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
     
     <div class="history-panel">
-      <div @click="$emit('undo')" title="Undo (Ctrl+Z)">
+      <div data-testid="history-undo" @click="$emit('undo')" title="Undo (Ctrl+Z)">
         <font-awesome-icon :icon="['fas', 'undo']" />
       </div>
-      <div @click="$emit('redo')" title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+      <div data-testid="history-redo" @click="$emit('redo')" title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
         <font-awesome-icon :icon="['fas', 'redo']" />
       </div>
     </div>
