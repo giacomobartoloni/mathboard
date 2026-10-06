@@ -50,12 +50,12 @@ function objectType(obj) {
   return obj.constructor?.name || null
 }
 
-function snapshotForE2e(obj) {
+function snapshotForE2e(obj, { includeChildren = true } = {}) {
   const isGroup = obj.isType?.('Group')
   // snapshotObject converts ActiveSelection-local left/top to canvas plane.
   const layout = snapshotObject(obj)
 
-  return {
+  const snapshot = {
     type: objectType(obj),
     left: Number(layout.left) || 0,
     top: Number(layout.top) || 0,
@@ -74,8 +74,22 @@ function snapshotForE2e(obj) {
       ? obj.formulaType
       : null,
     inkMode: obj.mathboardInkMode ?? null,
+    renderedInkIsLight: obj.mathboardRenderedInkIsLight === undefined
+      ? null
+      : Boolean(obj.mathboardRenderedInkIsLight),
+    filterTypes: Array.isArray(obj.filters)
+      ? obj.filters.map((filter) => filter?.type).filter(Boolean)
+      : [],
     childCount: isGroup ? obj.getObjects().length : null,
   }
+
+  if (includeChildren && isGroup && typeof obj.getObjects === 'function') {
+    snapshot.children = obj.getObjects().map((child) => (
+      snapshotForE2e(child, { includeChildren: false })
+    ))
+  }
+
+  return snapshot
 }
 
 function getBoardState(board) {

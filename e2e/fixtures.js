@@ -20,23 +20,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { expect } from '@playwright/test'
 import { getBoardState } from './helpers/canvas.js'
 
-export async function seedBoardStorage(page) {
+export async function seedBoardStorage(page, { boardTheme = 'light' } = {}) {
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
   await page.route(/simpleanalyticscdn\.com/, (route) => route.abort())
-  await page.addInitScript(() => {
+  await page.addInitScript((theme) => {
     localStorage.setItem('mathboard_cookie_consent', JSON.stringify({
       essential: true,
       analytics: false,
       marketing: false,
       timestamp: new Date().toISOString(),
     }))
-    localStorage.setItem('mathboard_ui_theme', 'light')
-    localStorage.setItem('mathboard_board_theme', 'light')
-  })
+    localStorage.setItem('mathboard_ui_theme', theme === 'light' ? 'light' : 'dark')
+    localStorage.setItem('mathboard_board_theme', theme)
+  }, boardTheme)
 }
 
-export async function gotoBoard(page, path = '/') {
-  await seedBoardStorage(page)
+export async function gotoBoard(page, path = '/', options = {}) {
+  await seedBoardStorage(page, options)
   await page.goto(path)
   await page.waitForFunction(() => {
     return Boolean(window.__MATHBOARD_E2E__?.getState)

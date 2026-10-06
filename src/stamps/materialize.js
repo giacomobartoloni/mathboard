@@ -75,6 +75,18 @@ function applyInkMetadata(object, node) {
 }
 
 /**
+ * Formula rematerialization: keep AUTO/FIXED ink mode, but never restore
+ * `mathboardRenderedInkIsLight`. That polarity describes the bitmap just
+ * produced by the current renderer; a stale Stamp value would make syncInk()
+ * Invert an already-correct image on cross-theme import.
+ */
+function applyFormulaInkMetadata(object, node) {
+  if (node.mathboardInkMode !== undefined) {
+    object.mathboardInkMode = node.mathboardInkMode
+  }
+}
+
+/**
  * Build Fabric objects from a validated stamp document.
  * Formula nodes require `buildFormula({ latex, left, top, ... })` which must
  * return a Fabric formula object (or null / throw on failure).
@@ -180,11 +192,12 @@ async function materializeNode(node, buildFormula) {
         latex: node.latex,
         ...transform,
         ...style,
+        mathboardInkMode: node.mathboardInkMode,
       })
       if (!img) {
         throw new StampError(STAMP_ERROR_CODES.FORMULA_RENDER_FAILED)
       }
-      applyInkMetadata(img, node)
+      applyFormulaInkMetadata(img, node)
       return img
     }
     case 'group': {

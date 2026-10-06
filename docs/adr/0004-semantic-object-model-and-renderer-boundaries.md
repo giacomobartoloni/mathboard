@@ -22,8 +22,8 @@ Vue reactivity and Fabric identity remain a hard constraint: Fabric instances an
 3. `BoardObjectPolicy` owns classification (`kindOf`, `isFormula`, `isBoardGroup`, …) and capability lookup. Formula classification precedes Group.
 4. Formula rendering is an adapter boundary (`KaTeXBitmapFormulaRenderer` today). `DrawBoard` orchestrates create/edit/stamp/theme workflows and does not implement KaTeX, html2canvas, temp DOM, or bitmap Invert logic.
 5. LaTeX remains the source of truth for formulas. Renderer output is a presentation artifact.
-6. Persistence (Stamp today; future documents) stores product semantics, not renderer artifacts (no MathJax path soup as source of truth).
-7. A future Formula may subclass Fabric `Group` (`FormulaObject extends Group`) when behavior and invariants justify it. Do not introduce a temporary `FormulaObject extends FabricImage`.
+6. Persistence (Stamp today; future documents) stores product semantics, not renderer artifacts (no MathJax path soup as source of truth). Stamp may still carry legacy `mathboardRenderedInkIsLight` for compatibility, but rematerialization must not restore that polarity onto a newly rendered bitmap — the current renderer owns artifact metadata. Formula detection is intentionally hardened: `latex` alone is not a semantic discriminator (`formulaType`, or `objectKind` + `latex`).
+7. A future Formula may subclass Fabric `Group` (`FormulaObject extends Group`) when behavior and invariants justify it. Do not introduce a temporary `FormulaObject extends FabricImage`. Product commands that decide board-group behavior (for example `ungroupSelection`) must use `BoardObjectPolicy.isBoardGroup()`, not Fabric `isType('Group')` alone.
 8. No parallel canonical BoardDocument runtime in this horizon.
 9. No tactical DDD ceremony (DI container, repository layer, domain events, CQRS) without a concrete need.
 10. Application services are composed in `app-bootstrap.js` (`createMathBoardServices`) and provided via Vue `provide`/`inject`. Services stay outside `data()`.

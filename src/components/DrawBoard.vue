@@ -43,6 +43,7 @@ import fabricStaticCanvas from "./fabricStaticCanvas";
 import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
 import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
+import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
 import {
   applySelectionObjectChrome,
@@ -644,12 +645,8 @@ export default {
         formula.set(next);
         formula.setCoords();
       }
-      if (spec.mathboardInkMode !== undefined) {
-        formula.mathboardInkMode = spec.mathboardInkMode;
-      }
-      if (spec.mathboardRenderedInkIsLight !== undefined) {
-        formula.mathboardRenderedInkIsLight = spec.mathboardRenderedInkIsLight;
-      }
+      // Ink mode is semantic; rendered polarity belongs to the current bitmap.
+      applyMaterializedFormulaMetadata(formula, spec);
       return formula;
     },
     async _materializeStamp(encoded) {
@@ -879,7 +876,8 @@ export default {
     ungroupSelection() {
       if (!this.canvas) return false;
       const active = this.canvas.getActiveObject();
-      if (!active || active.isType("ActiveSelection") || !active.isType("Group")) {
+      // Use semantic Board Group check: a Formula may be a Fabric Group.
+      if (!this._boardObjectPolicy.isBoardGroup(active)) {
         return false;
       }
 
