@@ -17,7 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
 import { INK_MODE_AUTO, INK_MODE_FIXED } from './themes.js'
+
+const boardObjectPolicy = new BoardObjectPolicy()
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Fabric 7 class type is PascalCase; the deprecated instance getter is lowercase.
@@ -30,21 +33,30 @@ function isInkType(object, types) {
   return types.includes(object.type)
 }
 
-const CONTAINER_INK_TYPES = ['Group', 'group', 'ActiveSelection', 'activeSelection']
-
 /**
  * Expand Groups / ActiveSelection into leaf objects that can carry board ink.
+ * Formulas are a semantic leaf (including a future Formula Group of paths).
  * Formulas and other non-ink types stay in the list; callers skip them.
  */
 export function flattenInkTargets(objects) {
   const out = []
   const walk = (object) => {
     if (!object || typeof object !== 'object') return
-    if (isInkType(object, CONTAINER_INK_TYPES)) {
+
+    if (boardObjectPolicy.isFormula(object)) {
+      out.push(object)
+      return
+    }
+
+    if (
+      boardObjectPolicy.isBoardGroup(object)
+      || boardObjectPolicy.isActiveSelection(object)
+    ) {
       const members = typeof object.getObjects === 'function' ? object.getObjects() : []
       members.forEach(walk)
       return
     }
+
     out.push(object)
   }
   if (!Array.isArray(objects)) return out
@@ -79,7 +91,7 @@ export function normalizeHexColor(value) {
  */
 export function paletteColorFromObject(object) {
   if (!object || typeof object !== 'object') return undefined
-  if (object.formulaType) return undefined
+  if (boardObjectPolicy.isFormula(object)) return undefined
 
   let raw = null
   if (isInkType(object, STROKE_INK_TYPES)) raw = object.stroke
@@ -118,7 +130,7 @@ export function paletteColorFromSelection(objects) {
 function inkPatchForType(object, color, inkMode) {
   const normalized = normalizeHexColor(color)
   if (!object || typeof object !== 'object' || !normalized) return null
-  if (object.formulaType) return null
+  if (boardObjectPolicy.isFormula(object)) return null
   if (isInkType(object, STROKE_INK_TYPES)) {
     const patch = { stroke: normalized, mathboardInkMode: inkMode }
     // Filled circles (e.g. stamp dots) keep fill in sync with stroke ink.

@@ -32,10 +32,12 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 
 ## Architecture
 
-- **Entrypoint**: `src/main.js` — creates Vue app, registers FontAwesome globally, mounts `#app`
+- **Entrypoint**: `src/main.js` → `mountMathBoard()` in `src/app-bootstrap.js` (composition root). E2E entry `e2e/main.js` mounts the same bootstrap then installs the board hook.
+- **Services**: `createMathBoardServices()` builds `BoardObjectPolicy` and the formula renderer; `app.provide(MATHBOARD_SERVICES, …)` injects them. Keep services out of Vue `data()` so they are not reactive proxies.
 - **App.vue** orchestrates all components, manages tool state, zoom, formula modal
 - **Components** live in `src/components/` — PascalCase filenames, PascalCase in templates
-- **DrawBoard.vue** is the core — wraps Fabric.js `Canvas`, manages zoom/pan/history/undo/redo/tools
+- **DrawBoard.vue** is the core — wraps Fabric.js `Canvas`, manages zoom/pan/history/undo/redo/tools; orchestrates formula workflows but does not implement KaTeX/html2canvas rendering
+- **Object semantics**: MathBoard semantic classification is centralized in `src/board/BoardObjectPolicy.js`; product logic must not infer Formula or Board Group solely from Fabric runtime class/type. Formula precedes Group. ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
 - **`fabricStaticCanvas.js`** is a **mixin** (not a component), provides `isDrawingMode` prop
 - **Event naming**: kebab-case (`@request-formula`, `@edit-formula`, `@text-editing-completed`)
 - **Tools** (select/pan/pencil/font/formula/shapes/stamps) communicate via props+events from ToolsPanel through App to DrawBoard
@@ -44,7 +46,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 
 ## Key implementation details
 
-- **Formulas**: entered in `FormulaModal` (KaTeX render preview), emitted as `{ latex, html }`, converted to canvas image via html2canvas on a temp div
+- **Formulas**: FormulaModal uses KaTeX for entry/preview. Board formula rendering is isolated behind `KaTeXBitmapFormulaRenderer`; DrawBoard must not depend directly on KaTeX/html2canvas/FabricImage rendering details. The adapter is intended to be replaced by MathJax SVG. ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
 - **Undo/redo**: command log, one entry per gesture, limit 50. Decision: `docs/adr/0001-command-log-history.md`
 - **Pan**: manipulates `viewportTransform[4/5]` directly
 - **Zoom**: `canvas.setZoom()`, clamp 0.1–5x

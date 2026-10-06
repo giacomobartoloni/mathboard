@@ -20,6 +20,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { createApp } from 'vue'
 import App from './App.vue'
 import { initializeAnalytics } from './analytics/index.js'
+import { createMathBoardServices } from './core/createMathBoardServices.js'
+import { MATHBOARD_SERVICES } from './core/serviceKeys.js'
 
 import { library } from '@fortawesome/fontawesome-svg-core'
 import { faMousePointer } from '@fortawesome/free-solid-svg-icons'
@@ -84,11 +86,16 @@ library.add(faGithub)
 /**
  * Mount the production Vue app. Shared by the production entry and the E2E entry.
  * Must stay free of Playwright / E2E awareness.
+ *
+ * @param {{ services?: ReturnType<typeof createMathBoardServices> }} [options]
  */
-export function mountMathBoard() {
+export function mountMathBoard(options = {}) {
   initializeAnalytics()
 
+  const services = options.services ?? createMathBoardServices()
+
   const app = createApp(App)
+  app.provide(MATHBOARD_SERVICES, services)
   app.component('font-awesome-icon', FontAwesomeIcon)
   return app.mount('#app')
 }

@@ -206,6 +206,22 @@ test('flattenInkTargets walks Groups and ActiveSelection', () => {
   assert.deepEqual(flattenInkTargets([line]), [line])
 })
 
+test('flattenInkTargets keeps Formula Group as a leaf', () => {
+  const child = {
+    type: 'Path',
+    isType: (...types) => types.includes('Path'),
+    stroke: '#000000',
+  }
+  const formulaGroup = {
+    type: 'Group',
+    isType: (...types) => types.includes('Group'),
+    formulaType: 'katex-formula',
+    latex: 'x',
+    getObjects: () => [child],
+  }
+  assert.deepEqual(flattenInkTargets([formulaGroup]), [formulaGroup])
+})
+
 test('paletteColorFromSelection reads Group members', () => {
   const group = {
     type: 'group',
