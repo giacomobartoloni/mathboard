@@ -34,8 +34,22 @@ test('formula is the only single selection that offers Edit', () => {
   assert.equal(selectionKind(formula), 'formula')
   assert.deepEqual(selectionMeta(formula).actions, [ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE])
 
-  const tagged = objectOf('image', { objectKind: 'formula' })
+  const tagged = objectOf('image', { objectKind: 'formula', latex: 'x' })
   assert.equal(selectionKind(tagged), 'formula')
+
+  const taggedWithoutLatex = objectOf('image', { objectKind: 'formula' })
+  assert.equal(selectionKind(taggedWithoutLatex), 'unknown')
+
+  const formulaLikeGroup = objectOf('Group', {
+    formulaType: 'katex-formula',
+    latex: 'x',
+  })
+  assert.equal(selectionKind(formulaLikeGroup), 'formula')
+  assert.deepEqual(selectionMeta(formulaLikeGroup).actions, [
+    ACTION_EDIT,
+    ACTION_DUPLICATE,
+    ACTION_DELETE,
+  ])
 
   const plainImage = objectOf('image')
   assert.equal(selectionKind(plainImage), 'unknown')

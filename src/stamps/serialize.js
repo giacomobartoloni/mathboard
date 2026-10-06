@@ -17,8 +17,11 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
 import { STAMP_VERSION, STAMP_ERROR_CODES, StampError } from './schema.js'
 import { encodeStampDocument } from './encode.js'
+
+const boardObjectPolicy = new BoardObjectPolicy()
 
 const TRANSFORM_KEYS = [
   'left',
@@ -43,8 +46,6 @@ const STYLE_KEYS = [
   'strokeLineCap',
   'strokeLineJoin',
 ]
-
-const FORMULA_TYPE = 'katex-formula'
 
 function pickDefined(source, keys) {
   const out = {}
@@ -77,13 +78,6 @@ function isType(object, ...types) {
   return types.some((type) => type.toLowerCase() === actual)
 }
 
-function isFormula(object) {
-  if (!object) return false
-  if (object.formulaType === FORMULA_TYPE) return true
-  if (object.objectKind === 'formula') return true
-  return Boolean(object.latex)
-}
-
 function commonProps(object) {
   const props = {
     ...pickDefined(object, TRANSFORM_KEYS),
@@ -114,7 +108,9 @@ export function serializeFabricObject(object) {
     )
   }
 
-  if (isFormula(object)) {
+  // Semantic Formula must win over Fabric Group.
+  // Vector formulas may be implemented as Groups but must serialize as formula nodes.
+  if (boardObjectPolicy.isFormula(object)) {
     if (typeof object.latex !== 'string' || !object.latex.trim()) {
       throw new StampError(
         STAMP_ERROR_CODES.INVALID_SHAPE,
