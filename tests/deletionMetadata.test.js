@@ -19,6 +19,27 @@ function sumCounts(metadata) {
   )
 }
 
+test('builder keeps zero-valued count fields in its application metadata', () => {
+  const metadata = build(['path'])
+
+  assert.deepEqual(Object.keys(metadata).sort(), [
+    'formula_count',
+    'group_count',
+    'object_type',
+    'path_count',
+    'selection_count',
+    'shape_count',
+    'text_count',
+    'unknown_count',
+  ])
+
+  assert.equal(metadata.shape_count, 0)
+  assert.equal(metadata.text_count, 0)
+  assert.equal(metadata.formula_count, 0)
+  assert.equal(metadata.group_count, 0)
+  assert.equal(metadata.unknown_count, 0)
+})
+
 test('single path', () => {
   assert.deepEqual(build(['path']), {
     selection_count: 1,

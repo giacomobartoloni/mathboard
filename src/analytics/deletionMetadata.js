@@ -34,6 +34,8 @@ const COUNT_FIELD_BY_TYPE = Object.freeze({
  * @param {(object: unknown) => string} getObjectType semantic classifier (e.g. kindOf)
  */
 export function buildObjectDeletedMetadata(objects, getObjectType) {
+  // Keep zero counts in the application-level schema.
+  // Simple Analytics may omit falsy numeric metadata when persisting events.
   const counts = {
     path_count: 0,
     shape_count: 0,

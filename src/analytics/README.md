@@ -219,7 +219,7 @@ object_created { object_type: stamp_template }
 
 `object_deleted` counts one delete gesture, not one event per object.
 
-Metadata (always present after this schema):
+MathBoard builds the following metadata for every delete gesture:
 
 - `selection_count`
 - `object_type`
@@ -230,9 +230,13 @@ Metadata (always present after this schema):
 - `group_count`
 - `unknown_count`
 
-All `*_count` fields are always emitted, including zeros.
+At the MathBoard adapter boundary all `*_count` fields are numeric and included, including zero values.
 
-Invariant:
+Simple Analytics does not retain falsy metadata values, so numeric zero counts may be absent from stored/exported event metadata.
+
+For `object_deleted` events carrying `object_type`, interpret a missing `*_count` field as zero. Older `object_deleted` events without `object_type` predate this schema and their missing count fields mean "not collected", not zero.
+
+Before provider-side metadata filtering, MathBoard guarantees:
 
 ```text
 selection_count
@@ -245,7 +249,7 @@ path_count + shape_count + text_count
 
 Classification uses `BoardObjectPolicy.kindOf()` only. Groups are counted atomically; members are not recursively counted. Stamps deleted as board groups count as `group`. Non-allowlisted kinds fall into `unknown_count`.
 
-Homogeneous example (3 pencil strokes):
+Homogeneous example (3 pencil strokes) as built by MathBoard:
 
 ```js
 {
@@ -259,6 +263,16 @@ Homogeneous example (3 pencil strokes):
   unknown_count: 0,
 }
 ```
+
+The homogeneous example above may appear in Simple Analytics with only:
+
+```text
+selection_count = 3
+object_type = path
+path_count = 3
+```
+
+The absent `shape_count`, `text_count`, `formula_count`, `group_count`, and `unknown_count` values are zero for this post-schema event.
 
 Mixed example:
 
