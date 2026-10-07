@@ -80,6 +80,7 @@ import {
   ANALYTICS_OBJECT_TYPES,
   ANALYTICS_FORMULA_MODES,
 } from "../analytics/events.js";
+import { buildObjectDeletedMetadata } from "../analytics/deletionMetadata.js";
 import {
   StampError,
   STAMP_ERROR_CODES,
@@ -1424,15 +1425,18 @@ export default {
         .sort((a, b) => a.index - b.index);
       if (!entries.length) return;
 
+      const deletionMetadata = buildObjectDeletedMetadata(
+        entries.map(({ object }) => object),
+        (object) => this._boardObjectPolicy.kindOf(object),
+      );
+
       this.canvas.discardActiveObject();
       entries.forEach(({ object }) => this.canvas.remove(object));
       this.canvas.requestRenderAll();
       this._pushCommand({ type: 'delete', entries });
       trackBoardEngaged();
       recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, {
-        selection_count: entries.length,
-      });
+      trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, deletionMetadata);
       this.refreshSelectionPanel();
       this._focusBoard();
     },

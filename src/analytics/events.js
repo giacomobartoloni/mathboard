@@ -62,6 +62,9 @@ export const ANALYTICS_OBJECT_TYPES = Object.freeze({
   SHAPE: 'shape',
   TEXT: 'text',
   FORMULA: 'formula',
+  GROUP: 'group',
+  UNKNOWN: 'unknown',
+  MIXED: 'mixed',
 })
 
 export const ANALYTICS_SHAPES = Object.freeze({
