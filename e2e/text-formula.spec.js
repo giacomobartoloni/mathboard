@@ -238,10 +238,12 @@ test('E2E-P0-005d formula edit preserves transform after scale and rotate', asyn
   expect(edited.padding).toBe(12)
 })
 
-test('E2E-P0-005e formula render avoids MathJax CDN hosts', async ({ page, baseURL }) => {
+test('E2E-P0-005e dynamic NewCM ranges load without CDN', async ({ page, baseURL }) => {
   const appOrigin = new URL(baseURL || page.url()).origin
   const mathjaxCdnRequests = []
+  const errors = []
 
+  page.on('pageerror', (error) => errors.push(error.message))
   page.on('request', (request) => {
     const url = new URL(request.url())
     if (url.origin === appOrigin) return
@@ -251,8 +253,17 @@ test('E2E-P0-005e formula render avoids MathJax CDN hosts', async ({ page, baseU
   })
 
   await gotoBoard(page)
-  const richLatex = String.raw`\int_0^1 x^2\,dx + \sum_{n=1}^{\infty}\frac{1}{n^2} + \alpha+\vec{v} + \partial + \begin{matrix}1&2\\3&4\end{matrix}`
-  await insertFormula(page, { latex: richLatex, x: 320, y: 220 })
+  // Force NewCM dynamic ranges (double-struck / calligraphic / fraktur).
+  const richLatex = String.raw`\mathbb{R} + \mathcal{L} + \mathfrak{g}`
+  const state = await insertFormula(page, { latex: richLatex, x: 320, y: 220 })
+  const formula = state.objects.find((object) => object.latex === richLatex)
 
+  expect(formula).toBeTruthy()
+  expect(formula.isVectorFormula).toBe(true)
+  expect(formula.childCount).toBeGreaterThan(0)
+  expect(formula.width).toBeGreaterThan(0)
+  expect(formula.height).toBeGreaterThan(0)
+  expect(formula.vectorPaints.length).toBeGreaterThan(0)
+  expect(errors).toEqual([])
   expect(mathjaxCdnRequests).toEqual([])
 })

@@ -46,7 +46,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 
 ## Key implementation details
 
-- **Formulas**: FormulaModal uses KaTeX for entry/preview/validation. Board formulas use `MathJaxSvgFormulaRenderer` → MathJax SVG → Fabric vector `FormulaObject` (atomic Group). LaTeX remains source of truth; Stamp v1 persists semantic formula nodes, not path soup. ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
+- **Formulas**: FormulaModal uses KaTeX for entry/preview/validation. Board formulas use `MathJaxSvgFormulaRenderer` → MathJax SVG → Fabric vector `FormulaObject` (atomic Group). LaTeX remains source of truth; Stamp v1 persists semantic formula nodes, not path soup. MathJax NewCM dynamic SVG font ranges load via Vite same-origin chunks (no CDN). ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
 - **Undo/redo**: command log, one entry per gesture, limit 50. Decision: `docs/adr/0001-command-log-history.md`
 - **Pan**: manipulates `viewportTransform[4/5]` directly
 - **Zoom**: `canvas.setZoom()`, clamp 0.1–5x

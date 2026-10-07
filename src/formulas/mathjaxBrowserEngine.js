@@ -30,6 +30,11 @@ import '@mathjax/src/js/input/tex/newcommand/NewcommandConfiguration.js'
 import '@mathjax/src/js/input/tex/noundefined/NoUndefinedConfiguration.js'
 import '@mathjax/src/js/input/tex/textmacros/TextMacrosConfiguration.js'
 
+import {
+  NEWCM_DYNAMIC_PREFIX,
+  installNewcmDynamicLoader,
+} from './mathjaxNewcmDynamicLoader.js'
+
 /** Board visual size target (em/ex = 2:1). Not the old html2canvas scale:2. */
 export const MATHJAX_EM_PX = 20
 export const MATHJAX_EX_PX = 10
@@ -62,6 +67,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
  */
 export function createMathJaxEngine(adaptor) {
   RegisterHTMLHandler(adaptor)
+  installNewcmDynamicLoader(mathjax)
 
   return {
     /**
@@ -71,8 +77,12 @@ export function createMathJaxEngine(adaptor) {
     async renderSvg(latex) {
       const doc = mathjax.document('', {
         InputJax: new TeX({ packages: [...TEX_PACKAGES] }),
-        // Explicit paths per glyph — no dynamic font-range fetches (CDN-safe).
-        OutputJax: new SVG({ fontCache: 'none' }),
+        // Standalone Formula SVG: emit glyph paths directly. NewCM dynamic ranges
+        // are loaded on demand through MathBoard's Vite-backed same-origin async loader.
+        OutputJax: new SVG({
+          fontCache: 'none',
+          dynamicPrefix: NEWCM_DYNAMIC_PREFIX,
+        }),
       })
 
       const node = await doc.convertPromise(latex, {

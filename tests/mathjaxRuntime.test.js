@@ -28,6 +28,11 @@ const CORPUS = [
   '\\begin{matrix}1&2\\\\3&4\\end{matrix}',
   '\\begin{cases}x & x>0\\\\-x & x<0\\end{cases}',
   '\\text{Area}=\\pi r^2',
+  '\\mathbb{R}',
+  '\\mathcal{L}',
+  '\\mathfrak{g}',
+  '\\mathsf{ABC}',
+  '\\mathtt{xyz}',
 ]
 
 function paletteLatex() {
