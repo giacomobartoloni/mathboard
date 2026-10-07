@@ -31,8 +31,8 @@ import '@mathjax/src/js/input/tex/noundefined/NoUndefinedConfiguration.js'
 import '@mathjax/src/js/input/tex/textmacros/TextMacrosConfiguration.js'
 
 /** Board visual size target (em/ex = 2:1). Not the old html2canvas scale:2. */
-export const MATHJAX_EM_PX = 16
-export const MATHJAX_EX_PX = 8
+export const MATHJAX_EM_PX = 17
+export const MATHJAX_EX_PX = 8.5
 
 const TEX_PACKAGES = Object.freeze([
   'base',
