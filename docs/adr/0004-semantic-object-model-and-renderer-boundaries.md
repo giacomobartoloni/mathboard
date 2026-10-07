@@ -7,9 +7,9 @@
 
 MathBoard treats Fabric.js as the interactive canvas runtime. Product meaning (Formula, Text, Stroke, Shape, Board Group, Selection) was inferred ad hoc from Fabric types and duplicated markers (`formulaType === 'katex-formula'`, `objectKind`, local `isFormula` helpers) across `DrawBoard.vue`, `selectionActions.js`, `colors.js`, and stamp serialization.
 
-Today a formula is a `FabricImage` with custom properties. The next formula representation is expected to be a Fabric `Group` of SVG paths (MathJax). If selection, ink traversal, and Stamp keep answering “what is this?” with `object.isType('Group')` alone, a Formula Group would be offered Ungroup, lose Edit, and expose child paths to the ink palette.
+Board formulas are atomic vector `FormulaObject` instances (`Group` of MathJax SVG paths) with legacy `formulaType === 'katex-formula'`. If selection, ink traversal, and Stamp answered “what is this?” with `object.isType('Group')` alone, a Formula Group would be offered Ungroup, lose Edit, and expose child paths to the ink palette.
 
-`DrawBoard.vue` also owned the full KaTeX → temp DOM → html2canvas → `FabricImage` → Invert-filter theme path. Replacing that pipeline with MathJax SVG would otherwise force a transversal edit of board, selection, theme, and Stamp code.
+Formula rendering is isolated behind `MathJaxSvgFormulaRenderer` (MathJax SVG → Fabric vectors + `applyInk`). `DrawBoard` orchestrates create/edit/stamp/theme workflows and does not own MathJax or Fabric SVG parse details. KaTeX remains only for FormulaModal preview/validation.
 
 Stamp transfer already serializes formulas as semantic `{ type: 'formula', latex }` nodes (ADR 0003). Detection of those nodes at export time still lived locally in the serializer.
 
@@ -20,10 +20,10 @@ Vue reactivity and Fabric identity remain a hard constraint: Fabric instances an
 1. Fabric remains the runtime interaction and geometry state for now. It is not the product semantic model.
 2. MathBoard semantics are separate from Fabric runtime class/type. `Fabric type != MathBoard semantic type`.
 3. `BoardObjectPolicy` owns classification (`kindOf`, `isFormula`, `isBoardGroup`, …) and capability lookup. Formula classification precedes Group.
-4. Formula rendering is an adapter boundary (`KaTeXBitmapFormulaRenderer` today). `DrawBoard` orchestrates create/edit/stamp/theme workflows and does not implement KaTeX, html2canvas, temp DOM, or bitmap Invert logic.
-5. LaTeX remains the source of truth for formulas. Renderer output is a presentation artifact.
-6. Persistence (Stamp today; future documents) stores product semantics, not renderer artifacts (no MathJax path soup as source of truth). Stamp may still carry legacy `mathboardRenderedInkIsLight` for compatibility, but rematerialization must not restore that polarity onto a newly rendered bitmap — the current renderer owns artifact metadata. Formula detection is intentionally hardened: `latex` alone is not a semantic discriminator (`formulaType`, or `objectKind` + `latex`).
-7. A future Formula may subclass Fabric `Group` (`FormulaObject extends Group`) when behavior and invariants justify it. Do not introduce a temporary `FormulaObject extends FabricImage`. Product commands that decide board-group behavior (for example `ungroupSelection`) must use `BoardObjectPolicy.isBoardGroup()`, not Fabric `isType('Group')` alone.
+4. Formula rendering is an adapter boundary (`MathJaxSvgFormulaRenderer`). `DrawBoard` orchestrates create/edit/stamp/theme workflows and does not implement MathJax typesetting or Fabric SVG parse details. KaTeX stays in FormulaModal only.
+5. LaTeX remains the source of truth for formulas. Renderer output is a presentation artifact (vector paths, not a persistence format).
+6. Persistence (Stamp today; future documents) stores product semantics, not renderer artifacts (no MathJax path soup as source of truth). Stamp may still carry legacy `mathboardRenderedInkIsLight` for compatibility; rematerialization must ignore that polarity — AUTO formulas apply destination board ink via `applyInk`. Formula detection is intentionally hardened: `latex` alone is not a semantic discriminator (`formulaType`, or `objectKind` + `latex`).
+7. Board Formula is `FormulaObject extends Group`. Product commands that decide board-group behavior (for example `ungroupSelection`) must use `BoardObjectPolicy.isBoardGroup()`, not Fabric `isType('Group')` alone.
 8. No parallel canonical BoardDocument runtime in this horizon.
 9. No tactical DDD ceremony (DI container, repository layer, domain events, CQRS) without a concrete need.
 10. Application services are composed in `app-bootstrap.js` (`createMathBoardServices`) and provided via Vue `provide`/`inject`. Services stay outside `data()`.
@@ -36,15 +36,15 @@ Capability flags describe whether an object may participate in an operation. The
 
 Positive:
 
-- A MathJax SVG migration can concentrate on `src/formulas/` (and the service factory) instead of rewriting selection, colors, Stamp detection, and DrawBoard formula infrastructure.
-- Selection, theme ink walks, and Stamp export stay correct when Formula becomes a Fabric Group.
+- MathJax SVG landed behind the formula renderer adapter without rewriting selection, colors, Stamp detection, or DrawBoard formula infrastructure.
+- Selection, theme ink walks, and Stamp export stay correct for Formula Groups.
 - Formula failures stay technical (`FormulaRenderError`) while DrawBoard decides application response (analytics, leave previous formula in place on edit failure).
 
 Costs:
 
 - A new semantic layer and a small indirection for callers.
 - Runtime remains Fabric-centric; there is still no independent document model.
-- The bitmap renderer and `mathboardRenderedInkIsLight` are temporary until the SVG path lands.
+- Vector formulas may contain many Fabric Path children (`fontCache: 'none'`); measure before optimizing.
 
 ## Alternatives considered
 
@@ -57,7 +57,7 @@ Costs:
 ## Implementation
 
 - `src/board/BoardObjectPolicy.js`, `src/board/capabilities.js`
-- `src/formulas/constants.js`, `FormulaRenderError.js`, `KaTeXBitmapFormulaRenderer.js`
+- `src/formulas/constants.js`, `FormulaRenderError.js`, `FormulaObject.js`, `MathJaxRuntime.js`, `MathJaxSvgFormulaRenderer.js`, `mathjaxBrowserEngine.js`
 - `src/core/createMathBoardServices.js`, `src/core/serviceKeys.js`
 - Call sites: `DrawBoard.vue`, `selectionActions.js`, `colors.js`, `stamps/serialize.js`
 - Composition root: `src/app-bootstrap.js`

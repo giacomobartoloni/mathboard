@@ -40,6 +40,23 @@ async function dblclickFormula(page, formula) {
   })
 }
 
+async function insertFormula(page, { latex, x = 340, y = 240 } = {}) {
+  await selectTool(page, 'Formula')
+  await clickOnCanvas(page, { x, y })
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await expect(latexInput).toBeVisible()
+  await latexInput.fill(latex)
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+  return waitForState(
+    page,
+    (s) => s.objects.some((o) => o.formulaType === 'katex-formula' && o.latex === latex),
+    { timeout: 15000 },
+  )
+}
+
+const MATHJAX_CDN_HOST =
+  /(?:^|\.)cdn\.jsdelivr\.net$|(?:^|\.)unpkg\.com$|(?:^|\.)mathjax\.org$/
+
 test('E2E-P0-004 text create and edit survive history', async ({ page }) => {
   await gotoBoard(page)
   const beforeCreate = await getBoardState(page)
@@ -87,6 +104,9 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
 
   const latexInput = page.getByLabel('LaTeX Formula:')
   await expect(latexInput).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Insert Formula (LaTeX)' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Insert', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Update', exact: true })).toHaveCount(0)
   await latexInput.fill('x^2')
   await page.getByRole('button', { name: 'Insert', exact: true }).click()
 
@@ -100,11 +120,19 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
   expect(state.objects.filter((o) => o.formulaType === 'katex-formula')).toHaveLength(1)
 
   const formula = state.objects.find((o) => o.formulaType === 'katex-formula')
+  expect(formula.isVectorFormula).toBe(true)
+  expect(formula.childCount).toBeGreaterThan(0)
+  expect(formula.type).not.toBe('FabricImage')
+  expect(formula.type).not.toBe('Image')
+
   const beforeEdit = state.history.length
   await dblclickFormula(page, formula)
   await expect(latexInput).toHaveValue('x^2')
+  await expect(page.getByRole('heading', { name: 'Edit Formula (LaTeX)' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Insert', exact: true })).toHaveCount(0)
   await latexInput.fill('x^3')
-  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+  await page.getByRole('button', { name: 'Update', exact: true }).click()
 
   state = await waitForState(
     page,
@@ -123,4 +151,141 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
   const restored = state.objects.find((o) => o.latex === 'x^3')
   await dblclickFormula(page, restored)
   await expect(latexInput).toHaveValue('x^3')
+})
+
+test('E2E-P0-005b formula duplicate keeps vector semantics', async ({ page }) => {
+  await gotoBoard(page)
+  await selectTool(page, 'Formula')
+  await clickOnCanvas(page, { x: 300, y: 220 })
+
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await latexInput.fill('y^2')
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+
+  let state = await waitForState(
+    page,
+    (s) => s.objects.some((o) => o.formulaType === 'katex-formula' && o.latex === 'y^2'),
+    { timeout: 15000 },
+  )
+  const beforeDup = state.history.length
+
+  await page.keyboard.press('ControlOrMeta+D')
+  state = await waitForState(
+    page,
+    (s) => s.objects.filter((o) => o.formulaType === 'katex-formula' && o.latex === 'y^2').length === 2,
+    { timeout: 15000 },
+  )
+  const formulas = state.objects.filter((o) => o.formulaType === 'katex-formula')
+  expect(formulas).toHaveLength(2)
+  expect(formulas.every((f) => f.isVectorFormula)).toBe(true)
+  expect(state.history.length).toBe(beforeDup + 1)
+  expect(state.history.tipType).toBe('duplicate')
+
+  await clickUndo(page)
+  state = await waitForState(
+    page,
+    (s) => s.objects.filter((o) => o.formulaType === 'katex-formula').length === 1,
+  )
+
+  await clickRedo(page)
+  state = await waitForState(
+    page,
+    (s) => s.objects.filter((o) => o.formulaType === 'katex-formula').length === 2,
+  )
+  expect(state.objects.filter((o) => o.isVectorFormula)).toHaveLength(2)
+})
+
+test('E2E-P0-005c complex vector formula materializes with padding', async ({ page }) => {
+  await gotoBoard(page)
+  const latex = String.raw`\frac{\int_0^1 x^2\,dx}{\sqrt{1+\alpha^2}}`
+  let state = await insertFormula(page, { latex, x: 360, y: 260 })
+  const formula = state.objects.find((o) => o.latex === latex)
+  expect(formula).toBeTruthy()
+  expect(formula.isVectorFormula).toBe(true)
+  expect(formula.childCount).toBeGreaterThan(0)
+  expect(formula.width).toBeGreaterThan(0)
+  expect(formula.height).toBeGreaterThan(0)
+  expect(formula.padding).toBe(12)
+  expect(formula.vectorPaints.length).toBeGreaterThan(0)
+
+  // Light → Dark refreshes selection chrome without resetting Formula padding.
+  await page.getByRole('button', { name: /Theme:/ }).click()
+  state = await waitForState(
+    page,
+    (s) => {
+      const next = s.objects.find((o) => o.latex === latex)
+      return Boolean(
+        next
+        && next.vectorPaints.length > 0
+        && next.vectorPaints.every((paint) => paint === '#f5f5f5'),
+      )
+    },
+    { timeout: 15000 },
+  )
+  expect(state.objects.find((o) => o.latex === latex).padding).toBe(12)
+})
+
+test('E2E-P0-005d formula edit preserves transform after scale and rotate', async ({ page }) => {
+  await gotoBoard(page)
+  let state = await insertFormula(page, { latex: 'x^2', x: 320, y: 200 })
+  const formula = state.objects.find((o) => o.latex === 'x^2')
+  expect(formula).toBeTruthy()
+
+  const patched = await page.evaluate(({ latex, patch }) => {
+    return window.__MATHBOARD_E2E__.setFormulaTransform(latex, patch)
+  }, { latex: 'x^2', patch: { scaleX: 1.8, scaleY: 1.8, angle: 25 } })
+  expect(patched).toBe(true)
+
+  state = await getBoardState(page)
+  const scaled = state.objects.find((o) => o.latex === 'x^2')
+  expect(scaled.scaleX).toBeCloseTo(1.8, 5)
+  expect(scaled.scaleY).toBeCloseTo(1.8, 5)
+  expect(scaled.angle).toBeCloseTo(25, 5)
+
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await dblclickFormula(page, scaled)
+  await latexInput.fill(String.raw`\frac{x}{2}`)
+  await page.getByRole('button', { name: 'Update', exact: true }).click()
+
+  state = await waitForState(
+    page,
+    (s) => s.objects.some((o) => o.latex === String.raw`\frac{x}{2}`),
+    { timeout: 15000 },
+  )
+  const edited = state.objects.find((o) => o.latex === String.raw`\frac{x}{2}`)
+  expect(edited.isVectorFormula).toBe(true)
+  expect(edited.scaleX).toBeCloseTo(1.8, 5)
+  expect(edited.scaleY).toBeCloseTo(1.8, 5)
+  expect(edited.angle).toBeCloseTo(25, 5)
+  expect(edited.padding).toBe(12)
+})
+
+test('E2E-P0-005e dynamic NewCM ranges load without CDN', async ({ page, baseURL }) => {
+  const appOrigin = new URL(baseURL || page.url()).origin
+  const mathjaxCdnRequests = []
+  const errors = []
+
+  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.origin === appOrigin) return
+    if (MATHJAX_CDN_HOST.test(url.hostname)) {
+      mathjaxCdnRequests.push(url.href)
+    }
+  })
+
+  await gotoBoard(page)
+  // Force NewCM dynamic ranges (double-struck / calligraphic / fraktur).
+  const richLatex = String.raw`\mathbb{R} + \mathcal{L} + \mathfrak{g}`
+  const state = await insertFormula(page, { latex: richLatex, x: 320, y: 220 })
+  const formula = state.objects.find((object) => object.latex === richLatex)
+
+  expect(formula).toBeTruthy()
+  expect(formula.isVectorFormula).toBe(true)
+  expect(formula.childCount).toBeGreaterThan(0)
+  expect(formula.width).toBeGreaterThan(0)
+  expect(formula.height).toBeGreaterThan(0)
+  expect(formula.vectorPaints.length).toBeGreaterThan(0)
+  expect(errors).toEqual([])
+  expect(mathjaxCdnRequests).toEqual([])
 })

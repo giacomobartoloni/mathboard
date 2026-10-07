@@ -98,6 +98,21 @@ const FILL_INK_TYPES = ["IText", "Text"];
 // Fabric 7 defaults origin to center/center; keep left/top for click-to-place UX.
 const LEFT_TOP_ORIGIN = { originX: "left", originY: "top" };
 
+// On formula edit, keep the user's transform; new SVG owns width/height.
+const FORMULA_REPLACEMENT_TRANSFORM_KEYS = [
+  "left",
+  "top",
+  "scaleX",
+  "scaleY",
+  "skewX",
+  "skewY",
+  "angle",
+  "flipX",
+  "flipY",
+  "originX",
+  "originY",
+];
+
 // Constants
 const CANVAS_EVENTS = [
   "before:render", "after:render", "canvas:cleared", "object:added", "object:removed",
@@ -646,7 +661,7 @@ export default {
         formula.set(next);
         formula.setCoords();
       }
-      // Ink mode is semantic; rendered polarity belongs to the current bitmap.
+      // Ink mode is semantic; vector formulas apply destination ink via applyInk.
       applyMaterializedFormulaMetadata(formula, spec);
       return formula;
     },
@@ -659,13 +674,29 @@ export default {
     _wrapAsStampGroup(objects) {
       // A Formula may be implemented as a Fabric Group; only semantic Board Groups
       // count as an existing Stamp wrapper.
-      return resolveStampRoot(objects, {
+      const root = resolveStampRoot(objects, {
         isBoardGroup: (object) => this._boardObjectPolicy.isBoardGroup(object),
         wrap: (members) => new Group(members, {
           subTargetCheck: false,
           interactive: false,
         }),
       });
+
+      // A formula-only Stamp has a technical wrapper Group. Fabric does not include
+      // child padding in the parent's selection box, so mirror the Formula runtime
+      // padding onto the root without persisting it in the Stamp payload.
+      if (this._boardObjectPolicy.isBoardGroup(root)) {
+        const members =
+          typeof root.getObjects === "function" ? root.getObjects() : [];
+        if (
+          members.length === 1
+          && this._boardObjectPolicy.isFormula(members[0])
+        ) {
+          root.set("padding", members[0].padding ?? 0);
+        }
+      }
+
+      return root;
     },
     _placeGroupAtViewportCenter(group) {
       const center = this._viewportCenterScenePoint();
@@ -1055,14 +1086,14 @@ export default {
       existing = toRaw(existing);
       if (!existing || !this.canvas) return false;
 
-      // Read canvas coordinates before the bitmap is ready. A selected formula
-      // may still be in group space; the snapshot converts and restores it.
+      // Snapshot before async render. A selected formula may still be in group
+      // space; snapshotObject converts to canvas plane.
       const placed = snapshotObject(existing);
-      const img = await this._buildFormulaObject(formulaData, {
+      const nextFormula = await this._buildFormulaObject(formulaData, {
         x: placed.left,
         y: placed.top
       });
-      if (!img) {
+      if (!nextFormula) {
         trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
           mode: ANALYTICS_FORMULA_MODES.EDIT,
         });
@@ -1070,24 +1101,35 @@ export default {
       }
       if (!this.canvas || !this.canvas.getObjects().includes(existing)) return false;
 
-      // The bitmap is built asynchronously. Place it where the formula is now.
+      // Preserve user transform; intrinsic width/height come from the new SVG.
       const current = snapshotObject(existing);
-      img.set({ left: current.left, top: current.top });
+      const transformPatch = {};
+      FORMULA_REPLACEMENT_TRANSFORM_KEYS.forEach((key) => {
+        if (current[key] !== undefined) {
+          transformPatch[key] = current[key];
+        }
+      });
+      if (existing.opacity !== undefined) {
+        transformPatch.opacity = existing.opacity;
+      }
+      nextFormula.set(transformPatch);
+      nextFormula.setCoords();
+
       const index = this.canvas.getObjects().indexOf(existing);
       this._suspendHistory = true;
       try {
         this._removeRetained(existing);
-        this._insertRetained(img, index);
+        this._insertRetained(nextFormula, index);
       } finally {
         this._suspendHistory = false;
       }
-      this.canvas.setActiveObject(img);
+      this.canvas.setActiveObject(nextFormula);
       this.canvas.requestRenderAll();
       this._pushCommand({
         type: 'replace',
         index,
         removed: existing,
-        added: img
+        added: nextFormula
       });
       trackBoardEngaged();
       recordProductAction();

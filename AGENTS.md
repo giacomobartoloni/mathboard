@@ -4,7 +4,7 @@
 
 - **Vue 3** (Options API with `setup()` — not `<script setup>`, not Composition API exclusively)
 - **Vite 6** (`vite`), **npm** (migrated from Vue CLI 5 in feature/vite-migration)
-- **Fabric.js 7** (canvas drawing), **KaTeX** (LaTeX rendering), **html2canvas** (formula→canvas conversion)
+- **Fabric.js 7** (canvas drawing), **KaTeX** (FormulaModal preview/validation), **MathJax SVG** (`@mathjax/src` → vector `FormulaObject` on the board)
 - **FontAwesome 6** global registration in `main.js`, used as `<font-awesome-icon :icon="['fas', 'name']" />`
 - **Cloudflare** is the deployment target: `wrangler.json` serves `./dist` as static assets. Firebase is not used in the runtime, build, or deploy
 - **No TypeScript, no typecheck** — verification is `npm run lint`, `npm run test:unit`, `npm run build`, and `npm run test:e2e`
@@ -36,7 +36,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 - **Services**: `createMathBoardServices()` builds `BoardObjectPolicy` and the formula renderer; `app.provide(MATHBOARD_SERVICES, …)` injects them. Keep services out of Vue `data()` so they are not reactive proxies.
 - **App.vue** orchestrates all components, manages tool state, zoom, formula modal
 - **Components** live in `src/components/` — PascalCase filenames, PascalCase in templates
-- **DrawBoard.vue** is the core — wraps Fabric.js `Canvas`, manages zoom/pan/history/undo/redo/tools; orchestrates formula workflows but does not implement KaTeX/html2canvas rendering
+- **DrawBoard.vue** is the core — wraps Fabric.js `Canvas`, manages zoom/pan/history/undo/redo/tools; orchestrates formula workflows but does not implement MathJax/Fabric SVG rendering details
 - **Object semantics**: MathBoard semantic classification is centralized in `src/board/BoardObjectPolicy.js`; product logic must not infer Formula or Board Group solely from Fabric runtime class/type. Formula precedes Group. ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
 - **`fabricStaticCanvas.js`** is a **mixin** (not a component), provides `isDrawingMode` prop
 - **Event naming**: kebab-case (`@request-formula`, `@edit-formula`, `@text-editing-completed`)
@@ -46,7 +46,7 @@ npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x
 
 ## Key implementation details
 
-- **Formulas**: FormulaModal uses KaTeX for entry/preview. Board formula rendering is isolated behind `KaTeXBitmapFormulaRenderer`; DrawBoard must not depend directly on KaTeX/html2canvas/FabricImage rendering details. The adapter is intended to be replaced by MathJax SVG. ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
+- **Formulas**: FormulaModal uses KaTeX for entry/preview/validation. Board formulas use `MathJaxSvgFormulaRenderer` → MathJax SVG → Fabric vector `FormulaObject` (atomic Group). LaTeX remains source of truth; Stamp v1 persists semantic formula nodes, not path soup. MathJax NewCM dynamic SVG font ranges load via Vite same-origin chunks (no CDN). ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
 - **Undo/redo**: command log, one entry per gesture, limit 50. Decision: `docs/adr/0001-command-log-history.md`
 - **Pan**: manipulates `viewportTransform[4/5]` directly
 - **Zoom**: `canvas.setZoom()`, clamp 0.1–5x
