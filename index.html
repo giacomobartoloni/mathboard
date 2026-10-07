@@ -41,28 +41,23 @@
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
+      "@type": ["SoftwareApplication", "WebApplication"],
+      "@id": "https://mathboard.app/#software",
       "name": "MathBoard",
+      "url": "https://mathboard.app/",
       "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Web Browser",
       "offers": {
         "@type": "Offer",
         "price": "0",
         "priceCurrency": "USD"
       },
-      "operatingSystem": "Web Browser",
-      "description": "Interactive digital whiteboard designed for mathematical notation and drawings, combining freehand drawing with LaTeX formula support.",
       "author": {
         "@type": "Person",
         "name": "Giacomo Bartoloni"
       },
-      "featureList": [
-        "Freehand drawing",
-        "LaTeX formula support",
-        "Text and shapes",
-        "Board themes",
-        "Open source AGPL v3"
-      ],
-      "privacyPolicy": "https://mathboard.app/privacy-policy.html"
+      "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+      "codeRepository": "https://github.com/giacomobartoloni/mathboard"
     }
     </script>
   </head>

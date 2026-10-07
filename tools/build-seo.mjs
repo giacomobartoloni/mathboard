@@ -34,7 +34,7 @@ import {
   validatePages,
   validateRenderedHtml,
 } from '../seo/lib/validate-pages.mjs'
-import { ORIGIN } from '../seo/lib/structured-data.mjs'
+import { ORIGIN, SOFTWARE_ID } from '../seo/lib/structured-data.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
@@ -130,6 +130,27 @@ async function main() {
 
   await fs.writeFile(path.join(DIST, '404.html'), render404(), 'utf8')
   console.log('✓ 404.html')
+
+  const rootHtml = await fs.readFile(path.join(DIST, 'index.html'), 'utf8')
+  const rootLdMatch = rootHtml.match(
+    /<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/i,
+  )
+  if (!rootLdMatch) {
+    throw new Error('Missing JSON-LD on /')
+  }
+  let rootLd
+  try {
+    rootLd = JSON.parse(rootLdMatch[1])
+  } catch (error) {
+    throw new Error(`Invalid JSON-LD on /: ${error.message}`)
+  }
+  if (rootLd['@id'] !== SOFTWARE_ID) {
+    throw new Error(`Root software @id must be ${SOFTWARE_ID}`)
+  }
+  if (rootLd.url !== `${ORIGIN}/`) {
+    throw new Error(`Root software url must be ${ORIGIN}/`)
+  }
+  console.log(`✓ root structured data (${SOFTWARE_ID})`)
 }
 
 main().catch((error) => {
