@@ -63,6 +63,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <FormulaModal 
       :isVisible="showFormulaModal"
       :initialLatex="editingLatex"
+      :mode="formulaModalMode"
       @close="onFormulaModalClose"
       @insert-formula="onInsertFormula"
       @assist-used="onFormulaAssistUsed"
@@ -605,6 +606,7 @@ export default {
       drawBoardRef,
       fullscreenRootRef,
       showFormulaModal,
+      formulaModalMode,
       showShareStampModal,
       shareStampUrl,
       closeShareStampModal,

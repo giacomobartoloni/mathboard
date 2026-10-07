@@ -104,6 +104,9 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
 
   const latexInput = page.getByLabel('LaTeX Formula:')
   await expect(latexInput).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Insert Formula (LaTeX)' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Insert', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Update', exact: true })).toHaveCount(0)
   await latexInput.fill('x^2')
   await page.getByRole('button', { name: 'Insert', exact: true }).click()
 
@@ -125,8 +128,11 @@ test('E2E-P0-005 formula lifecycle is atomic and editable', async ({ page }) => 
   const beforeEdit = state.history.length
   await dblclickFormula(page, formula)
   await expect(latexInput).toHaveValue('x^2')
+  await expect(page.getByRole('heading', { name: 'Edit Formula (LaTeX)' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Insert', exact: true })).toHaveCount(0)
   await latexInput.fill('x^3')
-  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+  await page.getByRole('button', { name: 'Update', exact: true }).click()
 
   state = await waitForState(
     page,
@@ -239,7 +245,7 @@ test('E2E-P0-005d formula edit preserves transform after scale and rotate', asyn
   const latexInput = page.getByLabel('LaTeX Formula:')
   await dblclickFormula(page, scaled)
   await latexInput.fill(String.raw`\frac{x}{2}`)
-  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+  await page.getByRole('button', { name: 'Update', exact: true }).click()
 
   state = await waitForState(
     page,
