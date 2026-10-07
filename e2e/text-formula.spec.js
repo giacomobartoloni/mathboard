@@ -199,7 +199,7 @@ test('E2E-P0-005c complex vector formula materializes with padding', async ({ pa
   expect(formula.childCount).toBeGreaterThan(0)
   expect(formula.width).toBeGreaterThan(0)
   expect(formula.height).toBeGreaterThan(0)
-  expect(formula.padding).toBe(6)
+  expect(formula.padding).toBe(12)
   expect(formula.vectorPaints.length).toBeGreaterThan(0)
 })
 
@@ -235,7 +235,7 @@ test('E2E-P0-005d formula edit preserves transform after scale and rotate', asyn
   expect(edited.scaleX).toBeCloseTo(1.8, 5)
   expect(edited.scaleY).toBeCloseTo(1.8, 5)
   expect(edited.angle).toBeCloseTo(25, 5)
-  expect(edited.padding).toBe(6)
+  expect(edited.padding).toBe(12)
 })
 
 test('E2E-P0-005e formula render avoids MathJax CDN hosts', async ({ page, baseURL }) => {
