@@ -581,8 +581,8 @@ export default {
       trackEvent(ANALYTICS_EVENTS.FORMULA_SUBMITTED, { mode })
 
       if (editingElement.value) {
-        // One gesture: swap the bitmap on the command log, do not remove first.
-        // Removing here used to drop the formula if the new bitmap failed.
+        // One gesture: replace the formula on the command log; do not remove first.
+        // Removing here would drop the existing formula if the new render failed.
         drawBoardRef.value?.replaceFormula(editingElement.value, formulaData)
         editingElement.value = null
       } else if (drawBoardRef.value && drawBoardRef.value.addFormulaToCanvas) {

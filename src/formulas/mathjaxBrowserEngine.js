@@ -71,6 +71,7 @@ export function createMathJaxEngine(adaptor) {
     async renderSvg(latex) {
       const doc = mathjax.document('', {
         InputJax: new TeX({ packages: [...TEX_PACKAGES] }),
+        // Explicit paths per glyph — no dynamic font-range fetches (CDN-safe).
         OutputJax: new SVG({ fontCache: 'none' }),
       })
 

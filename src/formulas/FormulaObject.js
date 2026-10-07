@@ -21,6 +21,9 @@ import { Group, classRegistry } from 'fabric'
 import { FORMULA_TYPE } from './constants.js'
 import { INK_MODE_AUTO } from '../config/themes.js'
 
+/** Selection/hit chrome only; does not change SVG geometry or Stamp. */
+export const FORMULA_SELECTION_PADDING = 6
+
 /**
  * Atomic board Formula: Fabric Group of MathJax SVG vector children.
  * Product semantics use `formulaType` (legacy discriminator), not Fabric type.
@@ -36,6 +39,7 @@ export class FormulaObject extends Group {
 
     super(objects, {
       ...fabricOptions,
+      padding: fabricOptions.padding ?? FORMULA_SELECTION_PADDING,
       subTargetCheck: false,
       interactive: false,
     })

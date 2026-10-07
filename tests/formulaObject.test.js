@@ -2,7 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Path, Group } from 'fabric'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
-import { FormulaObject } from '../src/formulas/FormulaObject.js'
+import {
+  FormulaObject,
+  FORMULA_SELECTION_PADDING,
+} from '../src/formulas/FormulaObject.js'
 import { FORMULA_TYPE } from '../src/formulas/constants.js'
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js'
 import { serializeFabricObject } from '../src/stamps/serialize.js'
@@ -14,6 +17,12 @@ const policy = new BoardObjectPolicy()
 function path(opts) {
   return new Path('M 0 0 L 10 0', opts)
 }
+
+test('FormulaObject defaults selection padding without changing child geometry', () => {
+  const child = path({ fill: 'black' })
+  const formula = new FormulaObject([child], { latex: 'x' })
+  assert.equal(formula.padding, FORMULA_SELECTION_PADDING)
+})
 
 test('FormulaObject carries semantic metadata and is not a Board Group', () => {
   const formula = new FormulaObject([path({ fill: 'black', stroke: null })], {
@@ -104,4 +113,5 @@ test('FormulaObject clone preserves atomic formula semantics', async () => {
   assert.equal(clone.getObjects().length, formula.getObjects().length)
   assert.notEqual(clone.getObjects()[0], formula.getObjects()[0])
   assert.equal(clone.getObjects()[0].fill, 'black')
+  assert.equal(clone.padding, formula.padding)
 })

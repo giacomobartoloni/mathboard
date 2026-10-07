@@ -40,6 +40,23 @@ async function dblclickFormula(page, formula) {
   })
 }
 
+async function insertFormula(page, { latex, x = 340, y = 240 } = {}) {
+  await selectTool(page, 'Formula')
+  await clickOnCanvas(page, { x, y })
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await expect(latexInput).toBeVisible()
+  await latexInput.fill(latex)
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+  return waitForState(
+    page,
+    (s) => s.objects.some((o) => o.formulaType === 'katex-formula' && o.latex === latex),
+    { timeout: 15000 },
+  )
+}
+
+const MATHJAX_CDN_HOST =
+  /(?:^|\.)cdn\.jsdelivr\.net$|(?:^|\.)unpkg\.com$|(?:^|\.)mathjax\.org$/
+
 test('E2E-P0-004 text create and edit survive history', async ({ page }) => {
   await gotoBoard(page)
   const beforeCreate = await getBoardState(page)
@@ -170,4 +187,72 @@ test('E2E-P0-005b formula duplicate keeps vector semantics', async ({ page }) =>
     (s) => s.objects.filter((o) => o.formulaType === 'katex-formula').length === 2,
   )
   expect(state.objects.filter((o) => o.isVectorFormula)).toHaveLength(2)
+})
+
+test('E2E-P0-005c complex vector formula materializes with padding', async ({ page }) => {
+  await gotoBoard(page)
+  const latex = String.raw`\frac{\int_0^1 x^2\,dx}{\sqrt{1+\alpha^2}}`
+  const state = await insertFormula(page, { latex, x: 360, y: 260 })
+  const formula = state.objects.find((o) => o.latex === latex)
+  expect(formula).toBeTruthy()
+  expect(formula.isVectorFormula).toBe(true)
+  expect(formula.childCount).toBeGreaterThan(0)
+  expect(formula.width).toBeGreaterThan(0)
+  expect(formula.height).toBeGreaterThan(0)
+  expect(formula.padding).toBe(6)
+  expect(formula.vectorPaints.length).toBeGreaterThan(0)
+})
+
+test('E2E-P0-005d formula edit preserves transform after scale and rotate', async ({ page }) => {
+  await gotoBoard(page)
+  let state = await insertFormula(page, { latex: 'x^2', x: 320, y: 200 })
+  const formula = state.objects.find((o) => o.latex === 'x^2')
+  expect(formula).toBeTruthy()
+
+  const patched = await page.evaluate(({ latex, patch }) => {
+    return window.__MATHBOARD_E2E__.setFormulaTransform(latex, patch)
+  }, { latex: 'x^2', patch: { scaleX: 1.8, scaleY: 1.8, angle: 25 } })
+  expect(patched).toBe(true)
+
+  state = await getBoardState(page)
+  const scaled = state.objects.find((o) => o.latex === 'x^2')
+  expect(scaled.scaleX).toBeCloseTo(1.8, 5)
+  expect(scaled.scaleY).toBeCloseTo(1.8, 5)
+  expect(scaled.angle).toBeCloseTo(25, 5)
+
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await dblclickFormula(page, scaled)
+  await latexInput.fill(String.raw`\frac{x}{2}`)
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+
+  state = await waitForState(
+    page,
+    (s) => s.objects.some((o) => o.latex === String.raw`\frac{x}{2}`),
+    { timeout: 15000 },
+  )
+  const edited = state.objects.find((o) => o.latex === String.raw`\frac{x}{2}`)
+  expect(edited.isVectorFormula).toBe(true)
+  expect(edited.scaleX).toBeCloseTo(1.8, 5)
+  expect(edited.scaleY).toBeCloseTo(1.8, 5)
+  expect(edited.angle).toBeCloseTo(25, 5)
+  expect(edited.padding).toBe(6)
+})
+
+test('E2E-P0-005e formula render avoids MathJax CDN hosts', async ({ page, baseURL }) => {
+  const appOrigin = new URL(baseURL || page.url()).origin
+  const mathjaxCdnRequests = []
+
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.origin === appOrigin) return
+    if (MATHJAX_CDN_HOST.test(url.hostname)) {
+      mathjaxCdnRequests.push(url.href)
+    }
+  })
+
+  await gotoBoard(page)
+  const richLatex = String.raw`\int_0^1 x^2\,dx + \sum_{n=1}^{\infty}\frac{1}{n^2} + \alpha+\vec{v} + \partial + \begin{matrix}1&2\\3&4\end{matrix}`
+  await insertFormula(page, { latex: richLatex, x: 320, y: 220 })
+
+  expect(mathjaxCdnRequests).toEqual([])
 })

@@ -109,6 +109,10 @@ function snapshotForE2e(obj, { includeChildren = true } = {}) {
       ? obj.filters.map((filter) => filter?.type).filter(Boolean)
       : [],
     childCount: composite ? obj.getObjects().length : null,
+    padding: obj.padding != null ? Number(obj.padding) : null,
+    scaleX: layout.scaleX != null ? Number(layout.scaleX) : null,
+    scaleY: layout.scaleY != null ? Number(layout.scaleY) : null,
+    angle: layout.angle != null ? Number(layout.angle) : null,
     vectorPaints,
     isVectorFormula: Boolean(
       obj.formulaType
@@ -179,11 +183,26 @@ function getBoardState(board) {
  * @param {() => object | null | undefined} getBoard
  * @returns {() => void} uninstall
  */
+function setFormulaTransform(getBoard, latex, patch) {
+  const board = getBoard?.()
+  const canvas = board?.canvas
+  if (!canvas || !latex) return false
+
+  const formula = canvas.getObjects().find((obj) => obj.latex === latex)
+  if (!formula) return false
+
+  formula.set(patch)
+  formula.setCoords()
+  canvas.requestRenderAll()
+  return true
+}
+
 export function installBoardE2eHook(getBoard) {
   // Canary string must remain in dist-e2e for assert:e2e-hook (void alone is DCE'd).
   window.__MATHBOARD_E2E__ = Object.freeze({
     marker: E2E_MARKER,
     getState: () => getBoardState(getBoard()),
+    setFormulaTransform: (latex, patch) => setFormulaTransform(getBoard, latex, patch),
   })
 
   return () => {

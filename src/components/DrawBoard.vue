@@ -661,7 +661,7 @@ export default {
         formula.set(next);
         formula.setCoords();
       }
-      // Ink mode is semantic; rendered polarity belongs to the current bitmap.
+      // Ink mode is semantic; vector formulas apply destination ink via applyInk.
       applyMaterializedFormulaMetadata(formula, spec);
       return formula;
     },
