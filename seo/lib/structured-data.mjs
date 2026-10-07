@@ -20,8 +20,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import assert from 'node:assert/strict'
 
 export const ORIGIN = 'https://mathboard.app'
+export const SCHEMA_CONTEXT = 'https://schema.org'
 export const SOFTWARE_ID = `${ORIGIN}/#software`
 export const WEBSITE_ID = `${ORIGIN}/#website`
+
+export function assertSchemaContext(document, label = 'JSON-LD') {
+  if (document?.['@context'] !== SCHEMA_CONTEXT) {
+    throw new Error(`${label} must use @context ${SCHEMA_CONTEXT}`)
+  }
+}
 
 const SOFTWARE_DESCRIPTION =
   'Free browser-based math whiteboard with freehand drawing, text, shapes, and editable LaTeX formulas.'
@@ -161,7 +168,7 @@ export function renderStructuredData(page) {
   }
 
   return `<script type="application/ld+json">${embedJsonLd({
-    '@context': 'https://schema.org',
+    '@context': SCHEMA_CONTEXT,
     '@graph': graph,
   })}</script>`
 }

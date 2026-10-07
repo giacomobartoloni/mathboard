@@ -37,6 +37,7 @@ import {
 import {
   ORIGIN,
   SOFTWARE_ID,
+  assertSchemaContext,
   assertSoftwareEntityParity,
 } from '../seo/lib/structured-data.mjs'
 
@@ -148,6 +149,7 @@ async function main() {
   } catch (error) {
     throw new Error(`Invalid JSON-LD on /: ${error.message}`)
   }
+  assertSchemaContext(rootLd, 'Root JSON-LD')
   assertSoftwareEntityParity(rootLd)
   console.log(`✓ root structured data (${SOFTWARE_ID})`)
 }

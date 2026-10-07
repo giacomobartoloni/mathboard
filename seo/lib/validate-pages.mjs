@@ -17,7 +17,12 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ORIGIN, SOFTWARE_ID, WEBSITE_ID } from './structured-data.mjs'
+import {
+  ORIGIN,
+  SOFTWARE_ID,
+  WEBSITE_ID,
+  assertSchemaContext,
+} from './structured-data.mjs'
 
 function extractJsonLdDocuments(html) {
   const docs = []
@@ -151,6 +156,7 @@ export function validateStructuredData(page, html) {
     } catch (error) {
       throw new Error(`Invalid JSON-LD on ${page.path}: ${error.message}`)
     }
+    assertSchemaContext(parsed, `JSON-LD on ${page.path}`)
     nodes.push(...collectGraphNodes(parsed))
   }
 
