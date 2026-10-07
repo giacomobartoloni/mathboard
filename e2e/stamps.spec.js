@@ -127,9 +127,16 @@ test('E2E-P0-007b formula stamp follows destination board auto ink across themes
     )),
     { timeout: 15000 },
   )
-  const imported = state.objects.find((o) => o.formulaType === 'katex-formula')
+  const root = state.objects[0]
+  expect(root.type).toBe('Group')
+  expect(root.childCount).toBe(1)
+  expect(root.padding).toBe(12)
+
+  const imported = root.children?.find((c) => c.formulaType === 'katex-formula')
+    || state.objects.find((o) => o.formulaType === 'katex-formula')
     || state.objects.flatMap((o) => o.children || []).find((o) => o.formulaType === 'katex-formula')
   expect(imported).toBeTruthy()
+  expect(imported.padding).toBe(12)
   expect(imported.inkMode).toBe('auto')
   expect(imported.isVectorFormula).toBe(true)
   expect(imported.filterTypes).toEqual([])
@@ -139,4 +146,70 @@ test('E2E-P0-007b formula stamp follows destination board auto ink across themes
   await expect(boot.locator('.stamp-error')).toHaveCount(0)
   expect(errors).toEqual([])
   await bootContext.close()
+})
+
+test('E2E-P0-007c formula stamp root padding survives re-share', async ({ page, browser }) => {
+  await gotoBoard(page)
+  await selectTool(page, 'Formula')
+  await clickOnCanvas(page, { x: 340, y: 240 })
+
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await expect(latexInput).toBeVisible()
+  await latexInput.fill('x^2')
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+
+  await waitForState(
+    page,
+    (s) => s.objects.some((o) => o.formulaType === 'katex-formula' && o.latex === 'x^2'),
+    { timeout: 15000 },
+  )
+
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.press('ControlOrMeta+Shift+L')
+  const shareDialog = page.getByRole('dialog', { name: 'Share board link' })
+  const urlInput = shareDialog.getByLabel(
+    'Anyone with this link opens a board with the current selection:',
+  )
+  await expect(urlInput).toBeVisible()
+  const firstShareUrl = await urlInput.inputValue()
+  expect(firstShareUrl).toContain('#s=')
+
+  const firstContext = await browser.newContext()
+  const firstBoot = await firstContext.newPage()
+  await gotoBoard(firstBoot, firstShareUrl)
+
+  let state = await waitForState(
+    firstBoot,
+    (s) => s.objects.some((o) => o.type === 'Group' && (o.children || []).some((c) => c.latex === 'x^2')),
+    { timeout: 15000 },
+  )
+  expect(state.objects[0].padding).toBe(12)
+  expect(state.objects[0].children[0].padding).toBe(12)
+
+  await firstBoot.keyboard.press('ControlOrMeta+A')
+  await firstBoot.keyboard.press('ControlOrMeta+Shift+L')
+  const secondUrlInput = firstBoot.getByRole('dialog', { name: 'Share board link' }).getByLabel(
+    'Anyone with this link opens a board with the current selection:',
+  )
+  await expect(secondUrlInput).toBeVisible()
+  const secondShareUrl = await secondUrlInput.inputValue()
+  expect(secondShareUrl).toContain('#s=')
+
+  const secondContext = await browser.newContext()
+  const secondBoot = await secondContext.newPage()
+  await gotoBoard(secondBoot, secondShareUrl)
+
+  state = await waitForState(
+    secondBoot,
+    (s) => s.objects.some((o) => o.type === 'Group' && (o.children || []).some((c) => c.latex === 'x^2')),
+    { timeout: 15000 },
+  )
+  expect(state.objects[0].type).toBe('Group')
+  expect(state.objects[0].childCount).toBe(1)
+  expect(state.objects[0].padding).toBe(12)
+  expect(state.objects[0].children[0].formulaType).toBe('katex-formula')
+  expect(state.objects[0].children[0].padding).toBe(12)
+
+  await firstContext.close()
+  await secondContext.close()
 })

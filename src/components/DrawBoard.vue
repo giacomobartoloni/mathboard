@@ -674,13 +674,29 @@ export default {
     _wrapAsStampGroup(objects) {
       // A Formula may be implemented as a Fabric Group; only semantic Board Groups
       // count as an existing Stamp wrapper.
-      return resolveStampRoot(objects, {
+      const root = resolveStampRoot(objects, {
         isBoardGroup: (object) => this._boardObjectPolicy.isBoardGroup(object),
         wrap: (members) => new Group(members, {
           subTargetCheck: false,
           interactive: false,
         }),
       });
+
+      // A formula-only Stamp has a technical wrapper Group. Fabric does not include
+      // child padding in the parent's selection box, so mirror the Formula runtime
+      // padding onto the root without persisting it in the Stamp payload.
+      if (this._boardObjectPolicy.isBoardGroup(root)) {
+        const members =
+          typeof root.getObjects === "function" ? root.getObjects() : [];
+        if (
+          members.length === 1
+          && this._boardObjectPolicy.isFormula(members[0])
+        ) {
+          root.set("padding", members[0].padding ?? 0);
+        }
+      }
+
+      return root;
     },
     _placeGroupAtViewportCenter(group) {
       const center = this._viewportCenterScenePoint();
