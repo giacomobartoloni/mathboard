@@ -215,6 +215,68 @@ object_created { object_type: stamp_template }
 - Keep `object_created` with `object_type=stamp_template` on successful open; do not replace it with `stamp_share_opened`.
 - Do not emit modal open/close, hover, or share-attempted events in this funnel.
 
+## Object deletion
+
+`object_deleted` counts one delete gesture, not one event per object.
+
+Metadata (always present after this schema):
+
+- `selection_count`
+- `object_type`
+- `path_count`
+- `shape_count`
+- `text_count`
+- `formula_count`
+- `group_count`
+- `unknown_count`
+
+All `*_count` fields are always emitted, including zeros.
+
+Invariant:
+
+```text
+selection_count
+=
+path_count + shape_count + text_count
++ formula_count + group_count + unknown_count
+```
+
+`object_type` is the sole type for homogeneous selections and `mixed` for heterogeneous selections. Allowed values: `path`, `shape`, `text`, `formula`, `group`, `unknown`, `mixed`.
+
+Classification uses `BoardObjectPolicy.kindOf()` only. Groups are counted atomically; members are not recursively counted. Stamps deleted as board groups count as `group`. Non-allowlisted kinds fall into `unknown_count`.
+
+Homogeneous example (3 pencil strokes):
+
+```js
+{
+  selection_count: 3,
+  object_type: 'path',
+  path_count: 3,
+  shape_count: 0,
+  text_count: 0,
+  formula_count: 0,
+  group_count: 0,
+  unknown_count: 0,
+}
+```
+
+Mixed example:
+
+```js
+{
+  selection_count: 5,
+  object_type: 'mixed',
+  path_count: 3,
+  shape_count: 0,
+  text_count: 1,
+  formula_count: 1,
+  group_count: 0,
+  unknown_count: 0,
+}
+```
+
+Undo/redo continue as `undo_used` / `redo_used` only — they must not re-emit `object_deleted`. Board clear during Stamp bootstrap must not emit `object_deleted`.
+
 ## Ownership
 
 All Simple Analytics interaction goes through this module. Do not call `window.sa_event` or inject the CDN script elsewhere in the app.
