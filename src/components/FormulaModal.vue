@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div v-if="isVisible" class="modal-overlay" @click="closeModal(closeReasons.BACKDROP)">
     <div class="modal-content" @click.stop>
       <div class="modal-header">
-        <h3>Insert Formula (LaTeX)</h3>
+        <h3>{{ modalTitle }}</h3>
         <button
           type="button"
           class="close-button"
@@ -130,7 +130,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           class="btn-insert"
           @click="insertFormula"
           :disabled="!isValidFormula"
-        >Insert</button>
+        >{{ submitLabel }}</button>
       </div>
     </div>
   </div>
@@ -160,7 +160,12 @@ export default {
     initialLatex: {
       type: String,
       default: ''
-    }
+    },
+    mode: {
+      type: String,
+      default: 'create',
+      validator: (value) => value === 'create' || value === 'edit',
+    },
   },
   emits: ['close', 'insert-formula', 'assist-used'],
   data() {
@@ -177,6 +182,15 @@ export default {
     }
   },
   computed: {
+    isEditMode() {
+      return this.mode === 'edit'
+    },
+    modalTitle() {
+      return this.isEditMode ? 'Edit Formula (LaTeX)' : 'Insert Formula (LaTeX)'
+    },
+    submitLabel() {
+      return this.isEditMode ? 'Update' : 'Insert'
+    },
     activePaletteItems() {
       const group = this.paletteGroups.find(
         (entry) => entry.id === this.activePaletteGroup

@@ -156,7 +156,7 @@ test('deflate walks permanent groups recursively', () => {
   assert.equal(group.objects[0].radius, 3)
 })
 
-test('deflate recognizes formulas via formulaType, objectKind, or latex', () => {
+test('deflate recognizes formulas via formulaType or objectKind+latex', () => {
   assert.equal(
     serializeFabricObject(fabricLike('image', {
       formulaType: 'katex-formula',
@@ -173,8 +173,12 @@ test('deflate recognizes formulas via formulaType, objectKind, or latex', () => 
     'c',
   )
   assert.equal(
-    serializeFabricObject(fabricLike('image', { latex: 'd' })).latex,
-    'd',
+    serializeFabricObject(fabricLike('Group', {
+      formulaType: 'katex-formula',
+      latex: 'x',
+      getObjects: () => [],
+    })).type,
+    'formula',
   )
 })
 

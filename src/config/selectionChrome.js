@@ -61,7 +61,7 @@ export function selectionChromeForBoard(boardTheme) {
     transparentCorners: false,
     cornerStyle: 'circle',
     borderScaleFactor: 2,
-    padding: 4,
+    padding: 4, // default for newly created generic Fabric objects
     selectionLineWidth: 2,
   }
 }
@@ -82,12 +82,18 @@ export function selectionObjectChromeForBoard(boardTheme) {
 }
 
 /**
- * Apply selection control colors to one Fabric object and nested Group members.
+ * Apply theme-dependent selection chrome to an object and nested Group members.
+ * Preserve object-owned padding: Formula and technical Stamp wrappers may use
+ * a larger interaction margin than the generic Fabric default.
  * Group children are not canvas top-level objects, so theme changes must walk in.
  */
 export function applySelectionObjectChrome(object, objectChrome) {
   if (!object || typeof object.set !== 'function') return
-  object.set(objectChrome)
+
+  const themeChrome = { ...objectChrome }
+  delete themeChrome.padding
+  object.set(themeChrome)
+
   const isGroup = typeof object.isType === 'function' && object.isType('Group')
   if (!isGroup || typeof object.getObjects !== 'function') return
   object.getObjects().forEach((child) => applySelectionObjectChrome(child, objectChrome))

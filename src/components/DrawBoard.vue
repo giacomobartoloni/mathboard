@@ -37,14 +37,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <script>
 import { markRaw, toRaw } from "vue";
-import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, FabricImage, filters, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
+import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
-import katex from "katex";
-import "katex/dist/katex.min.css";
 import fabricStaticCanvas from "./fabricStaticCanvas";
-import html2canvas from "html2canvas";
 import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
+import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
+import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
+import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
 import {
   applySelectionObjectChrome,
   selectionChromeForBoard,
@@ -80,6 +80,7 @@ import {
   ANALYTICS_OBJECT_TYPES,
   ANALYTICS_FORMULA_MODES,
 } from "../analytics/events.js";
+import { buildObjectDeletedMetadata } from "../analytics/deletionMetadata.js";
 import {
   StampError,
   STAMP_ERROR_CODES,
@@ -87,6 +88,7 @@ import {
   materializeStampDocument,
   encodeObjectsAsStamp,
 } from "../stamps/index.js";
+import { resolveStampRoot } from "../stamps/resolveStampRoot.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -94,10 +96,23 @@ const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
 // Objects whose board ink lives on "fill".
 const FILL_INK_TYPES = ["IText", "Text"];
 
-const FORMULA_TYPE = "katex-formula";
-
 // Fabric 7 defaults origin to center/center; keep left/top for click-to-place UX.
 const LEFT_TOP_ORIGIN = { originX: "left", originY: "top" };
+
+// On formula edit, keep the user's transform; new SVG owns width/height.
+const FORMULA_REPLACEMENT_TRANSFORM_KEYS = [
+  "left",
+  "top",
+  "scaleX",
+  "scaleY",
+  "skewX",
+  "skewY",
+  "angle",
+  "flipX",
+  "flipY",
+  "originX",
+  "originY",
+];
 
 // Constants
 const CANVAS_EVENTS = [
@@ -136,17 +151,15 @@ const CURSOR_TYPES = {
   text: 'text'
 };
 
-const FORMULA_CLONE_PROPS = [
-  "latex",
-  "formulaType",
-  "mathboardInkMode",
-  "mathboardRenderedInkIsLight",
-];
-
 export default {
   name: "DrawBoard",
   components: { SelectionActionsPanel },
   mixins: [fabricStaticCanvas],
+  inject: {
+    mathBoardServices: {
+      from: MATHBOARD_SERVICES,
+    },
+  },
   props: {
     id: { type: String, required: false, default: "c" },
     selectedTool: { type: String, default: "pencil" },
@@ -197,6 +210,9 @@ export default {
     this._uncommittedText = null;
     this._historyTipKind = "command";
     this._selectionGesture = false;
+    // Services stay off data() so they are not reactive proxies.
+    this._formulaRenderer = this.mathBoardServices.formulaRenderer;
+    this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
   },
   methods: {
     fitToContainer(canvas) {
@@ -249,16 +265,26 @@ export default {
     syncAutoInk(config) {
       const apply = (obj) => {
         if (!obj) return;
-        if (obj.isType?.("Group") || obj.isType?.("ActiveSelection")) {
+
+        if (this._boardObjectPolicy.isFormula(obj)) {
+          if (obj.mathboardInkMode === INK_MODE_AUTO) {
+            this._formulaRenderer.syncInk(obj, config);
+          }
+          return;
+        }
+
+        if (
+          this._boardObjectPolicy.isBoardGroup(obj)
+          || this._boardObjectPolicy.isActiveSelection(obj)
+        ) {
           const members = typeof obj.getObjects === "function" ? obj.getObjects() : [];
           members.forEach(apply);
           return;
         }
+
         if (obj.mathboardInkMode !== INK_MODE_AUTO) return;
 
-        if (obj.formulaType === FORMULA_TYPE) {
-          this.syncFormulaInk(obj, config);
-        } else if (obj.isType(...STROKE_INK_TYPES)) {
+        if (obj.isType(...STROKE_INK_TYPES)) {
           const patch = { stroke: config.defaultInk };
           if (
             obj.isType("Circle")
@@ -274,25 +300,12 @@ export default {
       };
       this.canvas.forEachObject(apply);
     },
-    /**
-     * Adapt a formula bitmap to the board ink polarity. Fabric filters never mutate
-     * the source element, so dropping the filter restores the original rendering.
-     */
-    syncFormulaInk(img, config) {
-      const shouldInvert = Boolean(img.mathboardRenderedInkIsLight) !== config.inkIsLight;
-      const isInverted = img.filters?.some((filter) => filter.type === 'Invert') ?? false;
-
-      if (shouldInvert === isInverted) return;
-
-      img.filters = shouldInvert ? [new filters.Invert()] : [];
-      img.applyFilters();
-    },
     markPathInk({ path }) {
       if (!path) return;
       path.mathboardInkMode = this.inkMode;
     },
     _inkSnapshot(object) {
-      if (!object || object.formulaType) return null;
+      if (!object || this._boardObjectPolicy.isFormula(object)) return null;
       if (object.isType(...STROKE_INK_TYPES)) {
         const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
         if (
@@ -600,7 +613,7 @@ export default {
     },
     editSelection() {
       const active = this.canvas?.getActiveObject();
-      if (!active || active.isEditing || active.formulaType !== FORMULA_TYPE) return;
+      if (!active || active.isEditing || !this._boardObjectPolicy.isFormula(active)) return;
       this.$emit("edit-formula", {
         latex: active.latex,
         position: { x: active.left, y: active.top },
@@ -620,22 +633,14 @@ export default {
       };
     },
     async _buildFormulaFromStamp(spec) {
-      let html;
-      try {
-        html = katex.renderToString(spec.latex, {
-          displayMode: true,
-          throwOnError: true,
-          strict: false,
-        });
-      } catch (error) {
-        console.error("Stamp formula render failed", error);
-        return null;
-      }
-      const img = await this._buildFormulaImage(
-        { latex: spec.latex, html },
-        { x: spec.left ?? 0, y: spec.top ?? 0 },
+      const formula = await this._buildFormulaObject(
+        { latex: spec.latex },
+        {
+          x: spec.left ?? 0,
+          y: spec.top ?? 0,
+        },
       );
-      if (!img) return null;
+      if (!formula) return null;
       const next = {};
       [
         "left",
@@ -654,16 +659,12 @@ export default {
         if (spec[key] !== undefined && spec[key] !== null) next[key] = spec[key];
       });
       if (Object.keys(next).length) {
-        img.set(next);
-        img.setCoords();
+        formula.set(next);
+        formula.setCoords();
       }
-      if (spec.mathboardInkMode !== undefined) {
-        img.mathboardInkMode = spec.mathboardInkMode;
-      }
-      if (spec.mathboardRenderedInkIsLight !== undefined) {
-        img.mathboardRenderedInkIsLight = spec.mathboardRenderedInkIsLight;
-      }
-      return img;
+      // Ink mode is semantic; vector formulas apply destination ink via applyInk.
+      applyMaterializedFormulaMetadata(formula, spec);
+      return formula;
     },
     async _materializeStamp(encoded) {
       const doc = decodeStampString(encoded);
@@ -672,13 +673,31 @@ export default {
       });
     },
     _wrapAsStampGroup(objects) {
-      if (objects.length === 1 && objects[0]?.isType?.("Group")) {
-        return objects[0];
-      }
-      return new Group(objects, {
-        subTargetCheck: false,
-        interactive: false,
+      // A Formula may be implemented as a Fabric Group; only semantic Board Groups
+      // count as an existing Stamp wrapper.
+      const root = resolveStampRoot(objects, {
+        isBoardGroup: (object) => this._boardObjectPolicy.isBoardGroup(object),
+        wrap: (members) => new Group(members, {
+          subTargetCheck: false,
+          interactive: false,
+        }),
       });
+
+      // A formula-only Stamp has a technical wrapper Group. Fabric does not include
+      // child padding in the parent's selection box, so mirror the Formula runtime
+      // padding onto the root without persisting it in the Stamp payload.
+      if (this._boardObjectPolicy.isBoardGroup(root)) {
+        const members =
+          typeof root.getObjects === "function" ? root.getObjects() : [];
+        if (
+          members.length === 1
+          && this._boardObjectPolicy.isFormula(members[0])
+        ) {
+          root.set("padding", members[0].padding ?? 0);
+        }
+      }
+
+      return root;
     },
     _placeGroupAtViewportCenter(group) {
       const center = this._viewportCenterScenePoint();
@@ -700,16 +719,23 @@ export default {
       const ink = this.boardThemeConfig.defaultInk;
       const walk = (object) => {
         if (!object) return;
-        if (object.isType?.("Group")) {
+
+        if (this._boardObjectPolicy.isFormula(object)) {
+          if (object.mathboardInkMode !== INK_MODE_FIXED) {
+            object.mathboardInkMode = INK_MODE_AUTO;
+            this._formulaRenderer.syncInk(object, this.boardThemeConfig);
+          }
+          return;
+        }
+
+        if (this._boardObjectPolicy.isBoardGroup(object)) {
           const members = typeof object.getObjects === "function" ? object.getObjects() : [];
           members.forEach(walk);
           return;
         }
+
         if (object.mathboardInkMode === INK_MODE_FIXED) return;
-        if (object.formulaType === FORMULA_TYPE) {
-          object.mathboardInkMode = INK_MODE_AUTO;
-          return;
-        }
+
         if (object.isType?.(...STROKE_INK_TYPES)) {
           const patch = { stroke: ink, mathboardInkMode: INK_MODE_AUTO };
           if (
@@ -885,7 +911,8 @@ export default {
     ungroupSelection() {
       if (!this.canvas) return false;
       const active = this.canvas.getActiveObject();
-      if (!active || active.isType("ActiveSelection") || !active.isType("Group")) {
+      // Use semantic Board Group check: a Formula may be a Fabric Group.
+      if (!this._boardObjectPolicy.isBoardGroup(active)) {
         return false;
       }
 
@@ -893,6 +920,9 @@ export default {
       const groupIndex = this.canvas.getObjects().indexOf(group);
       if (groupIndex < 0) return false;
 
+      // Match history undo: discard before removeAll so children return to
+      // canvas plane rather than selection/group local coordinates.
+      this.canvas.discardActiveObject();
       this._suspendHistory = true;
       let items;
       try {
@@ -1018,76 +1048,22 @@ export default {
       const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
-    _buildFormulaImage(formulaData, position) {
-      // Create a temporary div to render the formula
-      const tempDiv = document.createElement('div');
-      tempDiv.style.position = 'absolute';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.fontSize = '15px';
-      tempDiv.style.padding = '10px';
-      tempDiv.style.backgroundColor = 'transparent';
-      // The bitmap is rendered with the active board ink; it is marked as auto
-      // so theme switches can adapt it (rasterized text cannot be recolored).
-      tempDiv.style.color = this.boardThemeConfig.defaultInk;
-      tempDiv.innerHTML = formulaData.html;
-      document.body.appendChild(tempDiv);
-
-      return new Promise((resolve) => {
-        this.$nextTick(() => {
-          setTimeout(async () => {
-            try {
-              // Use html2canvas to convert the div to a canvas
-              const renderedCanvas = await html2canvas(tempDiv, {
-                backgroundColor: null,
-                scale: 2, // Higher quality
-                logging: false
-              });
-
-              // Create fabric image directly from the canvas element
-              const img = new FabricImage(renderedCanvas, {
-                left: position.x,
-                top: position.y,
-                ...LEFT_TOP_ORIGIN,
-                selectable: true,
-                evented: true,
-                hasControls: true,
-                hasBorders: true,
-                lockMovementX: false,
-                lockMovementY: false,
-                lockRotation: false,
-                lockScalingX: false,
-                lockScalingY: false,
-                lockScalingFlip: false,
-                lockSkewingX: false,
-                lockSkewingY: false
-              });
-
-              // Store latex data as custom property
-              img.latex = formulaData.latex;
-              img.formulaType = FORMULA_TYPE;
-              // Auto ink: follow the board theme. The polarity recorded here is the
-              // one the bitmap was rasterized with, so later board changes can decide
-              // whether an Invert filter is needed.
-              img.mathboardInkMode = INK_MODE_AUTO;
-              img.mathboardRenderedInkIsLight = this.boardThemeConfig.inkIsLight;
-
-              if (tempDiv.parentNode) {
-                document.body.removeChild(tempDiv);
-              }
-              resolve(img);
-            } catch (error) {
-              console.error('Error adding formula:', error);
-              if (tempDiv.parentNode) {
-                document.body.removeChild(tempDiv);
-              }
-              resolve(null);
-            }
-          }, 100);
+    async _buildFormulaObject(formulaData, position) {
+      try {
+        return await this._formulaRenderer.render({
+          latex: formulaData.latex,
+          html: formulaData.html,
+          position,
+          ink: this.boardThemeConfig.defaultInk,
+          inkIsLight: this.boardThemeConfig.inkIsLight,
         });
-      });
+      } catch (error) {
+        console.error("Formula rendering failed", error);
+        return null;
+      }
     },
     async addFormulaToCanvas(formulaData, position) {
-      const img = await this._buildFormulaImage(formulaData, position);
+      const img = await this._buildFormulaObject(formulaData, position);
       if (!img) {
         trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
           mode: ANALYTICS_FORMULA_MODES.CREATE,
@@ -1108,16 +1084,17 @@ export default {
       return true;
     },
     async replaceFormula(existing, formulaData) {
+      existing = toRaw(existing);
       if (!existing || !this.canvas) return false;
 
-      // Read canvas coordinates before the bitmap is ready. A selected formula
-      // may still be in group space; the snapshot converts and restores it.
+      // Snapshot before async render. A selected formula may still be in group
+      // space; snapshotObject converts to canvas plane.
       const placed = snapshotObject(existing);
-      const img = await this._buildFormulaImage(formulaData, {
+      const nextFormula = await this._buildFormulaObject(formulaData, {
         x: placed.left,
         y: placed.top
       });
-      if (!img) {
+      if (!nextFormula) {
         trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
           mode: ANALYTICS_FORMULA_MODES.EDIT,
         });
@@ -1125,24 +1102,35 @@ export default {
       }
       if (!this.canvas || !this.canvas.getObjects().includes(existing)) return false;
 
-      // The bitmap is built asynchronously. Place it where the formula is now.
+      // Preserve user transform; intrinsic width/height come from the new SVG.
       const current = snapshotObject(existing);
-      img.set({ left: current.left, top: current.top });
+      const transformPatch = {};
+      FORMULA_REPLACEMENT_TRANSFORM_KEYS.forEach((key) => {
+        if (current[key] !== undefined) {
+          transformPatch[key] = current[key];
+        }
+      });
+      if (existing.opacity !== undefined) {
+        transformPatch.opacity = existing.opacity;
+      }
+      nextFormula.set(transformPatch);
+      nextFormula.setCoords();
+
       const index = this.canvas.getObjects().indexOf(existing);
       this._suspendHistory = true;
       try {
         this._removeRetained(existing);
-        this._insertRetained(img, index);
+        this._insertRetained(nextFormula, index);
       } finally {
         this._suspendHistory = false;
       }
-      this.canvas.setActiveObject(img);
+      this.canvas.setActiveObject(nextFormula);
       this.canvas.requestRenderAll();
       this._pushCommand({
         type: 'replace',
         index,
         removed: existing,
-        added: img
+        added: nextFormula
       });
       trackBoardEngaged();
       recordProductAction();
@@ -1437,15 +1425,18 @@ export default {
         .sort((a, b) => a.index - b.index);
       if (!entries.length) return;
 
+      const deletionMetadata = buildObjectDeletedMetadata(
+        entries.map(({ object }) => object),
+        (object) => this._boardObjectPolicy.kindOf(object),
+      );
+
       this.canvas.discardActiveObject();
       entries.forEach(({ object }) => this.canvas.remove(object));
       this.canvas.requestRenderAll();
       this._pushCommand({ type: 'delete', entries });
       trackBoardEngaged();
       recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, {
-        selection_count: entries.length,
-      });
+      trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, deletionMetadata);
       this.refreshSelectionPanel();
       this._focusBoard();
     },
@@ -1782,7 +1773,7 @@ export default {
         if (target && target.isType(...FILL_INK_TYPES) && target.editable) {
           target.enterEditing();
           target.selectAll();
-        } else if (target && target.formulaType === FORMULA_TYPE) {
+        } else if (target && this._boardObjectPolicy.isFormula(target)) {
           // Edit formula
           this.$emit('edit-formula', { 
             latex: target.latex, 

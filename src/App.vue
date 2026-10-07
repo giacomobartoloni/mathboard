@@ -63,6 +63,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <FormulaModal 
       :isVisible="showFormulaModal"
       :initialLatex="editingLatex"
+      :mode="formulaModalMode"
       @close="onFormulaModalClose"
       @insert-formula="onInsertFormula"
       @assist-used="onFormulaAssistUsed"
@@ -97,7 +98,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 import FormulaModal from './components/FormulaModal.vue'
@@ -511,7 +512,8 @@ export default {
     const onEditFormula = ({ latex, position, fabricObject }) => {
       formulaPosition.value = position
       editingLatex.value = latex
-      editingElement.value = fabricObject
+      // markRaw: a reactive proxy breaks Fabric identity checks in replaceFormula.
+      editingElement.value = fabricObject ? markRaw(fabricObject) : null
       formulaModalMode.value = ANALYTICS_FORMULA_MODES.EDIT
       showFormulaModal.value = true
       trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_OPENED, {
@@ -580,8 +582,8 @@ export default {
       trackEvent(ANALYTICS_EVENTS.FORMULA_SUBMITTED, { mode })
 
       if (editingElement.value) {
-        // One gesture: swap the bitmap on the command log, do not remove first.
-        // Removing here used to drop the formula if the new bitmap failed.
+        // One gesture: replace the formula on the command log; do not remove first.
+        // Removing here would drop the existing formula if the new render failed.
         drawBoardRef.value?.replaceFormula(editingElement.value, formulaData)
         editingElement.value = null
       } else if (drawBoardRef.value && drawBoardRef.value.addFormulaToCanvas) {
@@ -604,6 +606,7 @@ export default {
       drawBoardRef,
       fullscreenRootRef,
       showFormulaModal,
+      formulaModalMode,
       showShareStampModal,
       shareStampUrl,
       closeShareStampModal,

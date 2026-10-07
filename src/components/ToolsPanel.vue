@@ -19,79 +19,168 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <template>
   <div class="left-chrome">
-    <div class="tools-panel">
-      <!--     <img alt="Vue logo" src="../assets/logo.png" width="30px" /> -->
-      <div :class="{ selected: selected === 'select' }" @click="select('select')" title="Select (V)">
+    <div class="tools-panel" role="toolbar" aria-label="Drawing tools">
+      <button
+        type="button"
+        class="tool-button"
+        :class="{ selected: selected === 'select' }"
+        :aria-pressed="selected === 'select'"
+        aria-label="Select"
+        title="Select (V)"
+        @click="select('select')"
+      >
         <font-awesome-icon :icon="['fas', 'mouse-pointer']" />
-      </div>
-      <div :class="{ selected: selected === 'pan' }" @click="select('pan')" title="Pan (H)">
+      </button>
+      <button
+        type="button"
+        class="tool-button"
+        :class="{ selected: selected === 'pan' }"
+        :aria-pressed="selected === 'pan'"
+        aria-label="Pan"
+        title="Pan (H)"
+        @click="select('pan')"
+      >
         <font-awesome-icon :icon="['far', 'hand-paper']" />
-      </div>
-      <div :class="{ selected: selected === 'pencil' }" @click="select('pencil')" title="Pen (P)">
+      </button>
+      <button
+        type="button"
+        class="tool-button"
+        :class="{ selected: selected === 'pencil' }"
+        :aria-pressed="selected === 'pencil'"
+        aria-label="Pen"
+        title="Pen (P)"
+        @click="select('pencil')"
+      >
         <font-awesome-icon :icon="['fas', 'pencil-alt']" />
-      </div>
-      <div :class="{ selected: selected === 'font' }" @click="select('font')" title="Text (T)">
+      </button>
+      <button
+        type="button"
+        class="tool-button"
+        :class="{ selected: selected === 'font' }"
+        :aria-pressed="selected === 'font'"
+        aria-label="Text"
+        title="Text (T)"
+        @click="select('font')"
+      >
         <font-awesome-icon :icon="['fas', 'font']" />
-      </div>
-      <div :class="{ selected: selected === 'formula' }" @click="select('formula')" title="Formula (F)">
+      </button>
+      <button
+        type="button"
+        class="tool-button"
+        :class="{ selected: selected === 'formula' }"
+        :aria-pressed="selected === 'formula'"
+        aria-label="Formula"
+        title="Formula (F)"
+        @click="select('formula')"
+      >
         <font-awesome-icon :icon="['fas', 'square-root-alt']" />
-      </div>
-      <div 
-        :class="{ selected: selected === 'shapes' }" 
-        @click="select('shapes')"
+      </button>
+
+      <div
+        class="tool-menu"
         @mouseenter="showShapesSubmenu = true"
         @mouseleave="showShapesSubmenu = false"
-        title="Shapes (S)"
+        @focusout="onShapesFocusOut"
       >
-        <font-awesome-icon :icon="['fas', 'shapes']" />
-        
-        <!-- Submenu per le forme -->
+        <button
+          type="button"
+          class="tool-button"
+          :class="{ selected: selected === 'shapes' }"
+          :aria-pressed="selected === 'shapes'"
+          aria-label="Shapes"
+          aria-controls="shape-options"
+          :aria-expanded="showShapesSubmenu && selected === 'shapes'"
+          title="Shapes (S)"
+          @click="openShapesMenu"
+        >
+          <font-awesome-icon :icon="['fas', 'shapes']" />
+        </button>
+
         <transition name="fade">
-          <div v-if="showShapesSubmenu && selected === 'shapes'" class="shapes-submenu" @click.stop>
-            <div 
+          <div
+            v-if="showShapesSubmenu && selected === 'shapes'"
+            id="shape-options"
+            class="shapes-submenu"
+            role="group"
+            aria-label="Shape options"
+            @click.stop
+          >
+            <button
+              type="button"
+              class="submenu-button"
               :class="{ 'selected-shape': selectedShape === 'rectangle' }"
-              @click="selectShape('rectangle')"
+              :aria-pressed="selectedShape === 'rectangle'"
+              aria-label="Rectangle"
               title="Rectangle (R)"
+              @click="selectShape('rectangle')"
             >
               <font-awesome-icon :icon="['far', 'square']" />
-            </div>
-            <div 
+            </button>
+            <button
+              type="button"
+              class="submenu-button"
               :class="{ 'selected-shape': selectedShape === 'circle' }"
-              @click="selectShape('circle')"
+              :aria-pressed="selectedShape === 'circle'"
+              aria-label="Circle"
               title="Circle (C)"
+              @click="selectShape('circle')"
             >
               <font-awesome-icon :icon="['far', 'circle']" />
-            </div>
-            <div 
+            </button>
+            <button
+              type="button"
+              class="submenu-button line-icon"
               :class="{ 'selected-shape': selectedShape === 'arrow' }"
-              @click="selectShape('arrow')"
-              class="line-icon"
+              :aria-pressed="selectedShape === 'arrow'"
+              aria-label="Line"
               title="Line (L)"
+              @click="selectShape('arrow')"
             >
               |
-            </div>
+            </button>
           </div>
         </transition>
       </div>
 
       <div
+        class="tool-menu"
         @mouseenter="showKitsSubmenu = true"
         @mouseleave="showKitsSubmenu = false"
-        title="Stamps"
+        @focusout="onStampsFocusOut"
       >
-        <font-awesome-icon :icon="['fas', 'wand-magic-sparkles']" />
+        <button
+          type="button"
+          class="tool-button"
+          aria-label="Stamps"
+          aria-controls="stamp-options"
+          :aria-expanded="showKitsSubmenu"
+          title="Stamps"
+          @click="openStampsMenu"
+        >
+          <font-awesome-icon :icon="['fas', 'wand-magic-sparkles']" />
+        </button>
         <transition name="fade">
-          <div v-if="showKitsSubmenu" class="shapes-submenu kits-submenu" @click.stop>
-            <div
+          <div
+            v-if="showKitsSubmenu"
+            id="stamp-options"
+            class="shapes-submenu kits-submenu"
+            role="group"
+            aria-label="Stamp kits"
+            @click.stop
+          >
+            <button
               v-for="kit in stampKits"
               :key="kit.id"
-              @click="insertKit(kit.id)"
+              type="button"
+              class="submenu-button"
+              :aria-label="kit.label"
               :title="kit.label"
+              @click="insertKit(kit.id)"
             >
               <font-awesome-icon
                 :icon="kit.id === 'unitCircle' ? ['fas', 'circle-notch'] : ['fas', 'border-all']"
               />
-            </div>
+            </button>
           </div>
         </transition>
       </div>
@@ -138,13 +227,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </transition>
     </div>
     
-    <div class="history-panel">
-      <div @click="$emit('undo')" title="Undo (Ctrl+Z)">
+    <div class="history-panel" role="toolbar" aria-label="History">
+      <button
+        type="button"
+        class="history-button"
+        aria-label="Undo"
+        title="Undo (Ctrl+Z)"
+        @click="$emit('undo')"
+      >
         <font-awesome-icon :icon="['fas', 'undo']" />
-      </div>
-      <div @click="$emit('redo')" title="Redo (Ctrl+Shift+Z or Ctrl+Y)">
+      </button>
+      <button
+        type="button"
+        class="history-button"
+        aria-label="Redo"
+        title="Redo (Ctrl+Shift+Z or Ctrl+Y)"
+        @click="$emit('redo')"
+      >
         <font-awesome-icon :icon="['fas', 'redo']" />
-      </div>
+      </button>
     </div>
   </div>
 </template>
@@ -220,6 +321,23 @@ export default {
         this.$emit('shape-selected', this.selectedShape);
       }
     },
+    openShapesMenu() {
+      this.select('shapes');
+      this.showShapesSubmenu = true;
+    },
+    openStampsMenu() {
+      this.showKitsSubmenu = true;
+    },
+    onShapesFocusOut(event) {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        this.showShapesSubmenu = false;
+      }
+    },
+    onStampsFocusOut(event) {
+      if (!event.currentTarget.contains(event.relatedTarget)) {
+        this.showKitsSubmenu = false;
+      }
+    },
     selectShape: function (shape) {
       this.$emit('shape-selected', shape);
     },
@@ -275,21 +393,40 @@ export default {
   gap: 4px;
 }
 
-.tools-panel > div {
-  padding: 8px 12px;
-  border-radius: 6px;
+.tool-menu {
   position: relative;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--icon-color);
 }
 
-.tools-panel > div:hover {
+.tool-button,
+.history-button,
+.submenu-button {
+  appearance: none;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  color: var(--icon-color);
+  font: inherit;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.tool-button:hover,
+.history-button:hover,
+.submenu-button:hover {
   background-color: var(--hover-bg);
   transform: translateY(-1px);
 }
 
-.tools-panel > div.selected {
+.tool-button:focus-visible,
+.history-button:focus-visible,
+.submenu-button:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+}
+
+.tool-button.selected {
   background-color: var(--selected-bg);
   color: var(--selected-text);
   box-shadow: var(--selected-shadow);
@@ -307,19 +444,6 @@ export default {
   gap: 4px;
 }
 
-.history-panel > div {
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--icon-color);
-}
-
-.history-panel > div:hover {
-  background-color: var(--hover-bg);
-  transform: translateY(-1px);
-}
-
 .shapes-submenu {
   position: absolute;
   left: 100%;
@@ -335,26 +459,18 @@ export default {
   box-shadow: var(--panel-shadow);
 }
 
-.shapes-submenu > div {
+.submenu-button {
   padding: 6px 10px;
   border-radius: 5px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--icon-color);
 }
 
-.shapes-submenu > div:hover {
-  background-color: var(--hover-bg);
-  transform: translateY(-1px);
-}
-
-.shapes-submenu > div.selected-shape {
+.submenu-button.selected-shape {
   background-color: var(--selected-bg);
   color: var(--selected-text);
   box-shadow: var(--selected-shadow);
 }
 
-.shapes-submenu > div.line-icon {
+.submenu-button.line-icon {
   font-size: 15px;
   font-weight: bold;
   width: 15px;

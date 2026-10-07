@@ -136,9 +136,14 @@ test('inflate nests group children as a Fabric Group', async () => {
   assert.ok(children[1] instanceof Line)
 })
 
-test('inflate calls buildFormula for formula nodes and keeps ink metadata', async () => {
+test('inflate calls buildFormula for formula nodes and keeps ink mode only', async () => {
   const calls = []
-  const fakeImage = { type: 'image', latex: 'x^2' }
+  const fakeImage = {
+    type: 'image',
+    latex: 'x^2',
+    // Renderer polarity for the freshly produced bitmap (current board).
+    mathboardRenderedInkIsLight: false,
+  }
   const [img] = await inflate(
     {
       version: STAMP_VERSION,
@@ -149,6 +154,7 @@ test('inflate calls buildFormula for formula nodes and keeps ink metadata', asyn
           left: 12,
           top: 34,
           mathboardInkMode: 'auto',
+          // Stale opposite polarity from the authoring theme — must not win.
           mathboardRenderedInkIsLight: true,
         },
       ],
@@ -163,9 +169,10 @@ test('inflate calls buildFormula for formula nodes and keeps ink metadata', asyn
   assert.equal(calls[0].latex, 'x^2')
   assert.equal(calls[0].left, 12)
   assert.equal(calls[0].top, 34)
+  assert.equal(calls[0].mathboardInkMode, 'auto')
   assert.equal(img, fakeImage)
   assert.equal(img.mathboardInkMode, 'auto')
-  assert.equal(img.mathboardRenderedInkIsLight, true)
+  assert.equal(img.mathboardRenderedInkIsLight, false)
 })
 
 test('inflate fails when formula builder returns null', async () => {
