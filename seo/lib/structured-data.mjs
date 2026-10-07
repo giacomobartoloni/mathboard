@@ -17,6 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import assert from 'node:assert/strict'
+
 export const ORIGIN = 'https://mathboard.app'
 export const SOFTWARE_ID = `${ORIGIN}/#software`
 export const WEBSITE_ID = `${ORIGIN}/#website`
@@ -44,7 +46,8 @@ function mathboardWebsite() {
   }
 }
 
-function mathboardSoftware() {
+/** Fresh canonical MathBoard software entity for SEO graphs and root parity. */
+export function buildMathboardSoftwareEntity() {
   return {
     '@type': ['SoftwareApplication', 'WebApplication'],
     '@id': SOFTWARE_ID,
@@ -65,6 +68,38 @@ function mathboardSoftware() {
     license: 'https://www.gnu.org/licenses/agpl-3.0.html',
     codeRepository: 'https://github.com/giacomobartoloni/mathboard',
   }
+}
+
+function normalizedTypes(value) {
+  return [...new Set(Array.isArray(value) ? value : [value])].sort()
+}
+
+/** Invariant fields used for root ↔ canonical software parity. */
+export function softwareComparable(node) {
+  return {
+    '@type': normalizedTypes(node['@type']),
+    '@id': node['@id'],
+    name: node.name,
+    url: node.url,
+    description: node.description,
+    applicationCategory: node.applicationCategory,
+    operatingSystem: node.operatingSystem,
+    offers: node.offers,
+    author: node.author,
+    license: node.license,
+    codeRepository: node.codeRepository,
+  }
+}
+
+export function assertSoftwareEntityParity(
+  actual,
+  expected = buildMathboardSoftwareEntity(),
+) {
+  assert.deepStrictEqual(
+    softwareComparable(actual),
+    softwareComparable(expected),
+    'Root structured data does not match canonical MathBoard software entity',
+  )
 }
 
 function webPage(page, { aboutSoftware = false } = {}) {
@@ -109,7 +144,7 @@ export function renderStructuredData(page) {
   const aboutSoftware = isSoftwarePage || page.aboutSoftware === true
 
   if (isSoftwarePage || aboutSoftware) {
-    graph.push(mathboardSoftware())
+    graph.push(buildMathboardSoftwareEntity())
   }
 
   if (

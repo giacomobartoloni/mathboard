@@ -21,7 +21,8 @@ import { ORIGIN, SOFTWARE_ID, WEBSITE_ID } from './structured-data.mjs'
 
 function extractJsonLdDocuments(html) {
   const docs = []
-  const re = /<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/gi
+  const re =
+    /<script\b[^>]*\btype=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
   let match
   while ((match = re.exec(html)) !== null) {
     docs.push(match[1].trim())
