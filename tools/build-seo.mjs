@@ -34,7 +34,12 @@ import {
   validatePages,
   validateRenderedHtml,
 } from '../seo/lib/validate-pages.mjs'
-import { ORIGIN } from '../seo/lib/structured-data.mjs'
+import {
+  ORIGIN,
+  SOFTWARE_ID,
+  assertSchemaContext,
+  assertSoftwareEntityParity,
+} from '../seo/lib/structured-data.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
@@ -130,6 +135,23 @@ async function main() {
 
   await fs.writeFile(path.join(DIST, '404.html'), render404(), 'utf8')
   console.log('✓ 404.html')
+
+  const rootHtml = await fs.readFile(path.join(DIST, 'index.html'), 'utf8')
+  const rootLdMatch = rootHtml.match(
+    /<script\b[^>]*\btype=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i,
+  )
+  if (!rootLdMatch) {
+    throw new Error('Missing JSON-LD on /')
+  }
+  let rootLd
+  try {
+    rootLd = JSON.parse(rootLdMatch[1])
+  } catch (error) {
+    throw new Error(`Invalid JSON-LD on /: ${error.message}`)
+  }
+  assertSchemaContext(rootLd, 'Root JSON-LD')
+  assertSoftwareEntityParity(rootLd)
+  console.log(`✓ root structured data (${SOFTWARE_ID})`)
 }
 
 main().catch((error) => {
