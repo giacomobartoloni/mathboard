@@ -143,6 +143,28 @@ test('E2E-P0-007b formula stamp follows destination board auto ink across themes
   // Chalkboard default ink; vector recolor, no Invert / polarity metadata.
   expect(imported.vectorPaints.length).toBeGreaterThan(0)
   expect(imported.vectorPaints.every((paint) => paint === '#f4f1de')).toBe(true)
+
+  // Theme cycle refreshes selection chrome; object-owned padding must survive.
+  await boot.getByRole('button', { name: /Theme:/ }).click()
+  state = await waitForState(
+    boot,
+    (s) => {
+      const nextRoot = s.objects[0]
+      const formula = nextRoot?.children?.find((c) => c.formulaType === 'katex-formula')
+      return Boolean(
+        nextRoot
+        && formula
+        && formula.vectorPaints.length > 0
+        && formula.vectorPaints.every((paint) => paint === '#000000' || paint === 'black'),
+      )
+    },
+    { timeout: 15000 },
+  )
+  const themedRoot = state.objects[0]
+  const themedFormula = themedRoot.children.find((c) => c.formulaType === 'katex-formula')
+  expect(themedRoot.padding).toBe(12)
+  expect(themedFormula.padding).toBe(12)
+
   await expect(boot.locator('.stamp-error')).toHaveCount(0)
   expect(errors).toEqual([])
   await bootContext.close()

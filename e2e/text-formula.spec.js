@@ -192,7 +192,7 @@ test('E2E-P0-005b formula duplicate keeps vector semantics', async ({ page }) =>
 test('E2E-P0-005c complex vector formula materializes with padding', async ({ page }) => {
   await gotoBoard(page)
   const latex = String.raw`\frac{\int_0^1 x^2\,dx}{\sqrt{1+\alpha^2}}`
-  const state = await insertFormula(page, { latex, x: 360, y: 260 })
+  let state = await insertFormula(page, { latex, x: 360, y: 260 })
   const formula = state.objects.find((o) => o.latex === latex)
   expect(formula).toBeTruthy()
   expect(formula.isVectorFormula).toBe(true)
@@ -201,6 +201,22 @@ test('E2E-P0-005c complex vector formula materializes with padding', async ({ pa
   expect(formula.height).toBeGreaterThan(0)
   expect(formula.padding).toBe(12)
   expect(formula.vectorPaints.length).toBeGreaterThan(0)
+
+  // Light → Dark refreshes selection chrome without resetting Formula padding.
+  await page.getByRole('button', { name: /Theme:/ }).click()
+  state = await waitForState(
+    page,
+    (s) => {
+      const next = s.objects.find((o) => o.latex === latex)
+      return Boolean(
+        next
+        && next.vectorPaints.length > 0
+        && next.vectorPaints.every((paint) => paint === '#f5f5f5'),
+      )
+    },
+    { timeout: 15000 },
+  )
+  expect(state.objects.find((o) => o.latex === latex).padding).toBe(12)
 })
 
 test('E2E-P0-005d formula edit preserves transform after scale and rotate', async ({ page }) => {
