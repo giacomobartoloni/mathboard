@@ -29,6 +29,7 @@ export const LAST_BOARD_ID_KEY = 'mathboard.lastBoardId'
 export const RECOVERY_BOARD_ID_KEY = 'mathboard.recoveryBoardId'
 export const BOARD_PERSISTENCE_ERROR_CODES = Object.freeze({
   BOARD_NOT_FOUND: 'board_not_found',
+  BOARD_RESTORE_FAILED: 'board_restore_failed',
   EDIT_IN_PROGRESS: 'edit_in_progress',
 })
 
@@ -94,6 +95,7 @@ export class BoardPersistenceService {
       state: SAVE_STATES.CLEAN,
       lastSavedAt: null,
       error: null,
+      recoveryFailure: null,
     }
     this._listeners = new Set()
   }
@@ -328,7 +330,10 @@ export class BoardPersistenceService {
     this.title = record.title || record.document.title || 'Untitled board'
     this.changeVersion = 0
     this._writeLastBoardId(record.id)
-    if (this._readRecoveryBoardId() === record.id) this._writeRecoveryBoardId(null)
+    if (this._readRecoveryBoardId() === record.id) {
+      this._writeRecoveryBoardId(null)
+      this._setStatus({ recoveryFailure: null })
+    }
     this._setStatus({
       state: SAVE_STATES.CLEAN,
       lastSavedAt: record.updatedAt || null,
@@ -386,7 +391,9 @@ export class BoardPersistenceService {
         const record = await this.createNewBoard()
         const restoreFailure = {
           boardId: lastId,
-          code: missing ? BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND : 'board_restore_failed',
+          code: missing
+            ? BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND
+            : BOARD_PERSISTENCE_ERROR_CODES.BOARD_RESTORE_FAILED,
           recoverable: !missing,
           error,
         }
