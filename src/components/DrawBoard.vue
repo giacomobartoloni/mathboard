@@ -558,6 +558,9 @@ export default {
       this.refreshSelectionPanel();
     },
     onSelectionPointerUp() {
+      // Fabric starts a transform before it knows whether the pointer will move.
+      // A click (including Formula double-click) has no object:modified event.
+      this._pendingTransform = null;
       if (!this._selectionGesture) return;
       this._selectionGesture = false;
       this.refreshSelectionPanel();

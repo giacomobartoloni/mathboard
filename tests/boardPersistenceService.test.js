@@ -23,7 +23,11 @@ import { Rect } from 'fabric'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js'
 import { ensureMathBoardObjectId } from '../src/board/ids.js'
-import { BoardPersistenceService, SAVE_STATES } from '../src/board/persistence/BoardPersistenceService.js'
+import {
+  BoardPersistenceService,
+  BOARD_PERSISTENCE_ERROR_CODES,
+  SAVE_STATES,
+} from '../src/board/persistence/BoardPersistenceService.js'
 
 installFabricDomStub()
 
@@ -171,7 +175,48 @@ test('bootstrap preserves failed restore metadata while opening a fallback board
   const result = await service.bootstrap()
 
   assert.equal(result.restoreFailure.boardId, 'mb_missing')
-  assert.equal(storage.getItem('mathboard.recoveryBoardId'), 'mb_missing')
+  assert.equal(result.restoreFailure.code, BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND)
+  assert.equal(storage.getItem('mathboard.recoveryBoardId'), null)
   assert.match(result.record.id, /^mb_/)
+  service.dispose()
+})
+
+test('clean but unstable board cannot be replaced', async () => {
+  const current = new Rect({ width: 10, height: 10 })
+  const canvas = makeCanvas([current])
+  const repository = makeRepository()
+  const service = makeService({ canvas, repository, isDocumentStable: () => false })
+  service.boardId = 'mb_current'
+
+  await assert.rejects(() => service.createNewBoard(), /Finish the current board edit/)
+  assert.deepEqual(canvas.getObjects(), [current])
+  assert.equal(repository.puts.length, 0)
+  service.dispose()
+})
+
+test('a change during an in-flight save stays dirty until the next flush', async () => {
+  const rect = new Rect({ width: 10, height: 10 })
+  ensureMathBoardObjectId(rect, 'mbobj_rect')
+  let releaseFirstPut
+  let puts = 0
+  const repository = makeRepository()
+  repository.put = async (record) => {
+    puts += 1
+    if (puts === 1) await new Promise((resolve) => { releaseFirstPut = resolve })
+    return record
+  }
+  const service = makeService({ canvas: makeCanvas([rect]), repository })
+  service.boardId = 'mb_current'
+  service.notifyDocumentChanged()
+  const firstSave = service.flush()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  service.notifyDocumentChanged()
+  releaseFirstPut()
+  await firstSave
+
+  assert.equal(service.status.state, SAVE_STATES.DIRTY)
+  await service.flush()
+  assert.equal(puts, 2)
+  assert.equal(service.status.state, SAVE_STATES.CLEAN)
   service.dispose()
 })

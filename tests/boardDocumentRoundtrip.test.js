@@ -89,6 +89,21 @@ test('nested group preserves child ids', async () => {
   assert.equal(doc.objects[0].objects[0].id, 'mbobj_child')
 })
 
+test('transformed group round-trips child identity, order, and local transforms', async () => {
+  const rect = new Rect({ width: 10, height: 8, left: 3, top: 4 })
+  const text = new IText('x', { left: 20, top: 12, angle: 10 })
+  ensureMathBoardObjectId(rect, 'mbobj_rect')
+  ensureMathBoardObjectId(text, 'mbobj_text')
+  const group = new Group([rect, text], { left: 40, top: 50, angle: 25, scaleX: 1.3, scaleY: 0.9 })
+  ensureMathBoardObjectId(group, 'mbobj_group')
+
+  const first = serializeBoardDocument({ canvas: makeCanvas([group]), boardObjectPolicy: policy, title: 'g' })
+  const { objects } = await materializeBoardDocument(first, { buildFormula: async () => null })
+  const second = serializeBoardDocument({ canvas: makeCanvas(objects), boardObjectPolicy: policy, title: 'g' })
+
+  assert.deepEqual(second.objects[0], first.objects[0])
+})
+
 test('BoardDocument excludes renderer-only formula polarity', () => {
   const rect = new Rect({ width: 10, height: 10 })
   rect.mathboardRenderedInkIsLight = true
