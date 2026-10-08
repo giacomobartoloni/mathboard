@@ -17,7 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { BoardObjectPolicy } from './BoardObjectPolicy.js'
+
 const ID_PREFIX = 'mbobj_'
+const defaultPolicy = new BoardObjectPolicy()
 
 /**
  * @returns {string} mbobj_<uuid>
@@ -59,28 +62,11 @@ export function ensureMathBoardObjectId(object, preferredId) {
   return next
 }
 
-function isFormulaLike(object) {
-  return Boolean(
-    object?.formulaType
-    || (typeof object?.latex === 'string' && object?.objectKind === 'formula'),
-  )
-}
-
-function isBoardGroupLike(object) {
-  return Boolean(
-    object
-    && typeof object.getObjects === 'function'
-    && object.isType?.('Group', 'group')
-    && !object.isType?.('ActiveSelection', 'activeselection')
-    && !isFormulaLike(object),
-  )
-}
-
-function walkFreshIds(object) {
+function walkFreshIds(object, boardObjectPolicy) {
   if (!object) return
   object.mathboardId = createMathBoardObjectId()
-  if (isBoardGroupLike(object)) {
-    object.getObjects().forEach(walkFreshIds)
+  if (boardObjectPolicy.isBoardGroup(object)) {
+    object.getObjects().forEach((child) => walkFreshIds(child, boardObjectPolicy))
   }
 }
 
@@ -90,7 +76,7 @@ function walkFreshIds(object) {
  * Used for Stamp import and board copy.
  * @param {object|object[]} objects
  */
-export function regenerateMathBoardObjectIds(objects) {
+export function regenerateMathBoardObjectIds(objects, { boardObjectPolicy = defaultPolicy } = {}) {
   const list = Array.isArray(objects) ? objects : [objects]
-  list.forEach(walkFreshIds)
+  list.forEach((object) => walkFreshIds(object, boardObjectPolicy))
 }

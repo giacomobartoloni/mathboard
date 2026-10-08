@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { BOARDS_STORE, idbRequest, openMathBoardDb } from './indexedDb.js'
+import { BOARDS_STORE, idbRequest, idbTransactionDone, openMathBoardDb } from './indexedDb.js'
 
 export function createBoardId() {
   return `mb_${globalThis.crypto.randomUUID()}`
@@ -54,7 +54,9 @@ export class IndexedDbBoardRepository {
   async create(record) {
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
+    const done = idbTransactionDone(tx)
     await idbRequest(tx.objectStore(BOARDS_STORE).add(record))
+    await done
     return record
   }
 
@@ -67,7 +69,9 @@ export class IndexedDbBoardRepository {
   async put(record) {
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
+    const done = idbTransactionDone(tx)
     await idbRequest(tx.objectStore(BOARDS_STORE).put(record))
+    await done
     return record
   }
 
@@ -81,6 +85,8 @@ export class IndexedDbBoardRepository {
   async delete(boardId) {
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
+    const done = idbTransactionDone(tx)
     await idbRequest(tx.objectStore(BOARDS_STORE).delete(boardId))
+    await done
   }
 }

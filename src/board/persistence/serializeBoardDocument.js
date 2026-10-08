@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { readSemanticBoardObject } from '../objects/serialize.js'
+import { readSemanticBoardObject, toBoardDocumentNode } from '../objects/serialize.js'
 import {
   BOARD_DOCUMENT_FORMAT,
   BOARD_DOCUMENT_VERSION,
@@ -47,11 +47,11 @@ export function serializeBoardDocument({ canvas, boardObjectPolicy, title }) {
     }
     try {
       objects.push(
-        readSemanticBoardObject(object, {
+        toBoardDocumentNode(readSemanticBoardObject(object, {
           boardObjectPolicy,
           includeId: true,
           ensureId: true,
-        }),
+        })),
       )
     } catch (error) {
       throw new BoardDocumentError(

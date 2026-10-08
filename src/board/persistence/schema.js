@@ -131,7 +131,6 @@ function validateCommonProps(node, path) {
     assertOptionalFiniteNumber(node, key, path)
   })
   assertOptionalString(node, 'mathboardInkMode', path)
-  assertOptionalBoolean(node, 'mathboardRenderedInkIsLight', path)
 }
 
 function validateNode(node, path, depth, seenIds, counters) {

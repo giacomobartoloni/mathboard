@@ -64,3 +64,16 @@ test('ungroup semantics: child IDs preserved when only group is regenerated', ()
   // Ungroup keeps children as-is.
   assert.equal(getMathBoardObjectId(child), childId)
 })
+
+test('formula groups keep renderer children outside the MathBoard identity tree', () => {
+  const child = new Rect({ width: 5, height: 5 })
+  ensureMathBoardObjectId(child, 'mbobj_renderer_child')
+  const formula = new Group([child], { subTargetCheck: false, interactive: false })
+  formula.objectKind = 'formula'
+  formula.latex = 'x^2'
+
+  regenerateMathBoardObjectIds(formula)
+
+  assert.match(formula.mathboardId, /^mbobj_/)
+  assert.equal(child.mathboardId, 'mbobj_renderer_child')
+})
