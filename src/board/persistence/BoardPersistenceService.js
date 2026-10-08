@@ -27,6 +27,18 @@ import {
 
 export const LAST_BOARD_ID_KEY = 'mathboard.lastBoardId'
 export const RECOVERY_BOARD_ID_KEY = 'mathboard.recoveryBoardId'
+export const BOARD_PERSISTENCE_ERROR_CODES = Object.freeze({
+  BOARD_NOT_FOUND: 'board_not_found',
+  EDIT_IN_PROGRESS: 'edit_in_progress',
+})
+
+export class BoardPersistenceError extends Error {
+  constructor(code, message) {
+    super(message)
+    this.name = 'BoardPersistenceError'
+    this.code = code
+  }
+}
 
 export const SAVE_STATES = Object.freeze({
   CLEAN: 'clean',
@@ -132,6 +144,20 @@ export class BoardPersistenceService {
     }
   }
 
+  _readRecoveryBoardId() {
+    try {
+      return this._storage?.getItem?.(RECOVERY_BOARD_ID_KEY) || null
+    } catch {
+      return null
+    }
+  }
+
+  _runScheduledFlush() {
+    void this.flush().catch((error) => {
+      console.error('Automatic board save failed', error)
+    })
+  }
+
   notifyDocumentChanged() {
     this.changeVersion += 1
     this._setStatus({ state: SAVE_STATES.DIRTY, error: null })
@@ -142,13 +168,13 @@ export class BoardPersistenceService {
     if (this._idleTimer) clearTimeout(this._idleTimer)
     this._idleTimer = setTimeout(() => {
       this._idleTimer = null
-      this.flush()
+      this._runScheduledFlush()
     }, this._idleDebounceMs)
 
     if (!this._maxTimer) {
       this._maxTimer = setTimeout(() => {
         this._maxTimer = null
-        this.flush()
+        this._runScheduledFlush()
       }, this._maxWaitMs)
     }
   }
@@ -235,6 +261,12 @@ export class BoardPersistenceService {
   }
 
   async _flushBeforeTransition() {
+    if (!this._isDocumentStable()) {
+      throw new BoardPersistenceError(
+        BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+        'Finish the current board edit before switching boards.',
+      )
+    }
     if (!this.boardId) return
     await this.flush()
     if (this.status.state !== SAVE_STATES.CLEAN && this.status.state !== SAVE_STATES.SAVED) {
@@ -278,7 +310,10 @@ export class BoardPersistenceService {
     await this._flushBeforeTransition()
     const record = await this._repository.get(boardId)
     if (!record?.document) {
-      throw new Error(`Board not found: ${boardId}`)
+      throw new BoardPersistenceError(
+        BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND,
+        `Board not found: ${boardId}`,
+      )
     }
 
     await replaceBoardFromDocument({
@@ -293,6 +328,7 @@ export class BoardPersistenceService {
     this.title = record.title || record.document.title || 'Untitled board'
     this.changeVersion = 0
     this._writeLastBoardId(record.id)
+    if (this._readRecoveryBoardId() === record.id) this._writeRecoveryBoardId(null)
     this._setStatus({
       state: SAVE_STATES.CLEAN,
       lastSavedAt: record.updatedAt || null,
@@ -306,6 +342,12 @@ export class BoardPersistenceService {
    * (e.g. after Stamp URL bootstrap). Does not clear the canvas.
    */
   async adoptCurrentCanvasAsNewBoard() {
+    if (!this._isDocumentStable()) {
+      throw new BoardPersistenceError(
+        BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+        'Finish the current board edit before creating a new board.',
+      )
+    }
     const document = this.serializeCurrent()
     const record = createBoardRecord({
       id: createBoardId(),
@@ -339,9 +381,15 @@ export class BoardPersistenceService {
           state: SAVE_STATES.ERROR,
           error: error?.message || String(error),
         })
-        this._writeRecoveryBoardId(lastId)
+        const missing = error?.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND
+        if (!missing) this._writeRecoveryBoardId(lastId)
         const record = await this.createNewBoard()
-        const restoreFailure = { boardId: lastId, error }
+        const restoreFailure = {
+          boardId: lastId,
+          code: missing ? BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND : 'board_restore_failed',
+          recoverable: !missing,
+          error,
+        }
         this._setStatus({ recoveryFailure: restoreFailure })
         return { record, restoreFailure }
       }

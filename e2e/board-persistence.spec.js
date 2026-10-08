@@ -62,6 +62,15 @@ test('E2E persistence: formula keeps identity and latex across reload', async ({
   const formula = state.objects.find((o) => o.mathboardId === formulaId)
   expect(formula.isVectorFormula).toBe(true)
   expect(formula.latex).toBe('x^2+1')
+
+  await clickOnCanvas(page, { x: Math.round(formula.left + formula.width / 2), y: Math.round(formula.top + formula.height / 2), clickCount: 2 })
+  await latexInput.fill('x^2+2')
+  await page.getByRole('button', { name: 'Update', exact: true }).click()
+  state = await waitForState(page, (s) => s.objects.some((o) => o.latex === 'x^2+2' && o.mathboardId === formulaId))
+  await flushPersistence(page)
+  await restoreBoard(page, boardId)
+  state = await waitForState(page, (s) => s.objects.some((o) => o.latex === 'x^2+2' && o.mathboardId === formulaId))
+  expect(state.history.length).toBe(0)
 })
 
 test('E2E persistence: save reload preserves path identity and clears history', async ({ page }) => {
