@@ -54,9 +54,10 @@ export class IndexedDbBoardRepository {
   async create(record) {
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
-    const done = idbTransactionDone(tx)
-    await idbRequest(tx.objectStore(BOARDS_STORE).add(record))
-    await done
+    await Promise.all([
+      idbRequest(tx.objectStore(BOARDS_STORE).add(record)),
+      idbTransactionDone(tx),
+    ])
     return record
   }
 
@@ -69,9 +70,10 @@ export class IndexedDbBoardRepository {
   async put(record) {
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
-    const done = idbTransactionDone(tx)
-    await idbRequest(tx.objectStore(BOARDS_STORE).put(record))
-    await done
+    await Promise.all([
+      idbRequest(tx.objectStore(BOARDS_STORE).put(record)),
+      idbTransactionDone(tx),
+    ])
     return record
   }
 
@@ -85,8 +87,9 @@ export class IndexedDbBoardRepository {
   async delete(boardId) {
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
-    const done = idbTransactionDone(tx)
-    await idbRequest(tx.objectStore(BOARDS_STORE).delete(boardId))
-    await done
+    await Promise.all([
+      idbRequest(tx.objectStore(BOARDS_STORE).delete(boardId)),
+      idbTransactionDone(tx),
+    ])
   }
 }

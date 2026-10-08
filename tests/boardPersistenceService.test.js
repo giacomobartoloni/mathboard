@@ -194,6 +194,27 @@ test('clean but unstable board cannot be replaced', async () => {
   service.dispose()
 })
 
+test('bootstrap keeps an unloadable board as recoverable', async () => {
+  const storage = new MapStorage()
+  storage.setItem('mathboard.lastBoardId', 'mb_corrupt')
+  const records = new Map([['mb_corrupt', {
+    id: 'mb_corrupt',
+    title: 'Corrupt',
+    document: { format: 'mathboard-board', version: 999, title: 'Corrupt', objects: [] },
+  }]])
+  const service = new BoardPersistenceService({
+    repository: makeRepository(records), boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, storage,
+  })
+  const result = await service.bootstrap()
+  assert.equal(result.restoreFailure.code, BOARD_PERSISTENCE_ERROR_CODES.BOARD_RESTORE_FAILED)
+  assert.equal(result.restoreFailure.recoverable, true)
+  assert.equal(storage.getItem('mathboard.recoveryBoardId'), 'mb_corrupt')
+  assert.equal(records.has('mb_corrupt'), true)
+  service.dispose()
+})
+
 test('a change during an in-flight save stays dirty until the next flush', async () => {
   const rect = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(rect, 'mbobj_rect')
