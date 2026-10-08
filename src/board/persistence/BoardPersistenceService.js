@@ -26,6 +26,7 @@ import {
 } from '../../storage/local/IndexedDbBoardRepository.js'
 
 export const LAST_BOARD_ID_KEY = 'mathboard.lastBoardId'
+export const RECOVERY_BOARD_ID_KEY = 'mathboard.recoveryBoardId'
 
 export const SAVE_STATES = Object.freeze({
   CLEAN: 'clean',
@@ -51,6 +52,7 @@ export class BoardPersistenceService {
     resetHistory,
     suspendHistory,
     getTitle = () => 'Untitled board',
+    isDocumentStable = () => true,
     storage = globalThis.localStorage,
     now = () => new Date().toISOString(),
     idleDebounceMs = IDLE_DEBOUNCE_MS,
@@ -63,6 +65,7 @@ export class BoardPersistenceService {
     this._resetHistory = resetHistory
     this._suspendHistory = suspendHistory
     this._getTitle = getTitle
+    this._isDocumentStable = isDocumentStable
     this._storage = storage
     this._now = now
     this._idleDebounceMs = idleDebounceMs
@@ -120,6 +123,15 @@ export class BoardPersistenceService {
     }
   }
 
+  _writeRecoveryBoardId(boardId) {
+    try {
+      if (boardId) this._storage?.setItem?.(RECOVERY_BOARD_ID_KEY, boardId)
+      else this._storage?.removeItem?.(RECOVERY_BOARD_ID_KEY)
+    } catch {
+      // ignore quota / private mode
+    }
+  }
+
   notifyDocumentChanged() {
     this.changeVersion += 1
     this._setStatus({ state: SAVE_STATES.DIRTY, error: null })
@@ -148,6 +160,11 @@ export class BoardPersistenceService {
     this._maxTimer = null
   }
 
+  dispose() {
+    this._clearTimers()
+    this._listeners.clear()
+  }
+
   serializeCurrent() {
     const canvas = this._getCanvas()
     return serializeBoardDocument({
@@ -163,6 +180,11 @@ export class BoardPersistenceService {
       return null
     }
     if (!this.boardId) return null
+    if (!this._isDocumentStable()) {
+      this._setStatus({ state: SAVE_STATES.DIRTY, error: null })
+      this._scheduleSave()
+      return null
+    }
 
     this._clearTimers()
     const savingVersion = this.changeVersion
@@ -212,8 +234,16 @@ export class BoardPersistenceService {
     return this._savePromise
   }
 
+  async _flushBeforeTransition() {
+    if (!this.boardId) return
+    await this.flush()
+    if (this.status.state !== SAVE_STATES.CLEAN && this.status.state !== SAVE_STATES.SAVED) {
+      throw new Error('Current board must be saved before switching boards.')
+    }
+  }
+
   async createNewBoard() {
-    await this.flush().catch(() => {})
+    await this._flushBeforeTransition()
     const canvas = this._getCanvas()
     const document = createEmptyBoardDocument(this._getTitle())
     const record = createBoardRecord({
@@ -221,6 +251,8 @@ export class BoardPersistenceService {
       title: document.title,
       document,
     })
+
+    await this._repository.put(record)
 
     if (typeof canvas?.discardActiveObject === 'function') {
       canvas.discardActiveObject()
@@ -234,7 +266,6 @@ export class BoardPersistenceService {
     this._resetHistory?.()
     canvas?.requestRenderAll?.()
 
-    await this._repository.put(record)
     this.boardId = record.id
     this.title = record.title
     this.changeVersion = 0
@@ -244,7 +275,7 @@ export class BoardPersistenceService {
   }
 
   async openBoard(boardId) {
-    await this.flush().catch(() => {})
+    await this._flushBeforeTransition()
     const record = await this._repository.get(boardId)
     if (!record?.document) {
       throw new Error(`Board not found: ${boardId}`)
@@ -308,6 +339,11 @@ export class BoardPersistenceService {
           state: SAVE_STATES.ERROR,
           error: error?.message || String(error),
         })
+        this._writeRecoveryBoardId(lastId)
+        const record = await this.createNewBoard()
+        const restoreFailure = { boardId: lastId, error }
+        this._setStatus({ recoveryFailure: restoreFailure })
+        return { record, restoreFailure }
       }
     }
     return this.createNewBoard()

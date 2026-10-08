@@ -248,8 +248,15 @@ export default {
         suspendHistory: (flag) => {
           this._suspendHistory = Boolean(flag);
         },
+        isDocumentStable: () => this._isDocumentStableForPersistence(),
       });
       return this._persistence;
+    },
+    _isDocumentStableForPersistence() {
+      if (!this.canvas) return false;
+      if (this.isDrawingShape || this.currentShape) return false;
+      if (this._uncommittedText || this._pendingTransform || this._pendingText) return false;
+      return !this.canvas.getActiveObject()?.isEditing;
     },
     async bootstrapPersistence({ adoptCurrent = false } = {}) {
       if (this._persistenceBootstrapped || !this.canvas) return null;
@@ -827,7 +834,6 @@ export default {
         return { ok: false, message: "Board is not ready." };
       }
 
-      regenerateMathBoardObjectIds(objects);
       const group = this._wrapAsStampGroup(objects);
       regenerateMathBoardObjectIds(group);
       this._applyBoardDefaultInkToStampTree(group);
@@ -888,7 +894,6 @@ export default {
       }
 
       this._clearBoardContents();
-      regenerateMathBoardObjectIds(objects);
       const group = this._wrapAsStampGroup(objects);
       regenerateMathBoardObjectIds(group);
       this._applyBoardDefaultInkToStampTree(group);
@@ -1457,6 +1462,7 @@ export default {
           if (existing) existing.after = entry.after;
           else tip.entries.push(entry);
         });
+        this._notifyDocumentChanged();
       } else {
         this._pushCommand({ type: "recolor", entries });
         if (coalesce) this._historyTipKind = "recolor-coalesce";
@@ -1904,6 +1910,7 @@ export default {
     });
   },
   beforeUnmount() {
+    this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
     });

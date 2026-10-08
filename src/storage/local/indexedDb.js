@@ -52,3 +52,11 @@ export function idbRequest(request) {
     request.onerror = () => reject(request.error || new Error('IndexedDB request failed.'))
   })
 }
+
+export function idbTransactionDone(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () => reject(transaction.error || new Error('IndexedDB transaction aborted.'))
+    transaction.onerror = () => reject(transaction.error || new Error('IndexedDB transaction failed.'))
+  })
+}

@@ -296,7 +296,10 @@ export default {
       const ready = await waitForBoardReady()
       if (!ready || !drawBoardRef.value) return
       try {
-        await drawBoardRef.value.bootstrapPersistence()
+        const result = await drawBoardRef.value.bootstrapPersistence()
+        if (result?.restoreFailure) {
+          stampError.value = 'MathBoard could not restore your previous board. A new local board was opened, but the previous board is still stored locally.'
+        }
       } catch (error) {
         console.error('Local board restore failed', error)
         stampError.value = error?.message || 'Could not restore the local board.'

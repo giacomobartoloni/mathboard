@@ -89,6 +89,20 @@ test('nested group preserves child ids', async () => {
   assert.equal(doc.objects[0].objects[0].id, 'mbobj_child')
 })
 
+test('BoardDocument excludes renderer-only formula polarity', () => {
+  const rect = new Rect({ width: 10, height: 10 })
+  rect.mathboardRenderedInkIsLight = true
+  ensureMathBoardObjectId(rect, 'mbobj_rect')
+
+  const document = serializeBoardDocument({
+    canvas: makeCanvas([rect]),
+    boardObjectPolicy: policy,
+    title: 'No renderer state',
+  })
+
+  assert.equal('mathboardRenderedInkIsLight' in document.objects[0], false)
+})
+
 test('atomic replace leaves current board on materialize failure', async () => {
   const keep = new Rect({ width: 9, height: 9, left: 1, top: 1 })
   ensureMathBoardObjectId(keep, 'mbobj_keep')

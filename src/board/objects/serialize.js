@@ -224,3 +224,11 @@ export function toStampNode(semantic) {
   }
   return { ...rest, type: semantic.type }
 }
+
+/** BoardDocument deliberately excludes renderer-only legacy polarity. */
+export function toBoardDocumentNode(semantic) {
+  if (!semantic || typeof semantic !== 'object') return semantic
+  const { mathboardRenderedInkIsLight, objects, ...rest } = semantic
+  void mathboardRenderedInkIsLight
+  return objects ? { ...rest, objects: objects.map(toBoardDocumentNode) } : rest
+}
