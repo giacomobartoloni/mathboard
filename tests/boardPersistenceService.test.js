@@ -26,6 +26,7 @@ import { ensureMathBoardObjectId } from '../src/board/ids.js'
 import {
   BoardPersistenceService,
   BOARD_PERSISTENCE_ERROR_CODES,
+  RECOVERY_BOARD_ID_KEY,
   SAVE_STATES,
 } from '../src/board/persistence/BoardPersistenceService.js'
 
@@ -212,6 +213,33 @@ test('bootstrap keeps an unloadable board as recoverable', async () => {
   assert.equal(result.restoreFailure.recoverable, true)
   assert.equal(storage.getItem('mathboard.recoveryBoardId'), 'mb_corrupt')
   assert.equal(records.has('mb_corrupt'), true)
+  service.dispose()
+})
+
+test('opening the recovery board clears recovery metadata', async () => {
+  const storage = new MapStorage()
+  storage.setItem(RECOVERY_BOARD_ID_KEY, 'mb_recovery')
+  const records = new Map([['mb_recovery', {
+    id: 'mb_recovery',
+    title: 'Recovered',
+    updatedAt: '2026-10-08T00:00:00.000Z',
+    document: { format: 'mathboard-board', version: 1, title: 'Recovered', objects: [] },
+  }]])
+  const service = new BoardPersistenceService({
+    repository: makeRepository(records), boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, storage,
+  })
+  service.status = {
+    ...service.status,
+    recoveryFailure: { boardId: 'mb_recovery', recoverable: true },
+  }
+
+  await service.openBoard('mb_recovery')
+
+  assert.equal(storage.getItem(RECOVERY_BOARD_ID_KEY), null)
+  assert.equal(service.status.recoveryFailure, null)
+  assert.equal(service.boardId, 'mb_recovery')
   service.dispose()
 })
 
