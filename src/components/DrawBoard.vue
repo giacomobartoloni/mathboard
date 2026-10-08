@@ -46,6 +46,13 @@ import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
 import {
+  ensureMathBoardObjectId,
+  getMathBoardObjectId,
+  regenerateMathBoardObjectIds,
+} from "../board/ids.js";
+import { BoardPersistenceService } from "../board/persistence/BoardPersistenceService.js";
+import { IndexedDbBoardRepository } from "../storage/local/IndexedDbBoardRepository.js";
+import {
   applySelectionObjectChrome,
   selectionChromeForBoard,
   selectionObjectChromeForBoard,
@@ -213,8 +220,50 @@ export default {
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
+    this._persistence = null;
+    this._persistenceBootstrapped = false;
   },
   methods: {
+    _notifyDocumentChanged() {
+      this._persistence?.notifyDocumentChanged();
+    },
+    _ensureObjectId(object) {
+      if (!object) return null;
+      return ensureMathBoardObjectId(object);
+    },
+    getPersistenceStatus() {
+      return this._persistence?.status || null;
+    },
+    getBoardId() {
+      return this._persistence?.boardId || null;
+    },
+    _ensurePersistenceService() {
+      if (this._persistence) return this._persistence;
+      this._persistence = new BoardPersistenceService({
+        repository: new IndexedDbBoardRepository(),
+        boardObjectPolicy: this._boardObjectPolicy,
+        getCanvas: () => this.canvas,
+        buildFormula: (spec) => this._buildFormulaFromStamp(spec),
+        resetHistory: () => this._resetHistory(),
+        suspendHistory: (flag) => {
+          this._suspendHistory = Boolean(flag);
+        },
+      });
+      return this._persistence;
+    },
+    async bootstrapPersistence({ adoptCurrent = false } = {}) {
+      if (this._persistenceBootstrapped || !this.canvas) return null;
+      const persistence = this._ensurePersistenceService();
+      const record = adoptCurrent
+        ? await persistence.adoptCurrentCanvasAsNewBoard()
+        : await persistence.bootstrap();
+      this._persistenceBootstrapped = true;
+      this.refreshSelectionPanel();
+      return record;
+    },
+    async flushPersistence() {
+      return this._persistence?.flush();
+    },
     fitToContainer(canvas) {
       canvas.style.width = "100%";
       canvas.style.height = "100%";
@@ -543,6 +592,8 @@ export default {
       FORMULA_CLONE_PROPS.forEach((key) => {
         if (object[key] !== undefined) clone[key] = object[key];
       });
+      // Duplicate always gets fresh identity (including nested board groups).
+      regenerateMathBoardObjectIds(clone);
       clone.setCoords();
       return clone;
     },
@@ -776,7 +827,9 @@ export default {
         return { ok: false, message: "Board is not ready." };
       }
 
+      regenerateMathBoardObjectIds(objects);
       const group = this._wrapAsStampGroup(objects);
+      regenerateMathBoardObjectIds(group);
       this._applyBoardDefaultInkToStampTree(group);
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
@@ -835,7 +888,9 @@ export default {
       }
 
       this._clearBoardContents();
+      regenerateMathBoardObjectIds(objects);
       const group = this._wrapAsStampGroup(objects);
+      regenerateMathBoardObjectIds(group);
       this._applyBoardDefaultInkToStampTree(group);
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
@@ -888,6 +943,8 @@ export default {
           memberEntries.map((entry) => entry.object),
           { subTargetCheck: false, interactive: false },
         );
+        // New group identity; children keep theirs.
+        ensureMathBoardObjectId(group);
         this.canvas.add(group);
         this.canvas.setActiveObject(group);
       } finally {
@@ -1115,6 +1172,8 @@ export default {
       }
       nextFormula.set(transformPatch);
       nextFormula.setCoords();
+      // Formula replace creates a new Fabric instance but keeps identity.
+      ensureMathBoardObjectId(nextFormula, getMathBoardObjectId(existing));
 
       const index = this.canvas.getObjects().indexOf(existing);
       this._suspendHistory = true;
@@ -1488,9 +1547,11 @@ export default {
         this._historyStep--;
       }
       this._historyTipKind = "command";
+      this._notifyDocumentChanged();
     },
     _recordAdd(object) {
       if (!object || !this.canvas) return;
+      this._ensureObjectId(object);
       const index = this.canvas.getObjects().indexOf(object);
       if (index < 0) return;
       this._pushCommand({ type: 'add', object, index });
@@ -1639,11 +1700,13 @@ export default {
     undo() {
       const command = this._runHistory('undo');
       if (!command) return;
+      this._notifyDocumentChanged();
       trackEvent(ANALYTICS_EVENTS.UNDO_USED, { command_type: command.type });
     },
     redo() {
       const command = this._runHistory('redo');
       if (!command) return;
+      this._notifyDocumentChanged();
       trackEvent(ANALYTICS_EVENTS.REDO_USED, { command_type: command.type });
     },
     onPathCreated({ path }) {

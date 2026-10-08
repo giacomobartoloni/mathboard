@@ -98,6 +98,7 @@ function snapshotForE2e(obj, { includeChildren = true } = {}) {
       : (obj.radius != null ? Number(obj.radius) : null),
     text: typeof obj.text === 'string' ? obj.text : null,
     latex: typeof obj.latex === 'string' ? obj.latex : null,
+    mathboardId: typeof obj.mathboardId === 'string' ? obj.mathboardId : null,
     formulaType: typeof obj.formulaType === 'string'
       ? obj.formulaType
       : null,
@@ -163,6 +164,8 @@ function getBoardState(board) {
       )
     : 0
 
+  const persistence = board._persistence?.status || null
+
   return {
     zoom: Number(canvas.getZoom()),
     viewportTransform: [...canvas.viewportTransform],
@@ -175,6 +178,14 @@ function getBoardState(board) {
       type: objectType(active),
       selectionCount,
     },
+    boardId: board._persistence?.boardId ?? null,
+    persistence: persistence
+      ? {
+          state: persistence.state,
+          lastSavedAt: persistence.lastSavedAt,
+          error: persistence.error,
+        }
+      : null,
     objects: canvas.getObjects().map(snapshotForE2e),
   }
 }
@@ -203,6 +214,7 @@ export function installBoardE2eHook(getBoard) {
     marker: E2E_MARKER,
     getState: () => getBoardState(getBoard()),
     setFormulaTransform: (latex, patch) => setFormulaTransform(getBoard, latex, patch),
+    flushPersistence: () => getBoard()?.flushPersistence?.(),
   })
 
   return () => {

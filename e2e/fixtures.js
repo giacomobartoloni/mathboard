@@ -32,6 +32,14 @@ export async function seedBoardStorage(page, { boardTheme = 'light' } = {}) {
     }))
     localStorage.setItem('mathboard_ui_theme', theme === 'light' ? 'light' : 'dark')
     localStorage.setItem('mathboard_board_theme', theme)
+    // Isolate persistence across tests. A reload can opt into restore via sessionStorage.
+    const restoreId = sessionStorage.getItem('mathboard.e2e.restoreBoardId')
+    if (restoreId) {
+      localStorage.setItem('mathboard.lastBoardId', restoreId)
+      sessionStorage.removeItem('mathboard.e2e.restoreBoardId')
+    } else {
+      localStorage.removeItem('mathboard.lastBoardId')
+    }
   }, boardTheme)
 }
 
@@ -39,8 +47,10 @@ export async function gotoBoard(page, path = '/', options = {}) {
   await seedBoardStorage(page, options)
   await page.goto(path)
   await page.waitForFunction(() => {
-    return Boolean(window.__MATHBOARD_E2E__?.getState)
+    const state = window.__MATHBOARD_E2E__?.getState?.()
+    return Boolean(state)
       && Boolean(document.querySelector('canvas.upper-canvas'))
+      && Boolean(state.boardId)
   })
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   return getBoardState(page)

@@ -266,35 +266,55 @@ export default {
 
     const bootstrapStampFromUrl = async () => {
       const payload = readStampFromLocation()
-      if (!payload) return
+      if (!payload) return false
       try {
         const ready = await waitForBoardReady()
         if (!ready || !drawBoardRef.value) {
           trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
           stampError.value = 'Board is not ready to load the stamp link.'
-          return
+          return false
         }
         const result = await drawBoardRef.value.bootstrapFromStamp(payload)
         if (!result?.ok) {
           trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
           stampError.value = result?.message || 'Could not load stamp from the link.'
-          return
+          return false
         }
         trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_OPENED)
         selectedTool.value = 'select'
+        return true
       } catch (error) {
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
         stampError.value = error?.message || 'Could not load stamp from the link.'
+        return false
       } finally {
         clearStampFromLocation()
       }
     }
 
-    onMounted(() => {
+    const bootstrapLocalBoard = async () => {
+      const ready = await waitForBoardReady()
+      if (!ready || !drawBoardRef.value) return
+      try {
+        await drawBoardRef.value.bootstrapPersistence()
+      } catch (error) {
+        console.error('Local board restore failed', error)
+        stampError.value = error?.message || 'Could not restore the local board.'
+      }
+    }
+
+    onMounted(async () => {
       fullscreenSupported.value = detectFullscreenSupport()
       document.addEventListener('fullscreenchange', syncFullscreenState)
       syncFullscreenState()
-      bootstrapStampFromUrl()
+      const stampLoaded = await bootstrapStampFromUrl()
+      if (stampLoaded) {
+        // Stamp URL starts a new session: keep canvas, mint a new local board id.
+        const ready = await waitForBoardReady()
+        if (ready) await drawBoardRef.value?.bootstrapPersistence({ adoptCurrent: true })
+      } else {
+        await bootstrapLocalBoard()
+      }
     })
 
     onBeforeUnmount(() => {
