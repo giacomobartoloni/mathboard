@@ -215,6 +215,10 @@ export function installBoardE2eHook(getBoard) {
     getState: () => getBoardState(getBoard()),
     setFormulaTransform: (latex, patch) => setFormulaTransform(getBoard, latex, patch),
     flushPersistence: () => getBoard()?.flushPersistence?.(),
+    createObjects: (specs, options) => getBoard().getBoardController().createMany(specs, options),
+    updateObject: (id, patch) => getBoard().getBoardController().update(id, patch),
+    deleteObject: (id) => getBoard().getBoardController().delete(id),
+    observeBoard: () => getBoard().getBoardController().observe(),
   })
 
   return () => {
