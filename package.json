@@ -1,8 +1,11 @@
 {
   "name": "mathboard",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vite",
     "build:app": "vite build",

@@ -26,6 +26,7 @@ export default {
     'MathBoard is a free, browser-based math whiteboard released under the GNU AGPL v3. View the source, report issues, or contribute on GitHub.',
   h1: 'An open-source whiteboard for math',
   structuredData: 'webpage',
+  aboutSoftware: true,
   body: `
     <p class="lede">
       MathBoard is released under the <strong>GNU Affero General Public License v3</strong>.
