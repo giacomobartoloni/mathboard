@@ -30,6 +30,9 @@ const FORBIDDEN_MARKERS = [
   'installE2eHook',
   'uninstallE2eHook',
   'installBoardE2eHook',
+  'MATHBOARD_LOCAL_AGENT_BRIDGE_V1',
+  '__mathboard_agent',
+  'installLocalAgentBrowserBridge',
 ]
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -72,7 +75,7 @@ async function main() {
   }
 
   if (hits.length) {
-    console.error('production E2E leakage detected:')
+    console.error('production development instrumentation leakage detected')
     for (const hit of hits) {
       console.error(`  ${hit.file}`)
       console.error(`  marker: ${hit.marker}`)
