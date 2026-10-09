@@ -17,29 +17,12 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import { localAgentModePlugin } from './tools/vite/local-agent-mode-plugin.mjs'
+import { mountMathBoard } from '../src/app-bootstrap.js'
+import { installLocalAgentBrowserBridge } from './local-agent-browser-bridge.js'
 
-function e2eEntryPlugin() {
-  return {
-    name: 'mathboard-e2e-entry',
-    transformIndexHtml: {
-      order: 'pre',
-      handler(html) {
-        return html.replace(
-          'src="/src/main.js"',
-          'src="/e2e/main.js"',
-        )
-      },
-    },
-  }
+const root = mountMathBoard()
+const uninstall = installLocalAgentBrowserBridge(() => root.drawBoardRef)
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(uninstall)
 }
-
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    vue(),
-    ...(mode === 'e2e' ? [e2eEntryPlugin()] : []),
-    ...(mode === 'agent' ? [localAgentModePlugin()] : []),
-  ],
-}))
