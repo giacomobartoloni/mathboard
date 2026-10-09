@@ -237,7 +237,7 @@ export default {
         suspendHistory: (flag) => {
           this._suspendHistory = Boolean(flag);
         },
-        isDocumentStable: () => this._isDocumentStableForPersistence(),
+        isDocumentStable: () => this._isBoardInteractionStable(),
       });
       return this._persistence;
     },
@@ -257,7 +257,7 @@ export default {
           applySelectionObjectChrome(object, selectionObjectChromeForBoard(this.boardTheme));
         },
         afterMutation: () => this.refreshSelectionPanel(),
-        isMutationStable: () => this.sessionReady && this._isDocumentStableForPersistence(),
+        isMutationStable: () => this.sessionReady && this._isBoardInteractionStable(),
         getBoardId: () => this.getBoardId(),
       });
       return this._boardController;
@@ -271,7 +271,7 @@ export default {
         this._suspendHistory = previous;
       }
     },
-    _isDocumentStableForPersistence() {
+    _isBoardInteractionStable() {
       if (!this.canvas) return false;
       if (this.isDrawingShape || this.currentShape || this._pencilGesture) return false;
       if (this._uncommittedText || this._pendingTransform || this._pendingText) return false;

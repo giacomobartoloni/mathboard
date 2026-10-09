@@ -45,7 +45,6 @@ export const SAVE_STATES = Object.freeze({
   CLEAN: 'clean',
   DIRTY: 'dirty',
   SAVING: 'saving',
-  SAVED: 'saved',
   ERROR: 'error',
 })
 
@@ -87,7 +86,6 @@ export class BoardPersistenceService {
     this.boardId = null
     this.title = 'Untitled board'
     this.changeVersion = 0
-    this._savingVersion = null
     this._idleTimer = null
     this._maxTimer = null
     this._savePromise = null
@@ -97,27 +95,10 @@ export class BoardPersistenceService {
       error: null,
       recoveryFailure: null,
     }
-    this._listeners = new Set()
-  }
-
-  onStatusChange(listener) {
-    this._listeners.add(listener)
-    return () => this._listeners.delete(listener)
-  }
-
-  _emit() {
-    this._listeners.forEach((listener) => {
-      try {
-        listener(this.status)
-      } catch (error) {
-        console.error('BoardPersistenceService listener failed', error)
-      }
-    })
   }
 
   _setStatus(patch) {
     this.status = { ...this.status, ...patch }
-    this._emit()
   }
 
   _readLastBoardId() {
@@ -190,7 +171,6 @@ export class BoardPersistenceService {
 
   dispose() {
     this._clearTimers()
-    this._listeners.clear()
   }
 
   serializeCurrent() {
@@ -204,7 +184,7 @@ export class BoardPersistenceService {
 
   async flush() {
     if (this._savePromise) return this._savePromise
-    if (this.status.state === SAVE_STATES.CLEAN || this.status.state === SAVE_STATES.SAVED) {
+    if (this.status.state === SAVE_STATES.CLEAN) {
       return null
     }
     if (!this.boardId) return null
@@ -216,7 +196,6 @@ export class BoardPersistenceService {
 
     this._clearTimers()
     const savingVersion = this.changeVersion
-    this._savingVersion = savingVersion
     this._setStatus({ state: SAVE_STATES.SAVING, error: null })
 
     this._savePromise = (async () => {
@@ -236,12 +215,10 @@ export class BoardPersistenceService {
 
         if (this.changeVersion === savingVersion) {
           this._setStatus({
-            state: SAVE_STATES.SAVED,
+            state: SAVE_STATES.CLEAN,
             lastSavedAt: now,
             error: null,
           })
-          // Settle to clean after a brief saved flash for UI.
-          this._setStatus({ state: SAVE_STATES.CLEAN })
         } else {
           this._setStatus({ state: SAVE_STATES.DIRTY })
           this._scheduleSave()
@@ -255,7 +232,6 @@ export class BoardPersistenceService {
         throw error
       } finally {
         this._savePromise = null
-        this._savingVersion = null
       }
     })()
 
@@ -271,7 +247,7 @@ export class BoardPersistenceService {
     }
     if (!this.boardId) return
     await this.flush()
-    if (this.status.state !== SAVE_STATES.CLEAN && this.status.state !== SAVE_STATES.SAVED) {
+    if (this.status.state !== SAVE_STATES.CLEAN) {
       throw new Error('Current board must be saved before switching boards.')
     }
   }

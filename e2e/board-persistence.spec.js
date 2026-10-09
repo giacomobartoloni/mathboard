@@ -83,33 +83,47 @@ test('E2E persistence: formula keeps identity and latex across reload', async ({
   expect(state.history.length).toBe(0)
 })
 
-test('E2E persistence: save reload preserves path identity and clears history', async ({ page }) => {
-  await gotoBoard(page)
+test('E2E persistence: autosave reload preserves a pen stroke and starts a fresh history', async ({ page }) => {
+  await gotoBoard(page, '/', { preserveLastBoardId: true })
+  const initial = await getBoardState(page)
   await selectTool(page, 'Pen')
   await dragOnCanvas(page, safeDrag())
 
   let state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Path'))
   expect(state.history.length).toBeGreaterThan(0)
-  const pathId = state.objects.find((o) => o.type === 'Path').mathboardId
+  const originalPath = state.objects.find((o) => o.type === 'Path')
+  const pathId = originalPath.mathboardId
   expect(pathId).toMatch(/^mbobj_/)
   const boardId = state.boardId
   expect(boardId).toMatch(/^mb_/)
 
-  await flushPersistence(page)
-  state = await waitForState(page, (s) => s.persistence?.state === 'clean' || s.persistence?.state === 'saved')
-
-  // Init script clears lastBoardId on navigation unless this session flag is set.
-  await page.evaluate((id) => {
-    sessionStorage.setItem('mathboard.e2e.restoreBoardId', id)
-  }, boardId)
-
+  state = await waitForState(page, (s) => (
+    s.persistence?.state === 'clean'
+    && s.persistence.lastSavedAt
+    && s.persistence.lastSavedAt !== initial.persistence?.lastSavedAt
+  ), { timeout: 15000 })
+  const savedAt = state.persistence.lastSavedAt
   await page.reload()
   await page.waitForFunction(() => window.__MATHBOARD_E2E__?.getState?.()?.boardId)
 
-  state = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Path'))
+  state = await waitForState(page, (s) => s.objects.some((o) => o.mathboardId === pathId))
   expect(state.boardId).toBe(boardId)
-  expect(state.objects.find((o) => o.type === 'Path').mathboardId).toBe(pathId)
+  const restoredPath = state.objects.find((o) => o.mathboardId === pathId)
+  expect(restoredPath.type).toBe('Path')
+  for (const property of ['left', 'top', 'width', 'height']) {
+    expect(restoredPath[property]).toBeCloseTo(originalPath[property], 2)
+  }
+  expect(state.persistence.lastSavedAt).toBe(savedAt)
   expect(state.history.length).toBe(0)
+
+  await selectTool(page, 'Pen')
+  await dragOnCanvas(page, { x1: 460, y1: 180, x2: 540, y2: 260 })
+  state = await waitForState(page, (s) => (
+    s.objects.filter((o) => o.type === 'Path').length === 2
+    && s.history.length > 0
+  ))
+  expect(state.boardId).toBe(boardId)
+  expect(state.objects.some((o) => o.mathboardId === pathId)).toBe(true)
 })
 
 test('E2E persistence: zoom does not dirty the document', async ({ page }) => {

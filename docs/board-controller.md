@@ -41,7 +41,7 @@ Unknown patch fields are rejected. Style, intrinsic shape geometry, group childr
 
 ## Integration and errors
 
-The constructor receives `getCanvas`, `boardObjectPolicy`, `buildFormula` and `pushHistoryCommand`; optional `isMutationStable` (defaulting to true) defines the committed interaction boundary; other callbacks provide history suppression, runtime decoration, selection-panel refresh and board ID. Formula UI create/edit routes through this same boundary; product analytics remains in DrawBoard. Other human gestures retain their existing Fabric/history paths.
+The constructor receives `getCanvas`, `boardObjectPolicy`, `buildFormula` and `pushHistoryCommand`; required `isMutationStable` is supplied by the interaction owner and defines the committed boundary; other callbacks provide history suppression, runtime decoration, selection-panel refresh and board ID. Formula UI create/edit routes through this same boundary; product analytics remains in DrawBoard. Other human gestures retain their existing Fabric/history paths.
 
 Mutations emit local history commands. DrawBoard's history commit marks persistence dirty exactly once. The controller has no dependency on IndexedDB, analytics or Stamp, and no public `history: false`, networking, operation protocol or global `window` API.
 
@@ -50,4 +50,4 @@ Mutations emit local history commands. DrawBoard's history commit marks persiste
 
 Create fields are explicitly allowlisted by semantic type, including recursive Group children. Paint values must be strings or null, dash arrays contain finite numbers, and ink mode is `auto` or `fixed`. Unknown fields and uncloneable specs fail with `invalid_object_spec`; supplied IDs are still replaced.
 
-`observe().stable` uses the same interaction predicate plus a defensive Text editing check. With `stable: false`, geometry is a transient observation that has not crossed a history commit boundary. Observation does not assign IDs or change the scene.
+`observe().stable` uses the same DrawBoard interaction predicate as controller mutation and autosave. With `stable: false`, geometry is a transient observation that has not crossed a history commit boundary. Observation does not assign IDs or change the scene.
