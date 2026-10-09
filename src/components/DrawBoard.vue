@@ -1219,6 +1219,13 @@ export default {
           object_type: ANALYTICS_OBJECT_TYPES.SHAPE,
           shape: this.selectedShape,
         });
+
+        // One-shot completion, like Text and Formula. Skip it when an explicit
+        // tool switch finalized the gesture through disableShapeDrawing(), so
+        // Pan/Pen/Select chosen mid-gesture is never overridden.
+        if (this.selectedTool === 'shapes') {
+          this.$emit('shape-drawing-completed');
+        }
       }
     },
     createShape(x, y, width, height) {
@@ -1226,7 +1233,9 @@ export default {
         fill: 'transparent',
         stroke: this.activeInk,
         strokeWidth: 2,
-        selectable: true
+        // While Shapes is active this object is still being authored.
+        // The 'select' tool watcher re-enables interaction after commit.
+        selectable: false
       };
       
       let shape;

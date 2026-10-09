@@ -38,6 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @request-formula="onRequestFormula"
       @edit-formula="onEditFormula"
       @text-editing-completed="onTextEditingCompleted"
+      @shape-drawing-completed="onShapeDrawingCompleted"
       @selection-color="onSelectionColor"
     />
     <ToolsPanel
@@ -556,6 +557,11 @@ export default {
       selectedTool.value = 'select'
     }
 
+    const onShapeDrawingCompleted = () => {
+      // Like Text and Formula, Shapes is a one-shot creation tool.
+      selectedTool.value = 'select'
+    }
+
     const onZoomIn = () => {
       drawBoardRef.value?.zoomIn()
       updateZoomLevel()
@@ -629,6 +635,7 @@ export default {
       onFormulaModalClose,
       onFormulaAssistUsed,
       onTextEditingCompleted,
+      onShapeDrawingCompleted,
       onZoomIn,
       onZoomOut,
       onResetZoom,
