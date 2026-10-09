@@ -21,7 +21,7 @@ await board.delete(formula.id)
 - `getObjects()` returns top-level objects in canvas z-order, with recursive semantic Board Group children and canvas-plane positions for ActiveSelection members.
 - `update(id, patch)` returns the updated semantic object. Top-level transform fields and Text content/font fields are supported. Formula `latex` rerenders off-canvas, preserving identity, transform, opacity and z-order.
 - `delete(id)` returns the removed semantic object; Undo restores its retained runtime instance and index.
-- `observe()` returns `{ version: 1, boardId, viewport, selection: { ids }, objects }`. Each top-level semantic object has scene bounds. Formula renderer children, history, DOM and UI state are excluded.
+- `observe()` returns `{ version: 1, stable, boardId, viewport, selection: { ids }, objects }`. Each top-level semantic object has scene bounds. Formula renderer children, history, DOM and UI state are excluded.
 
 ## Identity, ink and positions
 
@@ -41,8 +41,13 @@ Unknown patch fields are rejected. Style, intrinsic shape geometry, group childr
 
 ## Integration and errors
 
-The constructor receives `getCanvas`, `boardObjectPolicy`, `buildFormula` and `pushHistoryCommand`; optional callbacks provide history suppression, runtime decoration, selection-panel refresh and board ID. Formula UI create/edit routes through this same boundary; product analytics remains in DrawBoard. Other human gestures retain their existing Fabric/history paths.
+The constructor receives `getCanvas`, `boardObjectPolicy`, `buildFormula` and `pushHistoryCommand`; optional `isMutationStable` (defaulting to true) defines the committed interaction boundary; other callbacks provide history suppression, runtime decoration, selection-panel refresh and board ID. Formula UI create/edit routes through this same boundary; product analytics remains in DrawBoard. Other human gestures retain their existing Fabric/history paths.
 
 Mutations emit local history commands. DrawBoard's history commit marks persistence dirty exactly once. The controller has no dependency on IndexedDB, analytics or Stamp, and no public `history: false`, networking, operation protocol or global `window` API.
 
-`BoardControllerError.code` is one of `board_not_ready`, `invalid_object_spec`, `object_not_found`, `nested_object_mutation_not_supported`, `invalid_object_patch`, `formula_render_failed`, `board_commit_failed`. Programmable mutations reject an in-progress human Text edit with `board_commit_failed`, leaving its gesture history intact; finish editing before retrying. Formula materialization failure commits nothing; runtime/history commit failure rolls back canvas mutation.
+`BoardControllerError.code` is one of `board_not_ready`, `invalid_object_spec`, `object_not_found`, `nested_object_mutation_not_supported`, `invalid_object_patch`, `formula_render_failed`, `board_commit_failed`. Programmable mutations reject every unstable human gesture with `board_commit_failed`: shape drawing, Pencil strokes, pending transforms, uncommitted Text and live Text editing. Stability is checked before work and again before the live commit, including after asynchronous Formula rendering. Finish the gesture before retrying. App blocks pointer and keyboard editing until local restore or Stamp adoption finishes; storage failure explicitly opens a runtime session with an unsaved warning. Formula materialization failure commits nothing; runtime/history commit failure rolls back canvas mutation. Errors from `afterMutation` are logged without changing a successfully committed response.
+
+
+Create fields are explicitly allowlisted by semantic type, including recursive Group children. Paint values must be strings or null, dash arrays contain finite numbers, and ink mode is `auto` or `fixed`. Unknown fields and uncloneable specs fail with `invalid_object_spec`; supplied IDs are still replaced.
+
+`observe().stable` uses the same interaction predicate plus a defensive Text editing check. With `stable: false`, geometry is a transient observation that has not crossed a history commit boundary. Observation does not assign IDs or change the scene.

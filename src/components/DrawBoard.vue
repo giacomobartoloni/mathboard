@@ -159,6 +159,7 @@ export default {
     selectedShape: { type: String, default: "rectangle" },
     boardTheme: { type: String, default: "light" },
     selectedColor: { type: String, default: null },
+    sessionReady: { type: Boolean, default: true },
     selectionPanelSuspended: { type: Boolean, default: false },
   },
   data() {
@@ -201,6 +202,7 @@ export default {
     this._pendingTransform = null;
     this._pendingText = null;
     this._uncommittedText = null;
+    this._pencilGesture = false;
     this._historyTipKind = "command";
     this._selectionGesture = false;
     // Services stay off data() so they are not reactive proxies.
@@ -255,6 +257,7 @@ export default {
           applySelectionObjectChrome(object, selectionObjectChromeForBoard(this.boardTheme));
         },
         afterMutation: () => this.refreshSelectionPanel(),
+        isMutationStable: () => this.sessionReady && this._isDocumentStableForPersistence(),
         getBoardId: () => this.getBoardId(),
       });
       return this._boardController;
@@ -270,7 +273,7 @@ export default {
     },
     _isDocumentStableForPersistence() {
       if (!this.canvas) return false;
-      if (this.isDrawingShape || this.currentShape) return false;
+      if (this.isDrawingShape || this.currentShape || this._pencilGesture) return false;
       if (this._uncommittedText || this._pendingTransform || this._pendingText) return false;
       return !this.canvas.getActiveObject()?.isEditing;
     },
@@ -573,7 +576,11 @@ export default {
     onSelectionCleared() {
       this.refreshSelectionPanel();
     },
+    onPencilPointerDown() {
+      if (this.canvas.isDrawingMode) this._pencilGesture = true;
+    },
     onSelectionPointerUp() {
+      this._pencilGesture = false;
       // Fabric starts a transform before it knows whether the pointer will move.
       // A click (including Formula double-click) has no object:modified event.
       this._pendingTransform = null;
@@ -1707,6 +1714,7 @@ export default {
       trackEvent(ANALYTICS_EVENTS.REDO_USED, { command_type: command.type });
     },
     onPathCreated({ path }) {
+      this._pencilGesture = false;
       this._recordAdd(path);
       trackBoardEngaged();
       recordProductAction();
@@ -1737,7 +1745,12 @@ export default {
       this._pendingText = { object: target, before: snapshotObject(target) };
       trackEvent(ANALYTICS_EVENTS.TEXT_EDIT_STARTED);
     },
-    onTextEditingExited() {
+    onTextEditingExited({ target }) {
+      const pending = this._pendingText;
+      // Fabric emits no object:modified event when an edit leaves the snapshot unchanged.
+      if (pending?.object === target && snapshotsEqual(pending.before, snapshotObject(target))) {
+        this._pendingText = null;
+      }
       this.refreshSelectionPanel();
     },
     onObjectModified(opt) {
@@ -1828,6 +1841,7 @@ export default {
       this.canvas.on('selection:created', this.onSelectionChanged);
       this.canvas.on('selection:updated', this.onSelectionChanged);
       this.canvas.on('selection:cleared', this.onSelectionCleared);
+      this.canvas.on('mouse:down', this.onPencilPointerDown);
       this.canvas.on('mouse:up', this.onSelectionPointerUp);
 
       // Enable double-click editing for text objects and formulas
@@ -1919,6 +1933,7 @@ export default {
     this.canvas.off('selection:created', this.onSelectionChanged);
     this.canvas.off('selection:updated', this.onSelectionChanged);
     this.canvas.off('selection:cleared', this.onSelectionCleared);
+    this.canvas.off('mouse:down', this.onPencilPointerDown);
     this.canvas.off('mouse:up', this.onSelectionPointerUp);
     
     window.removeEventListener('resize', this.updateCanvasSize);

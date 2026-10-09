@@ -21,39 +21,45 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div
     id="app"
     ref="fullscreenRootRef"
+    :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
   >
     <span class="logo">MathBoard</span>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <DrawBoard 
-      :id="'board'" 
-      :selectedTool="selectedTool" 
-      :selectedShape="selectedShape" 
-      :board-theme="boardTheme"
-      :selected-color="selectedColor"
-      :selection-panel-suspended="showFormulaModal || showShareStampModal"
-      ref="drawBoardRef"
-      @request-formula="onRequestFormula"
-      @edit-formula="onEditFormula"
-      @text-editing-completed="onTextEditingCompleted"
-      @selection-color="onSelectionColor"
-    />
-    <ToolsPanel
-      :selectedTool="selectedTool"
-      :selected-shape="selectedShape"
-      :selected-color="selectedColor"
-      :display-color="displayColor"
-      :main-color="boardThemeConfig.defaultInk"
-      :main-ink-is-light="mainInkIsLight"
-      @tool-selected="onToolSelected"
-      @shape-selected="onShapeSelected"
-      @color-selected="onColorSelected"
-      @undo="onUndo"
-      @redo="onRedo"
-      @insert-kit="onInsertKit"
-    />
+    <div :inert="!boardSessionReady">
+      <DrawBoard
+        :id="'board'"
+        :selectedTool="selectedTool"
+        :selectedShape="selectedShape"
+        :session-ready="boardSessionReady"
+        :board-theme="boardTheme"
+        :selected-color="selectedColor"
+        :selection-panel-suspended="showFormulaModal || showShareStampModal"
+        ref="drawBoardRef"
+        @request-formula="onRequestFormula"
+        @edit-formula="onEditFormula"
+        @text-editing-completed="onTextEditingCompleted"
+        @selection-color="onSelectionColor"
+      />
+      <ToolsPanel
+        :selectedTool="selectedTool"
+        :selected-shape="selectedShape"
+        :selected-color="selectedColor"
+        :display-color="displayColor"
+        :main-color="boardThemeConfig.defaultInk"
+        :main-ink-is-light="mainInkIsLight"
+        @tool-selected="onToolSelected"
+        @shape-selected="onShapeSelected"
+        @color-selected="onColorSelected"
+        @undo="onUndo"
+        @redo="onRedo"
+        @insert-kit="onInsertKit"
+      />
+
+    </div>
+    <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
 
     <div v-if="stampError" class="stamp-error" role="alert">
       <span>{{ stampError }}</span>
@@ -165,6 +171,7 @@ export default {
     CookieBanner,
   },
   setup() {
+    const boardSessionReady = ref(false)
     // Persisted presentation preferences. DrawBoard adapts objects authored with
     // the automatic board ink when boardTheme changes; explicit ink stays put.
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
@@ -294,7 +301,7 @@ export default {
 
     const bootstrapLocalBoard = async () => {
       const ready = await waitForBoardReady()
-      if (!ready || !drawBoardRef.value) return
+      if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for local storage.')
       try {
         const result = await drawBoardRef.value.bootstrapPersistence()
         if (result?.restoreFailure) {
@@ -304,7 +311,7 @@ export default {
         }
       } catch (error) {
         console.error('Local board restore failed', error)
-        stampError.value = error?.message || 'Could not restore the local board.'
+        stampError.value = 'Local board storage is unavailable. Your changes may not be saved.'
       }
     }
 
@@ -312,13 +319,21 @@ export default {
       fullscreenSupported.value = detectFullscreenSupport()
       document.addEventListener('fullscreenchange', syncFullscreenState)
       syncFullscreenState()
-      const stampLoaded = await bootstrapStampFromUrl()
-      if (stampLoaded) {
-        // Stamp URL starts a new session: keep canvas, mint a new local board id.
-        const ready = await waitForBoardReady()
-        if (ready) await drawBoardRef.value?.bootstrapPersistence({ adoptCurrent: true })
-      } else {
-        await bootstrapLocalBoard()
+      try {
+        const stampLoaded = await bootstrapStampFromUrl()
+        if (stampLoaded) {
+          // Stamp URL starts a new session: keep canvas, mint a new local board id.
+          const ready = await waitForBoardReady()
+          if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for Stamp adoption.')
+          await drawBoardRef.value.bootstrapPersistence({ adoptCurrent: true })
+        } else {
+          await bootstrapLocalBoard()
+        }
+      } catch (error) {
+        console.error('Board session bootstrap failed', error)
+        stampError.value = 'Local board storage is unavailable. Your changes may not be saved.'
+      } finally {
+        boardSessionReady.value = true
       }
     })
 
@@ -389,6 +404,7 @@ export default {
     }
 
     const onKeyDown = (event) => {
+      if (!boardSessionReady.value) return
       if (isEscapeShortcut(event)) {
         // The browser uses Escape to leave fullscreen. Do not cancel that.
         if (document.fullscreenElement) return
@@ -626,6 +642,7 @@ export default {
     }
 
     return {
+      boardSessionReady,
       selectedTool,
       selectedShape,
       drawBoardRef,
@@ -823,5 +840,15 @@ body {
     left: 50%;
     transform: translateX(-50%);
   }
+}
+
+.board-session-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-primary);
 }
 </style>

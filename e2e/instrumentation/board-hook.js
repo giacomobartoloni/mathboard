@@ -208,10 +208,12 @@ function setFormulaTransform(getBoard, latex, patch) {
   return true
 }
 
-export function installBoardE2eHook(getBoard) {
+export function installBoardE2eHook(getBoard, bootstrapGate) {
   // Canary string must remain in dist-e2e for assert:e2e-hook (void alone is DCE'd).
   window.__MATHBOARD_E2E__ = Object.freeze({
     marker: E2E_MARKER,
+    isBootstrapWaiting: () => bootstrapGate?.isWaiting() || false,
+    resumeBootstrap: () => bootstrapGate?.resume(),
     getState: () => getBoardState(getBoard()),
     setFormulaTransform: (latex, patch) => setFormulaTransform(getBoard, latex, patch),
     flushPersistence: () => getBoard()?.flushPersistence?.(),

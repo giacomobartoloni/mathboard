@@ -17,8 +17,12 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS } from './constants.js'
+import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from './constants.js'
 import { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES as C } from '../BoardControllerError.js'
+
+const TYPE_KEYS = { rect: ['width', 'height', 'rx', 'ry'], circle: ['radius'],
+  line: ['x1', 'y1', 'x2', 'y2'], path: ['path'], text: ['text', ...TEXT_KEYS],
+  formula: ['latex'], group: ['objects'] }
 
 const NUMERIC_TRANSFORMS = TRANSFORM_KEYS.filter((key) => !['flipX', 'flipY', 'originX', 'originY'].includes(key))
 const NUMERIC_TEXT = ['fontSize', 'lineHeight', 'charSpacing']
@@ -52,6 +56,14 @@ function validateValues(value, code) {
 
 export function validateCreateSpec(spec, ancestors = new Set()) {
   if (!isPlainObject(spec) || !BOARD_OBJECT_TYPES.includes(spec.type) || ancestors.has(spec)) invalid(C.INVALID_SPEC)
+  const allowed = ['type', 'id', ...TRANSFORM_KEYS, ...STYLE_KEYS, 'mathboardInkMode', ...TYPE_KEYS[spec.type]]
+  if (Object.keys(spec).some((key) => !allowed.includes(key))) invalid(C.INVALID_SPEC)
+  for (const key of ['stroke', 'fill', 'strokeLineCap', 'strokeLineJoin']) {
+    if (key in spec && spec[key] !== null && typeof spec[key] !== 'string') invalid(C.INVALID_SPEC)
+  }
+  if ('strokeDashArray' in spec && spec.strokeDashArray !== null
+    && (!Array.isArray(spec.strokeDashArray) || !Array.from(spec.strokeDashArray).every(Number.isFinite))) invalid(C.INVALID_SPEC)
+  if ('mathboardInkMode' in spec && !['auto', 'fixed'].includes(spec.mathboardInkMode)) invalid(C.INVALID_SPEC)
   validateValues(spec, C.INVALID_SPEC)
   if (spec.type === 'text' && typeof spec.text !== 'string') invalid(C.INVALID_SPEC)
   if (spec.type === 'formula' && (typeof spec.latex !== 'string' || !spec.latex.trim())) invalid(C.INVALID_SPEC)
