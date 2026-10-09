@@ -44,7 +44,15 @@ import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSele
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
 import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
+import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
+import {
+  ensureMathBoardObjectId,
+  getMathBoardObjectId,
+  regenerateMathBoardObjectIds,
+} from "../board/ids.js";
+import { BoardPersistenceService } from "../board/persistence/BoardPersistenceService.js";
+import { IndexedDbBoardRepository } from "../storage/local/IndexedDbBoardRepository.js";
 import {
   applySelectionObjectChrome,
   selectionChromeForBoard,
@@ -99,21 +107,6 @@ const FILL_INK_TYPES = ["IText", "Text"];
 // Fabric 7 defaults origin to center/center; keep left/top for click-to-place UX.
 const LEFT_TOP_ORIGIN = { originX: "left", originY: "top" };
 
-// On formula edit, keep the user's transform; new SVG owns width/height.
-const FORMULA_REPLACEMENT_TRANSFORM_KEYS = [
-  "left",
-  "top",
-  "scaleX",
-  "scaleY",
-  "skewX",
-  "skewY",
-  "angle",
-  "flipX",
-  "flipY",
-  "originX",
-  "originY",
-];
-
 // Constants
 const CANVAS_EVENTS = [
   "before:render", "after:render", "canvas:cleared", "object:added", "object:removed",
@@ -166,6 +159,7 @@ export default {
     selectedShape: { type: String, default: "rectangle" },
     boardTheme: { type: String, default: "light" },
     selectedColor: { type: String, default: null },
+    sessionReady: { type: Boolean, default: true },
     selectionPanelSuspended: { type: Boolean, default: false },
   },
   data() {
@@ -208,13 +202,94 @@ export default {
     this._pendingTransform = null;
     this._pendingText = null;
     this._uncommittedText = null;
+    this._pencilGesture = false;
     this._historyTipKind = "command";
     this._selectionGesture = false;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
+    this._persistence = null;
+    this._boardController = null;
+    this._persistenceBootstrapped = false;
   },
   methods: {
+    _notifyDocumentChanged() {
+      this._persistence?.notifyDocumentChanged();
+    },
+    _ensureObjectId(object) {
+      if (!object) return null;
+      return ensureMathBoardObjectId(object);
+    },
+    getPersistenceStatus() {
+      return this._persistence?.status || null;
+    },
+    getBoardId() {
+      return this._persistence?.boardId || null;
+    },
+    _ensurePersistenceService() {
+      if (this._persistence) return this._persistence;
+      this._persistence = new BoardPersistenceService({
+        repository: new IndexedDbBoardRepository(),
+        boardObjectPolicy: this._boardObjectPolicy,
+        getCanvas: () => this.canvas,
+        buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
+        resetHistory: () => this._resetHistory(),
+        suspendHistory: (flag) => {
+          this._suspendHistory = Boolean(flag);
+        },
+        isDocumentStable: () => this._isBoardInteractionStable(),
+      });
+      return this._persistence;
+    },
+    getBoardController() {
+      return this._ensureBoardController();
+    },
+    _ensureBoardController() {
+      if (this._boardController) return this._boardController;
+      this._boardController = new BoardController({
+        getCanvas: () => this.canvas,
+        boardObjectPolicy: this._boardObjectPolicy,
+        buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
+        pushHistoryCommand: (command) => this._pushCommand(command),
+        runWithoutHistory: (callback) => this._runWithoutHistory(callback),
+        prepareCreatedObject: (object) => {
+          this._applyBoardDefaultInkToObjectTree(object);
+          applySelectionObjectChrome(object, selectionObjectChromeForBoard(this.boardTheme));
+        },
+        afterMutation: () => this.refreshSelectionPanel(),
+        isMutationStable: () => this.sessionReady && this._isBoardInteractionStable(),
+        getBoardId: () => this.getBoardId(),
+      });
+      return this._boardController;
+    },
+    _runWithoutHistory(callback) {
+      const previous = this._suspendHistory;
+      this._suspendHistory = true;
+      try {
+        return callback();
+      } finally {
+        this._suspendHistory = previous;
+      }
+    },
+    _isBoardInteractionStable() {
+      if (!this.canvas) return false;
+      if (this.isDrawingShape || this.currentShape || this._pencilGesture) return false;
+      if (this._uncommittedText || this._pendingTransform || this._pendingText) return false;
+      return !this.canvas.getActiveObject()?.isEditing;
+    },
+    async bootstrapPersistence({ adoptCurrent = false } = {}) {
+      if (this._persistenceBootstrapped || !this.canvas) return null;
+      const persistence = this._ensurePersistenceService();
+      const record = adoptCurrent
+        ? await persistence.adoptCurrentCanvasAsNewBoard()
+        : await persistence.bootstrap();
+      this._persistenceBootstrapped = true;
+      this.refreshSelectionPanel();
+      return record;
+    },
+    async flushPersistence() {
+      return this._persistence?.flush();
+    },
     fitToContainer(canvas) {
       canvas.style.width = "100%";
       canvas.style.height = "100%";
@@ -501,7 +576,14 @@ export default {
     onSelectionCleared() {
       this.refreshSelectionPanel();
     },
+    onPencilPointerDown() {
+      if (this.canvas.isDrawingMode) this._pencilGesture = true;
+    },
     onSelectionPointerUp() {
+      this._pencilGesture = false;
+      // Fabric starts a transform before it knows whether the pointer will move.
+      // A click (including Formula double-click) has no object:modified event.
+      this._pendingTransform = null;
       if (!this._selectionGesture) return;
       this._selectionGesture = false;
       this.refreshSelectionPanel();
@@ -543,6 +625,8 @@ export default {
       FORMULA_CLONE_PROPS.forEach((key) => {
         if (object[key] !== undefined) clone[key] = object[key];
       });
+      // Duplicate always gets fresh identity (including nested board groups).
+      regenerateMathBoardObjectIds(clone);
       clone.setCoords();
       return clone;
     },
@@ -632,9 +716,12 @@ export default {
         y: (height / 2 - vpt[5]) / vpt[3],
       };
     },
-    async _buildFormulaFromStamp(spec) {
+    async _buildFormulaFromSemanticSpec(spec) {
+      const fixedInk = spec.mathboardInkMode === INK_MODE_FIXED
+        ? [spec.fill, spec.stroke].find((paint) => paint && paint !== 'none' && paint !== 'transparent')
+        : null;
       const formula = await this._buildFormulaObject(
-        { latex: spec.latex },
+        { latex: spec.latex, ink: fixedInk },
         {
           x: spec.left ?? 0,
           y: spec.top ?? 0,
@@ -662,6 +749,8 @@ export default {
         formula.set(next);
         formula.setCoords();
       }
+      // Keep the monochrome semantic ink on the root for replacement and persistence.
+      if (fixedInk) formula.set('fill', fixedInk);
       // Ink mode is semantic; vector formulas apply destination ink via applyInk.
       applyMaterializedFormulaMetadata(formula, spec);
       return formula;
@@ -669,7 +758,7 @@ export default {
     async _materializeStamp(encoded) {
       const doc = decodeStampString(encoded);
       return materializeStampDocument(doc, {
-        buildFormula: (spec) => this._buildFormulaFromStamp(spec),
+        buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
       });
     },
     _wrapAsStampGroup(objects) {
@@ -714,7 +803,7 @@ export default {
      * follow the theme Main color instead of baked placeholder hex values.
      * Explicit FIXED colors from imported stamps are left alone.
      */
-    _applyBoardDefaultInkToStampTree(root) {
+    _applyBoardDefaultInkToObjectTree(root) {
       if (!root) return;
       const ink = this.boardThemeConfig.defaultInk;
       const walk = (object) => {
@@ -777,7 +866,8 @@ export default {
       }
 
       const group = this._wrapAsStampGroup(objects);
-      this._applyBoardDefaultInkToStampTree(group);
+      regenerateMathBoardObjectIds(group);
+      this._applyBoardDefaultInkToObjectTree(group);
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
@@ -836,7 +926,8 @@ export default {
 
       this._clearBoardContents();
       const group = this._wrapAsStampGroup(objects);
-      this._applyBoardDefaultInkToStampTree(group);
+      regenerateMathBoardObjectIds(group);
+      this._applyBoardDefaultInkToObjectTree(group);
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
@@ -888,6 +979,8 @@ export default {
           memberEntries.map((entry) => entry.object),
           { subTargetCheck: false, interactive: false },
         );
+        // New group identity; children keep theirs.
+        ensureMathBoardObjectId(group);
         this.canvas.add(group);
         this.canvas.setActiveObject(group);
       } finally {
@@ -1054,7 +1147,7 @@ export default {
           latex: formulaData.latex,
           html: formulaData.html,
           position,
-          ink: this.boardThemeConfig.defaultInk,
+          ink: formulaData.ink || this.boardThemeConfig.defaultInk,
           inkIsLight: this.boardThemeConfig.inkIsLight,
         });
       } catch (error) {
@@ -1063,19 +1156,21 @@ export default {
       }
     },
     async addFormulaToCanvas(formulaData, position) {
-      const img = await this._buildFormulaObject(formulaData, position);
-      if (!img) {
-        trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
-          mode: ANALYTICS_FORMULA_MODES.CREATE,
-        });
+      try {
+        await this._ensureBoardController().create({
+          type: 'formula',
+          latex: formulaData.latex,
+          left: position.x,
+          top: position.y,
+        }, { select: true });
+      } catch (error) {
+        if (error.code === BOARD_CONTROLLER_ERROR_CODES.FORMULA_RENDER_FAILED) {
+          trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
+            mode: ANALYTICS_FORMULA_MODES.CREATE,
+          });
+        }
         return false;
       }
-      if (!this.canvas) return false;
-
-      this.canvas.add(img);
-      this.canvas.setActiveObject(img);
-      this.canvas.requestRenderAll();
-      this._recordAdd(img);
       trackBoardEngaged();
       recordProductAction();
       trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
@@ -1086,52 +1181,18 @@ export default {
     async replaceFormula(existing, formulaData) {
       existing = toRaw(existing);
       if (!existing || !this.canvas) return false;
-
-      // Snapshot before async render. A selected formula may still be in group
-      // space; snapshotObject converts to canvas plane.
-      const placed = snapshotObject(existing);
-      const nextFormula = await this._buildFormulaObject(formulaData, {
-        x: placed.left,
-        y: placed.top
-      });
-      if (!nextFormula) {
-        trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
-          mode: ANALYTICS_FORMULA_MODES.EDIT,
+      try {
+        await this._ensureBoardController().update(getMathBoardObjectId(existing), {
+          latex: formulaData.latex,
         });
+      } catch (error) {
+        if (error.code === BOARD_CONTROLLER_ERROR_CODES.FORMULA_RENDER_FAILED) {
+          trackEvent(ANALYTICS_EVENTS.FORMULA_RENDER_FAILED, {
+            mode: ANALYTICS_FORMULA_MODES.EDIT,
+          });
+        }
         return false;
       }
-      if (!this.canvas || !this.canvas.getObjects().includes(existing)) return false;
-
-      // Preserve user transform; intrinsic width/height come from the new SVG.
-      const current = snapshotObject(existing);
-      const transformPatch = {};
-      FORMULA_REPLACEMENT_TRANSFORM_KEYS.forEach((key) => {
-        if (current[key] !== undefined) {
-          transformPatch[key] = current[key];
-        }
-      });
-      if (existing.opacity !== undefined) {
-        transformPatch.opacity = existing.opacity;
-      }
-      nextFormula.set(transformPatch);
-      nextFormula.setCoords();
-
-      const index = this.canvas.getObjects().indexOf(existing);
-      this._suspendHistory = true;
-      try {
-        this._removeRetained(existing);
-        this._insertRetained(nextFormula, index);
-      } finally {
-        this._suspendHistory = false;
-      }
-      this.canvas.setActiveObject(nextFormula);
-      this.canvas.requestRenderAll();
-      this._pushCommand({
-        type: 'replace',
-        index,
-        removed: existing,
-        added: nextFormula
-      });
       trackBoardEngaged();
       recordProductAction();
       trackEvent(ANALYTICS_EVENTS.FORMULA_EDITED);
@@ -1398,6 +1459,7 @@ export default {
           if (existing) existing.after = entry.after;
           else tip.entries.push(entry);
         });
+        this._notifyDocumentChanged();
       } else {
         this._pushCommand({ type: "recolor", entries });
         if (coalesce) this._historyTipKind = "recolor-coalesce";
@@ -1488,9 +1550,11 @@ export default {
         this._historyStep--;
       }
       this._historyTipKind = "command";
+      this._notifyDocumentChanged();
     },
     _recordAdd(object) {
       if (!object || !this.canvas) return;
+      this._ensureObjectId(object);
       const index = this.canvas.getObjects().indexOf(object);
       if (index < 0) return;
       this._pushCommand({ type: 'add', object, index });
@@ -1524,9 +1588,10 @@ export default {
           return;
         }
 
-        if (command.type === 'duplicate') {
+        if (command.type === 'duplicate' || command.type === 'batch-add') {
           if (direction === 'forward') {
-            command.entries.forEach(({ object, index }) => this._insertRetained(object, index));
+            command.entries.slice().sort((a, b) => a.index - b.index)
+              .forEach(({ object, index }) => this._insertRetained(object, index));
           } else {
             canvas.discardActiveObject();
             command.entries.forEach(({ object }) => this._removeRetained(object));
@@ -1639,14 +1704,17 @@ export default {
     undo() {
       const command = this._runHistory('undo');
       if (!command) return;
+      this._notifyDocumentChanged();
       trackEvent(ANALYTICS_EVENTS.UNDO_USED, { command_type: command.type });
     },
     redo() {
       const command = this._runHistory('redo');
       if (!command) return;
+      this._notifyDocumentChanged();
       trackEvent(ANALYTICS_EVENTS.REDO_USED, { command_type: command.type });
     },
     onPathCreated({ path }) {
+      this._pencilGesture = false;
       this._recordAdd(path);
       trackBoardEngaged();
       recordProductAction();
@@ -1660,6 +1728,9 @@ export default {
         this._hideSelectionPanel();
       }
       if (this._suspendHistory || !transform || !transform.target) return;
+      // Native IText editing can start on mouse-down before Fabric announces
+      // the same click as a transform. Keep the edit's history snapshot.
+      if (transform.target.isEditing) return;
       // A text edit commits on exit, before a later drag can start. Drop a
       // snapshot left behind by an edit that did not change the text.
       this._pendingText = null;
@@ -1674,7 +1745,12 @@ export default {
       this._pendingText = { object: target, before: snapshotObject(target) };
       trackEvent(ANALYTICS_EVENTS.TEXT_EDIT_STARTED);
     },
-    onTextEditingExited() {
+    onTextEditingExited({ target }) {
+      const pending = this._pendingText;
+      // Fabric emits no object:modified event when an edit leaves the snapshot unchanged.
+      if (pending?.object === target && snapshotsEqual(pending.before, snapshotObject(target))) {
+        this._pendingText = null;
+      }
       this.refreshSelectionPanel();
     },
     onObjectModified(opt) {
@@ -1765,6 +1841,7 @@ export default {
       this.canvas.on('selection:created', this.onSelectionChanged);
       this.canvas.on('selection:updated', this.onSelectionChanged);
       this.canvas.on('selection:cleared', this.onSelectionCleared);
+      this.canvas.on('mouse:down', this.onPencilPointerDown);
       this.canvas.on('mouse:up', this.onSelectionPointerUp);
 
       // Enable double-click editing for text objects and formulas
@@ -1795,6 +1872,7 @@ export default {
         ...this.definedProps,
       }));
       
+      this._ensureBoardController();
       this.initializeBrush();
       this.setBackgroundPattern();
       this.applySelectionChrome();
@@ -1841,6 +1919,7 @@ export default {
     });
   },
   beforeUnmount() {
+    this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
     });
@@ -1854,6 +1933,7 @@ export default {
     this.canvas.off('selection:created', this.onSelectionChanged);
     this.canvas.off('selection:updated', this.onSelectionChanged);
     this.canvas.off('selection:cleared', this.onSelectionCleared);
+    this.canvas.off('mouse:down', this.onPencilPointerDown);
     this.canvas.off('mouse:up', this.onSelectionPointerUp);
     
     window.removeEventListener('resize', this.updateCanvasSize);

@@ -17,11 +17,49 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { mountMathBoard } from '../src/app-bootstrap.js'
-import { installBoardE2eHook } from './instrumentation/board-hook.js'
+export const BOARD_OBJECT_TYPES = Object.freeze([
+  'rect',
+  'circle',
+  'line',
+  'path',
+  'text',
+  'formula',
+  'group',
+])
 
-import { installBootstrapGate } from './instrumentation/bootstrap-gate.js'
+export const TRANSFORM_KEYS = Object.freeze([
+  'left',
+  'top',
+  'scaleX',
+  'scaleY',
+  'skewX',
+  'skewY',
+  'angle',
+  'flipX',
+  'flipY',
+  'originX',
+  'originY',
+])
 
-const gate = installBootstrapGate()
-const root = mountMathBoard()
-installBoardE2eHook(() => root.drawBoardRef, gate)
+export const STYLE_KEYS = Object.freeze([
+  'stroke',
+  'fill',
+  'strokeWidth',
+  'opacity',
+  'strokeDashArray',
+  'strokeLineCap',
+  'strokeLineJoin',
+])
+
+export const TEXT_KEYS = Object.freeze([
+  'fontSize',
+  'fontFamily',
+  'fontWeight',
+  'fontStyle',
+  'textAlign',
+  'lineHeight',
+  'charSpacing',
+  'underline',
+  'linethrough',
+  'overline',
+])

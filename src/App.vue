@@ -21,43 +21,49 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div
     id="app"
     ref="fullscreenRootRef"
+    :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
   >
     <span class="logo">MathBoard</span>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <DrawBoard 
-      :id="'board'" 
-      :selectedTool="selectedTool" 
-      :selectedShape="selectedShape" 
-      :board-theme="boardTheme"
-      :selected-color="selectedColor"
-      :selection-panel-suspended="showFormulaModal || showShareStampModal"
-      ref="drawBoardRef"
-      @request-formula="onRequestFormula"
-      @edit-formula="onEditFormula"
-      @text-editing-completed="onTextEditingCompleted"
-      @selection-color="onSelectionColor"
-    />
-    <ToolsPanel
-      :selectedTool="selectedTool"
-      :selected-shape="selectedShape"
-      :selected-color="selectedColor"
-      :display-color="displayColor"
-      :main-color="boardThemeConfig.defaultInk"
-      :main-ink-is-light="mainInkIsLight"
-      @tool-selected="onToolSelected"
-      @shape-selected="onShapeSelected"
-      @color-selected="onColorSelected"
-      @undo="onUndo"
-      @redo="onRedo"
-      @insert-kit="onInsertKit"
-    />
+    <div :inert="!boardSessionReady">
+      <DrawBoard
+        :id="'board'"
+        :selectedTool="selectedTool"
+        :selectedShape="selectedShape"
+        :session-ready="boardSessionReady"
+        :board-theme="boardTheme"
+        :selected-color="selectedColor"
+        :selection-panel-suspended="showFormulaModal || showShareStampModal"
+        ref="drawBoardRef"
+        @request-formula="onRequestFormula"
+        @edit-formula="onEditFormula"
+        @text-editing-completed="onTextEditingCompleted"
+        @selection-color="onSelectionColor"
+      />
+      <ToolsPanel
+        :selectedTool="selectedTool"
+        :selected-shape="selectedShape"
+        :selected-color="selectedColor"
+        :display-color="displayColor"
+        :main-color="boardThemeConfig.defaultInk"
+        :main-ink-is-light="mainInkIsLight"
+        @tool-selected="onToolSelected"
+        @shape-selected="onShapeSelected"
+        @color-selected="onColorSelected"
+        @undo="onUndo"
+        @redo="onRedo"
+        @insert-kit="onInsertKit"
+      />
 
-    <div v-if="stampError" class="stamp-error" role="alert">
-      <span>{{ stampError }}</span>
-      <button type="button" @click="stampError = null" aria-label="Dismiss">×</button>
+    </div>
+    <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
+
+    <div v-if="boardError" class="stamp-error" role="alert">
+      <span>{{ boardError }}</span>
+      <button type="button" @click="boardError = null" aria-label="Dismiss">×</button>
     </div>
     
     <FormulaModal 
@@ -165,6 +171,7 @@ export default {
     CookieBanner,
   },
   setup() {
+    const boardSessionReady = ref(false)
     // Persisted presentation preferences. DrawBoard adapts objects authored with
     // the automatic board ink when boardTheme changes; explicit ink stays put.
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
@@ -208,7 +215,7 @@ export default {
     // Mirror of document.fullscreenElement only — never invent a parallel flag.
     const isFullscreen = ref(false)
     const fullscreenSupported = ref(detectFullscreenSupport())
-    const stampError = ref(null)
+    const boardError = ref(null)
     let fullscreenInitialized = false
     let previousFullscreen = false
 
@@ -266,35 +273,63 @@ export default {
 
     const bootstrapStampFromUrl = async () => {
       const payload = readStampFromLocation()
-      if (!payload) return
+      if (!payload) return false
       try {
         const ready = await waitForBoardReady()
         if (!ready || !drawBoardRef.value) {
           trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          stampError.value = 'Board is not ready to load the stamp link.'
-          return
+          boardError.value = 'Board is not ready to load the stamp link.'
+          return false
         }
         const result = await drawBoardRef.value.bootstrapFromStamp(payload)
         if (!result?.ok) {
           trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          stampError.value = result?.message || 'Could not load stamp from the link.'
-          return
+          boardError.value = result?.message || 'Could not load stamp from the link.'
+          return false
         }
         trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_OPENED)
         selectedTool.value = 'select'
+        return true
       } catch (error) {
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-        stampError.value = error?.message || 'Could not load stamp from the link.'
+        boardError.value = error?.message || 'Could not load stamp from the link.'
+        return false
       } finally {
         clearStampFromLocation()
       }
     }
 
-    onMounted(() => {
+    const bootstrapLocalBoard = async () => {
+      const ready = await waitForBoardReady()
+      if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for local storage.')
+      const result = await drawBoardRef.value.bootstrapPersistence()
+      if (result?.restoreFailure) {
+        boardError.value = result.restoreFailure.recoverable
+          ? 'MathBoard could not restore your previous board. A new local board was opened, and the previous board was kept for recovery.'
+          : 'MathBoard could not find your previous local board. A new board was opened.'
+      }
+    }
+
+    onMounted(async () => {
       fullscreenSupported.value = detectFullscreenSupport()
       document.addEventListener('fullscreenchange', syncFullscreenState)
       syncFullscreenState()
-      bootstrapStampFromUrl()
+      try {
+        const stampLoaded = await bootstrapStampFromUrl()
+        if (stampLoaded) {
+          // Stamp URL starts a new session: keep canvas, mint a new local board id.
+          const ready = await waitForBoardReady()
+          if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for Stamp adoption.')
+          await drawBoardRef.value.bootstrapPersistence({ adoptCurrent: true })
+        } else {
+          await bootstrapLocalBoard()
+        }
+      } catch (error) {
+        console.error('Board session bootstrap failed', error)
+        boardError.value = 'Local board storage is unavailable. Your changes may not be saved.'
+      } finally {
+        boardSessionReady.value = true
+      }
     })
 
     onBeforeUnmount(() => {
@@ -338,7 +373,7 @@ export default {
     }
 
     const openShareStampLink = () => {
-      stampError.value = null
+      boardError.value = null
       if (!drawBoardRef.value) {
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
         return
@@ -350,7 +385,7 @@ export default {
         // No selection is a silent no-op; other failures surface in English.
         if (/Nothing is selected/i.test(error?.message || '')) return
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
-        stampError.value = error?.message || 'Could not create a share link.'
+        boardError.value = error?.message || 'Could not create a share link.'
         return
       }
       try {
@@ -359,11 +394,12 @@ export default {
         trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_CREATED)
       } catch (error) {
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.BUILD_URL)
-        stampError.value = error?.message || 'Could not create a share link.'
+        boardError.value = error?.message || 'Could not create a share link.'
       }
     }
 
     const onKeyDown = (event) => {
+      if (!boardSessionReady.value) return
       if (isEscapeShortcut(event)) {
         // The browser uses Escape to leave fullscreen. Do not cancel that.
         if (document.fullscreenElement) return
@@ -482,17 +518,17 @@ export default {
     }
 
     const onInsertKit = async (kitId) => {
-      stampError.value = null
+      boardError.value = null
       let encoded
       try {
         encoded = getKitById(kitId)
       } catch (error) {
-        stampError.value = error?.message || 'Unknown kit.'
+        boardError.value = error?.message || 'Unknown kit.'
         return
       }
       const result = await drawBoardRef.value?.insertStamp(encoded)
       if (!result?.ok) {
-        stampError.value = result?.message || 'Could not insert stamp.'
+        boardError.value = result?.message || 'Could not insert stamp.'
         return
       }
       selectedTool.value = 'select'
@@ -601,6 +637,7 @@ export default {
     }
 
     return {
+      boardSessionReady,
       selectedTool,
       selectedShape,
       drawBoardRef,
@@ -622,7 +659,7 @@ export default {
       onUndo,
       onRedo,
       onInsertKit,
-      stampError,
+      boardError,
       onRequestFormula,
       onEditFormula,
       onInsertFormula,
@@ -798,5 +835,15 @@ body {
     left: 50%;
     transform: translateX(-50%);
   }
+}
+
+.board-session-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-primary);
 }
 </style>

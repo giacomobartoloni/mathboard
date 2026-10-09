@@ -17,11 +17,28 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { mountMathBoard } from '../src/app-bootstrap.js'
-import { installBoardE2eHook } from './instrumentation/board-hook.js'
+import {
+  BOARD_DOCUMENT_VERSION,
+  BOARD_DOCUMENT_ERROR_CODES,
+  BoardDocumentError,
+} from './schema.js'
 
-import { installBootstrapGate } from './instrumentation/bootstrap-gate.js'
-
-const gate = installBootstrapGate()
-const root = mountMathBoard()
-installBoardE2eHook(() => root.drawBoardRef, gate)
+/**
+ * Migrate a BoardDocument JSON to the current version.
+ * V1 is identity. Future: v1 → v2 → current on semantic JSON only.
+ */
+export function migrateBoardDocument(doc) {
+  if (!doc || typeof doc !== 'object') {
+    throw new BoardDocumentError(
+      BOARD_DOCUMENT_ERROR_CODES.INVALID,
+      'Root must be an object.',
+    )
+  }
+  if (doc.version === BOARD_DOCUMENT_VERSION) {
+    return doc
+  }
+  throw new BoardDocumentError(
+    BOARD_DOCUMENT_ERROR_CODES.UNSUPPORTED_VERSION,
+    `Got version ${JSON.stringify(doc.version)}.`,
+  )
+}

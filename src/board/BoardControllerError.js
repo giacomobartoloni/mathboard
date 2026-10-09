@@ -17,11 +17,20 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { mountMathBoard } from '../src/app-bootstrap.js'
-import { installBoardE2eHook } from './instrumentation/board-hook.js'
+export const BOARD_CONTROLLER_ERROR_CODES = Object.freeze({
+  NOT_READY: 'board_not_ready',
+  INVALID_SPEC: 'invalid_object_spec',
+  OBJECT_NOT_FOUND: 'object_not_found',
+  NESTED_OBJECT_UNSUPPORTED: 'nested_object_mutation_not_supported',
+  INVALID_PATCH: 'invalid_object_patch',
+  FORMULA_RENDER_FAILED: 'formula_render_failed',
+  COMMIT_FAILED: 'board_commit_failed',
+})
 
-import { installBootstrapGate } from './instrumentation/bootstrap-gate.js'
-
-const gate = installBootstrapGate()
-const root = mountMathBoard()
-installBoardE2eHook(() => root.drawBoardRef, gate)
+export class BoardControllerError extends Error {
+  constructor(code, message, options = {}) {
+    super(message, options)
+    this.name = 'BoardControllerError'
+    this.code = code
+  }
+}
