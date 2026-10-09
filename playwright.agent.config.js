@@ -17,29 +17,30 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import { localAgentModePlugin } from './tools/vite/local-agent-mode-plugin.mjs'
+import { defineConfig, devices } from '@playwright/test'
 
-function e2eEntryPlugin() {
-  return {
-    name: 'mathboard-e2e-entry',
-    transformIndexHtml: {
-      order: 'pre',
-      handler(html) {
-        return html.replace(
-          'src="/src/main.js"',
-          'src="/e2e/main.js"',
-        )
-      },
+export default defineConfig({
+  testDir: './e2e-agent',
+  fullyParallel: false,
+  workers: 1,
+  retries: 0,
+
+  use: {
+    baseURL: 'http://127.0.0.1:5173',
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
+  },
+
+  projects: [
+    {
+      name: 'chromium',
+      use: { ...devices['Desktop Chrome'] },
     },
-  }
-}
-
-export default defineConfig(({ mode }) => ({
-  plugins: [
-    vue(),
-    ...(mode === 'e2e' ? [e2eEntryPlugin()] : []),
-    ...(mode === 'agent' ? [localAgentModePlugin()] : []),
   ],
-}))
+
+  webServer: {
+    command: 'npm run dev:agent',
+    url: 'http://127.0.0.1:5173/__mathboard_agent/health',
+    reuseExistingServer: false,
+  },
+})

@@ -39,7 +39,7 @@ jobs:
       - name: Production build
         run: npm run build
 
-      - name: Assert production has no E2E hook
+      - name: Assert production has no development instrumentation
         run: npm run assert:no-e2e-hook
 
   e2e:
@@ -63,6 +63,9 @@ jobs:
 
       - name: Run E2E
         run: npm run test:e2e
+
+      - name: Test agent bridge
+        run: npm run test:agent-bridge
 
       - name: Upload Playwright diagnostics
         if: failure()

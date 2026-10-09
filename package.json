@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:agent": "vite --mode agent --host 127.0.0.1 --port 5173 --strictPort",
     "build:app": "vite build",
     "build:seo": "node tools/build-seo.mjs",
     "build": "npm run build:app && npm run build:seo",
@@ -18,6 +19,7 @@
     "test:unit": "node --test tests/*.test.js",
     "test:e2e:install": "playwright install chromium",
     "test:e2e": "npm run build:e2e && npm run assert:e2e-hook && playwright test",
+    "test:agent-bridge": "playwright test --config playwright.agent.config.js",
     "test:e2e:ui": "npm run build:e2e && npm run assert:e2e-hook && playwright test --ui",
     "assert:no-e2e-hook": "node tools/assert-no-e2e-hook.mjs",
     "assert:e2e-hook": "node tools/assert-e2e-hook.mjs",
