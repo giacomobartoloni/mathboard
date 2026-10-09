@@ -20,10 +20,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { expect } from '@playwright/test'
 import { getBoardState } from './helpers/canvas.js'
 
-export async function seedBoardStorage(page, { boardTheme = 'light' } = {}) {
+export async function seedBoardStorage(page, { boardTheme = 'light', preserveLastBoardId = false } = {}) {
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
   await page.route(/simpleanalyticscdn\.com/, (route) => route.abort())
-  await page.addInitScript((theme) => {
+  await page.addInitScript(({ theme, preserveLastBoardIdOnNavigation }) => {
     localStorage.setItem('mathboard_cookie_consent', JSON.stringify({
       essential: true,
       analytics: false,
@@ -37,10 +37,10 @@ export async function seedBoardStorage(page, { boardTheme = 'light' } = {}) {
     if (restoreId) {
       localStorage.setItem('mathboard.lastBoardId', restoreId)
       sessionStorage.removeItem('mathboard.e2e.restoreBoardId')
-    } else {
+    } else if (!preserveLastBoardIdOnNavigation) {
       localStorage.removeItem('mathboard.lastBoardId')
     }
-  }, boardTheme)
+  }, { theme: boardTheme, preserveLastBoardIdOnNavigation: preserveLastBoardId })
 }
 
 export async function gotoBoard(page, path = '/', options = {}) {

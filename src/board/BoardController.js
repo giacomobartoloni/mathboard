@@ -42,7 +42,8 @@ function findNode(nodes, id) {
 export class BoardController {
   constructor({ getCanvas, boardObjectPolicy, buildFormula, pushHistoryCommand,
     runWithoutHistory = (fn) => fn(), prepareCreatedObject = () => {},
-    afterMutation = () => {}, getBoardId = () => null, isMutationStable = () => true }) {
+    afterMutation = () => {}, getBoardId = () => null, isMutationStable }) {
+    if (typeof isMutationStable !== 'function') throw new TypeError('isMutationStable must be a function.')
     this._getCanvas = getCanvas
     this._policy = boardObjectPolicy
     this._buildFormula = buildFormula
@@ -108,12 +109,12 @@ export class BoardController {
     return canvas.getActiveObjects().includes(object)
   }
 
-  _isStable(canvas) {
-    return Boolean(this._isMutationStable()) && !canvas.getObjects().some((object) => object.isEditing)
+  _isStable() {
+    return Boolean(this._isMutationStable())
   }
 
-  _assertCanMutate(canvas) {
-    if (!this._isStable(canvas)) {
+  _assertCanMutate() {
+    if (!this._isStable()) {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Finish the current board gesture before a programmable mutation.')
     }
   }
@@ -127,7 +128,7 @@ export class BoardController {
   }
 
   _commit(canvas, change, rollback, command, readResult) {
-    this._assertCanMutate(canvas)
+    this._assertCanMutate()
     const previous = canvas.renderOnAddRemove
     canvas.renderOnAddRemove = false
     let result
@@ -137,13 +138,12 @@ export class BoardController {
       const entry = typeof command === 'function' ? command() : command
       if (entry) this._pushHistoryCommand(entry)
     } catch (cause) {
-      let failure = cause
       try {
         this._runWithoutHistory(rollback)
       } catch (rollbackError) {
-        failure = new globalThis.AggregateError([cause, rollbackError], 'Board commit and rollback encountered errors.')
+        console.error('Board rollback failed.', rollbackError)
       }
-      throw new BoardControllerError(C.COMMIT_FAILED, 'Board mutation could not be committed.', { cause: failure })
+      throw new BoardControllerError(C.COMMIT_FAILED, 'Board mutation could not be committed.', { cause })
     } finally {
       canvas.renderOnAddRemove = previous
       canvas.requestRenderAll()
@@ -156,7 +156,7 @@ export class BoardController {
 
   async _create(specs, options, batch) {
     const canvas = this._canvas()
-    this._assertCanMutate(canvas)
+    this._assertCanMutate()
     if (!Array.isArray(specs) || !specs.length) throw new BoardControllerError(C.INVALID_SPEC, 'Expected a non-empty array of specs.')
     specs.forEach((spec) => validateCreateSpec(spec))
     try { specs = structuredClone(specs) } catch (cause) {
@@ -191,7 +191,7 @@ export class BoardController {
 
   async update(id, patch, options = {}) {
     const canvas = this._canvas()
-    this._assertCanMutate(canvas)
+    this._assertCanMutate()
     const object = this._target(canvas, id)
     validateObjectPatch(patch, this._policy.kindOf(object))
     patch = structuredClone(patch)
@@ -218,7 +218,7 @@ export class BoardController {
     if (this._canvas() !== canvas || !canvas.getObjects().includes(existing)) {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Formula changed while rendering.')
     }
-    this._assertCanMutate(canvas)
+    this._assertCanMutate()
     const selected = this._selectionContains(canvas, existing)
     if (this._policy.isActiveSelection(existing.group)) canvas.discardActiveObject()
     // Re-read the transform after rendering: a human may have moved the retained object meanwhile.
@@ -249,7 +249,7 @@ export class BoardController {
 
   async delete(id) {
     const canvas = this._canvas()
-    this._assertCanMutate(canvas)
+    this._assertCanMutate()
     const object = this._target(canvas, id)
     const node = this._read(object)
     const index = canvas.getObjects().indexOf(object)
@@ -265,6 +265,6 @@ export class BoardController {
   observe() {
     const canvas = this._canvas()
     return { ...serializeBoardState({ canvas, boardObjectPolicy: this._policy, boardId: this._getBoardId() || null }),
-      stable: this._isStable(canvas) }
+      stable: this._isStable() }
   }
 }

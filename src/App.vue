@@ -62,9 +62,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
 
-    <div v-if="stampError" class="stamp-error" role="alert">
-      <span>{{ stampError }}</span>
-      <button type="button" @click="stampError = null" aria-label="Dismiss">×</button>
+    <div v-if="boardError" class="stamp-error" role="alert">
+      <span>{{ boardError }}</span>
+      <button type="button" @click="boardError = null" aria-label="Dismiss">×</button>
     </div>
     
     <FormulaModal 
@@ -216,7 +216,7 @@ export default {
     // Mirror of document.fullscreenElement only — never invent a parallel flag.
     const isFullscreen = ref(false)
     const fullscreenSupported = ref(detectFullscreenSupport())
-    const stampError = ref(null)
+    const boardError = ref(null)
     let fullscreenInitialized = false
     let previousFullscreen = false
 
@@ -279,13 +279,13 @@ export default {
         const ready = await waitForBoardReady()
         if (!ready || !drawBoardRef.value) {
           trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          stampError.value = 'Board is not ready to load the stamp link.'
+          boardError.value = 'Board is not ready to load the stamp link.'
           return false
         }
         const result = await drawBoardRef.value.bootstrapFromStamp(payload)
         if (!result?.ok) {
           trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          stampError.value = result?.message || 'Could not load stamp from the link.'
+          boardError.value = result?.message || 'Could not load stamp from the link.'
           return false
         }
         trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_OPENED)
@@ -293,7 +293,7 @@ export default {
         return true
       } catch (error) {
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-        stampError.value = error?.message || 'Could not load stamp from the link.'
+        boardError.value = error?.message || 'Could not load stamp from the link.'
         return false
       } finally {
         clearStampFromLocation()
@@ -303,16 +303,11 @@ export default {
     const bootstrapLocalBoard = async () => {
       const ready = await waitForBoardReady()
       if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for local storage.')
-      try {
-        const result = await drawBoardRef.value.bootstrapPersistence()
-        if (result?.restoreFailure) {
-          stampError.value = result.restoreFailure.recoverable
-            ? 'MathBoard could not restore your previous board. A new local board was opened, and the previous board was kept for recovery.'
-            : 'MathBoard could not find your previous local board. A new board was opened.'
-        }
-      } catch (error) {
-        console.error('Local board restore failed', error)
-        stampError.value = 'Local board storage is unavailable. Your changes may not be saved.'
+      const result = await drawBoardRef.value.bootstrapPersistence()
+      if (result?.restoreFailure) {
+        boardError.value = result.restoreFailure.recoverable
+          ? 'MathBoard could not restore your previous board. A new local board was opened, and the previous board was kept for recovery.'
+          : 'MathBoard could not find your previous local board. A new board was opened.'
       }
     }
 
@@ -332,7 +327,7 @@ export default {
         }
       } catch (error) {
         console.error('Board session bootstrap failed', error)
-        stampError.value = 'Local board storage is unavailable. Your changes may not be saved.'
+        boardError.value = 'Local board storage is unavailable. Your changes may not be saved.'
       } finally {
         boardSessionReady.value = true
       }
@@ -379,7 +374,7 @@ export default {
     }
 
     const openShareStampLink = () => {
-      stampError.value = null
+      boardError.value = null
       if (!drawBoardRef.value) {
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
         return
@@ -391,7 +386,7 @@ export default {
         // No selection is a silent no-op; other failures surface in English.
         if (/Nothing is selected/i.test(error?.message || '')) return
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
-        stampError.value = error?.message || 'Could not create a share link.'
+        boardError.value = error?.message || 'Could not create a share link.'
         return
       }
       try {
@@ -400,7 +395,7 @@ export default {
         trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_CREATED)
       } catch (error) {
         trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.BUILD_URL)
-        stampError.value = error?.message || 'Could not create a share link.'
+        boardError.value = error?.message || 'Could not create a share link.'
       }
     }
 
@@ -524,17 +519,17 @@ export default {
     }
 
     const onInsertKit = async (kitId) => {
-      stampError.value = null
+      boardError.value = null
       let encoded
       try {
         encoded = getKitById(kitId)
       } catch (error) {
-        stampError.value = error?.message || 'Unknown kit.'
+        boardError.value = error?.message || 'Unknown kit.'
         return
       }
       const result = await drawBoardRef.value?.insertStamp(encoded)
       if (!result?.ok) {
-        stampError.value = result?.message || 'Could not insert stamp.'
+        boardError.value = result?.message || 'Could not insert stamp.'
         return
       }
       selectedTool.value = 'select'
@@ -670,7 +665,7 @@ export default {
       onUndo,
       onRedo,
       onInsertKit,
-      stampError,
+      boardError,
       onRequestFormula,
       onEditFormula,
       onInsertFormula,

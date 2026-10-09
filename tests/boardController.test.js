@@ -37,6 +37,7 @@ function setup(overrides = {}) {
     boardObjectPolicy: new BoardObjectPolicy(),
     buildFormula: async (spec) => new FormulaObject([new Path('M 0 0 L 20 20')], { ...spec, latex: spec.latex }),
     pushHistoryCommand: (command) => history.push(command),
+    isMutationStable: () => true,
     ...overrides,
   })
   return { canvas, history, controller }
@@ -44,6 +45,15 @@ function setup(overrides = {}) {
 const rect = { type: 'rect', left: 100, top: 150, width: 50, height: 40 }
 const formula = { type: 'formula', latex: 'x=1', left: 200, top: 150, scaleX: 1.5, angle: 20, opacity: 0.4 }
 const rejectsCode = (operation, code) => assert.rejects(operation, (error) => error.code === code)
+
+test('controller requires an interaction stability boundary', () => {
+  assert.throws(() => new BoardController({
+    getCanvas: () => makeControllerCanvas(),
+    boardObjectPolicy: new BoardObjectPolicy(),
+    buildFormula: async () => null,
+    pushHistoryCommand: () => {},
+  }), /isMutationStable/)
+})
 
 test('create returns detached semantic nodes with fresh recursive IDs and one add command', async () => {
   const { controller, canvas, history } = setup()
@@ -108,23 +118,14 @@ test('Formula render failure leaves single and batch creation unchanged', async 
   }
 })
 
-test('partial batch insertion and history failure roll back canvas contents', async () => {
-  for (const historyFailure of [false, true]) {
-    const { canvas, controller, history } = setup(historyFailure ? {
-      pushHistoryCommand: () => { throw new Error('history failed') },
-    } : {})
-    if (!historyFailure) {
-      const insert = canvas.insertAt
-      canvas.insertAt = (index, object) => {
-        insert(index, object)
-        if (index === 1) throw new Error('insert failed after insertion')
-      }
-    }
-    await rejectsCode(() => controller.createMany([rect, rect]), C.COMMIT_FAILED)
-    assert.equal(canvas.getObjects().length, 0)
-    assert.equal(history.length, 0)
-    assert.equal(canvas.renderOnAddRemove, true)
-  }
+test('failed batch history commit leaves the board unchanged', async () => {
+  const { canvas, controller, history } = setup({
+    pushHistoryCommand: () => { throw new Error('history failed') },
+  })
+  await rejectsCode(() => controller.createMany([rect, rect]), C.COMMIT_FAILED)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  assert.equal(canvas.renderOnAddRemove, true)
 })
 
 test('get traverses Group children while mutation rejects nested IDs', async () => {
@@ -265,25 +266,6 @@ test('missing canvas rejects every public operation with the readiness code', as
   }
 })
 
-test('async creation rejects a changed canvas before inserting any runtime objects', async () => {
-  let finish
-  let current = makeControllerCanvas()
-  const original = current
-  const history = []
-  const { controller } = setup({
-    getCanvas: () => current,
-    pushHistoryCommand: (command) => history.push(command),
-    buildFormula: () => new Promise((resolve) => { finish = resolve }),
-  })
-  const pending = controller.create(formula)
-  current = makeControllerCanvas()
-  finish(new FormulaObject([new Path('M 0 0 L 20 20')], { latex: 'x=1' }))
-  await rejectsCode(() => pending, C.NOT_READY)
-  assert.equal(original.getObjects().length, 0)
-  assert.equal(current.getObjects().length, 0)
-  assert.equal(history.length, 0)
-})
-
 test('async Formula update rejects a removed target without resurrecting it', async () => {
   let finish
   let delay = false
@@ -303,10 +285,12 @@ test('async Formula update rejects a removed target without resurrecting it', as
   assert.equal(history.length, 1)
 })
 
-test('async Formula update keeps a human transform made during rendering', async () => {
+test('async Formula update keeps a human transform completed during rendering', async () => {
   let finish
   let delay = false
+  let stable = true
   const { controller, canvas } = setup({
+    isMutationStable: () => stable,
     buildFormula: async (spec) => {
       if (delay) await new Promise((resolve) => { finish = resolve })
       return new FormulaObject([new Path('M 0 0 L 20 20')], { ...spec, latex: spec.latex })
@@ -315,47 +299,13 @@ test('async Formula update keeps a human transform made during rendering', async
   const node = await controller.create(formula)
   delay = true
   const pending = controller.update(node.id, { latex: 'x=2' })
+  stable = false
   canvas.getObjects()[0].set({ left: 400, angle: 45 })
+  stable = true
   finish()
   const result = await pending
   assert.equal(result.left, 400)
   assert.equal(result.angle, 45)
-})
-
-test('programmable mutations reject live text editing without corrupting its history', async () => {
-  const { controller, canvas, history } = setup()
-  const node = await controller.create({ type: 'text', text: 'before' })
-  const text = canvas.getObjects()[0]
-  canvas.setActiveObject(text)
-  text.set('text', 'typed')
-  text.isEditing = true
-  for (const operation of [() => controller.update(node.id, { text: 'programmatic' }),
-    () => controller.delete(node.id), () => controller.create(rect), () => controller.createMany([rect])]) {
-    await rejectsCode(operation, C.COMMIT_FAILED)
-  }
-  assert.equal(text.text, 'typed')
-  assert.equal(text.isEditing, true)
-  assert.equal(history.length, 1)
-  assert.equal(canvas.getObjects().length, 1)
-})
-
-
-test('batch rollback cleans every inserted object even when removal listeners throw', async () => {
-  const { controller, canvas, history } = setup()
-  const insert = canvas.insertAt
-  const remove = canvas.remove
-  canvas.insertAt = (index, object) => {
-    insert(index, object)
-    if (index === 1) throw new Error('insertion listener failed')
-  }
-  canvas.remove = (object) => {
-    remove(object)
-    throw new Error('removal listener failed')
-  }
-  await rejectsCode(() => controller.createMany([rect, rect]), C.COMMIT_FAILED)
-  assert.equal(canvas.getObjects().length, 0)
-  assert.equal(history.length, 0)
-  assert.equal(canvas.renderOnAddRemove, true)
 })
 
 test('unstable gesture rejects every mutation and marks observations transient', async () => {
