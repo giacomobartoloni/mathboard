@@ -52,6 +52,7 @@ export async function gotoBoard(page, path = '/', options = {}) {
       && Boolean(document.querySelector('canvas.upper-canvas'))
       && Boolean(state.boardId)
   })
+  await expect(page.getByRole('status', { name: 'Loading board' })).toHaveCount(0)
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   return getBoardState(page)
 }

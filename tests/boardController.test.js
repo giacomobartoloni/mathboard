@@ -357,3 +357,74 @@ test('batch rollback cleans every inserted object even when removal listeners th
   assert.equal(history.length, 0)
   assert.equal(canvas.renderOnAddRemove, true)
 })
+
+test('unstable gesture rejects every mutation and marks observations transient', async () => {
+  let stable = true
+  const { controller, canvas, history } = setup({ isMutationStable: () => stable })
+  const node = await controller.create(rect)
+  stable = false
+  for (const operation of [() => controller.create(rect), () => controller.createMany([rect]),
+    () => controller.update(node.id, { left: 400 }), () => controller.delete(node.id)]) {
+    await rejectsCode(operation, C.COMMIT_FAILED)
+  }
+  assert.equal(canvas.getObjects().length, 1)
+  assert.equal(canvas.getObjects()[0].left, 100)
+  assert.equal(history.length, 1)
+  assert.equal(controller.observe().stable, false)
+  stable = true
+  assert.equal(controller.observe().stable, true)
+})
+
+test('async Formula replacement rechecks stability before touching live selection', async () => {
+  let stable = true
+  let release
+  const { controller, canvas, history } = setup({ isMutationStable: () => stable })
+  const node = await controller.create(formula)
+  const original = canvas.getObjects()[0]
+  await controller.create(rect)
+  const selection = new ActiveSelection(canvas.getObjects())
+  canvas.setActiveObject(selection)
+  controller._buildFormula = () => new Promise((resolve) => { release = resolve })
+  const pending = controller.update(node.id, { latex: 'x=2' })
+  stable = false
+  release(new FormulaObject([new Path('M 0 0 L 20 20')], { latex: 'x=2' }))
+  await rejectsCode(() => pending, C.COMMIT_FAILED)
+  assert.equal(canvas.getObjects()[0], original)
+  assert.equal(canvas.getActiveObject(), selection)
+  assert.equal(history.length, 2)
+})
+
+test('afterMutation failure preserves successful committed response', async (t) => {
+  const logged = t.mock.method(console, 'error', () => {})
+  const { controller, canvas, history } = setup({ afterMutation: () => { throw new Error('refresh failed') } })
+  const node = await controller.create(rect)
+  assert.equal(canvas.getObjects()[0].mathboardId, node.id)
+  assert.equal(history.length, 1)
+  assert.equal(logged.mock.callCount(), 1)
+})
+
+test('strict create validation normalizes unknown fields, invalid styles and uncloneable values', async () => {
+  const { controller, canvas, history } = setup()
+  for (const spec of [{ ...rect, unexpected: 1 }, { ...rect, callback: () => {} },
+    { ...rect, fill: {} }, { ...rect, strokeDashArray: [Infinity] }, { ...rect, opacity: NaN },
+    { ...rect, mathboardInkMode: 'other' }, { type: 'group', objects: [{ ...rect, callback: () => {} }] },
+    { ...rect, id: () => {} }]) {
+    await rejectsCode(() => controller.create(spec), C.INVALID_SPEC)
+  }
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+})
+
+test('async batch creation rejects a gesture started during materialization', async () => {
+  let stable = true
+  let release
+  const { controller, canvas, history } = setup({ isMutationStable: () => stable,
+    buildFormula: () => new Promise((resolve) => { release = resolve }) })
+  const pending = controller.createMany([rect, formula])
+  await Promise.resolve()
+  stable = false
+  release(new FormulaObject([new Path('M 0 0 L 20 20')], { latex: 'x=1' }))
+  await rejectsCode(() => pending, C.COMMIT_FAILED)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+})

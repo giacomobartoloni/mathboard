@@ -42,7 +42,7 @@ function findNode(nodes, id) {
 export class BoardController {
   constructor({ getCanvas, boardObjectPolicy, buildFormula, pushHistoryCommand,
     runWithoutHistory = (fn) => fn(), prepareCreatedObject = () => {},
-    afterMutation = () => {}, getBoardId = () => null }) {
+    afterMutation = () => {}, getBoardId = () => null, isMutationStable = () => true }) {
     this._getCanvas = getCanvas
     this._policy = boardObjectPolicy
     this._buildFormula = buildFormula
@@ -51,6 +51,7 @@ export class BoardController {
     this._prepareCreatedObject = prepareCreatedObject
     this._afterMutation = afterMutation
     this._getBoardId = getBoardId
+    this._isMutationStable = isMutationStable
   }
 
   _canvas() {
@@ -107,9 +108,13 @@ export class BoardController {
     return canvas.getActiveObjects().includes(object)
   }
 
+  _isStable(canvas) {
+    return Boolean(this._isMutationStable()) && !canvas.getObjects().some((object) => object.isEditing)
+  }
+
   _assertCanMutate(canvas) {
-    if (canvas.getObjects().some((object) => object.isEditing)) {
-      throw new BoardControllerError(C.COMMIT_FAILED, 'Finish the current text edit before a programmable mutation.')
+    if (!this._isStable(canvas)) {
+      throw new BoardControllerError(C.COMMIT_FAILED, 'Finish the current board gesture before a programmable mutation.')
     }
   }
 
@@ -143,7 +148,9 @@ export class BoardController {
       canvas.renderOnAddRemove = previous
       canvas.requestRenderAll()
     }
-    this._afterMutation()
+    try { this._afterMutation() } catch (error) {
+      console.error('Board mutation committed, but post-commit refresh failed.', error)
+    }
     return result
   }
 
@@ -152,7 +159,9 @@ export class BoardController {
     this._assertCanMutate(canvas)
     if (!Array.isArray(specs) || !specs.length) throw new BoardControllerError(C.INVALID_SPEC, 'Expected a non-empty array of specs.')
     specs.forEach((spec) => validateCreateSpec(spec))
-    specs = structuredClone(specs)
+    try { specs = structuredClone(specs) } catch (cause) {
+      throw new BoardControllerError(C.INVALID_SPEC, 'Cannot clone object spec.', { cause })
+    }
     const objects = await this._materialize(specs)
     if (this._canvas() !== canvas) throw new BoardControllerError(C.NOT_READY, 'Board canvas changed during materialization.')
     regenerateMathBoardObjectIds(objects, { boardObjectPolicy: this._policy })
@@ -209,6 +218,7 @@ export class BoardController {
     if (this._canvas() !== canvas || !canvas.getObjects().includes(existing)) {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Formula changed while rendering.')
     }
+    this._assertCanMutate(canvas)
     const selected = this._selectionContains(canvas, existing)
     if (this._policy.isActiveSelection(existing.group)) canvas.discardActiveObject()
     // Re-read the transform after rendering: a human may have moved the retained object meanwhile.
@@ -253,6 +263,8 @@ export class BoardController {
   }
 
   observe() {
-    return serializeBoardState({ canvas: this._canvas(), boardObjectPolicy: this._policy, boardId: this._getBoardId() || null })
+    const canvas = this._canvas()
+    return { ...serializeBoardState({ canvas, boardObjectPolicy: this._policy, boardId: this._getBoardId() || null }),
+      stable: this._isStable(canvas) }
   }
 }
