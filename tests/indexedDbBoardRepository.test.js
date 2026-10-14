@@ -19,7 +19,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { IndexedDbBoardRepository } from '../src/storage/local/IndexedDbBoardRepository.js'
+import {
+  BOARD_RECORD_KINDS,
+  createBoardRecord,
+  IndexedDbBoardRepository,
+} from '../src/storage/local/IndexedDbBoardRepository.js'
+
+test('createBoardRecord defaults to a scratch record', () => {
+  const record = createBoardRecord({ id: 'mb_default' })
+  assert.equal(record.kind, BOARD_RECORD_KINDS.SCRATCH)
+  assert.equal(createBoardRecord({ kind: BOARD_RECORD_KINDS.SAVED }).kind, BOARD_RECORD_KINDS.SAVED)
+})
 
 test('write consumes request and transaction failures together', async () => {
   const request = { error: new Error('request failed'), onsuccess: null, onerror: null }

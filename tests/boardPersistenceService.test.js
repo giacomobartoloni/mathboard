@@ -258,6 +258,7 @@ test('a fresh tab session bootstraps a new board and records it as active', asyn
   assert.match(result.id, /^mb_/)
   assert.equal(service.boardId, result.id)
   assert.equal(records.has(result.id), true)
+  assert.equal(records.get(result.id).kind, 'scratch')
   assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), service.boardId)
   service.dispose()
 })
@@ -286,6 +287,63 @@ test('an active tab session restores its existing board without creating a repla
   assert.equal(repository.puts.length, 0)
   assert.equal(records.size, 1)
   assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), 'mb_existing')
+  service.dispose()
+})
+
+test('adopting the current canvas creates a scratch board owned by this tab', async () => {
+  const sessionStorage = new MapStorage()
+  const records = new Map()
+  const repository = makeRepository(records)
+  const service = new BoardPersistenceService({
+    repository, boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
+    now: () => '2026-10-14T00:00:00.000Z',
+  })
+
+  const record = await service.adoptCurrentCanvasAsNewBoard()
+
+  assert.equal(record.kind, 'scratch')
+  assert.equal(records.get(record.id).kind, 'scratch')
+  assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), record.id)
+  assert.equal(service.boardId, record.id)
+  service.dispose()
+})
+
+test('flush preserves a saved record kind and upgrades a legacy record to scratch', async () => {
+  const sessionStorage = new MapStorage()
+  const saved = new Rect({ width: 10, height: 10 })
+  ensureMathBoardObjectId(saved, 'mbobj_rect')
+  const records = new Map([
+    ['mb_saved', {
+      id: 'mb_saved',
+      kind: 'saved',
+      title: 'Saved',
+      document: { format: 'mathboard-board', version: 1, title: 'Saved', objects: [] },
+    }],
+    ['mb_legacy', {
+      id: 'mb_legacy',
+      title: 'Legacy',
+      document: { format: 'mathboard-board', version: 1, title: 'Legacy', objects: [] },
+    }],
+  ])
+  const repository = makeRepository(records)
+  const service = new BoardPersistenceService({
+    repository, boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas([saved]), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
+    now: () => '2026-10-14T00:00:00.000Z',
+  })
+
+  service.boardId = 'mb_saved'
+  service.notifyDocumentChanged()
+  await service.flush()
+  assert.equal(repository.puts.at(-1).kind, 'saved')
+
+  service.boardId = 'mb_legacy'
+  service.notifyDocumentChanged()
+  await service.flush()
+  assert.equal(repository.puts.at(-1).kind, 'scratch')
   service.dispose()
 })
 

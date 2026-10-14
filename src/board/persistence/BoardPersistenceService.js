@@ -21,6 +21,7 @@ import { serializeBoardDocument } from './serializeBoardDocument.js'
 import { replaceBoardFromDocument } from './replaceBoardFromDocument.js'
 import { createEmptyBoardDocument } from './schema.js'
 import {
+  BOARD_RECORD_KINDS,
   createBoardId,
   createBoardRecord,
 } from '../../storage/local/IndexedDbBoardRepository.js'
@@ -203,8 +204,12 @@ export class BoardPersistenceService {
         const document = this.serializeCurrent()
         const existing = await this._repository.get(this.boardId)
         const now = this._now()
+        const kind = existing?.kind === BOARD_RECORD_KINDS.SAVED
+          ? BOARD_RECORD_KINDS.SAVED
+          : BOARD_RECORD_KINDS.SCRATCH
         const record = createBoardRecord({
           id: this.boardId,
+          kind,
           title: document.title,
           document,
           createdAt: existing?.createdAt || now,
@@ -257,6 +262,7 @@ export class BoardPersistenceService {
     const document = createEmptyBoardDocument(this._getTitle())
     const record = createBoardRecord({
       id: createBoardId(),
+      kind: BOARD_RECORD_KINDS.SCRATCH,
       title: document.title,
       document,
     })
@@ -331,6 +337,7 @@ export class BoardPersistenceService {
     const document = this.serializeCurrent()
     const record = createBoardRecord({
       id: createBoardId(),
+      kind: BOARD_RECORD_KINDS.SCRATCH,
       title: document.title,
       document,
     })

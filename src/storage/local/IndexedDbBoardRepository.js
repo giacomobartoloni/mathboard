@@ -19,14 +19,27 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { BOARDS_STORE, idbRequest, idbTransactionDone, openMathBoardDb } from './indexedDb.js'
 
+export const BOARD_RECORD_KINDS = Object.freeze({
+  SCRATCH: 'scratch',
+  SAVED: 'saved',
+})
+
 export function createBoardId() {
   return `mb_${globalThis.crypto.randomUUID()}`
 }
 
-export function createBoardRecord({ id, title, document, createdAt, updatedAt } = {}) {
+export function createBoardRecord({
+  id,
+  kind = BOARD_RECORD_KINDS.SCRATCH,
+  title,
+  document,
+  createdAt,
+  updatedAt,
+} = {}) {
   const now = new Date().toISOString()
   return {
     id: id || createBoardId(),
+    kind,
     title: typeof title === 'string' ? title : 'Untitled board',
     createdAt: createdAt || now,
     updatedAt: updatedAt || now,
