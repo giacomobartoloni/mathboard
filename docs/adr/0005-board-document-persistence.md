@@ -45,6 +45,11 @@ synchronized with Fabric.
 16. The active board reference is tab scoped: `mathboard.activeBoardId` lives in
     `sessionStorage`, so an independently opened tab starts a new board instead
     of reusing another tab's record.
+17. Local record lifecycle (`kind: "scratch" | "saved"`) is BoardRecord
+    metadata, not BoardDocument content.
+18. Scratch records unused for 30 days are pruned during bootstrap; the active
+    board, the recovery board, saved records and records with unknown metadata
+    are never deleted.
 
 Local records live in IndexedDB (`mathboard` / `boards`). The active-board
 preference `mathboard.activeBoardId` uses per-tab `sessionStorage`. Autosave is

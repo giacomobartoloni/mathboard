@@ -49,6 +49,9 @@ export const SAVE_STATES = Object.freeze({
   ERROR: 'error',
 })
 
+export const SCRATCH_BOARD_RETENTION_DAYS = 30
+const SCRATCH_BOARD_RETENTION_MS = SCRATCH_BOARD_RETENTION_DAYS * 24 * 60 * 60 * 1000
+
 const IDLE_DEBOUNCE_MS = 1000
 const MAX_WAIT_MS = 5000
 
@@ -355,13 +358,16 @@ export class BoardPersistenceService {
   }
 
   /**
-   * Bootstrap: restore this tab's active board or create a new local board.
+   * Bootstrap: restore this tab's active board or create a new local board,
+   * then run a best-effort pass that drops expired scratch records.
    */
   async bootstrap() {
     const activeId = this._readActiveBoardId()
+    let result
+
     if (activeId) {
       try {
-        return await this.openBoard(activeId)
+        result = await this.openBoard(activeId)
       } catch (error) {
         console.error('Failed to restore active board; creating a new one.', error)
         this._setStatus({
@@ -380,9 +386,43 @@ export class BoardPersistenceService {
           error,
         }
         this._setStatus({ recoveryFailure: restoreFailure })
-        return { record, restoreFailure }
+        result = { record, restoreFailure }
       }
+    } else {
+      result = await this.createNewBoard()
     }
-    return this.createNewBoard()
+
+    await this._pruneOldScratchBoards()
+    return result
+  }
+
+  /**
+   * Delete scratch records older than the retention window.
+   * Best effort: never fails bootstrap and never touches anything that is not
+   * explicitly marked scratch, the active board, or the recovery board.
+   */
+  async _pruneOldScratchBoards() {
+    try {
+      const records = await this._repository.list()
+      const recoveryBoardId = this._readRecoveryBoardId()
+      const nowMs = Date.parse(this._now())
+      if (!Number.isFinite(nowMs)) return
+
+      const cutoff = nowMs - SCRATCH_BOARD_RETENTION_MS
+
+      for (const record of records) {
+        if (record?.kind !== BOARD_RECORD_KINDS.SCRATCH) continue
+        if (record.id === this.boardId) continue
+        if (record.id === recoveryBoardId) continue
+
+        const timestamp = Date.parse(record.updatedAt || record.createdAt)
+        if (!Number.isFinite(timestamp)) continue
+        if (timestamp >= cutoff) continue
+
+        await this._repository.delete(record.id)
+      }
+    } catch (error) {
+      console.warn('Old scratch board cleanup failed.', error)
+    }
   }
 }

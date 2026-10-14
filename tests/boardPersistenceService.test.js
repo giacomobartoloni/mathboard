@@ -48,6 +48,7 @@ function makeCanvas(objects = []) {
 function makeRepository(records = new Map()) {
   return {
     puts: [],
+    deletes: [],
     async get(id) {
       return records.get(id) || null
     },
@@ -55,6 +56,13 @@ function makeRepository(records = new Map()) {
       this.puts.push(record)
       records.set(record.id, record)
       return record
+    },
+    async list() {
+      return [...records.values()]
+    },
+    async delete(id) {
+      this.deletes.push(id)
+      records.delete(id)
     },
   }
 }
@@ -344,6 +352,66 @@ test('flush preserves a saved record kind and upgrades a legacy record to scratc
   service.notifyDocumentChanged()
   await service.flush()
   assert.equal(repository.puts.at(-1).kind, 'scratch')
+  service.dispose()
+})
+
+test('scratch garbage collection only deletes expired unprotected scratch records', async () => {
+  const nowMs = Date.parse('2026-10-14T00:00:00.000Z')
+  const daysAgo = (days) => new Date(nowMs - days * 24 * 60 * 60 * 1000).toISOString()
+  const sessionStorage = new MapStorage()
+  sessionStorage.setItem('mathboard.activeBoardId', 'mb_active')
+  sessionStorage.setItem(RECOVERY_BOARD_ID_KEY, 'mb_recovery')
+  const document = { format: 'mathboard-board', version: 1, title: 'Board', objects: [] }
+  const records = new Map([
+    ['mb_active', { id: 'mb_active', kind: 'scratch', updatedAt: daysAgo(100), document }],
+    ['mb_expired', { id: 'mb_expired', kind: 'scratch', updatedAt: daysAgo(31), document }],
+    ['mb_recent', { id: 'mb_recent', kind: 'scratch', updatedAt: daysAgo(10), document }],
+    ['mb_saved', { id: 'mb_saved', kind: 'saved', updatedAt: daysAgo(200), document }],
+    ['mb_legacy', { id: 'mb_legacy', updatedAt: daysAgo(200), document }],
+    ['mb_recovery', { id: 'mb_recovery', kind: 'scratch', updatedAt: daysAgo(100), document }],
+    ['mb_invalid', { id: 'mb_invalid', kind: 'scratch', updatedAt: 'not-a-date', createdAt: 'also-not-a-date', document }],
+  ])
+  const repository = makeRepository(records)
+  const service = new BoardPersistenceService({
+    repository, boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
+    now: () => '2026-10-14T00:00:00.000Z',
+  })
+
+  await service.bootstrap()
+
+  assert.deepEqual([...records.keys()].sort(), [
+    'mb_active',
+    'mb_invalid',
+    'mb_legacy',
+    'mb_recent',
+    'mb_recovery',
+    'mb_saved',
+  ])
+  assert.deepEqual(repository.deletes, ['mb_expired'])
+  assert.equal(service.boardId, 'mb_active')
+  service.dispose()
+})
+
+test('a scratch cleanup failure does not block bootstrap', async () => {
+  const sessionStorage = new MapStorage()
+  const repository = makeRepository()
+  repository.list = async () => {
+    throw new Error('list failed')
+  }
+  const service = new BoardPersistenceService({
+    repository, boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
+    now: () => '2026-10-14T00:00:00.000Z',
+  })
+
+  const result = await service.bootstrap()
+
+  assert.match(result.id, /^mb_/)
+  assert.equal(service.boardId, result.id)
+  assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), service.boardId)
   service.dispose()
 })
 
