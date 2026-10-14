@@ -14,7 +14,7 @@
     "build": "npm run build:app && npm run build:seo",
     "build:e2e": "vite build --mode e2e --outDir dist-e2e",
     "preview": "vite preview",
-    "lint": "eslint --ext .js,.vue src/",
+    "lint": "eslint --ext .js,.mjs,.vue src/ dev-agent/ e2e-agent/ tools/vite/ playwright.agent.config.js vite.config.js",
     "test": "npm run test:unit",
     "test:unit": "node --test tests/*.test.js",
     "test:e2e:install": "playwright install chromium",
