@@ -274,9 +274,16 @@ export default {
     _isBoardInteractionStable() {
       if (!this.canvas) return false;
       if (this.isDrawingShape || this.currentShape || this._pencilGesture) return false;
+      // Guard against stale reference: if the uncommitted text object is no longer
+      // in editing mode (e.g. editing:exited event was missed due to tab focus loss
+      // or a context switch), clear it so it does not permanently block mutations.
+      if (this._uncommittedText && !this._uncommittedText.isEditing) {
+        this._uncommittedText = null;
+      }
       if (this._uncommittedText || this._pendingTransform || this._pendingText) return false;
       return !this.canvas.getActiveObject()?.isEditing;
     },
+
     async bootstrapPersistence({ adoptCurrent = false } = {}) {
       if (this._persistenceBootstrapped || !this.canvas) return null;
       const persistence = this._ensurePersistenceService();
