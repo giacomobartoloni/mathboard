@@ -20,10 +20,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { expect } from '@playwright/test'
 import { getBoardState } from './helpers/canvas.js'
 
+const E2E_SESSION_SEEDED_KEY = 'mathboard.e2e.sessionSeeded'
+
 export async function seedBoardStorage(page, { boardTheme = 'light' } = {}) {
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
   await page.route(/simpleanalyticscdn\.com/, (route) => route.abort())
-  await page.addInitScript((theme) => {
+  await page.addInitScript(({ theme, seededKey }) => {
     localStorage.setItem('mathboard_cookie_consent', JSON.stringify({
       essential: true,
       analytics: false,
@@ -32,9 +34,14 @@ export async function seedBoardStorage(page, { boardTheme = 'light' } = {}) {
     }))
     localStorage.setItem('mathboard_ui_theme', theme === 'light' ? 'light' : 'dark')
     localStorage.setItem('mathboard_board_theme', theme)
-    // Board identity is tab scoped: a fresh tab starts clean, a reload keeps
-    // sessionStorage["mathboard.activeBoardId"] and therefore the same board.
-  }, boardTheme)
+    // Board identity is tab scoped: the first navigation of a tab starts from a
+    // clean session, while a reload keeps sessionStorage["mathboard.activeBoardId"]
+    // and therefore restores the same board.
+    if (!sessionStorage.getItem(seededKey)) {
+      sessionStorage.removeItem('mathboard.activeBoardId')
+      sessionStorage.setItem(seededKey, '1')
+    }
+  }, { theme: boardTheme, seededKey: E2E_SESSION_SEEDED_KEY })
 }
 
 export async function gotoBoard(page, path = '/', options = {}) {
