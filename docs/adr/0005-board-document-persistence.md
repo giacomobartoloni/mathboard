@@ -47,9 +47,9 @@ synchronized with Fabric.
     of reusing another tab's record.
 17. Local record lifecycle (`kind: "scratch" | "saved"`) is BoardRecord
     metadata, not BoardDocument content.
-18. Scratch records unused for 30 days are pruned during bootstrap; the active
-    board, the recovery board, saved records and records with unknown metadata
-    are never deleted.
+18. Scratch records whose persisted `updatedAt` is older than 30 days are
+    eligible for pruning during bootstrap; the active board, the recovery
+    board, saved records and records with unknown metadata are never deleted.
 
 Local records live in IndexedDB (`mathboard` / `boards`). The active-board
 preference `mathboard.activeBoardId` uses per-tab `sessionStorage`. Autosave is

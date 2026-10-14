@@ -318,7 +318,7 @@ test('adopting the current canvas creates a scratch board owned by this tab', as
   service.dispose()
 })
 
-test('flush preserves a saved record kind and upgrades a legacy record to scratch', async () => {
+test('flush preserves explicit record kinds and upgrades legacy records to scratch', async () => {
   const sessionStorage = new MapStorage()
   const saved = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(saved, 'mbobj_rect')
@@ -328,6 +328,12 @@ test('flush preserves a saved record kind and upgrades a legacy record to scratc
       kind: 'saved',
       title: 'Saved',
       document: { format: 'mathboard-board', version: 1, title: 'Saved', objects: [] },
+    }],
+    ['mb_unknown', {
+      id: 'mb_unknown',
+      kind: 'future-kind',
+      title: 'Future',
+      document: { format: 'mathboard-board', version: 1, title: 'Future', objects: [] },
     }],
     ['mb_legacy', {
       id: 'mb_legacy',
@@ -348,6 +354,11 @@ test('flush preserves a saved record kind and upgrades a legacy record to scratc
   await service.flush()
   assert.equal(repository.puts.at(-1).kind, 'saved')
 
+  service.boardId = 'mb_unknown'
+  service.notifyDocumentChanged()
+  await service.flush()
+  assert.equal(repository.puts.at(-1).kind, 'future-kind')
+
   service.boardId = 'mb_legacy'
   service.notifyDocumentChanged()
   await service.flush()
@@ -367,6 +378,7 @@ test('scratch garbage collection only deletes expired unprotected scratch record
     ['mb_expired', { id: 'mb_expired', kind: 'scratch', updatedAt: daysAgo(31), document }],
     ['mb_recent', { id: 'mb_recent', kind: 'scratch', updatedAt: daysAgo(10), document }],
     ['mb_saved', { id: 'mb_saved', kind: 'saved', updatedAt: daysAgo(200), document }],
+    ['mb_unknown', { id: 'mb_unknown', kind: 'future-kind', updatedAt: daysAgo(200), document }],
     ['mb_legacy', { id: 'mb_legacy', updatedAt: daysAgo(200), document }],
     ['mb_recovery', { id: 'mb_recovery', kind: 'scratch', updatedAt: daysAgo(100), document }],
     ['mb_invalid', { id: 'mb_invalid', kind: 'scratch', updatedAt: 'not-a-date', createdAt: 'also-not-a-date', document }],
@@ -388,6 +400,7 @@ test('scratch garbage collection only deletes expired unprotected scratch record
     'mb_recent',
     'mb_recovery',
     'mb_saved',
+    'mb_unknown',
   ])
   assert.deepEqual(repository.deletes, ['mb_expired'])
   assert.equal(service.boardId, 'mb_active')

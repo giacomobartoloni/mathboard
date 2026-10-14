@@ -207,9 +207,7 @@ export class BoardPersistenceService {
         const document = this.serializeCurrent()
         const existing = await this._repository.get(this.boardId)
         const now = this._now()
-        const kind = existing?.kind === BOARD_RECORD_KINDS.SAVED
-          ? BOARD_RECORD_KINDS.SAVED
-          : BOARD_RECORD_KINDS.SCRATCH
+        const kind = existing?.kind ?? BOARD_RECORD_KINDS.SCRATCH
         const record = createBoardRecord({
           id: this.boardId,
           kind,
