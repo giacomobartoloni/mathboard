@@ -20,10 +20,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { expect } from '@playwright/test'
 import { getBoardState } from './helpers/canvas.js'
 
-export async function seedBoardStorage(page, { boardTheme = 'light', preserveLastBoardId = false } = {}) {
+export async function seedBoardStorage(page, { boardTheme = 'light' } = {}) {
   await page.route(/fonts\.(googleapis|gstatic)\.com/, (route) => route.abort())
   await page.route(/simpleanalyticscdn\.com/, (route) => route.abort())
-  await page.addInitScript(({ theme, preserveLastBoardIdOnNavigation }) => {
+  await page.addInitScript((theme) => {
     localStorage.setItem('mathboard_cookie_consent', JSON.stringify({
       essential: true,
       analytics: false,
@@ -32,15 +32,9 @@ export async function seedBoardStorage(page, { boardTheme = 'light', preserveLas
     }))
     localStorage.setItem('mathboard_ui_theme', theme === 'light' ? 'light' : 'dark')
     localStorage.setItem('mathboard_board_theme', theme)
-    // Isolate persistence across tests. A reload can opt into restore via sessionStorage.
-    const restoreId = sessionStorage.getItem('mathboard.e2e.restoreBoardId')
-    if (restoreId) {
-      localStorage.setItem('mathboard.lastBoardId', restoreId)
-      sessionStorage.removeItem('mathboard.e2e.restoreBoardId')
-    } else if (!preserveLastBoardIdOnNavigation) {
-      localStorage.removeItem('mathboard.lastBoardId')
-    }
-  }, { theme: boardTheme, preserveLastBoardIdOnNavigation: preserveLastBoardId })
+    // Board identity is tab scoped: a fresh tab starts clean, a reload keeps
+    // sessionStorage["mathboard.activeBoardId"] and therefore the same board.
+  }, boardTheme)
 }
 
 export async function gotoBoard(page, path = '/', options = {}) {

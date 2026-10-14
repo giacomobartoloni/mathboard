@@ -68,7 +68,7 @@ function makeService({ canvas = makeCanvas(), repository = makeRepository(), isD
     resetHistory: () => {},
     suspendHistory: () => {},
     getTitle: () => 'Board',
-    storage: new MapStorage(),
+    sessionStorage: new MapStorage(),
     now: () => '2026-10-08T00:00:00.000Z',
     idleDebounceMs: 60000,
     maxWaitMs: 60000,
@@ -159,8 +159,8 @@ test('new board write failure preserves the current runtime', async () => {
 })
 
 test('bootstrap preserves failed restore metadata while opening a fallback board', async () => {
-  const storage = new MapStorage()
-  storage.setItem('mathboard.lastBoardId', 'mb_missing')
+  const sessionStorage = new MapStorage()
+  sessionStorage.setItem('mathboard.activeBoardId', 'mb_missing')
   const repository = makeRepository()
   const service = new BoardPersistenceService({
     repository,
@@ -169,7 +169,7 @@ test('bootstrap preserves failed restore metadata while opening a fallback board
     buildFormula: async () => null,
     resetHistory: () => {},
     suspendHistory: () => {},
-    storage,
+    sessionStorage,
     now: () => '2026-10-08T00:00:00.000Z',
   })
 
@@ -177,7 +177,7 @@ test('bootstrap preserves failed restore metadata while opening a fallback board
 
   assert.equal(result.restoreFailure.boardId, 'mb_missing')
   assert.equal(result.restoreFailure.code, BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND)
-  assert.equal(storage.getItem('mathboard.recoveryBoardId'), null)
+  assert.equal(sessionStorage.getItem('mathboard.recoveryBoardId'), null)
   assert.match(result.record.id, /^mb_/)
   service.dispose()
 })
@@ -196,8 +196,8 @@ test('clean but unstable board cannot be replaced', async () => {
 })
 
 test('bootstrap keeps an unloadable board as recoverable', async () => {
-  const storage = new MapStorage()
-  storage.setItem('mathboard.lastBoardId', 'mb_corrupt')
+  const sessionStorage = new MapStorage()
+  sessionStorage.setItem('mathboard.activeBoardId', 'mb_corrupt')
   const records = new Map([['mb_corrupt', {
     id: 'mb_corrupt',
     title: 'Corrupt',
@@ -206,19 +206,19 @@ test('bootstrap keeps an unloadable board as recoverable', async () => {
   const service = new BoardPersistenceService({
     repository: makeRepository(records), boardObjectPolicy: new BoardObjectPolicy(),
     getCanvas: () => makeCanvas(), buildFormula: async () => null,
-    resetHistory: () => {}, suspendHistory: () => {}, storage,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
   })
   const result = await service.bootstrap()
   assert.equal(result.restoreFailure.code, BOARD_PERSISTENCE_ERROR_CODES.BOARD_RESTORE_FAILED)
   assert.equal(result.restoreFailure.recoverable, true)
-  assert.equal(storage.getItem('mathboard.recoveryBoardId'), 'mb_corrupt')
+  assert.equal(sessionStorage.getItem('mathboard.recoveryBoardId'), 'mb_corrupt')
   assert.equal(records.has('mb_corrupt'), true)
   service.dispose()
 })
 
 test('opening the recovery board clears recovery metadata', async () => {
-  const storage = new MapStorage()
-  storage.setItem(RECOVERY_BOARD_ID_KEY, 'mb_recovery')
+  const sessionStorage = new MapStorage()
+  sessionStorage.setItem(RECOVERY_BOARD_ID_KEY, 'mb_recovery')
   const records = new Map([['mb_recovery', {
     id: 'mb_recovery',
     title: 'Recovered',
@@ -228,7 +228,7 @@ test('opening the recovery board clears recovery metadata', async () => {
   const service = new BoardPersistenceService({
     repository: makeRepository(records), boardObjectPolicy: new BoardObjectPolicy(),
     getCanvas: () => makeCanvas(), buildFormula: async () => null,
-    resetHistory: () => {}, suspendHistory: () => {}, storage,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
   })
   service.status = {
     ...service.status,
@@ -237,9 +237,55 @@ test('opening the recovery board clears recovery metadata', async () => {
 
   await service.openBoard('mb_recovery')
 
-  assert.equal(storage.getItem(RECOVERY_BOARD_ID_KEY), null)
+  assert.equal(sessionStorage.getItem(RECOVERY_BOARD_ID_KEY), null)
   assert.equal(service.status.recoveryFailure, null)
   assert.equal(service.boardId, 'mb_recovery')
+  service.dispose()
+})
+
+test('a fresh tab session bootstraps a new board and records it as active', async () => {
+  const sessionStorage = new MapStorage()
+  const records = new Map()
+  const service = new BoardPersistenceService({
+    repository: makeRepository(records), boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
+    now: () => '2026-10-14T00:00:00.000Z',
+  })
+
+  const result = await service.bootstrap()
+
+  assert.match(result.id, /^mb_/)
+  assert.equal(service.boardId, result.id)
+  assert.equal(records.has(result.id), true)
+  assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), service.boardId)
+  service.dispose()
+})
+
+test('an active tab session restores its existing board without creating a replacement', async () => {
+  const sessionStorage = new MapStorage()
+  sessionStorage.setItem('mathboard.activeBoardId', 'mb_existing')
+  const records = new Map([['mb_existing', {
+    id: 'mb_existing',
+    title: 'Existing',
+    updatedAt: '2026-10-14T00:00:00.000Z',
+    document: { format: 'mathboard-board', version: 1, title: 'Existing', objects: [] },
+  }]])
+  const repository = makeRepository(records)
+  const service = new BoardPersistenceService({
+    repository, boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
+    now: () => '2026-10-14T00:00:00.000Z',
+  })
+
+  const result = await service.bootstrap()
+
+  assert.equal(result.id, 'mb_existing')
+  assert.equal(service.boardId, 'mb_existing')
+  assert.equal(repository.puts.length, 0)
+  assert.equal(records.size, 1)
+  assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), 'mb_existing')
   service.dispose()
 })
 

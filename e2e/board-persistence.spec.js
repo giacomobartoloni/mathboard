@@ -28,10 +28,7 @@ async function flushPersistence(page) {
   })
 }
 
-async function restoreBoard(page, boardId) {
-  await page.evaluate((id) => {
-    sessionStorage.setItem('mathboard.e2e.restoreBoardId', id)
-  }, boardId)
+async function reloadBoard(page) {
   await page.reload()
   await page.waitForFunction(() => window.__MATHBOARD_E2E__?.getState?.()?.boardId)
 }
@@ -62,7 +59,7 @@ test('E2E persistence: formula keeps identity and latex across reload', async ({
   const boardId = state.boardId
   const formulaId = state.objects.find((o) => o.latex === 'x^2+1').mathboardId
   await flushPersistence(page)
-  await restoreBoard(page, boardId)
+  await reloadBoard(page)
 
   state = await waitForState(
     page,
@@ -70,6 +67,7 @@ test('E2E persistence: formula keeps identity and latex across reload', async ({
     { timeout: 15000 },
   )
   const formula = state.objects.find((o) => o.mathboardId === formulaId)
+  expect(state.boardId).toBe(boardId)
   expect(formula.isVectorFormula).toBe(true)
   expect(formula.latex).toBe('x^2+1')
 
@@ -78,13 +76,13 @@ test('E2E persistence: formula keeps identity and latex across reload', async ({
   await page.getByRole('button', { name: 'Update', exact: true }).click()
   state = await waitForState(page, (s) => s.objects.some((o) => o.latex === 'x^2+2' && o.mathboardId === formulaId))
   await flushPersistence(page)
-  await restoreBoard(page, boardId)
+  await reloadBoard(page)
   state = await waitForState(page, (s) => s.objects.some((o) => o.latex === 'x^2+2' && o.mathboardId === formulaId))
   expect(state.history.length).toBe(0)
 })
 
 test('E2E persistence: autosave reload preserves a pen stroke and starts a fresh history', async ({ page }) => {
-  await gotoBoard(page, '/', { preserveLastBoardId: true })
+  await gotoBoard(page)
   const initial = await getBoardState(page)
   await selectTool(page, 'Pen')
   await dragOnCanvas(page, safeDrag())
@@ -103,8 +101,7 @@ test('E2E persistence: autosave reload preserves a pen stroke and starts a fresh
     && s.persistence.lastSavedAt !== initial.persistence?.lastSavedAt
   ), { timeout: 15000 })
   const savedAt = state.persistence.lastSavedAt
-  await page.reload()
-  await page.waitForFunction(() => window.__MATHBOARD_E2E__?.getState?.()?.boardId)
+  await reloadBoard(page)
 
   state = await waitForState(page, (s) => s.objects.some((o) => o.mathboardId === pathId))
   expect(state.boardId).toBe(boardId)
@@ -164,9 +161,10 @@ test('E2E persistence: active selection stores member canvas geometry', async ({
   const expected = new Map(state.objects.map((object) => [object.mathboardId, object]))
   expect([...expected.keys()]).not.toContain(null)
   await flushPersistence(page)
-  await restoreBoard(page, boardId)
+  await reloadBoard(page)
 
   const restored = await getBoardState(page)
+  expect(restored.boardId).toBe(boardId)
   expect(restored.active.type).not.toBe('ActiveSelection')
   for (const object of restored.objects) {
     const before = expected.get(object.mathboardId)
@@ -204,6 +202,50 @@ test('E2E persistence: flush defers while text editing is active', async ({ page
   await page.keyboard.press('Escape')
   await flushPersistence(page)
   await waitForState(page, (s) => s.persistence?.state === 'clean')
-  await restoreBoard(page, state.boardId)
+  await reloadBoard(page)
   await waitForState(page, (s) => s.objects.some((object) => object.mathboardId === text.mathboardId && object.text === 'after'))
+})
+
+test('E2E persistence: two independent tabs own distinct scratch boards', async ({ page, context }) => {
+  await gotoBoard(page)
+  await selectTool(page, 'Pen')
+  await dragOnCanvas(page, { x1: 280, y1: 180, x2: 380, y2: 260 })
+  let stateA = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Path'))
+  await flushPersistence(page)
+  const boardA = stateA.boardId
+  const pathA = stateA.objects.find((o) => o.type === 'Path').mathboardId
+  expect(boardA).toMatch(/^mb_/)
+
+  const pageB = await context.newPage()
+  try {
+    await gotoBoard(pageB)
+    let stateB = await getBoardState(pageB)
+    expect(stateB.boardId).toMatch(/^mb_/)
+    expect(stateB.boardId).not.toBe(boardA)
+    expect(stateB.objects).toHaveLength(0)
+
+    await selectTool(pageB, 'Pen')
+    await dragOnCanvas(pageB, { x1: 300, y1: 200, x2: 420, y2: 300 })
+    stateB = await waitForState(pageB, (s) => s.objects.some((o) => o.type === 'Path'))
+    await flushPersistence(pageB)
+    const boardB = stateB.boardId
+    const pathB = stateB.objects.find((o) => o.type === 'Path').mathboardId
+
+    let stateAfterB = await getBoardState(page)
+    expect(stateAfterB.boardId).toBe(boardA)
+    expect(stateAfterB.objects).toHaveLength(1)
+    expect(stateAfterB.objects[0].mathboardId).toBe(pathA)
+
+    await reloadBoard(page)
+    const reloadedA = await waitForState(page, (s) => s.objects.some((o) => o.mathboardId === pathA))
+    expect(reloadedA.boardId).toBe(boardA)
+    expect(reloadedA.objects).toHaveLength(1)
+
+    await reloadBoard(pageB)
+    const reloadedB = await waitForState(pageB, (s) => s.objects.some((o) => o.mathboardId === pathB))
+    expect(reloadedB.boardId).toBe(boardB)
+    expect(reloadedB.objects).toHaveLength(1)
+  } finally {
+    await pageB.close()
+  }
 })

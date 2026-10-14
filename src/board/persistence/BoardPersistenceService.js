@@ -25,7 +25,7 @@ import {
   createBoardRecord,
 } from '../../storage/local/IndexedDbBoardRepository.js'
 
-export const LAST_BOARD_ID_KEY = 'mathboard.lastBoardId'
+export const ACTIVE_BOARD_ID_KEY = 'mathboard.activeBoardId'
 export const RECOVERY_BOARD_ID_KEY = 'mathboard.recoveryBoardId'
 export const BOARD_PERSISTENCE_ERROR_CODES = Object.freeze({
   BOARD_NOT_FOUND: 'board_not_found',
@@ -65,7 +65,7 @@ export class BoardPersistenceService {
     suspendHistory,
     getTitle = () => 'Untitled board',
     isDocumentStable = () => true,
-    storage = globalThis.localStorage,
+    sessionStorage = globalThis.sessionStorage,
     now = () => new Date().toISOString(),
     idleDebounceMs = IDLE_DEBOUNCE_MS,
     maxWaitMs = MAX_WAIT_MS,
@@ -78,7 +78,7 @@ export class BoardPersistenceService {
     this._suspendHistory = suspendHistory
     this._getTitle = getTitle
     this._isDocumentStable = isDocumentStable
-    this._storage = storage
+    this._sessionStorage = sessionStorage
     this._now = now
     this._idleDebounceMs = idleDebounceMs
     this._maxWaitMs = maxWaitMs
@@ -101,27 +101,27 @@ export class BoardPersistenceService {
     this.status = { ...this.status, ...patch }
   }
 
-  _readLastBoardId() {
+  _readActiveBoardId() {
     try {
-      return this._storage?.getItem?.(LAST_BOARD_ID_KEY) || null
+      return this._sessionStorage?.getItem?.(ACTIVE_BOARD_ID_KEY) || null
     } catch {
       return null
     }
   }
 
-  _writeLastBoardId(boardId) {
+  _writeActiveBoardId(boardId) {
     try {
-      if (boardId) this._storage?.setItem?.(LAST_BOARD_ID_KEY, boardId)
-      else this._storage?.removeItem?.(LAST_BOARD_ID_KEY)
+      if (boardId) this._sessionStorage?.setItem?.(ACTIVE_BOARD_ID_KEY, boardId)
+      else this._sessionStorage?.removeItem?.(ACTIVE_BOARD_ID_KEY)
     } catch {
-      // ignore quota / private mode
+      // Keep runtime usable if storage is unavailable.
     }
   }
 
   _writeRecoveryBoardId(boardId) {
     try {
-      if (boardId) this._storage?.setItem?.(RECOVERY_BOARD_ID_KEY, boardId)
-      else this._storage?.removeItem?.(RECOVERY_BOARD_ID_KEY)
+      if (boardId) this._sessionStorage?.setItem?.(RECOVERY_BOARD_ID_KEY, boardId)
+      else this._sessionStorage?.removeItem?.(RECOVERY_BOARD_ID_KEY)
     } catch {
       // ignore quota / private mode
     }
@@ -129,7 +129,7 @@ export class BoardPersistenceService {
 
   _readRecoveryBoardId() {
     try {
-      return this._storage?.getItem?.(RECOVERY_BOARD_ID_KEY) || null
+      return this._sessionStorage?.getItem?.(RECOVERY_BOARD_ID_KEY) || null
     } catch {
       return null
     }
@@ -211,7 +211,6 @@ export class BoardPersistenceService {
           updatedAt: now,
         })
         await this._repository.put(record)
-        this._writeLastBoardId(this.boardId)
 
         if (this.changeVersion === savingVersion) {
           this._setStatus({
@@ -279,7 +278,7 @@ export class BoardPersistenceService {
     this.boardId = record.id
     this.title = record.title
     this.changeVersion = 0
-    this._writeLastBoardId(record.id)
+    this._writeActiveBoardId(record.id)
     this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: record.updatedAt, error: null })
     return record
   }
@@ -305,7 +304,7 @@ export class BoardPersistenceService {
     this.boardId = record.id
     this.title = record.title || record.document.title || 'Untitled board'
     this.changeVersion = 0
-    this._writeLastBoardId(record.id)
+    this._writeActiveBoardId(record.id)
     if (this._readRecoveryBoardId() === record.id) {
       this._writeRecoveryBoardId(null)
       this._setStatus({ recoveryFailure: null })
@@ -339,7 +338,7 @@ export class BoardPersistenceService {
     this.boardId = record.id
     this.title = record.title
     this.changeVersion = 0
-    this._writeLastBoardId(record.id)
+    this._writeActiveBoardId(record.id)
     this._setStatus({
       state: SAVE_STATES.CLEAN,
       lastSavedAt: record.updatedAt,
@@ -349,24 +348,24 @@ export class BoardPersistenceService {
   }
 
   /**
-   * Bootstrap: restore last board or create a new empty local board.
+   * Bootstrap: restore this tab's active board or create a new local board.
    */
   async bootstrap() {
-    const lastId = this._readLastBoardId()
-    if (lastId) {
+    const activeId = this._readActiveBoardId()
+    if (activeId) {
       try {
-        return await this.openBoard(lastId)
+        return await this.openBoard(activeId)
       } catch (error) {
-        console.error('Failed to restore last board; creating a new one.', error)
+        console.error('Failed to restore active board; creating a new one.', error)
         this._setStatus({
           state: SAVE_STATES.ERROR,
           error: error?.message || String(error),
         })
         const missing = error?.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND
-        if (!missing) this._writeRecoveryBoardId(lastId)
+        if (!missing) this._writeRecoveryBoardId(activeId)
         const record = await this.createNewBoard()
         const restoreFailure = {
-          boardId: lastId,
+          boardId: activeId,
           code: missing
             ? BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND
             : BOARD_PERSISTENCE_ERROR_CODES.BOARD_RESTORE_FAILED,

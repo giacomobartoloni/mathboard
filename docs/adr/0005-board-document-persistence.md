@@ -42,10 +42,14 @@ synchronized with Fabric.
     board untouched.
 15. Introducing BoardDocument does not invalidate ADR 0004: it is not a live
     canonical store.
+16. The active board reference is tab scoped: `mathboard.activeBoardId` lives in
+    `sessionStorage`, so an independently opened tab starts a new board instead
+    of reusing another tab's record.
 
-Local records live in IndexedDB (`mathboard` / `boards`). A small preference
-`mathboard.lastBoardId` may use localStorage. Autosave is driven by document
-content changes (history command commit boundaries), not viewport events.
+Local records live in IndexedDB (`mathboard` / `boards`). The active-board
+preference `mathboard.activeBoardId` uses per-tab `sessionStorage`. Autosave is
+driven by document content changes (history command commit boundaries), not
+viewport events.
 
 ## Consequences
 
