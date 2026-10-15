@@ -17,7 +17,45 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ORIGIN } from './structured-data.mjs'
+import {
+  ORIGIN,
+  SOFTWARE_ID,
+  WEBSITE_ID,
+  assertSchemaContext,
+} from './structured-data.mjs'
+
+function extractJsonLdDocuments(html) {
+  const docs = []
+  const re =
+    /<script\b[^>]*\btype=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  let match
+  while ((match = re.exec(html)) !== null) {
+    docs.push(match[1].trim())
+  }
+  return docs
+}
+
+function asArray(value) {
+  if (value == null) return []
+  return Array.isArray(value) ? value : [value]
+}
+
+function collectGraphNodes(document) {
+  if (Array.isArray(document['@graph'])) {
+    return document['@graph']
+  }
+  return [document]
+}
+
+function hasType(node, typeName) {
+  return asArray(node['@type']).includes(typeName)
+}
+
+function isSoftwareNode(node) {
+  return (
+    hasType(node, 'SoftwareApplication') || hasType(node, 'WebApplication')
+  )
+}
 
 const EXTRA_KNOWN_PATHS = new Set([
   '/',
@@ -104,6 +142,83 @@ export function validatePages(pages) {
   return { paths: knownPaths }
 }
 
+export function validateStructuredData(page, html) {
+  const rawDocs = extractJsonLdDocuments(html)
+  if (rawDocs.length === 0) {
+    throw new Error(`Missing JSON-LD on ${page.path}`)
+  }
+
+  const nodes = []
+  for (const raw of rawDocs) {
+    let parsed
+    try {
+      parsed = JSON.parse(raw)
+    } catch (error) {
+      throw new Error(`Invalid JSON-LD on ${page.path}: ${error.message}`)
+    }
+    assertSchemaContext(parsed, `JSON-LD on ${page.path}`)
+    nodes.push(...collectGraphNodes(parsed))
+  }
+
+  const softwareNodes = nodes.filter(isSoftwareNode)
+  for (const node of softwareNodes) {
+    if (node['@id'] !== SOFTWARE_ID) {
+      throw new Error(
+        `Software entity @id must be ${SOFTWARE_ID} on ${page.path}`,
+      )
+    }
+    if (node.url !== `${ORIGIN}/`) {
+      throw new Error(
+        `Software entity url must be ${ORIGIN}/ on ${page.path}`,
+      )
+    }
+  }
+
+  const pageUrl = `${ORIGIN}${page.path}`
+  const webpageId = `${pageUrl}#webpage`
+  const webpageNodes = nodes.filter((node) => hasType(node, 'WebPage'))
+  if (webpageNodes.length !== 1) {
+    throw new Error(`Expected exactly one WebPage on ${page.path}`)
+  }
+  const webpage = webpageNodes[0]
+  if (webpage['@id'] !== webpageId) {
+    throw new Error(`WebPage @id must be ${webpageId} on ${page.path}`)
+  }
+  if (webpage.url !== pageUrl) {
+    throw new Error(`WebPage url must be ${pageUrl} on ${page.path}`)
+  }
+  if (webpage.isPartOf?.['@id'] !== WEBSITE_ID) {
+    throw new Error(`WebPage.isPartOf must reference ${WEBSITE_ID} on ${page.path}`)
+  }
+
+  const expectsAboutSoftware =
+    page.structuredData === 'software-application' || page.aboutSoftware === true
+
+  if (expectsAboutSoftware) {
+    if (webpage.about?.['@id'] !== SOFTWARE_ID) {
+      throw new Error(
+        `WebPage.about must reference ${SOFTWARE_ID} on ${page.path}`,
+      )
+    }
+    if (softwareNodes.length !== 1) {
+      throw new Error(
+        `Expected canonical software entity on ${page.path}`,
+      )
+    }
+  } else if (softwareNodes.length > 0) {
+    throw new Error(
+      `Unexpected SoftwareApplication on ${page.path}`,
+    )
+  }
+
+  const pageSpecificSoftwareId = `${pageUrl}#software`
+  if (html.includes(pageSpecificSoftwareId)) {
+    throw new Error(
+      `Page-specific software @id must not appear on ${page.path}`,
+    )
+  }
+}
+
 export function validateRenderedHtml(page, html) {
   const h1Matches = html.match(/<h1[\s>]/g)
   if (!h1Matches || h1Matches.length !== 1) {
@@ -125,6 +240,7 @@ export function validateRenderedHtml(page, html) {
   if (text.length < 40) {
     throw new Error(`Body too thin on ${page.path}`)
   }
+  validateStructuredData(page, html)
 }
 
 export { collectInternalHrefs }

@@ -20,5 +20,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { mountMathBoard } from '../src/app-bootstrap.js'
 import { installBoardE2eHook } from './instrumentation/board-hook.js'
 
+import { installBootstrapGate } from './instrumentation/bootstrap-gate.js'
+
+const gate = installBootstrapGate()
 const root = mountMathBoard()
-installBoardE2eHook(() => root.drawBoardRef)
+installBoardE2eHook(() => root.drawBoardRef, gate)

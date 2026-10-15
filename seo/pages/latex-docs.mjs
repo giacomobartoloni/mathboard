@@ -56,6 +56,7 @@ export default {
     'Quick LaTeX examples for MathBoard formulas: fractions, roots, powers, integrals, sums, Greek letters, and common math notation.',
   h1: 'LaTeX formula examples',
   structuredData: 'docs',
+  aboutSoftware: true,
   needsKatex: true,
   breadcrumbs: [
     { label: 'Resources', href: '/resources/' },
