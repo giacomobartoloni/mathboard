@@ -1,0 +1,149 @@
+/*
+MathBoard
+
+Copyright (C) 2026 Giacomo Bartoloni
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+import { test, expect } from '@playwright/test'
+import { gotoBoard } from './fixtures.js'
+import { clickOnCanvas, getBoardState } from './helpers/canvas.js'
+
+const tools = [
+  ['Select', 'V'], ['Pan', 'H'], ['Pen', 'P'],
+  ['Text', 'T'], ['Formula', 'F'], ['Shapes', 'S'],
+]
+
+test('desktop hints preserve accessible names, tab order and board state', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const before = await gotoBoard(page)
+  for (const [name, key] of tools) {
+    const button = page.getByRole('button', { name, exact: true })
+    await expect(button).toHaveAttribute('title', `${name} (${key})`)
+    const hint = button.locator('span[aria-hidden="true"]')
+    await expect(hint).toHaveText(key)
+    await expect(hint).toBeVisible()
+    await expect(hint).not.toHaveAttribute('tabindex')
+  }
+  await expect(page.getByRole('button', { name: 'Stamps', exact: true }).locator('span')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Select', exact: true }).focus()
+  for (const [name] of tools.slice(1)) {
+    await page.keyboard.press('Tab')
+    await expect(page.getByRole('button', { name, exact: true })).toBeFocused()
+  }
+  expect(await getBoardState(page)).toEqual(before)
+})
+
+for (const [name, key] of tools) {
+  test(`${name} hint matches pointer and keyboard selection`, async ({ page }) => {
+    await gotoBoard(page)
+    const button = page.getByRole('button', { name, exact: true })
+    await button.click()
+    await expect(button).toHaveAttribute('aria-pressed', 'true')
+    if (name === 'Formula') await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'Select', exact: true }).click()
+    await page.keyboard.press(key.toLowerCase())
+    await expect(button).toHaveAttribute('aria-pressed', 'true')
+  })
+}
+
+
+for (const boardTheme of ['light', 'dark', 'chalkboard']) {
+  test(`hints remain readable in ${boardTheme} and fullscreen`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await gotoBoard(page, '/', { boardTheme })
+    await page.evaluate(() => document.fonts.ready)
+    const pen = page.getByRole('button', { name: 'Pen', exact: true })
+    await pen.click()
+    await pen.focus()
+    await expect(pen).toBeFocused()
+    await expect(pen.locator('span')).toBeVisible()
+    const path = testInfo.outputPath(`${boardTheme}-desktop.png`)
+    await page.screenshot({ path, animations: 'disabled' })
+    await testInfo.attach(`${boardTheme} desktop`, { path, contentType: 'image/png' })
+    await page.getByRole('button', { name: 'Enter fullscreen', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Exit fullscreen', exact: true })).toBeVisible()
+    for (const [name] of tools) {
+      await expect(page.getByRole('button', { name, exact: true }).locator('span')).toBeVisible()
+    }
+    const fullscreenPath = testInfo.outputPath(`${boardTheme}-fullscreen.png`)
+    await page.screenshot({ path: fullscreenPath, animations: 'disabled' })
+    await testInfo.attach(`${boardTheme} fullscreen`, { path: fullscreenPath, contentType: 'image/png' })
+  })
+}
+
+for (const viewport of [
+  { width: 1024, height: 768 },
+  { width: 640, height: 600 },
+  { width: 1280, height: 600 },
+]) {
+  test(`hints degrade gracefully at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
+    await page.setViewportSize(viewport)
+    const before = await gotoBoard(page)
+    for (const [name] of tools) {
+      const button = page.getByRole('button', { name, exact: true })
+      await expect(button).toBeInViewport()
+      const hint = button.locator('span')
+      if (viewport.height <= 700 || viewport.width <= 600) await expect(hint).toBeHidden()
+      else await expect(hint).toBeVisible()
+    }
+    await expect(page.getByRole('button', { name: 'Redo', exact: true })).toBeInViewport()
+    expect(await getBoardState(page)).toEqual(before)
+    const path = testInfo.outputPath('constrained.png')
+    await page.screenshot({ path, animations: 'disabled' })
+    await testInfo.attach('constrained toolbar', { path, contentType: 'image/png' })
+  })
+}
+
+test('coarse pointer hides hints while retaining touch targets', async ({ browser }, testInfo) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
+  })
+  try {
+    const page = await context.newPage()
+    await gotoBoard(page)
+    expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true)
+    for (const [name] of tools) {
+      const button = page.getByRole('button', { name, exact: true })
+      await expect(button).toBeInViewport()
+      await expect(button.locator('span')).toBeHidden()
+      const box = await button.boundingBox()
+      expect(box.height).toBeGreaterThanOrEqual(38)
+    }
+    const path = testInfo.outputPath('touch.png')
+    await page.screenshot({ path, animations: 'disabled' })
+    await testInfo.attach('touch toolbar', { path, contentType: 'image/png' })
+  } finally {
+    await context.close()
+  }
+})
+
+test('advertised shortcuts do not steal formula or Fabric text input', async ({ page }) => {
+  await gotoBoard(page)
+  await page.getByRole('button', { name: 'Formula', exact: true }).click()
+  await clickOnCanvas(page, { x: 340, y: 240 })
+  const input = page.getByLabel('LaTeX Formula:')
+  await input.pressSequentially('vhptfs')
+  await expect(input).toHaveValue('vhptfs')
+  await expect(page.getByRole('button', { name: 'Formula', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Text', exact: true }).click()
+  await clickOnCanvas(page, { x: 340, y: 240 })
+  const text = page.locator('textarea').first()
+  await text.fill('')
+  await text.pressSequentially('vhptfs')
+  await expect(text).toHaveValue('vhptfs')
+  await expect(page.getByRole('button', { name: 'Text', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})
