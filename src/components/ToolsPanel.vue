@@ -421,6 +421,7 @@ export default {
 }
 
 .tool-button--shortcut {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -432,6 +433,9 @@ export default {
 }
 
 .tool-shortcut-hint {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
   color: inherit;
   font-size: 11px;
   line-height: 1;

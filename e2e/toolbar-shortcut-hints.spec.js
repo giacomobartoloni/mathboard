@@ -36,6 +36,14 @@ test('desktop hints preserve accessible names, tab order and board state', async
     await expect(hint).toHaveText(key)
     await expect(hint).toBeVisible()
     await expect(hint).not.toHaveAttribute('tabindex')
+    const buttonBox = await button.boundingBox()
+    const hintBox = await hint.boundingBox()
+    // The key belongs to the lower-right corner, leaving the icon centered.
+    expect(hintBox.x + hintBox.width / 2).toBeGreaterThan(buttonBox.x + buttonBox.width * 0.65)
+    expect(buttonBox.x + buttonBox.width - hintBox.x - hintBox.width).toBeGreaterThanOrEqual(0)
+    expect(buttonBox.x + buttonBox.width - hintBox.x - hintBox.width).toBeLessThanOrEqual(8)
+    expect(buttonBox.y + buttonBox.height - hintBox.y - hintBox.height).toBeGreaterThanOrEqual(0)
+    expect(buttonBox.y + buttonBox.height - hintBox.y - hintBox.height).toBeLessThanOrEqual(8)
   }
   await expect(page.getByRole('button', { name: 'Stamps', exact: true }).locator('span')).toHaveCount(0)
   await page.getByRole('button', { name: 'Select', exact: true }).focus()
