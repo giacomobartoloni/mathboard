@@ -250,7 +250,21 @@ export default {
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
-        pushHistoryCommand: (command) => this._pushCommand(command),
+        pushHistoryCommand: (command) => {
+          // A notification can fail after _pushCommand mutates the log. Keep
+          // the history boundary atomic with the controller's canvas rollback.
+          const entries = this._history.slice();
+          const step = this._historyStep;
+          const tip = this._historyTipKind;
+          try {
+            this._pushCommand(command);
+          } catch (error) {
+            this._history.splice(0, this._history.length, ...entries);
+            this._historyStep = step;
+            this._historyTipKind = tip;
+            throw error;
+          }
+        },
         runWithoutHistory: (callback) => this._runWithoutHistory(callback),
         prepareCreatedObject: (object) => {
           this._applyBoardDefaultInkToObjectTree(object);

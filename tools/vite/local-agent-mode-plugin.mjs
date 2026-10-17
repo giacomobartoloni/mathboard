@@ -21,6 +21,7 @@ import { randomUUID } from 'node:crypto'
 
 const PREFIX = '/__mathboard_agent/'
 const COMMAND_TIMEOUT_MS = 30000
+const COMMAND_METHODS = new Set(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear'])
 
 function sendJson(response, status, payload) {
   if (response.writableEnded) return
@@ -108,6 +109,9 @@ export function localAgentModePlugin() {
             || typeof command.method !== 'string'
             || (command.params !== undefined && (typeof command.params !== 'object' || command.params === null || Array.isArray(command.params)))) {
             return sendJson(response, 400, transportError('invalid_command', 'A method and object params are required.'))
+          }
+          if (!COMMAND_METHODS.has(command.method)) {
+            return sendJson(response, 400, transportError('invalid_command', 'Unsupported local agent method.'))
           }
           if (!browserResponse) {
             return sendJson(response, 503, transportError('board_unavailable', 'No local MathBoard browser is connected.'))

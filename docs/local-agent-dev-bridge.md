@@ -60,6 +60,8 @@ Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the reque
 | `createMany` | `specs`, optional `options` |
 | `update` | `id`, `patch`, optional `options` |
 | `delete` | `id` |
+| `deleteMany` | `ids` (unique top-level IDs; empty array is a no-op) |
+| `clear` | No required parameters |
 
 The bridge delegates these commands to the corresponding `BoardController` methods and returns their semantic JSON results. It does not expose Fabric, history internals, persistence, or arbitrary method execution.
 
@@ -152,7 +154,7 @@ Re-observe after each change to confirm the board's current state. Formula updat
 1. Start `npm run dev:agent` and make sure a browser is open at `http://127.0.0.1:5173`.
 2. Check `/__mathboard_agent/health` until `browserConnected` is `true`.
 3. Call `observe`; mutate only when `result.stable` is `true`.
-4. Use `create`, `createMany`, `update`, and `delete` with semantic data.
+4. Use `create`, `createMany`, `update`, `delete`, `deleteMany`, and `clear` with semantic data.
 5. Call `observe` after changes and use its result as the source of truth.
 6. If a transport request fails during a browser reload, observe the board before retrying a mutation. The original command may have committed just before the connection dropped.
 
@@ -170,7 +172,7 @@ Transport failures use these HTTP statuses:
 
 | Status | Meaning |
 | --- | --- |
-| `400` | Malformed command |
+| `400` | Malformed command or unsupported method |
 | `404` | Unknown relay endpoint or result ID |
 | `409` | BoardController rejected the command |
 | `503` | No browser board is connected |
@@ -180,6 +182,6 @@ BoardController errors return a concise `code` and `message`. A transport error 
 
 ## Scope
 
-V1 exposes only `observe`, `create`, `createMany`, `update`, and `delete`. It has no clear, undo, redo, grouping, screenshot, auto-layout, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
+The bridge exposes `observe`, `create`, `createMany`, `update`, `delete`, `deleteMany`, and `clear`. Bulk deletion uses one existing history command; see [atomic board deletion](atomic-board-delete.md). It has no undo, redo, grouping, screenshot, auto-layout, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
 
 After using the bridge in real development, record repeated friction before proposing more commands. In particular, check whether coordinates, observation detail, board dimensions, or a missing operation repeatedly block useful work.
