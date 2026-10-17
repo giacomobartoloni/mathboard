@@ -22,5 +22,10 @@ export function hasValidShapeGeometry(node) {
   if (node.type === 'ellipse') {
     return ['rx', 'ry'].every((key) => Number.isFinite(node[key]) && node[key] >= 0)
   }
+  if (node.type === 'polygon') {
+    return Array.isArray(node.points) && node.points.length >= 3 && node.points.length <= 1000
+      && Array.from(node.points).every((point) => point && typeof point === 'object'
+        && Number.isFinite(point.x) && Number.isFinite(point.y))
+  }
   return true
 }
