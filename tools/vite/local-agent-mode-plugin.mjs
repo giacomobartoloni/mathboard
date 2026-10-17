@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { randomUUID } from 'node:crypto'
+import { getLocalAgentHelp, hasLocalAgentMethod } from '../../dev-agent/command-contract.js'
 
 const PREFIX = '/__mathboard_agent/'
 const COMMAND_TIMEOUT_MS = 30000
@@ -68,6 +69,10 @@ export function localAgentModePlugin() {
         const path = request.url?.split('?')[0]
         if (!path?.startsWith(PREFIX)) return next()
 
+        if (request.method === 'GET' && path === `${PREFIX}help`) {
+          return sendJson(response, 200, getLocalAgentHelp())
+        }
+
         if (request.method === 'GET' && path === `${PREFIX}health`) {
           return sendJson(response, 200, {
             ok: true,
@@ -108,6 +113,9 @@ export function localAgentModePlugin() {
             || typeof command.method !== 'string'
             || (command.params !== undefined && (typeof command.params !== 'object' || command.params === null || Array.isArray(command.params)))) {
             return sendJson(response, 400, transportError('invalid_command', 'A method and object params are required.'))
+          }
+          if (!hasLocalAgentMethod(command.method)) {
+            return sendJson(response, 400, transportError('invalid_command', 'Unsupported local agent method.'))
           }
           if (!browserResponse) {
             return sendJson(response, 503, transportError('board_unavailable', 'No local MathBoard browser is connected.'))
