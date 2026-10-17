@@ -107,21 +107,33 @@ for (const viewport of [
   })
 }
 
-test('coarse pointer hides hints while retaining touch targets', async ({ browser }, testInfo) => {
+for (const lineHeight of ['normal', '18px']) {
+test(`coarse pointer preserves incumbent touch targets with ${lineHeight} line height`, async ({ browser }, testInfo) => {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true,
   })
   try {
     const page = await context.newPage()
     await gotoBoard(page)
+    await page.getByRole('toolbar', { name: 'Drawing tools', exact: true }).evaluate((toolbar, value) => {
+      toolbar.style.lineHeight = value
+    }, lineHeight)
     expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true)
+    // Stamps keeps the original button styling and shares inherited font metrics.
+    const incumbent = await page.getByRole('button', { name: 'Stamps', exact: true }).boundingBox()
+    const dimensions = { incumbent, tools: {} }
     for (const [name] of tools) {
       const button = page.getByRole('button', { name, exact: true })
       await expect(button).toBeInViewport()
       await expect(button.locator('span')).toBeHidden()
       const box = await button.boundingBox()
-      expect(box.height).toBeGreaterThanOrEqual(38)
+      dimensions.tools[name] = box
+      expect(box.height).toBeGreaterThanOrEqual(incumbent.height)
+      expect(box.width).toBeGreaterThanOrEqual(incumbent.width)
     }
+    await testInfo.attach('touch target dimensions', {
+      body: JSON.stringify(dimensions, null, 2), contentType: 'application/json',
+    })
     const path = testInfo.outputPath('touch.png')
     await page.screenshot({ path, animations: 'disabled' })
     await testInfo.attach('touch toolbar', { path, contentType: 'image/png' })
@@ -129,6 +141,7 @@ test('coarse pointer hides hints while retaining touch targets', async ({ browse
     await context.close()
   }
 })
+}
 
 test('advertised shortcuts do not steal formula or Fabric text input', async ({ page }) => {
   await gotoBoard(page)
