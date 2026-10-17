@@ -21,6 +21,10 @@ const LOCAL_AGENT_MARKER = 'MATHBOARD_LOCAL_AGENT_BRIDGE_V1'
 
 function executeCommand(controller, command) {
   switch (command.method) {
+    case 'measure':
+      return controller.measure(command.params?.id)
+    case 'layout':
+      return controller.layout(command.params)
     case 'observe':
       return controller.observe()
     case 'create':

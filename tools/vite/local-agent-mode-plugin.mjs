@@ -21,7 +21,7 @@ import { randomUUID } from 'node:crypto'
 
 const PREFIX = '/__mathboard_agent/'
 const COMMAND_TIMEOUT_MS = 30000
-const COMMAND_METHODS = new Set(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear'])
+const COMMAND_METHODS = new Set(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'measure', 'layout'])
 
 function sendJson(response, status, payload) {
   if (response.writableEnded) return
