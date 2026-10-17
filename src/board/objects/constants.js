@@ -21,6 +21,7 @@ export const BOARD_OBJECT_TYPES = Object.freeze([
   'rect',
   'circle',
   'ellipse',
+  'polygon',
   'line',
   'path',
   'text',

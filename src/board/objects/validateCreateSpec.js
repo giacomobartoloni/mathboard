@@ -21,7 +21,7 @@ import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from './con
 import { hasValidShapeGeometry } from './shapeGeometry.js'
 import { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES as C } from '../BoardControllerError.js'
 
-const TYPE_KEYS = { rect: ['width', 'height', 'rx', 'ry'], circle: ['radius'], ellipse: ['rx', 'ry'],
+const TYPE_KEYS = { rect: ['width', 'height', 'rx', 'ry'], circle: ['radius'], ellipse: ['rx', 'ry'], polygon: ['points'],
   line: ['x1', 'y1', 'x2', 'y2'], path: ['path'], text: ['text', ...TEXT_KEYS],
   formula: ['latex'], group: ['objects'] }
 
