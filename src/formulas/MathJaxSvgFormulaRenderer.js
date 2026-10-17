@@ -84,7 +84,11 @@ export class MathJaxSvgFormulaRenderer {
    * @returns {boolean}
    */
   syncInk(formula, config) {
-    return Boolean(formula?.applyInk?.(config.defaultInk))
+    if (!formula) return false
+    const changed = Boolean(formula.applyInk?.(config.defaultInk))
+    // The semantic root and vector surfaces expose the same current ink.
+    formula.set('fill', config.defaultInk)
+    return changed
   }
 }
 

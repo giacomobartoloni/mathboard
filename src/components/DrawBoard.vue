@@ -271,6 +271,7 @@ export default {
           applySelectionObjectChrome(object, selectionObjectChromeForBoard(this.boardTheme));
         },
         afterMutation: () => this.refreshSelectionPanel(),
+        prepareUpdatedObject: (object) => this._syncObjectAutoInk(object, this.boardThemeConfig),
         isMutationStable: () => this.sessionReady && this._isBoardInteractionStable(),
         getBoardId: () => this.getBoardId(),
       });
@@ -358,41 +359,33 @@ export default {
      * documents) are left untouched, and no history entry is pushed.
      * Walks into permanent Groups (and ActiveSelection) so stamp kits follow theme.
      */
+    _syncObjectAutoInk(object, config) {
+      if (!object || object.mathboardInkMode !== INK_MODE_AUTO) return;
+      if (this._boardObjectPolicy.isFormula(object)) {
+        this._formulaRenderer.syncInk(object, config);
+        return;
+      }
+      // Explicit no-paint surfaces stay transparent even in AUTO mode.
+      const painted = (paint) => paint !== null && paint !== undefined && paint !== ""
+        && !["none", "transparent"].includes(String(paint).trim().toLowerCase());
+      const patch = {};
+      if (object.isType(...STROKE_INK_TYPES)) {
+        if (painted(object.stroke)) patch.stroke = config.defaultInk;
+        if (object.isType("Circle") && painted(object.fill)) patch.fill = config.defaultInk;
+      } else if (object.isType(...FILL_INK_TYPES) && painted(object.fill)) {
+        patch.fill = config.defaultInk;
+      }
+      object.set(patch);
+    },
     syncAutoInk(config) {
-      const apply = (obj) => {
-        if (!obj) return;
-
-        if (this._boardObjectPolicy.isFormula(obj)) {
-          if (obj.mathboardInkMode === INK_MODE_AUTO) {
-            this._formulaRenderer.syncInk(obj, config);
-          }
+      const apply = (object) => {
+        if (!object) return;
+        if (this._boardObjectPolicy.isBoardGroup(object)
+          || this._boardObjectPolicy.isActiveSelection(object)) {
+          object.getObjects().forEach(apply);
           return;
         }
-
-        if (
-          this._boardObjectPolicy.isBoardGroup(obj)
-          || this._boardObjectPolicy.isActiveSelection(obj)
-        ) {
-          const members = typeof obj.getObjects === "function" ? obj.getObjects() : [];
-          members.forEach(apply);
-          return;
-        }
-
-        if (obj.mathboardInkMode !== INK_MODE_AUTO) return;
-
-        if (obj.isType(...STROKE_INK_TYPES)) {
-          const patch = { stroke: config.defaultInk };
-          if (
-            obj.isType("Circle")
-            && obj.fill
-            && obj.fill !== "transparent"
-          ) {
-            patch.fill = config.defaultInk;
-          }
-          obj.set(patch);
-        } else if (obj.isType(...FILL_INK_TYPES)) {
-          obj.set("fill", config.defaultInk);
-        }
+        this._syncObjectAutoInk(object, config);
       };
       this.canvas.forEachObject(apply);
     },
@@ -1723,6 +1716,9 @@ export default {
       this._suspendHistory = true;
       try {
         this._applyCommand(command, direction === 'undo' ? 'inverse' : 'forward');
+        // Retained instances and snapshots may contain an earlier theme's AUTO
+        // ink. Resolve presentation now, without adding a history command.
+        this.syncAutoInk(this.boardThemeConfig);
         this._historyStep = direction === 'undo' ? index - 1 : index;
       } finally {
         this._suspendHistory = false;

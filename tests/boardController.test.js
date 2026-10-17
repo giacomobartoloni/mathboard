@@ -168,10 +168,10 @@ test('transform and text updates preserve identity and produce undoable modify s
   assert.equal(history.length, 2)
 })
 
-test('patch allowlist rejects styles, identity, wrong types, and nonfinite values', async () => {
+test('patch allowlist rejects unsupported fields, identity, wrong types, and nonfinite values', async () => {
   const { controller, history } = setup()
   const node = await controller.create(rect)
-  for (const patch of [{ fill: 'red' }, { id: 'other' }, { text: 'bad' }, { left: NaN },
+  for (const patch of [{ shadow: 'red' }, { id: 'other' }, { text: 'bad' }, { left: NaN },
     { flipX: 1 }, { originX: 'bad' }, { latex: 'x' }, null, []]) {
     await rejectsCode(() => controller.update(node.id, patch), C.INVALID_PATCH)
   }
