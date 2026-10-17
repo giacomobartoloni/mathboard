@@ -29,6 +29,8 @@ function executeCommand(controller, command) {
       return controller.createMany(command.params?.specs, command.params?.options)
     case 'update':
       return controller.update(command.params?.id, command.params?.patch, command.params?.options)
+    case 'group':
+      return controller.group(command.params?.ids, command.params?.options)
     case 'deleteMany':
       return controller.deleteMany(command.params?.ids)
     case 'clear':
