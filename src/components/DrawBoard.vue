@@ -42,6 +42,7 @@ import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
+import { extendedShapeInkPatch, isExtendedShape } from '../board/objects/shapeInk.js';
 import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
@@ -380,7 +381,10 @@ export default {
 
         if (obj.mathboardInkMode !== INK_MODE_AUTO) return;
 
-        if (obj.isType(...STROKE_INK_TYPES)) {
+        const extended = extendedShapeInkPatch(obj, config.defaultInk);
+        if (extended) {
+          obj.set(extended);
+        } else if (obj.isType(...STROKE_INK_TYPES)) {
           const patch = { stroke: config.defaultInk };
           if (
             obj.isType("Circle")
@@ -402,6 +406,9 @@ export default {
     },
     _inkSnapshot(object) {
       if (!object || this._boardObjectPolicy.isFormula(object)) return null;
+      if (isExtendedShape(object)) {
+        return { stroke: object.stroke, fill: object.fill, mathboardInkMode: object.mathboardInkMode };
+      }
       if (object.isType(...STROKE_INK_TYPES)) {
         const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
         if (
@@ -846,6 +853,11 @@ export default {
 
         if (object.mathboardInkMode === INK_MODE_FIXED) return;
 
+        const extended = extendedShapeInkPatch(object, ink);
+        if (extended) {
+          object.set({ ...extended, mathboardInkMode: INK_MODE_AUTO });
+          return;
+        }
         if (object.isType?.(...STROKE_INK_TYPES)) {
           const patch = { stroke: ink, mathboardInkMode: INK_MODE_AUTO };
           if (
