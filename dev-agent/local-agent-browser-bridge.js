@@ -17,24 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { executeLocalAgentCommand } from './command-contract.js'
+
 const LOCAL_AGENT_MARKER = 'MATHBOARD_LOCAL_AGENT_BRIDGE_V1'
 
-function executeCommand(controller, command) {
-  switch (command.method) {
-    case 'observe':
-      return controller.observe()
-    case 'create':
-      return controller.create(command.params?.spec, command.params?.options)
-    case 'createMany':
-      return controller.createMany(command.params?.specs, command.params?.options)
-    case 'update':
-      return controller.update(command.params?.id, command.params?.patch, command.params?.options)
-    case 'delete':
-      return controller.delete(command.params?.id)
-    default:
-      throw new Error(`Unsupported local agent method: ${command.method}`)
-  }
-}
 
 function errorPayload(error) {
   return {
@@ -55,7 +41,7 @@ export function installLocalAgentBrowserBridge(getBoard) {
     try {
       const board = getBoard?.()
       if (!board) throw new Error('DrawBoard is not available.')
-      const result = await executeCommand(board.getBoardController(), command)
+      const result = await executeLocalAgentCommand(board.getBoardController(), command)
       payload = { id: command.id, ok: true, result }
     } catch (error) {
       payload = { id: command.id, ok: false, error: errorPayload(error) }

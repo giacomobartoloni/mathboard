@@ -49,6 +49,10 @@ Once the browser is connected, the response should look like:
 
 `browserConnected` means the browser transport is connected. It does not mean the board is ready for a mutation. Send `observe` and proceed only when its result has `stable: true`.
 
+## Discover available commands
+
+`GET /__mathboard_agent/help` returns versioned read-only JSON even without a connected browser. It describes exactly the executable methods, semantic object types, parameter/result schemas, synthetic examples and error/readiness guidance for this build. Health reports connectivity separately; observe reports board stability. See [API discovery and local tool adapters](local-agent-api-help.md). Discovery does not grant permission to mutate.
+
 ## Command API
 
 Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the request ID; callers do not need to create correlation IDs. The only supported methods are:
