@@ -75,11 +75,16 @@ export class BoardObjectPolicy {
     )
   }
 
+  isArrow(object) {
+    return Boolean(object && object.mathboardShapeType === 'arrow')
+  }
+
   isBoardGroup(object) {
     return Boolean(
       object
       && !this.isActiveSelection(object)
       && !this.isFormula(object)
+      && !this.isArrow(object)
       && isFabricType(object, 'Group', 'group'),
     )
   }
@@ -93,7 +98,7 @@ export class BoardObjectPolicy {
   }
 
   isShape(object) {
-    return isFabricType(
+    return this.isArrow(object) || isFabricType(
       object,
       'Rect',
       'Circle',
@@ -118,6 +123,10 @@ export class BoardObjectPolicy {
 
     if (this.isFormula(object)) {
       return BOARD_OBJECT_KINDS.FORMULA
+    }
+
+    if (this.isArrow(object)) {
+      return BOARD_OBJECT_KINDS.SHAPE
     }
 
     if (this.isBoardGroup(object)) {
