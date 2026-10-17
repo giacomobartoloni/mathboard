@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { ActiveSelection } from 'fabric'
 import { getMathBoardObjectId, ensureMathBoardObjectId, regenerateMathBoardObjectIds } from './ids.js'
 import { materializeBoardObjects } from './objects/materialize.js'
+import { normalizeCreateOrigins } from './objects/normalizeCreateOrigins.js'
 import { readSemanticBoardObject, toBoardDocumentNode } from './objects/serialize.js'
 import { validateCreateSpec, validateObjectPatch } from './objects/validateCreateSpec.js'
 import { TRANSFORM_KEYS } from './objects/constants.js'
@@ -162,6 +163,7 @@ export class BoardController {
     try { specs = structuredClone(specs) } catch (cause) {
       throw new BoardControllerError(C.INVALID_SPEC, 'Cannot clone object spec.', { cause })
     }
+    specs = specs.map(normalizeCreateOrigins)
     const objects = await this._materialize(specs)
     if (this._canvas() !== canvas) throw new BoardControllerError(C.NOT_READY, 'Board canvas changed during materialization.')
     regenerateMathBoardObjectIds(objects, { boardObjectPolicy: this._policy })
