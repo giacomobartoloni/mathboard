@@ -27,5 +27,28 @@ export function hasValidShapeGeometry(node) {
       && Array.from(node.points).every((point) => point && typeof point === 'object'
         && Number.isFinite(point.x) && Number.isFinite(point.y))
   }
+  if (node.type === 'arrow') {
+    if (!['x1', 'y1', 'x2', 'y2'].every((key) => Number.isFinite(node[key]))) return false
+    const length = Math.hypot(node.x2 - node.x1, node.y2 - node.y1)
+    if (!Number.isFinite(length) || length <= 0) return false
+    for (const key of ['headLength', 'headWidth']) {
+      if (node[key] !== undefined && (!Number.isFinite(node[key]) || node[key] <= 0)) return false
+    }
+    return makeArrowPath(node).every((command) => command.slice(1).every(Number.isFinite))
+  }
   return true
+}
+
+/** Intrinsic coordinates: one open shaft followed by one closed terminal head. */
+export function makeArrowPath({ x1, y1, x2, y2, headLength = 16, headWidth = 12 }) {
+  const length = Math.hypot(x2 - x1, y2 - y1)
+  const ux = (x2 - x1) / length
+  const uy = (y2 - y1) / length
+  const effectiveHead = Math.min(headLength, length)
+  const bx = x2 - ux * effectiveHead
+  const by = y2 - uy * effectiveHead
+  const nx = -uy * headWidth / 2
+  const ny = ux * headWidth / 2
+  return [['M', x1, y1], ['L', bx, by], ['M', bx + nx, by + ny],
+    ['L', x2, y2], ['L', bx - nx, by - ny], ['Z']]
 }

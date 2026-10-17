@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { Rect, Circle, Ellipse, Polygon, Line, Path, IText, Group } from 'fabric'
+import { ArrowObject } from './ArrowObject.js'
 import { ensureMathBoardObjectId } from '../ids.js'
 import { STYLE_KEYS, TEXT_KEYS, TRANSFORM_KEYS } from './constants.js'
 
@@ -120,6 +121,11 @@ export async function materializeBoardObject(node, options = {}) {
     }
     case 'polygon': {
       object = new Polygon(node.points.map(({ x, y }) => ({ x, y })), { ...style, ...transform })
+      applyInkMetadata(object, node)
+      break
+    }
+    case 'arrow': {
+      object = new ArrowObject([], { ...style, ...transform, ...pickDefined(node, ['x1', 'y1', 'x2', 'y2', 'headLength', 'headWidth']) })
       applyInkMetadata(object, node)
       break
     }
