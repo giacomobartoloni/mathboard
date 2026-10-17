@@ -38,7 +38,7 @@ Allowed transforms: `left`, `top`, `scaleX`, `scaleY`, `skewX`, `skewY`, `angle`
 
 Text additionally permits `text`, `fontSize`, `fontFamily`, `fontWeight`, `fontStyle`, `textAlign`, `lineHeight`, `charSpacing`, `underline`, `linethrough`, `overline`. Formula additionally permits `latex`.
 
-Unknown patch fields are rejected. Style, intrinsic shape geometry, group children, identity and z-order updates are deferred because the current `modify` history snapshots do not cover them uniformly. Nested IDs can be observed but cannot be updated or deleted. Updating an ActiveSelection member first discards the selection to avoid local-coordinate writes.
+Unknown patch fields are rejected. Style updates follow the bounded [history-safe styles](history-safe-styles.md) contract, including current-theme AUTO ink and atomic Formula replacement. Intrinsic shape geometry, group children, identity and z-order updates remain unsupported. Nested IDs can be observed but cannot be updated or deleted. Updating an ActiveSelection member first discards the selection to avoid local-coordinate writes.
 
 ## Integration and errors
 
