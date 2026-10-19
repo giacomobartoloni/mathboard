@@ -51,7 +51,7 @@ Once the browser is connected, the response should look like:
 
 ## API discovery for local LLMs
 
-Call `GET /__mathboard_agent/help` in `npm run dev:agent` to obtain build-accurate JSON descriptions of the nine executable semantic methods, including read-only `screenshot` with its three capture targets and PNG limits. Discovery is available without a connected browser and does not inspect or change the board. A local LLM adapter may translate these descriptors into tool declarations, but discovery never grants permission to mutate. See [Local API Help](local-agent-api-help.md) for the schema and integration example. Ordinary development and production modes do not expose this route.
+Call `GET /__mathboard_agent/help` in `npm run dev:agent` to obtain build-accurate JSON descriptions of the eleven executable semantic methods, including read-only `screenshot` with its three capture targets and PNG limits. Discovery is available without a connected browser and does not inspect or change the board. A local LLM adapter may translate these descriptors into tool declarations, but discovery never grants permission to mutate. See [Local API Help](local-agent-api-help.md) for the schema and integration example. Ordinary development and production modes do not expose this route.
 
 ## Command API
 
@@ -67,6 +67,8 @@ Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the reque
 | `deleteMany` | `ids` (unique top-level semantic IDs; `[]` is a no-op) |
 | `clear` | No required parameters; empty board is a no-op |
 | `group` | `ids` (at least two unique top-level groupable IDs), optional `options.select` |
+| `measure` | `id` (read-only scene bounds) |
+| `layout` | `ids`, optional `direction`, `gap`, `margin`, `left`, `top` |
 | `screenshot` | `target`, optional `scale`, `format` (PNG only) |
 
 See [Local Agent Visual Capture](local-agent-visual-capture.md) for the read-only screenshot contract, limits, local PNG review and F033 integration gate. Screenshot uses a development-only capture adapter; semantic mutations delegate to the corresponding `BoardController` methods and returns their semantic JSON results. It does not expose Fabric, history internals, persistence, or arbitrary method execution.
@@ -168,7 +170,7 @@ The bridge does not automatically replay mutating commands. This avoids duplicat
 
 ## Coordinates and layout
 
-Until MathBoard provides layout support, specify `left` and `top` explicitly. A useful starting convention is around `x=200, y=150`, with about 80–120 px between rows and 150–250 px between columns. These are suggestions for the caller; the bridge does not calculate layout or avoid collisions.
+Use read-only `measure({ id })` for scene bounds or `layout({ ids, direction: 'stack' | 'row', gap: 24, margin: 16, left?, top? })` to arrange roots in the visible safe area. Gap and positions use scene units, margin is in viewport CSS pixels. Effective layout has one Undo; no-op preserves Redo, and overflow rejects atomically. See [Measured Semantic Layout](semantic-auto-layout.md).
 
 ## Connection and errors
 
@@ -190,6 +192,6 @@ BoardController errors return a concise `code` and `message`. A transport error 
 
 ## Scope
 
-The bridge exposes `observe`, `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, and read-only `screenshot`. Grouping requires two or more existing top-level groupable objects; nested grouping and nested editing are not supported. It has no programmatic undo, redo, ungroup, auto-layout, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
+The bridge exposes `observe`, `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, read-only `measure`, mutating `layout`, and read-only `screenshot`. Grouping requires two or more existing top-level groupable objects; nested grouping and nested editing are not supported. It has no programmatic undo, redo, ungroup, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
 
 After using the bridge in real development, record repeated friction before proposing more commands. In particular, check whether coordinates, observation detail, board dimensions, or a missing operation repeatedly block useful work.

@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { ActiveSelection, Group } from 'fabric'
+import { validateLayoutOptions, sceneSafeArea, planLayout, unionBounds } from './layout/planLayout.js'
 import { getMathBoardObjectId, ensureMathBoardObjectId, regenerateMathBoardObjectIds } from './ids.js'
 import { materializeBoardObjects } from './objects/materialize.js'
 import { normalizeCreateOrigins } from './objects/normalizeCreateOrigins.js'
@@ -43,7 +44,8 @@ function findNode(nodes, id) {
 export class BoardController {
   constructor({ getCanvas, boardObjectPolicy, buildFormula, pushHistoryCommand,
     runWithoutHistory = (fn) => fn(), prepareCreatedObject = () => {},
-    afterMutation = () => {}, getBoardId = () => null, isMutationStable }) {
+    afterMutation = () => {}, getBoardId = () => null, isMutationStable,
+    getLayoutSafeArea = (canvas) => ({ left: 0, top: 0, width: canvas.getWidth(), height: canvas.getHeight() }) }) {
     if (typeof isMutationStable !== 'function') throw new TypeError('isMutationStable must be a function.')
     this._getCanvas = getCanvas
     this._policy = boardObjectPolicy
@@ -54,6 +56,7 @@ export class BoardController {
     this._afterMutation = afterMutation
     this._getBoardId = getBoardId
     this._isMutationStable = isMutationStable
+    this._getLayoutSafeArea = getLayoutSafeArea
   }
 
   _canvas() {
@@ -376,6 +379,80 @@ export class BoardController {
         canvas.setActiveObject(active)
       },
     ]), { type: 'delete', entries }, () => nodes)
+  }
+
+  measure(id) {
+    const canvas = this._canvas()
+    const object = this._target(canvas, id)
+    // ActiveSelection can inflate a child's conservative skew box differently
+    // from the same committed scene transform. Measure that transform directly,
+    // restoring every runtime field before returning (as semantic serialization does).
+    let bounds
+    if (this._policy.isActiveSelection(object.group)) {
+      const group = object.group, groupDirty = group.dirty, dirty = object.dirty
+      const local = Object.fromEntries(TRANSFORM_KEYS.map(key => [key, object[key]]))
+      const absolute = snapshotObject(object)
+      try {
+        object.group = undefined
+        object.set(Object.fromEntries(TRANSFORM_KEYS.map(key => [key, absolute[key]])))
+        object.setCoords()
+        bounds = object.getBoundingRect()
+      } finally {
+        object.group = group
+        object.set(local); object.setCoords()
+        object.dirty = dirty; group.dirty = groupDirty
+      }
+    } else bounds = object.getBoundingRect()
+    if (!['left', 'top', 'width', 'height'].every(key => Number.isFinite(bounds[key]))) {
+      throw new BoardControllerError(C.INVALID_SPEC, 'Cannot measure nonfinite geometry.')
+    }
+    return { id, ...structuredClone(bounds) }
+  }
+
+  async layout(options) {
+    const canvas = this._canvas()
+    this._assertCanMutate()
+    validateLayoutOptions(options)
+    const ids = options.ids.slice()
+    const objects = ids.map(id => this._target(canvas, id))
+    const bounds = ids.map(id => this.measure(id))
+    const safeArea = sceneSafeArea(canvas, this._getLayoutSafeArea(canvas), options.margin ?? 16)
+    const placements = planLayout(bounds, options, safeArea)
+    const entries = objects.map((object, index) => {
+      const before = snapshotObject(object)
+      const rawX = placements[index].left - bounds[index].left, rawY = placements[index].top - bounds[index].top
+      // Rendered transforms can introduce subpixel arithmetic residue on repeat.
+      const dx = Math.abs(rawX) < 1e-7 ? 0 : rawX, dy = Math.abs(rawY) < 1e-7 ? 0 : rawY
+      return { object, before, after: { ...before, left: before.left + dx, top: before.top + dy } }
+    }).filter(entry => !snapshotsEqual(entry.before, entry.after))
+    const result = () => {
+      const scene = this.observe()
+      const nodes = ids.map(id => scene.objects.find(object => object.id === id))
+      return { objects: nodes, bounds: unionBounds(nodes.map(node => node.bounds)), safeArea }
+    }
+    if (!entries.length) return result()
+    const active = canvas.getActiveObject(), selected = canvas.getActiveObjects()
+    const discard = entries.some(e => selected.includes(e.object))
+    const selection = discard && this._policy.isActiveSelection(active)
+    const selectionSnapshot = selection ? snapshotObject(active) : null
+    const local = selection ? selected.map(object => ({ object,
+      snapshot: Object.fromEntries(Object.keys(snapshotObject(object)).map(key => [key, object[key]])),
+    })) : []
+    return this._commit(canvas, () => {
+      if (discard) canvas.discardActiveObject()
+      entries.forEach(({object, after}) => applySnapshot(object, after))
+    }, () => this._rollback([
+      ...entries.map(({object, before}) => () => applySnapshot(object, before)),
+      () => {
+        if (!discard) return
+        if (selection) {
+          active.removeAll(); active.add(...selected)
+          applySnapshot(active, selectionSnapshot)
+          local.forEach(({object, snapshot}) => applySnapshot(object, snapshot))
+        }
+        canvas.setActiveObject(active)
+      },
+    ]), { type: 'modify', entries }, result)
   }
 
   observe() {

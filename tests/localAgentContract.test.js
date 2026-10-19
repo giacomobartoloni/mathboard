@@ -25,7 +25,7 @@ import { acceptsSchema } from './helpers/check-discovery-schema.js'
 import { validateCreateSpec, validateObjectPatch } from '../src/board/objects/validateCreateSpec.js'
 import { normalizeCreateOrigins } from '../src/board/objects/normalizeCreateOrigins.js'
 
-const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'screenshot']
+const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot']
 
 test('discovery is detached, deterministic and exposes only executable baseline methods', () => {
   const help = getLocalAgentHelp()
@@ -43,7 +43,7 @@ test('discovery is detached, deterministic and exposes only executable baseline 
   assert.deepEqual(getLocalAgentHelp(), getLocalAgentHelp())
   assert.equal(getLocalAgentHelp().methods[0].paramsSchema.properties.injected, undefined)
   assert.ok(!getLocalAgentHelp().objectTypes.includes('arrow'))
-  for (const name of ['layout', 'measure', 'events', 'result', 'constructor', 'toString', '__proto__']) {
+  for (const name of ['events', 'result', 'constructor', 'toString', '__proto__']) {
     assert.equal(hasLocalAgentMethod(name), false, name)
     assert.throws(() => executeLocalAgentCommand({}, { method: name }), /Unsupported local agent method/)
   }
@@ -52,7 +52,7 @@ test('discovery is detached, deterministic and exposes only executable baseline 
 test('each advertised method has actionable metadata for a local tool adapter', () => {
   for (const descriptor of getLocalAgentHelp().methods) {
     assert.equal(hasLocalAgentMethod(descriptor.method), true)
-    assert.equal(descriptor.mutatesBoard, !['observe', 'screenshot'].includes(descriptor.method))
+    assert.equal(descriptor.mutatesBoard, !['observe', 'measure', 'screenshot'].includes(descriptor.method))
     assert.equal(descriptor.requiresStable, descriptor.mutatesBoard || descriptor.method === 'screenshot')
     assert.ok(descriptor.summary.length > 10)
     assert.equal(descriptor.paramsSchema.type, 'object')
@@ -224,4 +224,30 @@ test('F016 discovery exposes group as one explicitly approved retained mutation 
     { id: 'mbgroup_example', type: 'group' })
   assert.deepEqual(calls, [{ ids: ['mbobj_example_a', 'mbobj_example_b'], options: { select: false } }])
   assert.equal(hasLocalAgentMethod('group'), true)
+})
+
+test('F018 read-only measure and mutating layout use explicit registry closures', async () => {
+  const help = getLocalAgentHelp()
+  const measure = help.methods.find(x => x.method === 'measure')
+  const layout = help.methods.find(x => x.method === 'layout')
+  assert.equal(measure.mutatesBoard, false)
+  assert.equal(measure.requiresStable, false)
+  assert.deepEqual(measure.paramsSchema.required, ['id'])
+  assert.deepEqual(measure.resultSchema.required, ['id', 'left', 'top', 'width', 'height'])
+  assert.equal(layout.mutatesBoard, true)
+  assert.equal(layout.requiresStable, true)
+  assert.deepEqual(layout.paramsSchema.required, ['ids'])
+  assert.equal(layout.paramsSchema.properties.ids.minItems, 1)
+  assert.equal(layout.paramsSchema.properties.ids.uniqueItems, true)
+  assert.deepEqual(layout.paramsSchema.properties.direction.enum, ['stack', 'row'])
+  assert.equal(layout.paramsSchema.properties.gap.default, 24)
+  assert.equal(layout.paramsSchema.properties.margin.default, 16)
+  const calls = []
+  const controller = {
+    measure(id) { calls.push(['measure', id]); return { id, left: 1, top: 2, width: 3, height: 4 } },
+    layout(opts) { calls.push(['layout', opts]); return { objects: [], bounds: {}, safeArea: {} } },
+  }
+  assert.equal((await executeLocalAgentCommand(controller, measure.example)).id, 'mbobj_example')
+  assert.deepEqual(await executeLocalAgentCommand(controller, layout.example), { objects: [], bounds: {}, safeArea: {} })
+  assert.deepEqual(calls, [['measure', 'mbobj_example'], ['layout', layout.example.params]])
 })
