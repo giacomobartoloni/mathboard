@@ -55,19 +55,37 @@ test('desktop hints preserve accessible names, tab order and board state', async
 })
 
 
-for (const [boardTheme, expectedGray] of [
-  ['light', 'rgb(153, 153, 153)'],
-  ['dark', 'rgb(187, 187, 187)'],
+for (const [boardTheme, idleGray, selectedGray] of [
+  ['light', 'rgb(153, 153, 153)', null],
+  ['dark', 'rgb(136, 136, 136)', 'rgb(187, 187, 187)'],
+  ['chalkboard', 'rgb(136, 136, 136)', 'rgb(187, 187, 187)'],
 ]) {
-  test(`idle shortcut hints use lighter gray in ${boardTheme} UI`, async ({ page }) => {
+  test(`shortcut hints are thinner and subdued in ${boardTheme} UI`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await gotoBoard(page, '/', { boardTheme })
     const pen = page.getByRole('button', { name: 'Pen', exact: true })
     const hint = pen.locator('.tool-shortcut-hint')
-    await expect(hint).toHaveCSS('color', expectedGray)
+    await expect(hint).toHaveCSS('color', idleGray)
+    await expect(hint).toHaveCSS('font-weight', '300')
+
+    // In dark chrome, both idle and selected hints must be dimmer than the icon.
+    const assertDarkerThanIcon = async () => {
+      const { hintColor, iconColor } = await pen.evaluate((button) => ({
+        hintColor: getComputedStyle(button.querySelector('.tool-shortcut-hint')).color,
+        iconColor: getComputedStyle(button).color,
+      }))
+      const channels = (rgb) => rgb.match(/\\d+/g).slice(0, 3).map(Number)
+      const hintChannels = channels(hintColor)
+      const iconChannels = channels(iconColor)
+      expect(hintChannels.every((value, index) => value < iconChannels[index])).toBe(true)
+    }
+    if (boardTheme !== 'light') await assertDarkerThanIcon()
+
     await pen.click()
     const selectedForeground = await pen.evaluate((button) => getComputedStyle(button).color)
-    await expect(hint).toHaveCSS('color', selectedForeground)
+    await expect(hint).toHaveCSS('color', selectedGray ?? selectedForeground)
+    await expect(hint).toHaveCSS('font-weight', '300')
+    if (boardTheme !== 'light') await assertDarkerThanIcon()
   })
 }
 
