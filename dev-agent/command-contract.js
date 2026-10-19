@@ -42,10 +42,10 @@ const styleProperties = Object.fromEntries(STYLE_KEYS.map(key => [key,
     : key === 'strokeDashArray' ? { type: ['array', 'null'], items: number } : nullablePaint,
 ]))
 const objectSchema = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false })
-const common = { type: string, id: { description: 'Ignored on create: fresh semantic IDs are assigned.' },
+const common = { type: string, id: { description: 'Ignored on create; a new ID is assigned.' },
   ...transformProperties,
-  originX: { ...transformProperties.originX, default: 'left', description: 'New programmable creations default to left when omitted, including group children; explicit named or numeric origins are preserved.' },
-  originY: { ...transformProperties.originY, default: 'top', description: 'New programmable creations default to top when omitted, including group children; explicit named or numeric origins are preserved.' },
+  originX: { ...transformProperties.originX, default: 'left', description: 'Create defaults left, including group children. Explicit origins win.' },
+  originY: { ...transformProperties.originY, default: 'top', description: 'Create defaults top, including group children. Explicit origins win.' },
   ...styleProperties, mathboardInkMode: { enum: ['auto', 'fixed'] } }
 const typeFields = {
   rect: { width: number, height: number, rx: number, ry: number },
