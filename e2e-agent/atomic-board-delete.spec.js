@@ -98,6 +98,16 @@ const specs = [
 
 test('HTTP deleteMany and clear each replay as one command and preserve editable persistent formulas', async ({ page, request }) => {
   await ready(page, request)
+  const discovery = await (await request.get('/__mathboard_agent/help')).json()
+  for (const method of ['deleteMany', 'clear']) {
+    const descriptor = discovery.methods.find(entry => entry.method === method)
+    expect(descriptor).toBeTruthy()
+    expect(descriptor.mutatesBoard).toBe(true)
+    expect(descriptor.requiresStable).toBe(true)
+    expect(descriptor.resultSchema.type).toBe('array')
+  }
+  expect(discovery.methods.find(entry => entry.method === 'deleteMany').paramsSchema.properties.ids.uniqueItems).toBe(true)
+  expect(discovery.methods.find(entry => entry.method === 'screenshot').mutatesBoard).toBe(false)
   const nodes = await command(request, 'createMany', { specs })
   const ids = idsOf(nodes)
   const before = await observe(request)

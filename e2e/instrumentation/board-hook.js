@@ -220,6 +220,8 @@ export function installBoardE2eHook(getBoard, bootstrapGate) {
     createObjects: (specs, options) => getBoard().getBoardController().createMany(specs, options),
     updateObject: (id, patch) => getBoard().getBoardController().update(id, patch),
     deleteObject: (id) => getBoard().getBoardController().delete(id),
+    measureObject: (id) => getBoard().getBoardController().measure(id),
+    layoutObjects: (options) => getBoard().getBoardController().layout(options),
     observeBoard: () => getBoard().getBoardController().observe(),
   })
 
