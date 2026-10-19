@@ -439,7 +439,7 @@ export default {
   color: var(--text-placeholder);
   font-size: 11px;
   line-height: 1;
-  font-weight: 600;
+  font-weight: 300;
   pointer-events: none;
 }
 
@@ -449,6 +449,11 @@ export default {
 }
 
 #app[data-theme="dark"] .tool-button:not(.selected) .tool-shortcut-hint {
+  color: var(--text-muted);
+}
+
+/* Selected hints stay dimmer than their icons but legible on the dark highlight. */
+#app[data-theme="dark"] .tool-button.selected .tool-shortcut-hint {
   color: var(--text-secondary);
 }
 
