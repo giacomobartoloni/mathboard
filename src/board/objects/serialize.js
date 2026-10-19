@@ -175,6 +175,10 @@ export function readSemanticBoardObject(object, options = {}) {
     })
   }
 
+  if (isType(object, 'Polygon')) {
+    return withId({ type: 'polygon', points: object.points.map(({ x, y }) => ({ x, y })), ...commonProps(object) })
+  }
+
   if (isType(object, 'Ellipse')) {
     return withId({ type: 'ellipse', rx: object.rx, ry: object.ry, ...commonProps(object) })
   }

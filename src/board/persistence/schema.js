@@ -187,6 +187,7 @@ function validateNode(node, path, depth, seenIds, counters) {
       assertOptionalFiniteNumber(node, 'rx', path)
       assertOptionalFiniteNumber(node, 'ry', path)
       break
+    case 'polygon':
     case 'ellipse':
       break
     case 'circle':

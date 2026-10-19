@@ -112,6 +112,11 @@ test('representative accepted and rejected creation/patch inputs agree with publ
     { type: 'ellipse', rx: 35, ry: 12, left: 100, top: 50 },
     { type: 'ellipse', rx: -1, ry: 12 },
     { type: 'ellipse', rx: 12 },
+    { type: 'polygon', points: [{ x: -20, y: 10 }, { x: 20, y: 10 }, { x: 0, y: 35 }] },
+    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 10, y: 20 }] },
+    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 10, y: 20 }, { x: 30 }] },
+    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 10, y: 20 }, { x: '30', y: 10 }] },
+    { type: 'polygon', points: Array.from({ length: 1001 }, () => ({ x: 0, y: 0 })) },
     { type: 'group', objects: [{ type: 'ellipse' }] },
   ]) {
     let valid = true

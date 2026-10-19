@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /** New semantic shapes share one painted-surface AUTO policy. */
 export function isExtendedShape(object) {
-  return Boolean(object?.isType?.('Ellipse'))
+  return Boolean(object?.isType?.('Ellipse', 'Polygon'))
 }
 
 export function hasPaint(value) {

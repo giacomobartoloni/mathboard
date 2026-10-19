@@ -31,7 +31,9 @@ export function acceptsSchema(schema, value, root = schema) {
   if (typeof value === 'number' && ((schema.minimum !== undefined && value < schema.minimum)
     || (schema.maximum !== undefined && value > schema.maximum))) return false
   if (typeof value === 'string' && (value.length < (schema.minLength || 0) || (schema.pattern && !new RegExp(schema.pattern).test(value)))) return false
-  if (Array.isArray(value) && (value.length < (schema.minItems || 0) || !value.every(item => acceptsSchema(schema.items || {}, item, root)))) return false
+  if (Array.isArray(value) && (value.length < (schema.minItems || 0)
+    || (schema.maxItems !== undefined && value.length > schema.maxItems)
+    || !Array.from(value).every(item => acceptsSchema(schema.items || {}, item, root)))) return false
   if (value && !Array.isArray(value) && typeof value === 'object') {
     if (schema.required?.some(key => !(key in value))) return false
     for (const [key, item] of Object.entries(value)) {
