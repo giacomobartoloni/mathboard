@@ -63,6 +63,8 @@ test('help does not change transport state or advertise unrelated pending featur
   expect(arrowSchema.required).toEqual(['type', 'x1', 'y1', 'x2', 'y2'])
   expect(arrowSchema.properties.headLength.exclusiveMinimum).toBe(0)
   expect(arrowSchema.properties.headWidth.exclusiveMinimum).toBe(0)
+  expect(arrowSchema.properties.headLength.default).toBe(16)
+  expect(arrowSchema.properties.headWidth.default).toBe(12)
   expect(await (await request.get(prefix + 'help')).json()).toEqual(help)
   expect(await (await request.get(prefix + 'health')).json()).toEqual(healthBefore)
   const unsupported = await request.post(prefix + 'command', { data: { method: 'autoLayoutV2' } })
