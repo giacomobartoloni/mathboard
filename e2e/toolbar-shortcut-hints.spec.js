@@ -74,7 +74,7 @@ for (const [boardTheme, idleGray, selectedGray] of [
         hintColor: getComputedStyle(button.querySelector('.tool-shortcut-hint')).color,
         iconColor: getComputedStyle(button).color,
       }))
-      const channels = (rgb) => rgb.match(/\\d+/g).slice(0, 3).map(Number)
+      const channels = (rgb) => rgb.match(/\d+/g).slice(0, 3).map(Number)
       const hintChannels = channels(hintColor)
       const iconChannels = channels(iconColor)
       expect(hintChannels.every((value, index) => value < iconChannels[index])).toBe(true)
