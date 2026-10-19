@@ -25,7 +25,7 @@ import { acceptsSchema } from './helpers/check-discovery-schema.js'
 import { validateCreateSpec, validateObjectPatch } from '../src/board/objects/validateCreateSpec.js'
 import { normalizeCreateOrigins } from '../src/board/objects/normalizeCreateOrigins.js'
 
-const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'screenshot']
+const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'screenshot']
 
 test('discovery is detached, deterministic and exposes only executable baseline methods', () => {
   const help = getLocalAgentHelp()
@@ -43,7 +43,7 @@ test('discovery is detached, deterministic and exposes only executable baseline 
   assert.deepEqual(getLocalAgentHelp(), getLocalAgentHelp())
   assert.equal(getLocalAgentHelp().methods[0].paramsSchema.properties.injected, undefined)
   assert.ok(!getLocalAgentHelp().objectTypes.includes('arrow'))
-  for (const name of ['clear', 'deleteMany', 'group', 'layout', 'measure', 'events', 'result', 'constructor', 'toString', '__proto__']) {
+  for (const name of ['group', 'layout', 'measure', 'events', 'result', 'constructor', 'toString', '__proto__']) {
     assert.equal(hasLocalAgentMethod(name), false, name)
     assert.throws(() => executeLocalAgentCommand({}, { method: name }), /Unsupported local agent method/)
   }
@@ -172,4 +172,35 @@ test('discovery creation defaults match recursive F014 origin normalization with
   assert.equal(line.left, undefined)
   assert.equal(line.top, undefined)
   assert.match(help.limitations.join(' '), /default omitted origins to left\/top/)
+})
+
+test('F015 discovery has executable deleteMany/clear closures with atomic semantics and no schema drift', async () => {
+  const help = getLocalAgentHelp()
+  const bulk = help.methods.find(method => method.method === 'deleteMany')
+  const clear = help.methods.find(method => method.method === 'clear')
+  assert.equal(bulk.mutatesBoard, true)
+  assert.equal(bulk.requiresStable, true)
+  assert.deepEqual(bulk.paramsSchema.required, ['ids'])
+  assert.equal(bulk.paramsSchema.properties.ids.type, 'array')
+  assert.equal(bulk.paramsSchema.properties.ids.uniqueItems, true)
+  assert.equal(bulk.paramsSchema.properties.ids.items.minLength, 1)
+  assert.equal(bulk.resultSchema.type, 'array')
+  assert.equal(clear.mutatesBoard, true)
+  assert.equal(clear.requiresStable, true)
+  assert.deepEqual(clear.paramsSchema.required, [])
+  assert.equal(clear.resultSchema.type, 'array')
+  assert.ok(help.limitations.some(line => line.includes('deleteMany') && line.includes('no-ops')))
+  const calls = []
+  const controller = {
+    deleteMany(ids) { calls.push({ method: 'deleteMany', ids }); return [{ id: ids[0] }] },
+    clear() { calls.push({ method: 'clear' }); return [] },
+  }
+  assert.deepEqual(await executeLocalAgentCommand(controller, bulk.example), [{ id: 'mbobj_example_a' }])
+  assert.deepEqual(await executeLocalAgentCommand(controller, clear.example), [])
+  assert.deepEqual(calls, [
+    { method: 'deleteMany', ids: ['mbobj_example_a', 'mbobj_example_b'] },
+    { method: 'clear' },
+  ])
+  assert.equal(hasLocalAgentMethod('deleteMany'), true)
+  assert.equal(hasLocalAgentMethod('clear'), true)
 })

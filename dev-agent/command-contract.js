@@ -108,6 +108,16 @@ const descriptors = [
   { method: 'delete', summary: 'Remove one top-level semantic object with one Undo command.', mutatesBoard: true,
     paramsSchema: params({ id: nonempty }, ['id']), resultSchema: node,
     example: { method: 'delete', params: { id: 'mbobj_example' } }, execute: (controller, p) => controller.delete(p.id) },
+  { method: 'deleteMany', summary: 'Remove unique existing top-level IDs atomically with one Undo; empty IDs do nothing.', mutatesBoard: true,
+    paramsSchema: params({ ids: { type: 'array', items: nonempty, uniqueItems: true,
+      description: 'Unique IDs of top-level semantic objects. Unknown or nested IDs reject the entire batch without changes.' } }, ['ids']),
+    resultSchema: { type: 'array', items: node, description: 'Removed semantic nodes in original canvas z-order.' },
+    example: { method: 'deleteMany', params: { ids: ['mbobj_example_a', 'mbobj_example_b'] } },
+    execute: (controller, p) => controller.deleteMany(p.ids) },
+  { method: 'clear', summary: 'Atomically remove all top-level board objects with one Undo; empty board is a no-op.', mutatesBoard: true,
+    paramsSchema: params({}), resultSchema: { type: 'array', items: node,
+      description: 'All removed semantic nodes in original canvas z-order.' },
+    example: { method: 'clear', params: {} }, execute: controller => controller.clear() },
   { ...getScreenshotDescriptor(), execute: (_controller, p, capture) => capture.screenshot(p) },
 ]
 
@@ -154,6 +164,7 @@ export function getLocalAgentHelp() {
       'Call observe and wait for result.stable === true before mutation.',
       'Obtain human authorization appropriate to the mutation; discovering a method does not authorize it.',
       'Send method and params to commandEndpoint, then observe to verify the result.',
+      'deleteMany and clear are all-or-nothing history mutations; the human Undo/Redo UI reverses each nonempty call in one step.',
       'Use the read-only screenshot method to inspect canvas pixels; decode its base64 PNG as an image in a multimodal host.',
       'On timeout/disconnect, re-observe after reconnecting before deciding whether to retry a mutation.',
     ],
@@ -161,7 +172,7 @@ export function getLocalAgentHelp() {
       discoveryGrantsAuthorization: false, containsBoardData: false },
     limitations: [
       'Only commands in methods are executable in this build; planned operations are absent.',
-      'Mutations address top-level IDs only; nested group children cannot be mutated directly.',
+      'Mutations address top-level IDs only; nested group children cannot be mutated directly. deleteMany rejects duplicate, unknown or nested IDs atomically; [] and empty-board clear are history-preserving no-ops.',
       'Coordinates are scene units, independent of viewport pan/zoom. New programmable create/createMany default omitted origins to left/top recursively; explicit named/numeric origins are preserved. Existing documents, Stamps and UI creation are unchanged.',
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
       'Update schema is a type-dependent union, not permission to apply text/LaTeX fields to every object; style/ink updates reject.',

@@ -44,18 +44,20 @@ async function invokeDiscovered(request, help, tool, args, { approveMutation = f
   return command(request, descriptor.method, args)
 }
 
-test('help does not change transport state or claim pending feature commands', async ({ request }) => {
+test('help does not change transport state or advertise unrelated pending feature commands', async ({ request }) => {
   const healthBefore = await (await request.get(prefix + 'health')).json()
   const response = await request.get(prefix + 'help')
   expect(response.status()).toBe(200)
   expect(response.headers()['content-type']).toContain('application/json')
   const help = await response.json()
-  expect(help.methods.map(m => m.method)).toEqual(['observe', 'create', 'createMany', 'update', 'delete', 'screenshot'])
+  expect(help.methods.map(m => m.method)).toEqual(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'screenshot'])
   expect(help.objectTypes).toEqual(['rect', 'circle', 'line', 'path', 'text', 'formula', 'group'])
   expect(await (await request.get(prefix + 'help')).json()).toEqual(help)
   expect(await (await request.get(prefix + 'health')).json()).toEqual(healthBefore)
-  const unsupported = await request.post(prefix + 'command', { data: { method: 'clear' } })
+  const unsupported = await request.post(prefix + 'command', { data: { method: 'group' } })
   expect(unsupported.status()).toBe(400)
+  expect(help.methods.find(m => m.method === 'deleteMany').paramsSchema.properties.ids.uniqueItems).toBe(true)
+  expect(help.methods.find(m => m.method === 'clear').mutatesBoard).toBe(true)
 })
 
 test('local adapter discovers tools, guards mutation and preserves live scene selection and Redo during help', async ({ page, request }) => {
@@ -116,6 +118,23 @@ test('local adapter discovers tools, guards mutation and preserves live scene se
   expect((await rejected.json()).error.code).toBe('invalid_object_patch')
   await command(request, 'delete', { id: object.id })
   expect((await command(request, 'observe')).objects.some(o => o.id === object.id)).toBe(false)
+  const beforeBulk = (await command(request, 'observe')).objects.map(o => o.id)
+  await expect(invokeDiscovered(request, help, 'deleteMany', { ids: beforeBulk }))
+    .rejects.toThrow('Mutation needs approval')
+  const removed = await invokeDiscovered(request, help, 'deleteMany',
+    { ids: [...beforeBulk].reverse() }, { approveMutation: true })
+  expect(removed.map(o => o.id)).toEqual(beforeBulk)
+  expect((await command(request, 'observe')).objects).toHaveLength(0)
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect.poll(async () => (await command(request, 'observe')).objects.map(o => o.id)).toEqual(beforeBulk)
+  const beforeClear = await command(request, 'observe')
+  await expect(invokeDiscovered(request, help, 'clear', {})).rejects.toThrow('Mutation needs approval')
+  expect(await command(request, 'observe')).toEqual(beforeClear)
+  const cleared = await invokeDiscovered(request, help, 'clear', {}, { approveMutation: true })
+  expect(cleared.map(o => o.id)).toEqual(beforeBulk)
+  expect((await command(request, 'observe')).objects).toHaveLength(0)
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect.poll(async () => (await command(request, 'observe')).objects.map(o => o.id)).toEqual(beforeBulk)
   const unknown = await request.post(prefix + 'command', { data: { method: 'constructor' } })
   expect(unknown.status()).toBe(400)
 })

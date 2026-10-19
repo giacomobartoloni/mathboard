@@ -264,6 +264,62 @@ export class BoardController {
     }, { type: 'delete', entries: [{ object, index }] }, () => node)
   }
 
+  async deleteMany(ids) {
+    const canvas = this._canvas()
+    this._assertCanMutate()
+    if (!Array.isArray(ids) || Array.from(ids).some((id) => typeof id !== 'string' || !id.trim())
+      || new Set(ids).size !== ids.length) {
+      throw new BoardControllerError(C.INVALID_SPEC, 'Expected an array of unique non-empty object IDs.')
+    }
+    // Resolve the complete request before reading or changing selection geometry.
+    const targets = new Set(ids.map((id) => this._target(canvas, id)))
+    return this._deleteRoots(canvas, targets)
+  }
+
+  async clear() {
+    const canvas = this._canvas()
+    this._assertCanMutate()
+    return this._deleteRoots(canvas, new Set(canvas.getObjects()))
+  }
+
+  _deleteRoots(canvas, targets) {
+    const entries = canvas.getObjects().flatMap((object, index) => targets.has(object) ? [{ object, index }] : [])
+    if (!entries.length) return []
+    const nodes = entries.map(({ object }) => this._read(object))
+    const active = canvas.getActiveObject()
+    const selected = canvas.getActiveObjects()
+    const discardSelection = selected.some((object) => targets.has(object))
+    const isSelection = discardSelection && this._policy.isActiveSelection(active)
+    const selectionSnapshot = isSelection ? snapshotObject(active) : null
+    // Preserve the original selection plane exactly, including unremoved members.
+    const localSnapshots = isSelection ? selected.map((object) => ({ object,
+      snapshot: Object.fromEntries(Object.keys(snapshotObject(object)).map((key) => [key, object[key]])),
+    })) : []
+    return this._commit(canvas, () => {
+      if (discardSelection) canvas.discardActiveObject()
+      for (const { object } of entries) {
+        canvas.remove(object)
+        if (canvas.getObjects().includes(object)) throw new Error('Object was not removed.')
+      }
+    }, () => this._rollback([
+      ...entries.map(({ object, index }) => () => {
+        if (!canvas.getObjects().includes(object)) canvas.insertAt(index, object)
+      }),
+      () => {
+        if (!discardSelection) return
+        if (isSelection) {
+          // discardActiveObject removes members from the retained ActiveSelection.
+          // Reuse that instance, then restore both its plane and its local members.
+          active.removeAll()
+          active.add(...selected)
+          applySnapshot(active, selectionSnapshot)
+          localSnapshots.forEach(({ object, snapshot }) => applySnapshot(object, snapshot))
+        }
+        canvas.setActiveObject(active)
+      },
+    ]), { type: 'delete', entries }, () => nodes)
+  }
+
   observe() {
     const canvas = this._canvas()
     return { ...serializeBoardState({ canvas, boardObjectPolicy: this._policy, boardId: this._getBoardId() || null }),
