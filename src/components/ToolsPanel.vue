@@ -436,11 +436,20 @@ export default {
   position: absolute;
   right: 4px;
   bottom: 4px;
-  color: inherit;
+  color: var(--text-placeholder);
   font-size: 11px;
   line-height: 1;
   font-weight: 600;
   pointer-events: none;
+}
+
+/* Preserve selected-tool contrast while keeping idle hints subdued. */
+.tool-button.selected .tool-shortcut-hint {
+  color: inherit;
+}
+
+:global(#app[data-theme="dark"]) .tool-button:not(.selected) .tool-shortcut-hint {
+  color: var(--text-secondary);
 }
 
 /* Keep the original compact targets when hints would crowd the rail. */
