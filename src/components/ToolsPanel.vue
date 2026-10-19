@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <div class="tools-panel" role="toolbar" aria-label="Drawing tools">
       <button
         type="button"
-        class="tool-button"
+        class="tool-button tool-button--shortcut"
         :class="{ selected: selected === 'select' }"
         :aria-pressed="selected === 'select'"
         aria-label="Select"
@@ -30,10 +30,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @click="select('select')"
       >
         <font-awesome-icon :icon="['fas', 'mouse-pointer']" />
+        <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('select') }}</span>
       </button>
       <button
         type="button"
-        class="tool-button"
+        class="tool-button tool-button--shortcut"
         :class="{ selected: selected === 'pan' }"
         :aria-pressed="selected === 'pan'"
         aria-label="Pan"
@@ -41,10 +42,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @click="select('pan')"
       >
         <font-awesome-icon :icon="['far', 'hand-paper']" />
+        <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('pan') }}</span>
       </button>
       <button
         type="button"
-        class="tool-button"
+        class="tool-button tool-button--shortcut"
         :class="{ selected: selected === 'pencil' }"
         :aria-pressed="selected === 'pencil'"
         aria-label="Pen"
@@ -52,10 +54,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @click="select('pencil')"
       >
         <font-awesome-icon :icon="['fas', 'pencil-alt']" />
+        <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('pencil') }}</span>
       </button>
       <button
         type="button"
-        class="tool-button"
+        class="tool-button tool-button--shortcut"
         :class="{ selected: selected === 'font' }"
         :aria-pressed="selected === 'font'"
         aria-label="Text"
@@ -63,10 +66,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @click="select('font')"
       >
         <font-awesome-icon :icon="['fas', 'font']" />
+        <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('font') }}</span>
       </button>
       <button
         type="button"
-        class="tool-button"
+        class="tool-button tool-button--shortcut"
         :class="{ selected: selected === 'formula' }"
         :aria-pressed="selected === 'formula'"
         aria-label="Formula"
@@ -74,6 +78,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @click="select('formula')"
       >
         <font-awesome-icon :icon="['fas', 'square-root-alt']" />
+        <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('formula') }}</span>
       </button>
 
       <div
@@ -84,7 +89,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       >
         <button
           type="button"
-          class="tool-button"
+          class="tool-button tool-button--shortcut"
           :class="{ selected: selected === 'shapes' }"
           :aria-pressed="selected === 'shapes'"
           aria-label="Shapes"
@@ -94,6 +99,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           @click="openShapesMenu"
         >
           <font-awesome-icon :icon="['fas', 'shapes']" />
+          <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('shapes') }}</span>
         </button>
 
         <transition name="fade">
@@ -251,6 +257,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
+import { getToolShortcutHint } from '../config/shortcuts.js'
 import { COLOR_PRESETS } from '../config/colors.js'
 import { listKits } from '../stamps/registry.js'
 
@@ -314,6 +321,7 @@ export default {
     },
   },
   methods: {
+    getToolShortcutHint,
     select: function (element) {
       this.selected = element;
       this.$emit('tool-selected', element);
@@ -410,6 +418,56 @@ export default {
   padding: 8px 12px;
   border-radius: 6px;
   transition: all 0.2s ease;
+}
+
+.tool-button--shortcut {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 5px 12px;
+}
+
+.tool-shortcut-hint {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  color: var(--text-placeholder);
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 300;
+  pointer-events: none;
+}
+
+/* Preserve selected-tool contrast while keeping idle hints subdued. */
+.tool-button.selected .tool-shortcut-hint {
+  color: inherit;
+}
+
+#app[data-theme="dark"] .tool-button:not(.selected) .tool-shortcut-hint {
+  color: var(--text-muted);
+}
+
+/* Selected hints stay dimmer than their icons but legible on the dark highlight. */
+#app[data-theme="dark"] .tool-button.selected .tool-shortcut-hint {
+  color: var(--text-secondary);
+}
+
+/* Keep the original compact targets when hints would crowd the rail. */
+@media (max-height: 700px), (max-width: 600px), (pointer: coarse) {
+  .tool-button--shortcut {
+    display: inline-block;
+    min-height: 0;
+    padding: 8px 12px;
+  }
+
+  .tool-shortcut-hint {
+    display: none;
+  }
 }
 
 .tool-button:hover,
