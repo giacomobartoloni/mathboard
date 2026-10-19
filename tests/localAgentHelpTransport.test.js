@@ -43,7 +43,7 @@ test('disconnected help is bounded, deterministic JSON without board contents or
   assert.equal(text, await (await fetch(url + 'help')).text())
   assert.ok(text.length < 60000)
   assert.equal(help.schemaVersion, 1)
-  assert.deepEqual(help.methods.map(m => m.method), ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'screenshot'])
+  assert.deepEqual(help.methods.map(m => m.method), ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'screenshot'])
   const capture = help.methods.find(m => m.method === 'screenshot')
   assert.equal(capture.mutatesBoard, false)
   assert.equal(capture.requiresStable, true)
@@ -67,9 +67,9 @@ test('unsupported methods reject before connection checks and known methods reta
   const known = await fetch(url + 'command', { method: 'POST', body: JSON.stringify({ method: 'observe' }) })
   assert.equal(known.status, 503)
   assert.equal((await known.json()).error.code, 'board_unavailable')
-  for (const method of ['deleteMany', 'clear']) {
+  for (const method of ['deleteMany', 'clear', 'group']) {
     const knownMutation = await fetch(url + 'command', { method: 'POST',
-      body: JSON.stringify({ method, params: method === 'deleteMany' ? { ids: [] } : {} }) })
+      body: JSON.stringify({ method, params: method === 'deleteMany' ? { ids: [] } : method === 'group' ? { ids: ['synthetic_a', 'synthetic_b'] } : {} }) })
     assert.equal(knownMutation.status, 503, method)
     assert.equal((await knownMutation.json()).error.code, 'board_unavailable')
   }

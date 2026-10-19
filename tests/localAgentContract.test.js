@@ -25,7 +25,7 @@ import { acceptsSchema } from './helpers/check-discovery-schema.js'
 import { validateCreateSpec, validateObjectPatch } from '../src/board/objects/validateCreateSpec.js'
 import { normalizeCreateOrigins } from '../src/board/objects/normalizeCreateOrigins.js'
 
-const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'screenshot']
+const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'screenshot']
 
 test('discovery is detached, deterministic and exposes only executable baseline methods', () => {
   const help = getLocalAgentHelp()
@@ -43,7 +43,7 @@ test('discovery is detached, deterministic and exposes only executable baseline 
   assert.deepEqual(getLocalAgentHelp(), getLocalAgentHelp())
   assert.equal(getLocalAgentHelp().methods[0].paramsSchema.properties.injected, undefined)
   assert.ok(!getLocalAgentHelp().objectTypes.includes('arrow'))
-  for (const name of ['group', 'layout', 'measure', 'events', 'result', 'constructor', 'toString', '__proto__']) {
+  for (const name of ['layout', 'measure', 'events', 'result', 'constructor', 'toString', '__proto__']) {
     assert.equal(hasLocalAgentMethod(name), false, name)
     assert.throws(() => executeLocalAgentCommand({}, { method: name }), /Unsupported local agent method/)
   }
@@ -203,4 +203,25 @@ test('F015 discovery has executable deleteMany/clear closures with atomic semant
   ])
   assert.equal(hasLocalAgentMethod('deleteMany'), true)
   assert.equal(hasLocalAgentMethod('clear'), true)
+})
+
+test('F016 discovery exposes group as one explicitly approved retained mutation with bounded IDs', async () => {
+  const help = getLocalAgentHelp()
+  const descriptor = help.methods.find(item => item.method === 'group')
+  assert.equal(descriptor.mutatesBoard, true)
+  assert.equal(descriptor.requiresStable, true)
+  assert.deepEqual(descriptor.paramsSchema.required, ['ids'])
+  assert.equal(descriptor.paramsSchema.properties.ids.type, 'array')
+  assert.equal(descriptor.paramsSchema.properties.ids.minItems, 2)
+  assert.equal(descriptor.paramsSchema.properties.ids.uniqueItems, true)
+  assert.equal(descriptor.paramsSchema.properties.ids.items.minLength, 1)
+  assert.equal(descriptor.paramsSchema.properties.options.properties.select.type, 'boolean')
+  assert.equal(descriptor.resultSchema.required.includes('id'), true)
+  assert.ok(help.limitations.some(line => line.includes('group requires') && line.includes('Board Groups')))
+  const calls = []
+  const controller = { group(ids, options) { calls.push({ ids, options }); return { id: 'mbgroup_example', type: 'group' } } }
+  assert.deepEqual(await executeLocalAgentCommand(controller, descriptor.example),
+    { id: 'mbgroup_example', type: 'group' })
+  assert.deepEqual(calls, [{ ids: ['mbobj_example_a', 'mbobj_example_b'], options: { select: false } }])
+  assert.equal(hasLocalAgentMethod('group'), true)
 })

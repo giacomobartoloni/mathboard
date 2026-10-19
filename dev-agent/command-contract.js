@@ -118,6 +118,13 @@ const descriptors = [
     paramsSchema: params({}), resultSchema: { type: 'array', items: node,
       description: 'All removed semantic nodes in original canvas z-order.' },
     example: { method: 'clear', params: {} }, execute: controller => controller.clear() },
+  { method: 'group', summary: 'Combine at least two distinct top-level groupable objects in one retained Board Group and Undo step.', mutatesBoard: true,
+    paramsSchema: params({ ids: { type: 'array', items: nonempty, minItems: 2, uniqueItems: true,
+      description: 'At least two unique top-level groupable IDs. Existing Board Groups and nested children are not supported.' },
+      options }, ['ids']),
+    resultSchema: node,
+    example: { method: 'group', params: { ids: ['mbobj_example_a', 'mbobj_example_b'], options: { select: false } } },
+    execute: (controller, p) => controller.group(p.ids, p.options) },
   { ...getScreenshotDescriptor(), execute: (_controller, p, capture) => capture.screenshot(p) },
 ]
 
@@ -165,6 +172,7 @@ export function getLocalAgentHelp() {
       'Obtain human authorization appropriate to the mutation; discovering a method does not authorize it.',
       'Send method and params to commandEndpoint, then observe to verify the result.',
       'deleteMany and clear are all-or-nothing history mutations; the human Undo/Redo UI reverses each nonempty call in one step.',
+      'group joins at least two already-created top-level groupable IDs; it preserves child IDs and creates a new retained group ID with one Undo.',
       'Use the read-only screenshot method to inspect canvas pixels; decode its base64 PNG as an image in a multimodal host.',
       'On timeout/disconnect, re-observe after reconnecting before deciding whether to retry a mutation.',
     ],
@@ -173,6 +181,7 @@ export function getLocalAgentHelp() {
     limitations: [
       'Only commands in methods are executable in this build; planned operations are absent.',
       'Mutations address top-level IDs only; nested group children cannot be mutated directly. deleteMany rejects duplicate, unknown or nested IDs atomically; [] and empty-board clear are history-preserving no-ops.',
+      'group requires at least two unique existing top-level groupable IDs, refuses existing Board Groups and nested IDs, preserves child geometry, and places the new group in front. Ungroup and Undo/Redo remain UI actions.',
       'Coordinates are scene units, independent of viewport pan/zoom. New programmable create/createMany default omitted origins to left/top recursively; explicit named/numeric origins are preserved. Existing documents, Stamps and UI creation are unchanged.',
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
       'Update schema is a type-dependent union, not permission to apply text/LaTeX fields to every object; style/ink updates reject.',

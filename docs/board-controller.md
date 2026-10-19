@@ -21,6 +21,7 @@ await board.delete(formula.id)
 - `getObjects()` returns top-level objects in canvas z-order, with recursive semantic Board Group children and canvas-plane positions for ActiveSelection members.
 - `update(id, patch)` returns the updated semantic object. Top-level transform fields and Text content/font fields are supported. Formula `latex` rerenders off-canvas, preserving identity, transform, opacity and z-order.
 - `delete(id)` returns the removed semantic object; Undo restores its retained runtime instance and index.
+- `group(ids, { select: false })` combines two or more unique top-level groupable objects into a retained Board Group, preserving child IDs, geometry and an atomic Undo/Redo history command. Existing groups and nested IDs are rejected. See [programmable grouping](programmatic-group.md).
 - `deleteMany(ids)` and `clear()` return removed top-level nodes in canvas order and commit one atomic `delete` command. Empty operations preserve Redo history. See [atomic board deletion](atomic-board-delete.md) for validation, selection and rollback details.
 - `observe()` returns `{ version: 1, stable, boardId, viewport, selection: { ids }, objects }`. Each top-level semantic object has scene bounds. Formula renderer children, history, DOM and UI state are excluded.
 

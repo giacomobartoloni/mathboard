@@ -51,7 +51,7 @@ Once the browser is connected, the response should look like:
 
 ## API discovery for local LLMs
 
-Call `GET /__mathboard_agent/help` in `npm run dev:agent` to obtain build-accurate JSON descriptions of the eight executable semantic methods, including read-only `screenshot` with its three capture targets and PNG limits. Discovery is available without a connected browser and does not inspect or change the board. A local LLM adapter may translate these descriptors into tool declarations, but discovery never grants permission to mutate. See [Local API Help](local-agent-api-help.md) for the schema and integration example. Ordinary development and production modes do not expose this route.
+Call `GET /__mathboard_agent/help` in `npm run dev:agent` to obtain build-accurate JSON descriptions of the nine executable semantic methods, including read-only `screenshot` with its three capture targets and PNG limits. Discovery is available without a connected browser and does not inspect or change the board. A local LLM adapter may translate these descriptors into tool declarations, but discovery never grants permission to mutate. See [Local API Help](local-agent-api-help.md) for the schema and integration example. Ordinary development and production modes do not expose this route.
 
 ## Command API
 
@@ -66,6 +66,7 @@ Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the reque
 | `delete` | `id` |
 | `deleteMany` | `ids` (unique top-level semantic IDs; `[]` is a no-op) |
 | `clear` | No required parameters; empty board is a no-op |
+| `group` | `ids` (at least two unique top-level groupable IDs), optional `options.select` |
 | `screenshot` | `target`, optional `scale`, `format` (PNG only) |
 
 See [Local Agent Visual Capture](local-agent-visual-capture.md) for the read-only screenshot contract, limits, local PNG review and F033 integration gate. Screenshot uses a development-only capture adapter; semantic mutations delegate to the corresponding `BoardController` methods and returns their semantic JSON results. It does not expose Fabric, history internals, persistence, or arbitrary method execution.
@@ -152,14 +153,14 @@ curl -s -X POST http://127.0.0.1:5173/__mathboard_agent/command \
   -d '{"method":"delete","params":{"id":"mbobj_..."}}'
 ```
 
-Re-observe after each change to confirm the board's current state. Formula updates should use the same `update` method with a patch such as `{"latex":"x=2"}`. For bulk removal send `{"method":"deleteMany","params":{"ids":["mbobj_a","mbobj_b"]}}`; for full clear send `{"method":"clear","params":{}}`. Both commands operate atomically on top-level objects, preserve Redo for empty operations, and use one Undo for nonempty removal. See [Atomic Board Deletion](atomic-board-delete.md).
+Re-observe after each change to confirm the board's current state. Formula updates should use the same `update` method with a patch such as `{"latex":"x=2"}`. For bulk removal send `{"method":"deleteMany","params":{"ids":["mbobj_a","mbobj_b"]}}`; for full clear send `{"method":"clear","params":{}}`. Both commands operate atomically on top-level objects, preserve Redo for empty operations, and use one Undo for nonempty removal. See [Atomic Board Deletion](atomic-board-delete.md). To combine existing roots, send `{"method":"group","params":{"ids":["mbobj_a","mbobj_b"],"options":{"select":false}}}`; see [Programmable Grouping](programmatic-group.md).
 
 ## Recommended agent workflow
 
 1. Start `npm run dev:agent` and make sure a browser is open at `http://127.0.0.1:5173`.
 2. Check `/__mathboard_agent/health` until `browserConnected` is `true`.
 3. Call `observe`; mutate only when `result.stable` is `true`.
-4. Use `create`, `createMany`, `update`, `delete`, `deleteMany`, or `clear` with semantic data. `deleteMany` and `clear` each commit one Undo step for a nonempty removal.
+4. Use `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, or `group` with semantic data. `deleteMany`, `clear`, and `group` each commit one Undo step for a nonempty successful operation.
 5. Call `observe` after changes and use its result as the source of truth.
 6. If a transport request fails during a browser reload, observe the board before retrying a mutation. The original command may have committed just before the connection dropped.
 
@@ -189,6 +190,6 @@ BoardController errors return a concise `code` and `message`. A transport error 
 
 ## Scope
 
-The bridge exposes `observe`, `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, and read-only `screenshot`. It has no programmatic undo, redo, grouping, auto-layout, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
+The bridge exposes `observe`, `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, and read-only `screenshot`. Grouping requires two or more existing top-level groupable objects; nested grouping and nested editing are not supported. It has no programmatic undo, redo, ungroup, auto-layout, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
 
 After using the bridge in real development, record repeated friction before proposing more commands. In particular, check whether coordinates, observation detail, board dimensions, or a missing operation repeatedly block useful work.
