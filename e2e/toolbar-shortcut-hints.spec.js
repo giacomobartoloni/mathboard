@@ -68,19 +68,18 @@ for (const [boardTheme, idleGray, selectedGray] of [
     await expect(hint).toHaveCSS('color', idleGray)
     await expect(hint).toHaveCSS('font-weight', '300')
 
-    // In dark chrome, both idle and selected hints must be dimmer than the icon.
+    // The button animates its foreground color on selection; wait for it to settle.
     const assertDarkerThanIcon = async () => {
-      const { hintColor, iconColor } = await pen.evaluate((button) => ({
-        hintColor: getComputedStyle(button.querySelector('.tool-shortcut-hint')).color,
-        iconColor: getComputedStyle(button.querySelector('svg')).color,
-      }))
-      const channels = (rgb) => rgb.match(/\d+/g).slice(0, 3).map(Number)
-      const hintChannels = channels(hintColor)
-      const iconChannels = channels(iconColor)
-      expect(
-        hintChannels.every((value, index) => value < iconChannels[index]),
-        `Hint ${hintColor} should be darker than the icon ${iconColor}`,
-      ).toBe(true)
+      await expect.poll(async () => {
+        const { hintColor, iconColor } = await pen.evaluate((button) => ({
+          hintColor: getComputedStyle(button.querySelector('.tool-shortcut-hint')).color,
+          iconColor: getComputedStyle(button.querySelector('svg')).color,
+        }))
+        const channels = (rgb) => rgb.match(/\d+/g).slice(0, 3).map(Number)
+        const hintChannels = channels(hintColor)
+        const iconChannels = channels(iconColor)
+        return hintChannels.every((value, index) => value < iconChannels[index])
+      }, { message: 'Shortcut hint should be dimmer than the icon after color transitions' }).toBe(true)
     }
     if (boardTheme !== 'light') await assertDarkerThanIcon()
 
