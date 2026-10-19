@@ -54,6 +54,23 @@ test('desktop hints preserve accessible names, tab order and board state', async
   expect(await getBoardState(page)).toEqual(before)
 })
 
+
+for (const [boardTheme, expectedGray] of [
+  ['light', 'rgb(153, 153, 153)'],
+  ['dark', 'rgb(187, 187, 187)'],
+]) {
+  test(`idle shortcut hints use lighter gray in ${boardTheme} UI`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await gotoBoard(page, '/', { boardTheme })
+    const pen = page.getByRole('button', { name: 'Pen', exact: true })
+    const hint = pen.locator('.tool-shortcut-hint')
+    await expect(hint).toHaveCSS('color', expectedGray)
+    await pen.click()
+    const selectedForeground = await pen.evaluate((button) => getComputedStyle(button).color)
+    await expect(hint).toHaveCSS('color', selectedForeground)
+  })
+}
+
 for (const [name, key] of tools) {
   test(`${name} hint matches pointer and keyboard selection`, async ({ page }) => {
     await gotoBoard(page)
