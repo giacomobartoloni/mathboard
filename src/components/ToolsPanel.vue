@@ -448,7 +448,7 @@ export default {
   color: inherit;
 }
 
-:global(#app[data-theme="dark"]) .tool-button:not(.selected) .tool-shortcut-hint {
+#app[data-theme="dark"] .tool-button:not(.selected) .tool-shortcut-hint {
   color: var(--text-secondary);
 }
 
