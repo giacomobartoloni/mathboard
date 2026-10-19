@@ -72,12 +72,15 @@ for (const [boardTheme, idleGray, selectedGray] of [
     const assertDarkerThanIcon = async () => {
       const { hintColor, iconColor } = await pen.evaluate((button) => ({
         hintColor: getComputedStyle(button.querySelector('.tool-shortcut-hint')).color,
-        iconColor: getComputedStyle(button).color,
+        iconColor: getComputedStyle(button.querySelector('svg')).color,
       }))
       const channels = (rgb) => rgb.match(/\d+/g).slice(0, 3).map(Number)
       const hintChannels = channels(hintColor)
       const iconChannels = channels(iconColor)
-      expect(hintChannels.every((value, index) => value < iconChannels[index])).toBe(true)
+      expect(
+        hintChannels.every((value, index) => value < iconChannels[index]),
+        `Hint ${hintColor} should be darker than the icon ${iconColor}`,
+      ).toBe(true)
     }
     if (boardTheme !== 'light') await assertDarkerThanIcon()
 
