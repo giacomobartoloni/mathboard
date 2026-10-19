@@ -50,7 +50,7 @@ const common = { type: string, id: { description: 'Ignored on create: fresh sema
 const typeFields = {
   rect: { width: number, height: number, rx: number, ry: number },
   circle: { radius: number },
-  ellipse: { rx: number, ry: number },
+  ellipse: { rx: { type: 'number', minimum: 0 }, ry: { type: 'number', minimum: 0 } },
   line: { x1: number, y1: number, x2: number, y2: number },
   path: { path: { type: 'array', description: 'Permissive Fabric path-command data; rendering can still reject invalid contents.', items: {} } },
   text: { text: string, ...textProperties },
