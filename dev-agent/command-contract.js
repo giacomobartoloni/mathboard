@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from '../src/board/objects/constants.js'
+import { getScreenshotDescriptor } from './capture/discovery.js'
 
 const number = { type: 'number' }
 const string = { type: 'string' }
@@ -104,6 +105,7 @@ const descriptors = [
   { method: 'delete', summary: 'Remove one top-level semantic object with one Undo command.', mutatesBoard: true,
     paramsSchema: params({ id: nonempty }, ['id']), resultSchema: node,
     example: { method: 'delete', params: { id: 'mbobj_example' } }, execute: (controller, p) => controller.delete(p.id) },
+  { ...getScreenshotDescriptor(), execute: (_controller, p, capture) => capture.screenshot(p) },
 ]
 
 export function hasLocalAgentMethod(method) {
@@ -111,10 +113,14 @@ export function hasLocalAgentMethod(method) {
 }
 
 /** Explicit closures are the only callable surface; never look up arbitrary controller methods. */
-export function executeLocalAgentCommand(controller, command) {
+export function localAgentMethodMutatesBoard(method) {
+  return descriptors.find(entry => entry.method === method)?.mutatesBoard ?? false
+}
+
+export function executeLocalAgentCommand(controller, command, capture) {
   const entry = descriptors.find(candidate => candidate.method === command?.method)
   if (!entry) throw new Error(`Unsupported local agent method: ${command?.method}`)
-  return entry.execute(controller, command.params || {})
+  return entry.execute(controller, command.params || {}, capture)
 }
 
 /** Detached metadata only: this function never observes or accesses a board. */
@@ -127,7 +133,8 @@ export function getLocalAgentHelp() {
     schemaDialect: 'https://json-schema.org/draft/2020-12/schema',
     methods: descriptors.map(({ execute, ...metadata }) => {
       void execute
-      return { ...metadata, requiresStable: metadata.mutatesBoard, errors, successStatus: 200 }
+      return { ...metadata, requiresStable: metadata.requiresStable ?? metadata.mutatesBoard,
+        errors: metadata.errors ?? errors, successStatus: metadata.successStatus ?? 200 }
     }),
     objectTypes: [...BOARD_OBJECT_TYPES], patchSchemas,
     examplesByType: {
@@ -144,6 +151,7 @@ export function getLocalAgentHelp() {
       'Call observe and wait for result.stable === true before mutation.',
       'Obtain human authorization appropriate to the mutation; discovering a method does not authorize it.',
       'Send method and params to commandEndpoint, then observe to verify the result.',
+      'Use the read-only screenshot method to inspect canvas pixels; decode its base64 PNG as an image in a multimodal host.',
       'On timeout/disconnect, re-observe after reconnecting before deciding whether to retry a mutation.',
     ],
     safety: { localDevelopmentOnly: true, loopbackHost: '127.0.0.1', requireStableBeforeMutation: true,
@@ -157,6 +165,7 @@ export function getLocalAgentHelp() {
       'Path items are intentionally permissive schema data; materialization may reject malformed path commands.',
       'Examples are synthetic templates. Replace mbobj_example with an observed existing ID. Discovery performs no permission enforcement.',
       'Undo/Redo are UI actions, not bridge methods. Normal dev/production builds do not expose this bridge.',
+      'Screenshot exports only canvas pixels, not toolbars or DOM overlays; follow its own limits, stable-board requirement and safety guidance.',
     ],
   })
 }

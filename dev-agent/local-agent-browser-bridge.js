@@ -17,10 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { executeLocalAgentCommand } from './command-contract.js'
+import { executeLocalAgentCommand, localAgentMethodMutatesBoard } from './command-contract.js'
 
 const LOCAL_AGENT_MARKER = 'MATHBOARD_LOCAL_AGENT_BRIDGE_V1'
-
 
 function errorPayload(error) {
   return {
@@ -29,7 +28,7 @@ function errorPayload(error) {
   }
 }
 
-export function installLocalAgentBrowserBridge(getBoard) {
+export function installLocalAgentBrowserBridge(getBoard, capture) {
   console.info(LOCAL_AGENT_MARKER)
   const events = new EventSource('/__mathboard_agent/events')
   let reportedPostFailure = false
@@ -41,7 +40,9 @@ export function installLocalAgentBrowserBridge(getBoard) {
     try {
       const board = getBoard?.()
       if (!board) throw new Error('DrawBoard is not available.')
-      const result = await executeLocalAgentCommand(board.getBoardController(), command)
+      const finish = localAgentMethodMutatesBoard(command.method) ? capture.beginMutation() : () => {}
+      let result
+      try {result=await executeLocalAgentCommand(board.getBoardController(), command, capture)} finally {finish()}
       payload = { id: command.id, ok: true, result }
     } catch (error) {
       payload = { id: command.id, ok: false, error: errorPayload(error) }
@@ -50,7 +51,7 @@ export function installLocalAgentBrowserBridge(getBoard) {
     try {
       const response = await fetch('/__mathboard_agent/result', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-MathBoard-Command-Id': command.id },
         body: JSON.stringify(payload),
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)

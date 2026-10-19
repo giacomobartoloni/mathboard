@@ -24,7 +24,7 @@ import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS } from '../src/board/obje
 import { acceptsSchema } from './helpers/check-discovery-schema.js'
 import { validateCreateSpec, validateObjectPatch } from '../src/board/objects/validateCreateSpec.js'
 
-const methods = ['observe', 'create', 'createMany', 'update', 'delete']
+const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'screenshot']
 
 test('discovery is detached, deterministic and exposes only executable baseline methods', () => {
   const help = getLocalAgentHelp()
@@ -51,8 +51,8 @@ test('discovery is detached, deterministic and exposes only executable baseline 
 test('each advertised method has actionable metadata for a local tool adapter', () => {
   for (const descriptor of getLocalAgentHelp().methods) {
     assert.equal(hasLocalAgentMethod(descriptor.method), true)
-    assert.equal(descriptor.mutatesBoard, descriptor.method !== 'observe')
-    assert.equal(descriptor.requiresStable, descriptor.mutatesBoard)
+    assert.equal(descriptor.mutatesBoard, !['observe', 'screenshot'].includes(descriptor.method))
+    assert.equal(descriptor.requiresStable, descriptor.mutatesBoard || descriptor.method === 'screenshot')
     assert.ok(descriptor.summary.length > 10)
     assert.equal(descriptor.paramsSchema.type, 'object')
     assert.ok(descriptor.resultSchema.type)
@@ -121,4 +121,21 @@ test('representative accepted and rejected creation/patch inputs agree with publ
       assert.equal(acceptsSchema(help.patchSchemas[kind], patch), valid, `${kind}:${JSON.stringify(patch)}`)
     }
   }
+})
+
+
+test('screenshot discovery is a read-only executable closure with exact capture metadata', async () => {
+  const descriptor = getLocalAgentHelp().methods.find(item => item.method === 'screenshot')
+  assert.equal(descriptor.mutatesBoard, false)
+  assert.equal(descriptor.requiresStable, true)
+  assert.equal(descriptor.paramsSchema.required.includes('target'), true)
+  assert.deepEqual(descriptor.paramsSchema.properties.target.oneOf.map(x => x.properties.kind.const),
+    ['sceneRect', 'objectIds', 'viewport'])
+  assert.equal(descriptor.resultSchema.properties.mimeType.const, 'image/png')
+  assert.equal(descriptor.resultSchema.properties.encoding.const, 'base64')
+  assert.equal(descriptor.errors.some(x => x.codes?.includes('capture_too_large')), true)
+  let called = 0
+  const capture = { screenshot: async params => { called++; return { region: params.target.kind } } }
+  assert.deepEqual(await executeLocalAgentCommand({}, descriptor.example, capture), { region: 'sceneRect' })
+  assert.equal(called, 1)
 })
