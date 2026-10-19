@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Rect, Circle, Line, Path, IText, Group } from 'fabric'
+import { Rect, Circle, Ellipse, Line, Path, IText, Group } from 'fabric'
 import { ensureMathBoardObjectId } from '../ids.js'
 import { STYLE_KEYS, TEXT_KEYS, TRANSFORM_KEYS } from './constants.js'
 
@@ -110,6 +110,11 @@ export async function materializeBoardObject(node, options = {}) {
         ...transform,
         radius: node.radius ?? 0,
       })
+      applyInkMetadata(object, node)
+      break
+    }
+    case 'ellipse': {
+      object = new Ellipse({ ...style, ...transform, rx: node.rx, ry: node.ry })
       applyInkMetadata(object, node)
       break
     }

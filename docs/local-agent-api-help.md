@@ -29,7 +29,7 @@ The response is deterministic JSON with `schemaVersion:1`, a JSON Schema2020-12 
 
 Each method includes `method`, `summary`, `mutatesBoard`, `requiresStable`, `paramsSchema`, `resultSchema`, `successStatus`, `errors` and `example`. Results describe detached semantic data; the output schemas are partial descriptions (additional fields allowed). Formula nodes preserve LaTeX without exposing internal SVG paths.
 
-This build exposes exactly `observe`, `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, read-only `measure`, mutating `layout` and read-only `screenshot`. A create spec can describe rect/circle/line/path/text/formula/group. Creating a group tree is different from grouping existing IDs: ellipse/polygon/arrow and other unlisted methods are not executable here. Discover the running build rather than assuming another branch's features are available.
+This build exposes exactly `observe`, `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, read-only `measure`, mutating `layout` and read-only `screenshot`. A create spec can describe rect/circle/ellipse/line/path/text/formula/group. The semantic `ellipse` type requires finite nonnegative `rx` and `ry`; its description and required geometry fields come from the canonical runtime discovery schema. Creating a group tree is different from grouping existing IDs. Polygon/arrow object types and unlisted methods are not executable in this build. Discover the running build rather than assuming another branch's features are available.
 
 ## Local tool adapter
 

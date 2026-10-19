@@ -108,7 +108,11 @@ test('representative accepted and rejected creation/patch inputs agree with publ
     { type: 'formula', latex: '   ' }, { type: 'text' }, { type: 'text', text: 3 },
     { type: 'rect', originX: 'top' }, { type: 'rect', left: '20' },
     { type: 'rect', strokeDashArray: ['bad'] }, { type: 'circle', bogus: 1 },
-    { type: 'arrow', x1: 1, y1: 1, x2: 2, y2: 2 }, { type: 'group', objects: [{ type: 'ellipse' }] },
+    { type: 'arrow', x1: 1, y1: 1, x2: 2, y2: 2 },
+    { type: 'ellipse', rx: 35, ry: 12, left: 100, top: 50 },
+    { type: 'ellipse', rx: -1, ry: 12 },
+    { type: 'ellipse', rx: 12 },
+    { type: 'group', objects: [{ type: 'ellipse' }] },
   ]) {
     let valid = true
     try { validateCreateSpec(sample) } catch { valid = false }

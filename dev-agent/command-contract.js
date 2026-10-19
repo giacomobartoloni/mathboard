@@ -50,13 +50,14 @@ const common = { type: string, id: { description: 'Ignored on create: fresh sema
 const typeFields = {
   rect: { width: number, height: number, rx: number, ry: number },
   circle: { radius: number },
+  ellipse: { rx: { type: 'number', minimum: 0 }, ry: { type: 'number', minimum: 0 } },
   line: { x1: number, y1: number, x2: number, y2: number },
   path: { path: { type: 'array', description: 'Permissive Fabric path-command data; rendering can still reject invalid contents.', items: {} } },
   text: { text: string, ...textProperties },
   formula: { latex },
   group: { objects: { type: 'array', items: { $ref: '#/$defs/createSpec' } } },
 }
-const requiredFields = { rect: [], circle: [], line: ['x1', 'y1', 'x2', 'y2'],
+const requiredFields = { rect: [], circle: [], ellipse: ['rx', 'ry'], line: ['x1', 'y1', 'x2', 'y2'],
   path: ['path'], text: ['text'], formula: ['latex'], group: ['objects'] }
 const createSpec = { oneOf: BOARD_OBJECT_TYPES.map(type => {
   if (!typeFields[type]) throw new Error(`Missing local discovery schema for ${type}`)
@@ -183,6 +184,7 @@ export function getLocalAgentHelp() {
     examplesByType: {
       rect: { type: 'rect', width: 80, height: 50, fill: null },
       circle: { type: 'circle', radius: 30 },
+      ellipse: { type: 'ellipse', rx: 70, ry: 45, fill: null },
       line: { type: 'line', x1: 200, y1: 200, x2: 300, y2: 250 },
       path: { type: 'path', path: [['M', 200, 200], ['L', 300, 250]], fill: null },
       text: { type: 'text', text: 'Synthetic title' },

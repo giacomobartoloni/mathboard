@@ -175,6 +175,10 @@ export function readSemanticBoardObject(object, options = {}) {
     })
   }
 
+  if (isType(object, 'Ellipse')) {
+    return withId({ type: 'ellipse', rx: object.rx, ry: object.ry, ...commonProps(object) })
+  }
+
   if (isType(object, 'Line', 'line')) {
     return withId({
       type: 'line',

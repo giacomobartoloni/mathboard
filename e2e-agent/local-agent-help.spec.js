@@ -51,7 +51,7 @@ test('help does not change transport state or advertise unrelated pending featur
   expect(response.headers()['content-type']).toContain('application/json')
   const help = await response.json()
   expect(help.methods.map(m => m.method)).toEqual(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot'])
-  expect(help.objectTypes).toEqual(['rect', 'circle', 'line', 'path', 'text', 'formula', 'group'])
+  expect(help.objectTypes).toEqual(['rect', 'circle', 'ellipse', 'line', 'path', 'text', 'formula', 'group'])
   expect(await (await request.get(prefix + 'help')).json()).toEqual(help)
   expect(await (await request.get(prefix + 'health')).json()).toEqual(healthBefore)
   const unsupported = await request.post(prefix + 'command', { data: { method: 'autoLayoutV2' } })

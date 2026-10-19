@@ -28,6 +28,8 @@ export function acceptsSchema(schema, value, root = schema) {
     if (![schema.type].flat().includes(actual)) return false
     if (actual === 'number' && !Number.isFinite(value)) return false
   }
+  if (typeof value === 'number' && ((schema.minimum !== undefined && value < schema.minimum)
+    || (schema.maximum !== undefined && value > schema.maximum))) return false
   if (typeof value === 'string' && (value.length < (schema.minLength || 0) || (schema.pattern && !new RegExp(schema.pattern).test(value)))) return false
   if (Array.isArray(value) && (value.length < (schema.minItems || 0) || !value.every(item => acceptsSchema(schema.items || {}, item, root)))) return false
   if (value && !Array.isArray(value) && typeof value === 'object') {
