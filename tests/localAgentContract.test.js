@@ -23,6 +23,7 @@ import { getLocalAgentHelp, hasLocalAgentMethod, executeLocalAgentCommand } from
 import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS } from '../src/board/objects/constants.js'
 import { acceptsSchema } from './helpers/check-discovery-schema.js'
 import { validateCreateSpec, validateObjectPatch } from '../src/board/objects/validateCreateSpec.js'
+import { normalizeCreateOrigins } from '../src/board/objects/normalizeCreateOrigins.js'
 
 const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'screenshot']
 
@@ -138,4 +139,37 @@ test('screenshot discovery is a read-only executable closure with exact capture 
   const capture = { screenshot: async params => { called++; return { region: params.target.kind } } }
   assert.deepEqual(await executeLocalAgentCommand({}, descriptor.example, capture), { region: 'sceneRect' })
   assert.equal(called, 1)
+})
+
+
+test('discovery creation defaults match recursive F014 origin normalization without changing update schemas', () => {
+  const help = getLocalAgentHelp()
+  for (const method of ['create', 'createMany']) {
+    const params = help.methods.find(entry => entry.method === method).paramsSchema
+    for (const schema of params.$defs.createSpec.oneOf) {
+      assert.equal(schema.properties.originX.default, 'left', schema.properties.type.const)
+      assert.equal(schema.properties.originY.default, 'top', schema.properties.type.const)
+    }
+  }
+  assert.equal(help.patchSchemas.shape.properties.originX.default, undefined)
+  assert.equal(help.patchSchemas.shape.properties.originY.default, undefined)
+  const group = { type: 'group', objects: [
+    { type: 'formula', latex: 'x=2', left: 100, top: 200 },
+    { type: 'rect', width: 20, height: 40, originX: 0.25, originY: 'center' },
+    { type: 'group', objects: [{ type: 'text', text: 'Nested' }] },
+  ] }
+  const normalized = normalizeCreateOrigins(group)
+  assert.equal(group.originX, undefined)
+  assert.equal(normalized.originX, 'left')
+  assert.equal(normalized.originY, 'top')
+  assert.equal(normalized.objects[0].originX, 'left')
+  assert.equal(normalized.objects[0].originY, 'top')
+  assert.equal(normalized.objects[1].originX, 0.25)
+  assert.equal(normalized.objects[1].originY, 'center')
+  assert.equal(normalized.objects[2].objects[0].originX, 'left')
+  assert.equal(normalized.objects[2].objects[0].originY, 'top')
+  const line = normalizeCreateOrigins({ type: 'line', x1: 10, y1: 20, x2: 40, y2: 50 })
+  assert.equal(line.left, undefined)
+  assert.equal(line.top, undefined)
+  assert.match(help.limitations.join(' '), /default omitted origins to left\/top/)
 })

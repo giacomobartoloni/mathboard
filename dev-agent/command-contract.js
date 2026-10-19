@@ -43,7 +43,10 @@ const styleProperties = Object.fromEntries(STYLE_KEYS.map(key => [key,
 ]))
 const objectSchema = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false })
 const common = { type: string, id: { description: 'Ignored on create: fresh semantic IDs are assigned.' },
-  ...transformProperties, ...styleProperties, mathboardInkMode: { enum: ['auto', 'fixed'] } }
+  ...transformProperties,
+  originX: { ...transformProperties.originX, default: 'left', description: 'New programmable creations default to left when omitted, including group children; explicit named or numeric origins are preserved.' },
+  originY: { ...transformProperties.originY, default: 'top', description: 'New programmable creations default to top when omitted, including group children; explicit named or numeric origins are preserved.' },
+  ...styleProperties, mathboardInkMode: { enum: ['auto', 'fixed'] } }
 const typeFields = {
   rect: { width: number, height: number, rx: number, ry: number },
   circle: { radius: number },
@@ -159,7 +162,7 @@ export function getLocalAgentHelp() {
     limitations: [
       'Only commands in methods are executable in this build; planned operations are absent.',
       'Mutations address top-level IDs only; nested group children cannot be mutated directly.',
-      'Coordinates are scene units, independent of viewport pan/zoom. Set originX/originY explicitly: omitted origins use existing type defaults.',
+      'Coordinates are scene units, independent of viewport pan/zoom. New programmable create/createMany default omitted origins to left/top recursively; explicit named/numeric origins are preserved. Existing documents, Stamps and UI creation are unchanged.',
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
       'Update schema is a type-dependent union, not permission to apply text/LaTeX fields to every object; style/ink updates reject.',
       'Path items are intentionally permissive schema data; materialization may reject malformed path commands.',
