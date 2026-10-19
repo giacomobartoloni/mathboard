@@ -49,6 +49,10 @@ Once the browser is connected, the response should look like:
 
 `browserConnected` means the browser transport is connected. It does not mean the board is ready for a mutation. Send `observe` and proceed only when its result has `stable: true`.
 
+## API discovery for local LLMs
+
+Call `GET /__mathboard_agent/help` in `npm run dev:agent` to obtain build-accurate JSON descriptions of the six executable semantic methods, including read-only `screenshot` with its three capture targets and PNG limits. Discovery is available without a connected browser and does not inspect or change the board. A local LLM adapter may translate these descriptors into tool declarations, but discovery never grants permission to mutate. See [Local API Help](local-agent-api-help.md) for the schema and integration example. Ordinary development and production modes do not expose this route.
+
 ## Command API
 
 Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the request ID; callers do not need to create correlation IDs. The only supported methods are:
@@ -60,8 +64,9 @@ Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the reque
 | `createMany` | `specs`, optional `options` |
 | `update` | `id`, `patch`, optional `options` |
 | `delete` | `id` |
+| `screenshot` | `target`, optional `scale`, `format` (PNG only) |
 
-The bridge delegates these commands to the corresponding `BoardController` methods and returns their semantic JSON results. It does not expose Fabric, history internals, persistence, or arbitrary method execution.
+See [Local Agent Visual Capture](local-agent-visual-capture.md) for the read-only screenshot contract, limits, local PNG review and F033 integration gate. Screenshot uses a development-only capture adapter; semantic mutations delegate to the corresponding `BoardController` methods and returns their semantic JSON results. It does not expose Fabric, history internals, persistence, or arbitrary method execution.
 
 ### Observe
 
@@ -170,9 +175,11 @@ Transport failures use these HTTP statuses:
 
 | Status | Meaning |
 | --- | --- |
-| `400` | Malformed command |
+| `400` | Malformed envelope or unsupported command method |
 | `404` | Unknown relay endpoint or result ID |
-| `409` | BoardController rejected the command |
+| `409` | Board/domain rejection or capture validation failure |
+| `413` | Request or capture relay body exceeds its byte limit |
+| `429` | The agent relay reached its concurrent command limit |
 | `503` | No browser board is connected |
 | `504` | Command timed out |
 
@@ -180,6 +187,6 @@ BoardController errors return a concise `code` and `message`. A transport error 
 
 ## Scope
 
-V1 exposes only `observe`, `create`, `createMany`, `update`, and `delete`. It has no clear, undo, redo, grouping, screenshot, auto-layout, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
+The bridge exposes `observe`, `create`, `createMany`, `update`, `delete`, and read-only `screenshot`. It has no clear, undo, redo, grouping, auto-layout, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
 
 After using the bridge in real development, record repeated friction before proposing more commands. In particular, check whether coordinates, observation detail, board dimensions, or a missing operation repeatedly block useful work.
