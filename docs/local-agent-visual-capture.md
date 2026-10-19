@@ -88,13 +88,13 @@ Transport failures include 403 `forbidden_origin`, 408 `request_timeout`, 413 `r
 
 The relay remains opt-in, loopback-only and same-origin. Loopback binding is not user authentication: other local processes can call this development API. Requests without an Origin header (local CLI clients) are supported; cross-origin browser requests are rejected. No CORS, extra screenshot endpoint, remote asset fetch, arbitrary Fabric method exposure or PNG logging is added. Normal development and production builds do not load the capture adapter.
 
-## F033 integration gate
+## F033 API discovery
 
-F033 (PR #61) is independently open and is absent from this branch's `develop` base. This feature exports detached screenshot metadata from `dev-agent/capture/discovery.js`; it does not copy or enable the F033 registry.
+F033's `GET /__mathboard_agent/help` is integrated with the live screenshot adapter in this branch. The build-specific command registry exposes exactly six methods: `observe`, `create`, `createMany`, `update`, `delete`, and `screenshot`. The screenshot entry derives from `getScreenshotDescriptor()`, sharing its three target schemas, pixel/byte limits, return media format and specific error codes. Only one executable screenshot closure exists, and the Vite relay and browser dispatch both validate against the same registry.
 
-When combining the PRs, add exactly one registry entry using `getScreenshotDescriptor()` and an explicit closure `(controller, params, capture) => capture.screenshot(params)`. Extend `executeLocalAgentCommand(controller, command, capture)` to pass that capability, and pass it from the browser adapter. Preserve `requiresStable:true` for screenshot even though `mutatesBoard:false`; the existing F033 help mapper must use `metadata.requiresStable ?? metadata.mutatesBoard`. Preserve screenshot-specific errors instead of overwriting them with generic mutation errors. Relay allow-list and browser execution must both use that registry. Never use arbitrary controller property lookup.
+Help remains read-only and can be called without a connected browser. The screenshot method has `mutatesBoard:false` but `requiresStable:true`; discovery and result transport do not weaken the existing capture readiness, size, loopback/Origin, and non-mutating guarantees. The description is metadata for local LLM adapters; it does not grant authorization and does not expose a production API.
 
-Combined validation must prove `/help` is detached and usable without a browser, lists screenshot once, describes the three targets/limits/base64 media, and agrees with actual execution. Existing five method names, JSON discovery and text help must remain intact. This is an integration gate, not a claim that standalone `develop` already has `/help`.
+See [Local Agent API Help](local-agent-api-help.md) for the machine-readable discovery contract. The regression suite verifies method parity, actual PNG image responses, help stability and normal/production mode exclusion.
 
 ## Verification
 

@@ -49,6 +49,10 @@ Once the browser is connected, the response should look like:
 
 `browserConnected` means the browser transport is connected. It does not mean the board is ready for a mutation. Send `observe` and proceed only when its result has `stable: true`.
 
+## API discovery for local LLMs
+
+Call `GET /__mathboard_agent/help` in `npm run dev:agent` to obtain build-accurate JSON descriptions of the six executable semantic methods, including read-only `screenshot` with its three capture targets and PNG limits. Discovery is available without a connected browser and does not inspect or change the board. A local LLM adapter may translate these descriptors into tool declarations, but discovery never grants permission to mutate. See [Local API Help](local-agent-api-help.md) for the schema and integration example. Ordinary development and production modes do not expose this route.
+
 ## Command API
 
 Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the request ID; callers do not need to create correlation IDs. The only supported methods are:
@@ -171,9 +175,11 @@ Transport failures use these HTTP statuses:
 
 | Status | Meaning |
 | --- | --- |
-| `400` | Malformed command |
+| `400` | Malformed envelope or unsupported command method |
 | `404` | Unknown relay endpoint or result ID |
-| `409` | BoardController rejected the command |
+| `409` | Board/domain rejection or capture validation failure |
+| `413` | Request or capture relay body exceeds its byte limit |
+| `429` | The agent relay reached its concurrent command limit |
 | `503` | No browser board is connected |
 | `504` | Command timed out |
 
