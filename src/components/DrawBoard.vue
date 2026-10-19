@@ -36,6 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
+import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
@@ -274,6 +275,7 @@ export default {
         afterMutation: () => this.refreshSelectionPanel(),
         isMutationStable: () => this.sessionReady && this._isBoardInteractionStable(),
         getBoardId: () => this.getBoardId(),
+        getLayoutSafeArea: () => workspaceSafeArea(this.canvas, this.$el.closest("#app")),
       });
       return this._boardController;
     },

@@ -17,12 +17,16 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { watch } from 'vue'
+import { createVisualCaptureAdapter } from './capture/visual-capture.js'
 import { mountMathBoard } from '../src/app-bootstrap.js'
 import { installLocalAgentBrowserBridge } from './local-agent-browser-bridge.js'
 
 const root = mountMathBoard()
-const uninstall = installLocalAgentBrowserBridge(() => root.drawBoardRef)
+const capture=createVisualCaptureAdapter(()=>root.drawBoardRef)
+const stopWatching=watch(()=>root.drawBoardRef,()=>capture.attach(),{immediate:true,flush:'sync'})
+const uninstall=installLocalAgentBrowserBridge(()=>root.drawBoardRef,capture)
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(uninstall)
+  import.meta.hot.dispose(()=>{uninstall();stopWatching();capture.dispose()})
 }
