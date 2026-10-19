@@ -17,7 +17,21 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import assert from 'node:assert/strict'
+
 export const ORIGIN = 'https://mathboard.app'
+export const SCHEMA_CONTEXT = 'https://schema.org'
+export const SOFTWARE_ID = `${ORIGIN}/#software`
+export const WEBSITE_ID = `${ORIGIN}/#website`
+
+export function assertSchemaContext(document, label = 'JSON-LD') {
+  if (document?.['@context'] !== SCHEMA_CONTEXT) {
+    throw new Error(`${label} must use @context ${SCHEMA_CONTEXT}`)
+  }
+}
+
+const SOFTWARE_DESCRIPTION =
+  'Free browser-based math whiteboard with freehand drawing, text, shapes, and editable LaTeX formulas.'
 
 function embedJsonLd(value) {
   // Prevent </script> breakout while keeping valid JSON for crawlers.
@@ -30,20 +44,30 @@ export function absoluteUrl(path) {
   return `${ORIGIN}${path.startsWith('/') ? path : `/${path}`}`
 }
 
-function softwareApplication(page) {
+function mathboardWebsite() {
   return {
-    '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
+    '@type': 'WebSite',
+    '@id': WEBSITE_ID,
     name: 'MathBoard',
+    url: `${ORIGIN}/`,
+  }
+}
+
+/** Fresh canonical MathBoard software entity for SEO graphs and root parity. */
+export function buildMathboardSoftwareEntity() {
+  return {
+    '@type': ['SoftwareApplication', 'WebApplication'],
+    '@id': SOFTWARE_ID,
+    name: 'MathBoard',
+    url: `${ORIGIN}/`,
     applicationCategory: 'EducationalApplication',
     operatingSystem: 'Web Browser',
+    description: SOFTWARE_DESCRIPTION,
     offers: {
       '@type': 'Offer',
       price: '0',
       priceCurrency: 'USD',
     },
-    description: page.description,
-    url: absoluteUrl(page.path),
     author: {
       '@type': 'Person',
       name: 'Giacomo Bartoloni',
@@ -53,18 +77,55 @@ function softwareApplication(page) {
   }
 }
 
-function webPage(page) {
+function normalizedTypes(value) {
+  return [...new Set(Array.isArray(value) ? value : [value])].sort()
+}
+
+/** Invariant fields used for root ↔ canonical software parity. */
+export function softwareComparable(node) {
   return {
-    '@context': 'https://schema.org',
+    '@type': normalizedTypes(node['@type']),
+    '@id': node['@id'],
+    name: node.name,
+    url: node.url,
+    description: node.description,
+    applicationCategory: node.applicationCategory,
+    operatingSystem: node.operatingSystem,
+    offers: node.offers,
+    author: node.author,
+    license: node.license,
+    codeRepository: node.codeRepository,
+  }
+}
+
+export function assertSoftwareEntityParity(
+  actual,
+  expected = buildMathboardSoftwareEntity(),
+) {
+  assert.deepStrictEqual(
+    softwareComparable(actual),
+    softwareComparable(expected),
+    'Root structured data does not match canonical MathBoard software entity',
+  )
+}
+
+function webPage(page, { aboutSoftware = false } = {}) {
+  return {
     '@type': 'WebPage',
+    '@id': `${absoluteUrl(page.path)}#webpage`,
     name: page.title,
     description: page.description,
     url: absoluteUrl(page.path),
     isPartOf: {
-      '@type': 'WebSite',
-      name: 'MathBoard',
-      url: ORIGIN,
+      '@id': WEBSITE_ID,
     },
+    ...(aboutSoftware
+      ? {
+          about: {
+            '@id': SOFTWARE_ID,
+          },
+        }
+      : {}),
   }
 }
 
@@ -73,8 +134,8 @@ function breadcrumbList(page) {
     return null
   }
   return {
-    '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
+    '@id': `${absoluteUrl(page.path)}#breadcrumb`,
     itemListElement: page.breadcrumbs.map((crumb, index) => ({
       '@type': 'ListItem',
       position: index + 1,
@@ -85,20 +146,29 @@ function breadcrumbList(page) {
 }
 
 export function renderStructuredData(page) {
-  const blocks = []
-  if (page.structuredData === 'software-application') {
-    blocks.push(softwareApplication(page))
-  } else if (page.structuredData === 'webpage' || page.structuredData === 'docs') {
-    blocks.push(webPage(page))
+  const graph = [mathboardWebsite()]
+  const isSoftwarePage = page.structuredData === 'software-application'
+  const aboutSoftware = isSoftwarePage || page.aboutSoftware === true
+
+  if (isSoftwarePage || aboutSoftware) {
+    graph.push(buildMathboardSoftwareEntity())
   }
+
+  if (
+    isSoftwarePage
+    || page.structuredData === 'webpage'
+    || page.structuredData === 'docs'
+  ) {
+    graph.push(webPage(page, { aboutSoftware }))
+  }
+
   const crumbs = breadcrumbList(page)
   if (crumbs) {
-    blocks.push(crumbs)
+    graph.push(crumbs)
   }
-  return blocks
-    .map(
-      (block) =>
-        `<script type="application/ld+json">${embedJsonLd(block)}</script>`,
-    )
-    .join('\n')
+
+  return `<script type="application/ld+json">${embedJsonLd({
+    '@context': SCHEMA_CONTEXT,
+    '@graph': graph,
+  })}</script>`
 }

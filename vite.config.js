@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { localAgentModePlugin } from './tools/vite/local-agent-mode-plugin.mjs'
 
 function e2eEntryPlugin() {
   return {
@@ -39,5 +40,6 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     vue(),
     ...(mode === 'e2e' ? [e2eEntryPlugin()] : []),
+    ...(mode === 'agent' ? [localAgentModePlugin()] : []),
   ],
 }))

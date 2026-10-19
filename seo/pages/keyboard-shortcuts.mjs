@@ -60,6 +60,7 @@ export default {
     'Keyboard shortcuts for MathBoard tools, undo and redo, deleting selections, and cancelling actions.',
   h1: 'Keyboard shortcuts',
   structuredData: 'docs',
+  aboutSoftware: true,
   breadcrumbs: [
     { label: 'Resources', href: '/resources/' },
     { label: 'Keyboard shortcuts' },
