@@ -33,6 +33,14 @@ export const TOOL_SHORTCUTS = {
   s: 'shapes',
 }
 
+/** Decorative single-letter cue derived from the executable tool mapping. */
+export function getToolShortcutHint(toolId) {
+  const entry = Object.entries(TOOL_SHORTCUTS).find(
+    ([key, tool]) => tool === toolId && /^[a-z]$/i.test(key),
+  )
+  return entry ? entry[0].toUpperCase() : null
+}
+
 /** Plain keys that select a shape and activate the shapes tool. Line uses id `arrow`. */
 export const SHAPE_SHORTCUTS = {
   r: 'rectangle',

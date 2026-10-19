@@ -32,4 +32,4 @@ The existing `delete(id)` result remains one node. It continues to use its exist
 { "method": "clear", "params": {} }
 ```
 
-Send these requests to `POST /__mathboard_agent/command` in explicit local agent mode. Domain errors return HTTP 409. Only the documented bridge methods are accepted; other method strings reject with HTTP 400 `invalid_command`. UI Undo/Redo remain the existing human history controls. The bridge stays excluded from normal development and production builds.
+Send these requests to `POST /__mathboard_agent/command` in explicit local agent mode. Both operations are listed by [Local LLM API Help](local-agent-api-help.md) through the shared executable registry (`GET /__mathboard_agent/help`) with `mutatesBoard: true`, `requiresStable: true`, and parameters, errors and return schemas. Domain errors return HTTP 409. Only registered methods are accepted; other method strings reject with HTTP 400 `invalid_command`. The read-only `screenshot` command and its transport limits remain unchanged. UI Undo/Redo remain the existing human history controls. The bridge stays excluded from normal development and production builds.

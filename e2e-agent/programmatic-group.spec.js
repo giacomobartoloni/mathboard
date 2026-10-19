@@ -87,6 +87,14 @@ const diagram = [
 
 test('HTTP triangle groups retained labels, moves/replays, persists, follows themes and ungroups for formula editing', async ({ page, request }, testInfo) => {
   await ready(page, request)
+  const help = await (await request.get('/__mathboard_agent/help')).json()
+  const grouping = help.methods.find(method => method.method === 'group')
+  expect(grouping).toBeTruthy()
+  expect(grouping.mutatesBoard).toBe(true)
+  expect(grouping.requiresStable).toBe(true)
+  expect(grouping.paramsSchema.properties.ids.minItems).toBe(2)
+  expect(grouping.paramsSchema.properties.ids.uniqueItems).toBe(true)
+  expect(help.methods.find(method => method.method === 'screenshot').mutatesBoard).toBe(false)
   const nodes = await command(request, 'createMany', { specs: diagram })
   const before = await runtime(page, 'remember')
   const grouped = await command(request, 'group', { ids: idsOf(nodes).reverse(), options: { select: true } })

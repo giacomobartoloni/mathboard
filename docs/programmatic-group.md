@@ -40,6 +40,9 @@ BoardDocument Save/Open preserves the hierarchy and IDs; AUTO ink follows board
 themes and FIXED ink stays explicit.
 
 This feature builds on F014 positioning and F015 transactional history callback
-handling. Its review branch is stacked on `feature/atomic-board-delete` until
-that foundation is integrated. The development bridge remains excluded from
-production output.
+handling. The F014 and F015 foundations have been merged into `develop`; this
+review branch is aligned with that foundation and targets `develop` directly.
+The read-only `GET /__mathboard_agent/help` method registry advertises
+`group` only in builds containing this implementation, including validation,
+history effects and examples. The development bridge remains excluded from
+normal development and production output.
