@@ -1,7 +1,28 @@
+/*
+MathBoard
+
+Copyright (C) 2026 Giacomo Bartoloni
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { COLOR_PRESETS } from '../src/config/colors.js'
 import {
+  getToolShortcutHint,
+  TOOL_SHORTCUTS,
   isDeleteShortcut,
   isDuplicateShortcut,
   isEscapeShortcut,
@@ -178,4 +199,17 @@ test('plain color digits map to COLOR_PRESETS order', () => {
   assert.equal(isPlainColorDigit({ key: '1', ctrlKey: true }), null)
   assert.equal(isPlainColorDigit({ key: '2', shiftKey: true }), null)
   assert.equal(isPlainColorDigit({ key: '3', repeat: true }), null)
+})
+
+
+test('visible tool hints round-trip to the executable shortcut', () => {
+  const expected = { select: 'V', pan: 'H', pencil: 'P', font: 'T', formula: 'F', shapes: 'S' }
+  for (const [tool, hint] of Object.entries(expected)) {
+    assert.equal(getToolShortcutHint(tool), hint)
+    assert.equal(isPlainToolKey({ key: hint.toLowerCase() }), tool)
+    assert.equal(Object.values(TOOL_SHORTCUTS).filter((id) => id === tool).length, 1)
+  }
+  for (const unsupported of ['stamps', 'rectangle', 'unknown', '', null, undefined]) {
+    assert.equal(getToolShortcutHint(unsupported), null)
+  }
 })
