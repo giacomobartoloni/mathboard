@@ -18,5 +18,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { mountMathBoard } from './app-bootstrap.js'
+import '@fontsource/satisfy/400.css'
 
 mountMathBoard()

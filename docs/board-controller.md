@@ -21,6 +21,8 @@ await board.delete(formula.id)
 - `getObjects()` returns top-level objects in canvas z-order, with recursive semantic Board Group children and canvas-plane positions for ActiveSelection members.
 - `update(id, patch)` returns the updated semantic object. Top-level transform fields and Text content/font fields are supported. Formula `latex` rerenders off-canvas, preserving identity, transform, opacity and z-order.
 - `delete(id)` returns the removed semantic object; Undo restores its retained runtime instance and index.
+- `group(ids, { select: false })` combines two or more unique top-level groupable objects into a retained Board Group, preserving child IDs, geometry and an atomic Undo/Redo history command. Existing groups and nested IDs are rejected. See [programmable grouping](programmatic-group.md).
+- `deleteMany(ids)` and `clear()` return removed top-level nodes in canvas order and commit one atomic `delete` command. Empty operations preserve Redo history. See [atomic board deletion](atomic-board-delete.md) for validation, selection and rollback details.
 - `observe()` returns `{ version: 1, stable, boardId, viewport, selection: { ids }, objects }`. Each top-level semantic object has scene bounds. Formula renderer children, history, DOM and UI state are excluded.
 
 ## Identity, ink and positions
@@ -37,7 +39,7 @@ Allowed transforms: `left`, `top`, `scaleX`, `scaleY`, `skewX`, `skewY`, `angle`
 
 Text additionally permits `text`, `fontSize`, `fontFamily`, `fontWeight`, `fontStyle`, `textAlign`, `lineHeight`, `charSpacing`, `underline`, `linethrough`, `overline`. Formula additionally permits `latex`.
 
-Unknown patch fields are rejected. Style, intrinsic shape geometry, group children, identity and z-order updates are deferred because the current `modify` history snapshots do not cover them uniformly. Nested IDs can be observed but cannot be updated or deleted. Updating an ActiveSelection member first discards the selection to avoid local-coordinate writes.
+Unknown patch fields are rejected. Style updates follow the bounded [history-safe styles](history-safe-styles.md) contract, including current-theme AUTO ink and atomic Formula replacement. Intrinsic shape geometry, group children, identity and z-order updates remain unsupported. Nested IDs can be observed but cannot be updated or deleted. Updating an ActiveSelection member first discards the selection to avoid local-coordinate writes.
 
 ## Integration and errors
 

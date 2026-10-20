@@ -18,9 +18,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from './constants.js'
+import { hasValidShapeGeometry } from './shapeGeometry.js'
 import { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES as C } from '../BoardControllerError.js'
 
-const TYPE_KEYS = { rect: ['width', 'height', 'rx', 'ry'], circle: ['radius'],
+const TYPE_KEYS = { rect: ['width', 'height', 'rx', 'ry'], circle: ['radius'], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2', 'headLength', 'headWidth'],
   line: ['x1', 'y1', 'x2', 'y2'], path: ['path'], text: ['text', ...TEXT_KEYS],
   formula: ['latex'], group: ['objects'] }
 
@@ -65,6 +66,7 @@ export function validateCreateSpec(spec, ancestors = new Set()) {
     && (!Array.isArray(spec.strokeDashArray) || !Array.from(spec.strokeDashArray).every(Number.isFinite))) invalid(C.INVALID_SPEC)
   if ('mathboardInkMode' in spec && !['auto', 'fixed'].includes(spec.mathboardInkMode)) invalid(C.INVALID_SPEC)
   validateValues(spec, C.INVALID_SPEC)
+  if (!hasValidShapeGeometry(spec)) invalid(C.INVALID_SPEC)
   if (spec.type === 'text' && typeof spec.text !== 'string') invalid(C.INVALID_SPEC)
   if (spec.type === 'formula' && (typeof spec.latex !== 'string' || !spec.latex.trim())) invalid(C.INVALID_SPEC)
   if (spec.type === 'line' && !['x1', 'y1', 'x2', 'y2'].every((key) => Number.isFinite(spec[key]))) invalid(C.INVALID_SPEC)
@@ -81,8 +83,25 @@ export function validateObjectPatch(patch, kind) {
   if (!isPlainObject(patch)) invalid(C.INVALID_PATCH)
   const allowed = [...TRANSFORM_KEYS,
     ...(kind === 'text' ? ['text', ...TEXT_KEYS] : []),
-    ...(kind === 'formula' ? ['latex'] : []),
+    ...(kind === 'formula' ? ['latex', 'fill', 'stroke', 'opacity', 'mathboardInkMode'] : []),
+    ...(kind === 'group' ? ['opacity'] : []),
+    ...(['shape', 'path', 'text'].includes(kind) ? [...STYLE_KEYS, 'mathboardInkMode'] : []),
   ]
   if (Object.keys(patch).some((key) => !allowed.includes(key))) invalid(C.INVALID_PATCH)
   validateValues(patch, C.INVALID_PATCH)
+  for (const key of ['stroke', 'fill']) {
+    if (!(key in patch)) continue
+    const paint = patch[key]
+    if (paint !== null && typeof paint !== 'string') invalid(C.INVALID_PATCH)
+    if (kind === 'formula' && (typeof paint !== 'string' || !paint.trim()
+      || ['none', 'transparent'].includes(paint.trim().toLowerCase()))) invalid(C.INVALID_PATCH)
+  }
+  if ('opacity' in patch && (patch.opacity < 0 || patch.opacity > 1)) invalid(C.INVALID_PATCH)
+  if ('strokeWidth' in patch && patch.strokeWidth < 0) invalid(C.INVALID_PATCH)
+  if ('strokeDashArray' in patch && patch.strokeDashArray !== null
+    && (!Array.isArray(patch.strokeDashArray)
+      || !Array.from(patch.strokeDashArray).every((value) => Number.isFinite(value) && value >= 0))) invalid(C.INVALID_PATCH)
+  if ('strokeLineCap' in patch && !['butt', 'round', 'square'].includes(patch.strokeLineCap)) invalid(C.INVALID_PATCH)
+  if ('strokeLineJoin' in patch && !['bevel', 'round', 'miter'].includes(patch.strokeLineJoin)) invalid(C.INVALID_PATCH)
+  if ('mathboardInkMode' in patch && !['auto', 'fixed'].includes(patch.mathboardInkMode)) invalid(C.INVALID_PATCH)
 }

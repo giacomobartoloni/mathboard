@@ -36,12 +36,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
+import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
+import { extendedShapeInkPatch, isExtendedShape } from '../board/objects/shapeInk.js';
 import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
@@ -250,15 +252,31 @@ export default {
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
-        pushHistoryCommand: (command) => this._pushCommand(command),
+        pushHistoryCommand: (command) => {
+          // A notification can fail after _pushCommand mutates the log. Keep
+          // the history boundary atomic with the controller's canvas rollback.
+          const entries = this._history.slice();
+          const step = this._historyStep;
+          const tip = this._historyTipKind;
+          try {
+            this._pushCommand(command);
+          } catch (error) {
+            this._history.splice(0, this._history.length, ...entries);
+            this._historyStep = step;
+            this._historyTipKind = tip;
+            throw error;
+          }
+        },
         runWithoutHistory: (callback) => this._runWithoutHistory(callback),
         prepareCreatedObject: (object) => {
           this._applyBoardDefaultInkToObjectTree(object);
           applySelectionObjectChrome(object, selectionObjectChromeForBoard(this.boardTheme));
         },
         afterMutation: () => this.refreshSelectionPanel(),
+        prepareUpdatedObject: (object) => this._syncObjectAutoInk(object, this.boardThemeConfig),
         isMutationStable: () => this.sessionReady && this._isBoardInteractionStable(),
         getBoardId: () => this.getBoardId(),
+        getLayoutSafeArea: () => workspaceSafeArea(this.canvas, this.$el.closest("#app")),
       });
       return this._boardController;
     },
@@ -344,41 +362,36 @@ export default {
      * documents) are left untouched, and no history entry is pushed.
      * Walks into permanent Groups (and ActiveSelection) so stamp kits follow theme.
      */
+    _syncObjectAutoInk(object, config) {
+      if (!object || object.mathboardInkMode !== INK_MODE_AUTO) return;
+      if (this._boardObjectPolicy.isFormula(object)) {
+        this._formulaRenderer.syncInk(object, config);
+        return;
+      }
+      // Explicit no-paint surfaces stay transparent during update and replay.
+      const painted = (value) => value !== null && value !== undefined && value !== ""
+        && !["none", "transparent"].includes(String(value).trim().toLowerCase());
+      const extended = extendedShapeInkPatch(object, config.defaultInk);
+      if (extended) {
+        object.set(extended);
+      } else if (object.isType(...STROKE_INK_TYPES)) {
+        const patch = {};
+        if (painted(object.stroke)) patch.stroke = config.defaultInk;
+        if (object.isType("Circle") && painted(object.fill)) patch.fill = config.defaultInk;
+        object.set(patch);
+      } else if (object.isType(...FILL_INK_TYPES) && painted(object.fill)) {
+        object.set("fill", config.defaultInk);
+      }
+    },
     syncAutoInk(config) {
-      const apply = (obj) => {
-        if (!obj) return;
-
-        if (this._boardObjectPolicy.isFormula(obj)) {
-          if (obj.mathboardInkMode === INK_MODE_AUTO) {
-            this._formulaRenderer.syncInk(obj, config);
-          }
+      const apply = (object) => {
+        if (!object) return;
+        if (this._boardObjectPolicy.isBoardGroup(object)
+          || this._boardObjectPolicy.isActiveSelection(object)) {
+          object.getObjects().forEach(apply);
           return;
         }
-
-        if (
-          this._boardObjectPolicy.isBoardGroup(obj)
-          || this._boardObjectPolicy.isActiveSelection(obj)
-        ) {
-          const members = typeof obj.getObjects === "function" ? obj.getObjects() : [];
-          members.forEach(apply);
-          return;
-        }
-
-        if (obj.mathboardInkMode !== INK_MODE_AUTO) return;
-
-        if (obj.isType(...STROKE_INK_TYPES)) {
-          const patch = { stroke: config.defaultInk };
-          if (
-            obj.isType("Circle")
-            && obj.fill
-            && obj.fill !== "transparent"
-          ) {
-            patch.fill = config.defaultInk;
-          }
-          obj.set(patch);
-        } else if (obj.isType(...FILL_INK_TYPES)) {
-          obj.set("fill", config.defaultInk);
-        }
+        this._syncObjectAutoInk(object, config);
       };
       this.canvas.forEachObject(apply);
     },
@@ -388,6 +401,9 @@ export default {
     },
     _inkSnapshot(object) {
       if (!object || this._boardObjectPolicy.isFormula(object)) return null;
+      if (isExtendedShape(object)) {
+        return { stroke: object.stroke, fill: object.fill, mathboardInkMode: object.mathboardInkMode };
+      }
       if (object.isType(...STROKE_INK_TYPES)) {
         const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
         if (
@@ -832,6 +848,11 @@ export default {
 
         if (object.mathboardInkMode === INK_MODE_FIXED) return;
 
+        const extended = extendedShapeInkPatch(object, ink);
+        if (extended) {
+          object.set({ ...extended, mathboardInkMode: INK_MODE_AUTO });
+          return;
+        }
         if (object.isType?.(...STROKE_INK_TYPES)) {
           const patch = { stroke: ink, mathboardInkMode: INK_MODE_AUTO };
           if (
@@ -1709,6 +1730,9 @@ export default {
       this._suspendHistory = true;
       try {
         this._applyCommand(command, direction === 'undo' ? 'inverse' : 'forward');
+        // Retained instances and snapshots may contain an earlier theme's AUTO
+        // ink. Resolve presentation now, without adding a history command.
+        this.syncAutoInk(this.boardThemeConfig);
         this._historyStep = direction === 'undo' ? index - 1 : index;
       } finally {
         this._suspendHistory = false;

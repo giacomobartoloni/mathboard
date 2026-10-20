@@ -83,12 +83,15 @@ export function clearStampFromLocation(loc = typeof window !== 'undefined' ? win
  * Build a deep-link URL that bootstraps a stamp on load.
  * @param {string} payload base64url stamp string
  * @param {{ origin?: string, pathname?: string }} [loc]
+ * @param {{ desktop?: boolean }} [options]
  */
-export function buildStampShareUrl(payload, loc = typeof window !== 'undefined' ? window.location : null) {
+export function buildStampShareUrl(payload, loc = typeof window !== 'undefined' ? window.location : null, { desktop = false } = {}) {
   if (!payload || typeof payload !== 'string') {
     throw new Error('Stamp payload is required.')
   }
-  const origin = loc?.origin || ''
-  const pathname = loc?.pathname || '/'
+  // Tauri's internal origin is not a portable link. Desktop shares always
+  // target the public web app; browser shares retain the current origin.
+  const origin = desktop ? 'https://mathboard.app' : (loc?.origin || '')
+  const pathname = desktop ? '/' : (loc?.pathname || '/')
   return `${origin}${pathname}#s=${payload}`
 }

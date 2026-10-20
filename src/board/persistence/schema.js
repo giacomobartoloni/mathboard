@@ -17,6 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { hasValidShapeGeometry } from '../objects/shapeGeometry.js'
+
 import { BOARD_OBJECT_TYPES, STYLE_KEYS, TRANSFORM_KEYS } from '../objects/constants.js'
 
 export const BOARD_DOCUMENT_FORMAT = 'mathboard-board'
@@ -98,7 +100,11 @@ function assertOptionalBoolean(node, key, path) {
 function validateCommonProps(node, path) {
   TRANSFORM_KEYS.forEach((key) => {
     if (key === 'originX' || key === 'originY') {
-      assertOptionalString(node, key, path)
+      const origin = node[key]
+      const names = key === 'originX' ? ['left', 'center', 'right'] : ['top', 'center', 'bottom']
+      if (origin !== undefined && origin !== null && !names.includes(origin) && !Number.isFinite(origin)) {
+        throw new BoardDocumentError(BOARD_DOCUMENT_ERROR_CODES.INVALID, `Invalid origin at ${path}.${key}.`)
+      }
       return
     }
     if (key === 'flipX' || key === 'flipY') {
@@ -172,6 +178,7 @@ function validateNode(node, path, depth, seenIds, counters) {
   }
 
   validateCommonProps(node, path)
+  if (!hasValidShapeGeometry(node)) throw new BoardDocumentError(BOARD_DOCUMENT_ERROR_CODES.INVALID, `Invalid shape geometry at ${path}.`)
 
   switch (node.type) {
     case 'rect':
@@ -179,6 +186,10 @@ function validateNode(node, path, depth, seenIds, counters) {
       assertOptionalFiniteNumber(node, 'height', path)
       assertOptionalFiniteNumber(node, 'rx', path)
       assertOptionalFiniteNumber(node, 'ry', path)
+      break
+    case 'arrow':
+    case 'polygon':
+    case 'ellipse':
       break
     case 'circle':
       assertOptionalFiniteNumber(node, 'radius', path)

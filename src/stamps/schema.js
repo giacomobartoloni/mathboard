@@ -17,6 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { hasValidShapeGeometry } from '../board/objects/shapeGeometry.js'
+
 /** Stamp transfer schema version. Bump when the payload shape changes. */
 export const STAMP_VERSION = 1
 
@@ -26,6 +28,9 @@ export const STAMP_MAX_BYTES = 256 * 1024
 export const STAMP_NODE_TYPES = Object.freeze([
   'rect',
   'circle',
+  'ellipse',
+  'polygon',
+  'arrow',
   'line',
   'path',
   'text',
@@ -126,7 +131,11 @@ function assertOptionalBoolean(node, key, path) {
 function validateCommonProps(node, path) {
   TRANSFORM_KEYS.forEach((key) => {
     if (key === 'originX' || key === 'originY') {
-      assertOptionalString(node, key, path)
+      const origin = node[key]
+      const names = key === 'originX' ? ['left', 'center', 'right'] : ['top', 'center', 'bottom']
+      if (origin !== undefined && origin !== null && !names.includes(origin) && !Number.isFinite(origin)) {
+        throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, `Invalid origin at ${path}.${key}.`)
+      }
       return
     }
     if (key === 'flipX' || key === 'flipY') {
@@ -168,6 +177,7 @@ function validateNode(node, path, depth) {
   }
 
   validateCommonProps(node, path)
+  if (!hasValidShapeGeometry(node)) throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, `Invalid shape geometry at ${path}.`)
 
   switch (node.type) {
     case 'rect':
@@ -175,6 +185,10 @@ function validateNode(node, path, depth) {
       assertOptionalFiniteNumber(node, 'height', path)
       assertOptionalFiniteNumber(node, 'rx', path)
       assertOptionalFiniteNumber(node, 'ry', path)
+      break
+    case 'arrow':
+    case 'polygon':
+    case 'ellipse':
       break
     case 'circle':
       assertOptionalFiniteNumber(node, 'radius', path)

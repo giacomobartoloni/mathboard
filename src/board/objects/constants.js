@@ -20,6 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 export const BOARD_OBJECT_TYPES = Object.freeze([
   'rect',
   'circle',
+  'ellipse',
+  'polygon',
+  'arrow',
   'line',
   'path',
   'text',

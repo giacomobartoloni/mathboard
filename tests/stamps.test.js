@@ -96,3 +96,20 @@ test('buildStampShareUrl puts the payload in the hash', () => {
     'https://mathboard.app/#s=abc123',
   )
 })
+
+test('buildStampShareUrl uses the public app for desktop shares', () => {
+  const url = buildStampShareUrl(
+    'abc123',
+    { origin: 'tauri://localhost', pathname: '/internal' },
+    { desktop: true },
+  )
+  assert.equal(url, 'https://mathboard.app/#s=abc123')
+  assert.equal(readStampFromLocation(new URL(url)), 'abc123')
+})
+
+test('buildStampShareUrl preserves the web development origin', () => {
+  assert.equal(
+    buildStampShareUrl('abc123', { origin: 'http://localhost:5173', pathname: '/preview' }),
+    'http://localhost:5173/preview#s=abc123',
+  )
+})

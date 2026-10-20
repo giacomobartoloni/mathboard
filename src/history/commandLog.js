@@ -18,6 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { util } from "fabric";
+import { STYLE_KEYS } from "../board/objects/constants.js";
+import { BoardObjectPolicy } from "../board/BoardObjectPolicy.js";
+
+const snapshotPolicy = new BoardObjectPolicy();
 
 export const HISTORY_LIMIT = 50;
 
@@ -97,6 +101,7 @@ function keysFor(object) {
 }
 
 function copyValue(key, value) {
+  if (key === "strokeDashArray") return value ? value.slice() : value;
   if (key === "styles") {
     return value ? JSON.parse(JSON.stringify(value)) : {};
   }
@@ -118,7 +123,10 @@ function pickKeys(object, keys) {
  * and flip of the gesture target, and its origin is the control corner.
  */
 export function snapshotObject(object) {
-  const keys = keysFor(object);
+  const kind = snapshotPolicy.kindOf(object);
+  const styleKeys = ["shape", "path", "text"].includes(kind)
+    ? [...STYLE_KEYS, "mathboardInkMode"] : ["opacity"];
+  const keys = [...keysFor(object), ...styleKeys];
   const group = object.group;
   if (!isActiveSelection(group)) {
     return pickKeys(object, keys);
