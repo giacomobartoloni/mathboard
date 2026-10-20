@@ -187,7 +187,7 @@ const specs = [
   { type: 'formula', latex: '(x+3)^2=16', left: 300, top: 340 },
   { type: 'ellipse', rx: 55, ry: 35, left: 700, top: 200, fill: null },
   { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 110, y: 0 }, { x: 55, y: 90 }],
-    left: 750, top: 350, fill: null },
+    left: 750, top: 350, fill: null, stroke: '#e8590c', strokeWidth: 4, mathboardInkMode: 'fixed' },
   { type: 'arrow', x1: 690, y1: 540, x2: 940, y2: 540,
     headLength: 20, headWidth: 14 },
 ]
