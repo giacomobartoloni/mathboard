@@ -30,6 +30,8 @@ npm run assert:e2e-hook  # fail if dist-e2e/ is missing the E2E canary
 npm run generate:icons # regenerate public/icon-192x192.png and public/icon-512x512.png from tools/icon-template.html
 ```
 
+For the combined local Programmable Board acceptance/release gate (F014–F020 and F033), follow [docs/programmable-board-acceptance-runbook.md](docs/programmable-board-acceptance-runbook.md). Record actual pass/fail evidence; green CI does not replace human visual review or deployment verification.
+
 ## Architecture
 
 - **Entrypoint**: `src/main.js` → `mountMathBoard()` in `src/app-bootstrap.js` (composition root). E2E entry `e2e/main.js` mounts the same bootstrap then installs the board hook.
