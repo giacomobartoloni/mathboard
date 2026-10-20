@@ -1,8 +1,9 @@
 # MathBoard
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
-# Produces unsigned, unpublished desktop release candidates. Signing and
-# notarization must be integrated before a draft is published publicly.
+# Produces unsigned desktop release candidates in a GitHub Draft Release.
+# An owner may publish a clearly labeled unsigned public beta only after the
+# platform acceptance gates pass. A signed/notarized release is a later goal.
 name: Desktop Release Candidate
 
 on:
@@ -11,6 +12,8 @@ on:
     paths:
       - '.github/workflows/release-desktop.yml'
       - 'docs/desktop/RELEASE.md'
+      - 'docs/desktop/UNSIGNED_BETA.md'
+      - '.github/FUNDING.yml'
   push:
     tags:
       - 'desktop-v*'
@@ -135,9 +138,32 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: MathBoard Desktop ${{ github.ref_name }}
           releaseBody: |
-            Unpublished desktop release candidate; installers are not yet
-            Developer ID/notarized or Authenticode-signed.
-            Do not publish until the platform signing and GUI acceptance gates pass.
+            ## MathBoard Desktop — Unsigned Public Beta
+
+            **Free, open-source prerelease.** These installers are not signed
+            with an Apple Developer ID or Windows Authenticode certificate, and
+            the macOS DMGs have not been notarized by Apple. macOS ad-hoc signing
+            is not equivalent to signing by an identified developer.
+
+            **Important:** Gatekeeper, SmartScreen, Smart App Control, or
+            organization policies may warn about or block installation.
+            Do not disable system-wide security protections.
+
+            Download only from this official GitHub repository, and check
+            files against the attached SHA256SUMS.txt before installation.
+            Checksums help detect changes but do not establish publisher
+            identity or replace code signing.
+
+            Installation and security guidance:
+            https://github.com/giacomobartoloni/mathboard/blob/main/docs/desktop/UNSIGNED_BETA.md
+
+            Please report issues:
+            https://github.com/giacomobartoloni/mathboard/issues
+
+            **Support MathBoard:** Optional donations help fund Apple
+            notarization and Windows signing for future releases.
+            The software remains free; no donation is required.
+            https://www.buymeacoffee.com/gbartoloni
           releaseDraft: true
           prerelease: true
           uploadUpdaterJson: false

@@ -1,7 +1,10 @@
 # Desktop release
 
-This document describes release considerations, not an automated signed-release
-pipeline. The desktop CI workflow only verifies that the application compiles.
+This document covers a manual-review GitHub release pipeline. The initial release
+format may be a clearly labeled **unsigned public beta**, after all target-platform
+acceptance tests pass. Developer ID / Authenticode signing and Apple notarization
+are future improvements, not prerequisites for an explicitly unsigned beta.
+The regular desktop CI workflow only verifies native compilation.
 
 ## Version and identity
 
@@ -51,14 +54,34 @@ The desktop CI command uses `--no-bundle`; it proves that the native host compil
 does not run the bundled WebView or cover CSP, opener permissions, fullscreen, or
 offline GUI behavior. Do not ship installers based only on a passing CI run.
 
-## Signing and trust
+## Signing, trust, and unsigned beta policy
 
-- **macOS:** use an Apple Developer ID Application certificate and notarize the
-  distributed app. Staple the notarization result before publication.
-- **Windows:** use an appropriate code-signing certificate. Unsigned or newly signed
-  binaries may trigger Microsoft Defender SmartScreen reputation warnings.
-- **Linux:** publish cryptographic hashes and retain build provenance. Package-repository
-  signing is separate from Tauri bundling.
+**An unsigned public beta is permitted** as an explicitly labeled GitHub
+prerelease, provided the complete native acceptance matrix, checksum generation,
+platform install checks, security disclosures and manual owner approval all pass.
+Do **not** present this as a signed or notarized production/stable release.
+
+- **macOS:** initial DMGs use ad-hoc signing, **not** Apple Developer ID; they are
+  not notarized. Gatekeeper may block launch. Only users who trust the source
+  and have verified the downloaded asset should consider macOS's per-app
+  **System Settings > Privacy & Security > Open Anyway** exception.
+  Never recommend disabling Gatekeeper globally or stripping quarantine metadata.
+- **Windows:** initial NSIS/ MSI installers are unsigned. Defender SmartScreen,
+  Smart App Control, or organization policy may warn or block execution.
+  Do not recommend disabling antivirus, SmartScreen or security policy.
+- **Linux:** initial AppImage/DEB bundles are not signed with a package-repository
+  identity. Provide hashes and test the actual downloaded packages.
+
+**SHA-256 hashes are an integrity check, not an independent authenticity guarantee**
+when the binaries and the manifest come from the same unsigned GitHub Release.
+Direct users only to the project's official GitHub repository and prefer
+documenting the exact Git commit and release workflow run.
+
+For a future **signed release**, use an Apple Developer ID Application
+certificate, notarize and staple the macOS app, and configure a Windows
+code-signing certificate or a suitable managed signing service. These steps
+remain recommended for reducing installation friction and improving publisher
+verification. See [Unsigned desktop beta](UNSIGNED_BETA.md) for user guidance.
 
 Store certificates, passwords, API keys, and notarization credentials only in GitHub
 Secrets (or an equivalent release secret store). Never commit them to the repository,
@@ -109,27 +132,42 @@ git push origin desktop-v1.8.0-rc.1
 ```
 
 The tag push triggers a billable GitHub Actions matrix and creates a **draft**, not
-a published GitHub Release. Pushing a tag must never be used to bypass approval,
-checks, platform acceptance, or code signing.
+a published GitHub Release. Pushing a tag must never bypass owner approval,
+automated checks or platform acceptance. Signing is optional **only for an
+explicitly labeled unsigned public beta**.
 
 ### Review and publish
 
 - Download each installer from the draft and run the platform-specific native
   `docs/desktop/TEST_MATRIX.md`, including a clean-install/offline smoke test,
   CSP, external links, and persisted board access.
-- Confirm the expected signing/notarization identities and verify package
-  signatures on clean target machines. **The initial workflow has no signing
-  secrets and produces unsigned/not-notarized release candidates.** The macOS
-  build uses ad-hoc signing only; it is **not** Developer ID signing.
+- Distinguish two deliberate publication paths:
+  - **Unsigned public beta:** verify on clean machines that the downloaded
+    unsigned installers behave as documented; disclose the lack of Developer ID,
+    notarization and Authenticode in the release title/body and linked
+    [installation guide](UNSIGNED_BETA.md). Publish **as a prerelease** only.
+  - **Future signed release:** first integrate and verify Apple Developer ID
+    signing/notarization and Windows Authenticode signing, then rerun acceptance.
 - Match each downloaded package against `SHA256SUMS.txt` (for example,
   `shasum -a 256 <filename>` on macOS). Record the exact commit, platform,
-  WebView version, and test evidence.
-- Before any public distribution, extend the release workflow with Apple
-  Developer ID signing/notarization and Windows Authenticode signing; rerun
-  a full candidate. Add release notes and validate all uploaded assets.
+  WebView version and test evidence. A checksum alone does not establish
+  the identity of the publisher.
+- Review the staged GitHub Release notes, asset filenames, donation link and
+  prominent unsigned warnings. Include the known native limitations and
+  record which platforms were actually tested. A failed or untested platform
+  cannot be presented as verified.
 - Only after explicit owner approval, use GitHub **Releases > Edit > Publish
-  release**. Mark the release as a prerelease or stable release as appropriate.
+  release**. The initial unsigned public beta stays marked as a **prerelease**.
   The workflow itself must **never** automatically publish a draft.
+
+### Community funding
+
+MathBoard remains free and open source. Donations to
+[Buy Me a Coffee](https://www.buymeacoffee.com/gbartoloni) are voluntary and
+help cover Apple Developer membership/notarization and Windows code-signing
+expenses for future releases. No donation is needed to download or use MathBoard.
+GitHub's `.github/FUNDING.yml` advertises the same optional funding link.
+Do not represent a donation as an installer security guarantee.
 
 ### Signing setup prerequisites
 
