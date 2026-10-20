@@ -29,7 +29,9 @@ export function acceptsSchema(schema, value, root = schema) {
     if (actual === 'number' && !Number.isFinite(value)) return false
   }
   if (typeof value === 'number' && ((schema.minimum !== undefined && value < schema.minimum)
-    || (schema.maximum !== undefined && value > schema.maximum))) return false
+    || (schema.maximum !== undefined && value > schema.maximum)
+    || (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum)
+    || (schema.exclusiveMaximum !== undefined && value >= schema.exclusiveMaximum))) return false
   if (typeof value === 'string' && (value.length < (schema.minLength || 0) || (schema.pattern && !new RegExp(schema.pattern).test(value)))) return false
   if (Array.isArray(value) && (value.length < (schema.minItems || 0)
     || (schema.maxItems !== undefined && value.length > schema.maxItems)

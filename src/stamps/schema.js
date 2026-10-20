@@ -30,6 +30,7 @@ export const STAMP_NODE_TYPES = Object.freeze([
   'circle',
   'ellipse',
   'polygon',
+  'arrow',
   'line',
   'path',
   'text',
@@ -185,6 +186,7 @@ function validateNode(node, path, depth) {
       assertOptionalFiniteNumber(node, 'rx', path)
       assertOptionalFiniteNumber(node, 'ry', path)
       break
+    case 'arrow':
     case 'polygon':
     case 'ellipse':
       break

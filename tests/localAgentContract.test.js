@@ -42,7 +42,7 @@ test('discovery is detached, deterministic and exposes only executable baseline 
   help.objectTypes.push('arrow')
   assert.deepEqual(getLocalAgentHelp(), getLocalAgentHelp())
   assert.equal(getLocalAgentHelp().methods[0].paramsSchema.properties.injected, undefined)
-  assert.ok(!getLocalAgentHelp().objectTypes.includes('arrow'))
+  assert.ok(getLocalAgentHelp().objectTypes.includes('arrow'))
   for (const name of ['events', 'result', 'constructor', 'toString', '__proto__']) {
     assert.equal(hasLocalAgentMethod(name), false, name)
     assert.throws(() => executeLocalAgentCommand({}, { method: name }), /Unsupported local agent method/)
@@ -109,6 +109,11 @@ test('representative accepted and rejected creation/patch inputs agree with publ
     { type: 'rect', originX: 'top' }, { type: 'rect', left: '20' },
     { type: 'rect', strokeDashArray: ['bad'] }, { type: 'circle', bogus: 1 },
     { type: 'arrow', x1: 1, y1: 1, x2: 2, y2: 2 },
+    { type: 'arrow', x1: -4, y1: 3, x2: 5, y2: 10, headLength: 0.1 },
+    { type: 'arrow', x1: 1, y1: 1, x2: 2 },
+    { type: 'arrow', x1: 1, y1: 1, x2: 2, y2: 2, headLength: 0 },
+    { type: 'arrow', x1: 1, y1: 1, x2: 2, y2: 2, headWidth: -1 },
+    { type: 'arrow', x1: 1, y1: 1, x2: 2, y2: 2, headWidth: null },
     { type: 'ellipse', rx: 35, ry: 12, left: 100, top: 50 },
     { type: 'ellipse', rx: -1, ry: 12 },
     { type: 'ellipse', rx: 12 },

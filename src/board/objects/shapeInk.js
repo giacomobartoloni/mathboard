@@ -17,9 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { BoardObjectPolicy } from '../BoardObjectPolicy.js'
+
+const policy = new BoardObjectPolicy()
+
 /** New semantic shapes share one painted-surface AUTO policy. */
 export function isExtendedShape(object) {
-  return Boolean(object?.isType?.('Ellipse', 'Polygon'))
+  return policy.isArrow(object) || Boolean(object?.isType?.('Ellipse', 'Polygon'))
 }
 
 export function hasPaint(value) {
