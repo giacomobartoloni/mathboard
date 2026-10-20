@@ -90,10 +90,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><font-awesome-icon :icon="['fas', 'code-branch']" /> <strong>Open Source</strong></p>
           <p>MathBoard is licensed under the <strong>GNU AGPL v3</strong>. The source code is freely available on GitHub. Contributions, issues, and suggestions are welcome!</p>
           <div class="contact-links">
-            <a href="/resources/">
+            <a href="/resources/" @click="onSiteLink($event, '/resources/')">
               Resources &amp; shortcuts
             </a>
-            <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer">
+            <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard')">
               <font-awesome-icon :icon="['fab', 'github']" /> GitHub Repository
             </a>
           </div>
@@ -103,23 +103,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><strong>Get in touch</strong></p>
           <p>Send your feedback, suggestions, or bug reports:</p>
           <div class="contact-links">
-            <a href="mailto:gbartoloni@proton.me">Email me</a>
-            <a href="https://www.linkedin.com/in/giacomobartoloni/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+            <a href="mailto:gbartoloni@proton.me" @click.prevent="onExternalLink('mailto:gbartoloni@proton.me')">Email me</a>
+            <a href="https://www.linkedin.com/in/giacomobartoloni/" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://www.linkedin.com/in/giacomobartoloni/')">LinkedIn</a>
           </div>
         </div>
 
         <div class="coffee-section">
           <p>If you find MathBoard useful, consider supporting the project:</p>
-          <a href="https://www.buymeacoffee.com/gbartoloni" target="_blank" rel="noopener noreferrer" class="coffee-link">
+          <a href="https://www.buymeacoffee.com/gbartoloni" target="_blank" rel="noopener noreferrer" class="coffee-link" @click.prevent="onExternalLink('https://www.buymeacoffee.com/gbartoloni')">
             <img src="../assets/bmc.png" alt="Buy Me A Coffee" />
             <span>Buy me a coffee</span>
           </a>
         </div>
 
         <div class="legal-links">
-          <a href="/resources/">Resources</a>
+          <a href="/resources/" @click="onSiteLink($event, '/resources/')">Resources</a>
           <span class="separator" aria-hidden="true">·</span>
-          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" @click="onSiteLink($event, '/privacy-policy.html')">Privacy Policy</a>
         </div>
       </div>
     </div>
@@ -129,6 +129,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { ref } from 'vue'
 import packageInfo from '../../package.json'
+import { openExternalUrl } from '../platform/externalLinks'
+import { publicSitePageUrl } from '../platform/siteLinks'
+import { isDesktopRuntime } from '../platform/runtime'
 import { SHORTCUT_HELP } from '../config/shortcuts.js'
 import { trackEvent } from '../analytics'
 import { ANALYTICS_EVENTS } from '../analytics/events.js'
@@ -140,6 +143,22 @@ export default {
     const shortcutsExpanded = ref(false)
     const version = packageInfo.version
     const shortcutHelp = SHORTCUT_HELP
+    const desktopRuntime = isDesktopRuntime()
+
+    const onExternalLink = async (url) => {
+      try {
+        await openExternalUrl(url)
+      } catch (error) {
+        console.warn('Could not open external URL:', error)
+      }
+    }
+
+    // Keep same-origin navigation on the web; desktop pages live on the public site.
+    const onSiteLink = (event, path) => {
+      if (!desktopRuntime) return
+      event.preventDefault()
+      onExternalLink(publicSitePageUrl(path))
+    }
 
     const openAbout = () => {
       showAbout.value = true
@@ -152,6 +171,8 @@ export default {
       shortcutsExpanded,
       version,
       shortcutHelp,
+      onExternalLink,
+      onSiteLink,
       openAbout,
     }
   }
