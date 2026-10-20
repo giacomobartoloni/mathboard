@@ -70,6 +70,89 @@ or an online download. A fixed WebView2 runtime supports offline and version-pin
 installations but substantially increases artifact size and transfers runtime patching
 responsibility to the release process.
 
+## GitHub draft-release pipeline
+
+`.github/workflows/release-desktop.yml` is a separate, tag-triggered release-candidate
+pipeline. A pull request only runs the source verification job (no package upload).
+No installer is uploaded until a matching tag is pushed; no release is made public
+by the workflow.
+
+### Create a candidate (manual owner approval required)
+
+1. Merge the Tauri desktop PR into `develop`, then integrate the approved desktop
+   version into `main`. The workflow itself may be merged later and is deliberately
+   developed as a separate, stacked PR.
+2. Confirm `main` has green CI and the committed `package.json`,
+   `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock` versions agree.
+3. On the reviewed, immutable release commit reachable from `main`, create and
+   push a unique tag in the form `desktop-v1.8.0-rc.1` (or `desktop-v1.8.0`).
+   The version part must equal the package and Cargo versions. Never reuse a tag.
+4. Check the `Desktop Release Candidate` workflow: the source verification job
+   first checks the tag syntax, version consistency, main ancestry, lint, tests,
+   and production build. Packaging is not allowed if verification fails.
+5. On four native runners, Tauri builds macOS Apple Silicon/Intel DMGs, Windows
+   x64 NSIS and MSI installers, and Linux x64 .deb and AppImage packages. The
+   action attaches them to a **Draft Release**, marked as a prerelease.
+6. After all platform builds pass, the checksum job downloads the draft assets,
+   verifies the five expected artifact categories (including two macOS DMGs),
+   and uploads `SHA256SUMS.txt`.
+
+Example tagging commands (run only after approval and checkout of the verified
+release commit on `main`):
+
+```sh
+git fetch origin
+git switch main
+git pull --ff-only origin main
+git tag desktop-v1.8.0-rc.1
+git push origin desktop-v1.8.0-rc.1
+```
+
+The tag push triggers a billable GitHub Actions matrix and creates a **draft**, not
+a published GitHub Release. Pushing a tag must never be used to bypass approval,
+checks, platform acceptance, or code signing.
+
+### Review and publish
+
+- Download each installer from the draft and run the platform-specific native
+  `docs/desktop/TEST_MATRIX.md`, including a clean-install/offline smoke test,
+  CSP, external links, and persisted board access.
+- Confirm the expected signing/notarization identities and verify package
+  signatures on clean target machines. **The initial workflow has no signing
+  secrets and produces unsigned/not-notarized release candidates.** The macOS
+  build uses ad-hoc signing only; it is **not** Developer ID signing.
+- Match each downloaded package against `SHA256SUMS.txt` (for example,
+  `shasum -a 256 <filename>` on macOS). Record the exact commit, platform,
+  WebView version, and test evidence.
+- Before any public distribution, extend the release workflow with Apple
+  Developer ID signing/notarization and Windows Authenticode signing; rerun
+  a full candidate. Add release notes and validate all uploaded assets.
+- Only after explicit owner approval, use GitHub **Releases > Edit > Publish
+  release**. Mark the release as a prerelease or stable release as appropriate.
+  The workflow itself must **never** automatically publish a draft.
+
+### Signing setup prerequisites
+
+For macOS, enroll in the Apple Developer Program and create a Developer ID
+Application certificate. Export its private-key certificate as a password-protected
+P12 for CI; keep the base64-encoded P12 and password in GitHub Secrets. Configure
+a disposable keychain for the macOS runner and use App Store Connect API credentials
+(or an Apple ID app-specific password) for notarization/stapling. Plan the signing
+identity's long-term ownership before releasing `app.mathboard.desktop`.
+
+For Windows, decide on a CA-issued OV code-signing certificate with secure private
+key custody, Microsoft Artifact Signing if eligible for the account type and
+jurisdiction, or Microsoft Store distribution. A signature alone does not guarantee
+immediate Microsoft SmartScreen reputation. Tauri supports a custom
+`bundle.windows.signCommand` for managed signing providers; select and verify
+one before adding secrets. Do not add placeholder credentials or public PFX/P12
+files to this repository.
+
+Relevant upstream references:
+- https://v2.tauri.app/distribute/pipelines/github/
+- https://v2.tauri.app/distribute/sign/macos/
+- https://v2.tauri.app/distribute/sign/windows/
+
 ## Current release boundary
 
 `.github/workflows/desktop.yml` runs lint, web build, and an unbundled native compile on
