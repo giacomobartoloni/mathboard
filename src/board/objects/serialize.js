@@ -147,6 +147,10 @@ export function readSemanticBoardObject(object, options = {}) {
     })
   }
 
+  if (policy.isArrow(object)) {
+    return withId({ type: 'arrow', ...pickDefined(object, ['x1', 'y1', 'x2', 'y2', 'headLength', 'headWidth']), ...commonProps(object) })
+  }
+
   if (isType(object, 'Group', 'group')) {
     const children = typeof object.getObjects === 'function' ? object.getObjects() : []
     return withId({
@@ -173,6 +177,14 @@ export function readSemanticBoardObject(object, options = {}) {
       radius: object.radius,
       ...commonProps(object),
     })
+  }
+
+  if (isType(object, 'Polygon')) {
+    return withId({ type: 'polygon', points: object.points.map(({ x, y }) => ({ x, y })), ...commonProps(object) })
+  }
+
+  if (isType(object, 'Ellipse')) {
+    return withId({ type: 'ellipse', rx: object.rx, ry: object.ry, ...commonProps(object) })
   }
 
   if (isType(object, 'Line', 'line')) {

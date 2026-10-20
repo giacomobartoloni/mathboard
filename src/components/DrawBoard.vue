@@ -36,12 +36,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
+import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
+import { extendedShapeInkPatch, isExtendedShape } from '../board/objects/shapeInk.js';
 import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
@@ -274,6 +276,7 @@ export default {
         prepareUpdatedObject: (object) => this._syncObjectAutoInk(object, this.boardThemeConfig),
         isMutationStable: () => this.sessionReady && this._isBoardInteractionStable(),
         getBoardId: () => this.getBoardId(),
+        getLayoutSafeArea: () => workspaceSafeArea(this.canvas, this.$el.closest("#app")),
       });
       return this._boardController;
     },
@@ -365,17 +368,20 @@ export default {
         this._formulaRenderer.syncInk(object, config);
         return;
       }
-      // Explicit no-paint surfaces stay transparent even in AUTO mode.
-      const painted = (paint) => paint !== null && paint !== undefined && paint !== ""
-        && !["none", "transparent"].includes(String(paint).trim().toLowerCase());
-      const patch = {};
-      if (object.isType(...STROKE_INK_TYPES)) {
+      // Explicit no-paint surfaces stay transparent during update and replay.
+      const painted = (value) => value !== null && value !== undefined && value !== ""
+        && !["none", "transparent"].includes(String(value).trim().toLowerCase());
+      const extended = extendedShapeInkPatch(object, config.defaultInk);
+      if (extended) {
+        object.set(extended);
+      } else if (object.isType(...STROKE_INK_TYPES)) {
+        const patch = {};
         if (painted(object.stroke)) patch.stroke = config.defaultInk;
         if (object.isType("Circle") && painted(object.fill)) patch.fill = config.defaultInk;
+        object.set(patch);
       } else if (object.isType(...FILL_INK_TYPES) && painted(object.fill)) {
-        patch.fill = config.defaultInk;
+        object.set("fill", config.defaultInk);
       }
-      object.set(patch);
     },
     syncAutoInk(config) {
       const apply = (object) => {
@@ -395,6 +401,9 @@ export default {
     },
     _inkSnapshot(object) {
       if (!object || this._boardObjectPolicy.isFormula(object)) return null;
+      if (isExtendedShape(object)) {
+        return { stroke: object.stroke, fill: object.fill, mathboardInkMode: object.mathboardInkMode };
+      }
       if (object.isType(...STROKE_INK_TYPES)) {
         const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
         if (
@@ -839,6 +848,11 @@ export default {
 
         if (object.mathboardInkMode === INK_MODE_FIXED) return;
 
+        const extended = extendedShapeInkPatch(object, ink);
+        if (extended) {
+          object.set({ ...extended, mathboardInkMode: INK_MODE_AUTO });
+          return;
+        }
         if (object.isType?.(...STROKE_INK_TYPES)) {
           const patch = { stroke: ink, mathboardInkMode: INK_MODE_AUTO };
           if (

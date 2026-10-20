@@ -17,6 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { extendedShapeInkPatch, hasPaint, isExtendedShape } from '../board/objects/shapeInk.js'
 import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
 import { INK_MODE_AUTO, INK_MODE_FIXED } from './themes.js'
 
@@ -94,7 +95,8 @@ export function paletteColorFromObject(object) {
   if (boardObjectPolicy.isFormula(object)) return undefined
 
   let raw = null
-  if (isInkType(object, STROKE_INK_TYPES)) raw = object.stroke
+  if (isExtendedShape(object)) raw = hasPaint(object.stroke) ? object.stroke : object.fill
+  else if (isInkType(object, STROKE_INK_TYPES)) raw = object.stroke
   else if (isInkType(object, FILL_INK_TYPES)) raw = object.fill
   else return undefined
 
@@ -131,6 +133,8 @@ function inkPatchForType(object, color, inkMode) {
   const normalized = normalizeHexColor(color)
   if (!object || typeof object !== 'object' || !normalized) return null
   if (boardObjectPolicy.isFormula(object)) return null
+  const extended = extendedShapeInkPatch(object, normalized)
+  if (extended) return { ...extended, mathboardInkMode: inkMode }
   if (isInkType(object, STROKE_INK_TYPES)) {
     const patch = { stroke: normalized, mathboardInkMode: inkMode }
     // Filled circles (e.g. stamp dots) keep fill in sync with stroke ink.

@@ -22,6 +22,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
 import { localAgentModePlugin } from '../tools/vite/local-agent-mode-plugin.mjs'
+import { getLocalAgentHelp } from '../dev-agent/command-contract.js'
 
 test('HTTP relay accepts documented methods and rejects unsupported methods before browser delivery', async (t) => {
   let middleware
@@ -30,8 +31,14 @@ test('HTTP relay accepts documented methods and rejects unsupported methods befo
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   t.after(() => new Promise((resolve) => server.close(resolve)))
-  const url = `http://127.0.0.1:${server.address().port}/__mathboard_agent/command`
-  for (const method of ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear']) {
+  const base = `http://127.0.0.1:${server.address().port}/__mathboard_agent/`
+  const url = base + 'command'
+  const response = await fetch(base + 'help')
+  assert.equal(response.status, 200)
+  const help = await response.json()
+  assert.deepEqual(help.methods.map(item => item.method), getLocalAgentHelp().methods.map(item => item.method))
+  assert.equal(help.methods.find(item => item.method === 'group')?.mutatesBoard, true)
+  for (const { method } of help.methods) {
     const response = await fetch(url, { method: 'POST', body: JSON.stringify({ method }) })
     assert.equal(response.status, 503)
     assert.equal((await response.json()).error.code, 'board_unavailable')

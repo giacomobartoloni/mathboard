@@ -97,7 +97,7 @@ for (const type of ['rect', 'text', 'formula']) {
   })
 }
 
-test('styles remain undoable and persistent; formula canonical ink agrees with painted vectors', async ({ page, request }) => {
+test('styles remain undoable and persistent; formula canonical ink agrees with painted vectors', async ({ page, request }, testInfo) => {
   await ready(page, request)
   const nodes = await command(request, 'createMany', { specs: [
     { type: 'rect', left: 300, top: 210, width: 150, height: 100, fill: null },
@@ -112,10 +112,10 @@ test('styles remain undoable and persistent; formula canonical ink agrees with p
   expect((await inspect(page)).history.length).toBe(beforeFormula.history.length + 1)
   expect((await observe(request)).objects[2]).toMatchObject({ fill: '#c92a2a', opacity: 0.8, mathboardInkMode: 'fixed' })
   expect(new Set(leafPaints((await inspect(page)).objects[2]))).toEqual(new Set(['#c92a2a']))
-  await page.screenshot({ path: '/private/tmp/f020-styles-light.png' })
+  await page.screenshot({ path: testInfo.outputPath('f020-styles-light.png') })
   await page.getByRole('button', { name: /Theme:/ }).click()
   await expect.poll(async () => (await observe(request)).objects[1].fill).toBe('#f5f5f5')
-  await page.screenshot({ path: '/private/tmp/f020-styles-dark.png' })
+  await page.screenshot({ path: testInfo.outputPath('f020-styles-dark.png') })
   await inspect(page, 'flush')
   await page.reload()
   await expect.poll(async () => (await observe(request)).objects.length).toBe(3)
@@ -124,7 +124,7 @@ test('styles remain undoable and persistent; formula canonical ink agrees with p
   await command(request, 'update', { id: nodes[2].id, patch: { mathboardInkMode: 'auto' } })
   expect((await observe(request)).objects[2].fill).toBe('#f5f5f5')
   expect(new Set(leafPaints((await inspect(page)).objects[2]))).toEqual(new Set(['#f5f5f5']))
-  await page.screenshot({ path: '/private/tmp/f020-styles-auto-dark.png' })
+  await page.screenshot({ path: testInfo.outputPath('f020-styles-auto-dark.png') })
 })
 
 test('null and transparent primitive surfaces survive AUTO mode and theme replay', async ({ page, request }) => {
@@ -226,4 +226,38 @@ test('formula paint ignored by explicit AUTO is an effective no-op and preserves
   expect(await inspect(page)).toEqual(before)
   await page.keyboard.press('ControlOrMeta+Shift+z')
   await expect.poll(async () => (await observe(request)).objects.length).toBe(2)
+})
+
+test('F019 semantic ellipse polygon and arrow retain history-safe style across themes and persistence', async ({ page, request }) => {
+  await ready(page, request)
+  const specs = [
+    { type: 'ellipse', rx: 65, ry: 35, left: 180, top: 170, fill: null },
+    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 40, y: 80 }],
+      left: 390, top: 170, fill: null },
+    { type: 'arrow', x1: 550, y1: 220, x2: 790, y2: 220, headLength: 22, headWidth: 16 },
+  ]
+  const nodes = await command(request, 'createMany', { specs })
+  for (const node of nodes) {
+    await command(request, 'update', { id: node.id,
+      patch: { stroke: '#2f9e44', strokeWidth: 4, opacity: 0.75, mathboardInkMode: 'fixed' } })
+  }
+  expect((await observe(request)).objects).toHaveLength(3)
+  for (const object of (await observe(request)).objects) {
+    expect(object).toMatchObject({ stroke: '#2f9e44', strokeWidth: 4,
+      opacity: 0.75, mathboardInkMode: 'fixed' })
+  }
+  await page.getByRole('button', { name: /Theme:/ }).click()
+  for (const object of (await observe(request)).objects) {
+    expect(object.stroke).toBe('#2f9e44')
+  }
+  await page.keyboard.press('ControlOrMeta+z')
+  await expect.poll(async () => (await observe(request)).objects[2].mathboardInkMode).toBe('auto')
+  await page.keyboard.press('ControlOrMeta+Shift+z')
+  await expect.poll(async () => (await observe(request)).objects[2].stroke).toBe('#2f9e44')
+  await inspect(page, 'flush')
+  await page.reload()
+  await expect.poll(async () => (await observe(request)).objects.length).toBe(3)
+  for (const object of (await observe(request)).objects) {
+    expect(object).toMatchObject({ stroke: '#2f9e44', opacity: 0.75, mathboardInkMode: 'fixed' })
+  }
 })
