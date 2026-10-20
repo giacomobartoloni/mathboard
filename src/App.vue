@@ -392,7 +392,7 @@ export default {
         return
       }
       try {
-        shareStampUrl.value = buildStampShareUrl(payload)
+        shareStampUrl.value = buildStampShareUrl(payload, undefined, { desktop: desktopRuntime })
         showShareStampModal.value = true
         trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_CREATED)
       } catch (error) {

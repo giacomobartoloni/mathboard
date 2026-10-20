@@ -18,6 +18,7 @@ differences.
 | Theme preference | Change the board theme, reload, and confirm it persists | Change the theme, close and reopen, and confirm it persists | Repeat | Repeat |
 | Fullscreen | Enter and exit fullscreen where the browser supports it | Verify the control works or degrades safely in WKWebView | Verify the control works or degrades safely in WebView2 | Verify the control works or degrades safely in WebKitGTK |
 | External links | Verify HTTPS and `mailto:` links; Privacy Policy uses same-origin `/privacy-policy.html` | Verify links open in the default native handler; Privacy Policy opens `https://mathboard.app/privacy-policy.html` | Repeat | Repeat |
+| Stamp sharing | Select two objects and use Ctrl/Cmd+Shift+L; confirm the resulting link opens the Stamp in a browser | Confirm sharing uses `https://mathboard.app/#s=...`, never Tauri's internal origin; open the link in a browser and inspect both objects | Repeat | Repeat |
 | Security smoke test | Check the production browser console for CSP errors | Check expected resources load under the Tauri CSP; the Simple Analytics request is expected to be blocked | Repeat | Repeat |
 | Session lifecycle | Verify IndexedDB autosave/open across a reload and confirm undo history resets | Verify saved boards remain accessible after app restart; confirm history resets | Repeat | Repeat |
 
