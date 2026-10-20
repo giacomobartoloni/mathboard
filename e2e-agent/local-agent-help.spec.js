@@ -136,7 +136,7 @@ test('local adapter discovers tools, guards mutation and preserves live scene se
   expect(Buffer.from(captured.data, 'base64').subarray(0, 8))
     .toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
   expect(await command(request, 'observe')).toEqual(beforeCapture)
-  const rejected = await request.post(prefix + 'command', { data: { method: 'update', params: { id: formula.id, patch: { fill: 'red' } } } })
+  const rejected = await request.post(prefix + 'command', { data: { method: 'update', params: { id: formula.id, patch: { strokeWidth: 4 } } } })
   expect(rejected.status()).toBe(409)
   expect((await rejected.json()).error.code).toBe('invalid_object_patch')
   await command(request, 'delete', { id: object.id })
