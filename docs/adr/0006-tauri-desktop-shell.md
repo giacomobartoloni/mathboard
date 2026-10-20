@@ -1,4 +1,4 @@
-# 0003. Use Tauri 2 as a thin desktop shell
+# 0006. Use Tauri 2 as a thin desktop shell
 
 - Status: Accepted
 - Date: 2026-10-01
@@ -9,10 +9,10 @@ MathBoard is a Vue and Vite application whose production artifact is `dist/`. Na
 distribution should preserve the web implementation rather than introduce a second
 frontend or move application behavior into a platform-specific layer.
 
-The board and its command-log history are held in memory. Closing or reloading the
-application loses the current document and its undo/redo history; desktop packaging
-does not add document persistence. UI preferences such as the selected theme may
-persist independently through `localStorage`.
+MathBoard already supports semantic BoardDocument snapshots, IndexedDB storage,
+and autosave (ADR 0005). The active board identity is tab/session scoped, and the
+undo/redo command history is memory-only. Tauri reuses that web persistence model
+without introducing a second desktop-specific document store.
 
 ## Decision
 
@@ -36,17 +36,17 @@ the host without producing signed installers.
 - The identifier must be treated as stable because changing it creates a distinct
   application identity for operating systems, signing, and future updates.
 - Tauri capabilities and CSP remain part of the desktop security boundary.
-- Board state and history remain session-only; persisted UI preferences do not provide
-  an open/save document workflow.
+- The existing IndexedDB-based BoardDocument save/open workflow remains shared;
+  undo/redo history is still session-only and is reset on restore.
 - The web Privacy Policy link stays on the same origin at `/privacy-policy.html`.
   Desktop opens `https://mathboard.app/privacy-policy.html` in the system browser
   through the scoped opener, so following that link requires network access.
 
 ## Non-decisions
 
-This decision does not add SQLite or another storage layer, persisted history, a Rust
-business layer, an updater, mobile targets, or desktop-specific analytics. Those require
-separate decisions.
+This decision does not add SQLite or any new native storage layer, persisted
+history, a Rust business layer, an updater, mobile targets, or desktop-specific analytics.
+Those require separate decisions.
 
 ## Alternatives considered
 

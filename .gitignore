@@ -1,6 +1,10 @@
 .DS_Store
 node_modules
 /dist
+/dist-e2e
+/test-results/
+/playwright-report/
+/playwright/.cache/
 
 # local env files
 .env.local

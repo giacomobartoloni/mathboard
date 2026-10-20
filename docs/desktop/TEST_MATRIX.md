@@ -10,7 +10,7 @@ differences.
 | Pencil | Draw short and long strokes; verify ink and zoom behavior | Repeat in WebKit | Repeat in WebView2 | Repeat in WebKitGTK 4.1 |
 | Shapes | Draw, select, move, resize, and rotate rectangles, circles, and lines | Repeat | Repeat | Repeat |
 | Text | Create text, edit it, move it, and finish editing by changing tools | Repeat; check font rendering | Repeat; check font rendering | Repeat; check font rendering |
-| Formula | Insert and edit a KaTeX formula; verify the rendered canvas image | Repeat; inspect raster clarity | Repeat; inspect raster clarity | Repeat; inspect raster clarity |
+| Formula | Insert and edit LaTeX; verify KaTeX preview and MathJax SVG board rendering | Repeat; inspect vector clarity | Repeat; inspect vector clarity | Repeat; inspect vector clarity |
 | Selection | Multi-select objects, transform them, delete them, and restore them | Repeat | Repeat | Repeat |
 | Pan and zoom | Pan, zoom from 0.1× to 5×, and switch tools while zoomed | Repeat with trackpad and mouse | Repeat with mouse and available touchpad | Repeat with mouse and available touchpad |
 | History | Verify one undo entry per pencil, shape, text, formula, delete, and transform gesture; redo each action | Repeat | Repeat | Repeat |
@@ -19,15 +19,16 @@ differences.
 | Fullscreen | Enter and exit fullscreen where the browser supports it | Verify the control works or degrades safely in WKWebView | Verify the control works or degrades safely in WebView2 | Verify the control works or degrades safely in WebKitGTK |
 | External links | Verify HTTPS and `mailto:` links; Privacy Policy uses same-origin `/privacy-policy.html` | Verify links open in the default native handler; Privacy Policy opens `https://mathboard.app/privacy-policy.html` | Repeat | Repeat |
 | Security smoke test | Check the production browser console for CSP errors | Check expected resources load under the Tauri CSP; the Simple Analytics request is expected to be blocked | Repeat | Repeat |
-| Session lifecycle | Reload and confirm canvas and history are lost as documented | Close and reopen; confirm canvas and history are lost while theme persists | Repeat | Repeat |
+| Session lifecycle | Verify IndexedDB autosave/open across a reload and confirm undo history resets | Verify saved boards remain accessible after app restart; confirm history resets | Repeat | Repeat |
 
 ## Expected persistence behavior
 
-MathBoard has no document open/save feature. Canvas contents and the command-log
-undo/redo history are held in memory only. Losing them after reload, window close, or
-application exit is expected in every environment and must not be mistaken for a
-platform-specific regression. UI preferences such as the selected theme may persist
-through `localStorage` in the environment's application data.
+MathBoard supports BoardDocument save/open and autosave using IndexedDB (ADR 0005).
+The active board ID is scoped to sessionStorage; on a fresh session, the last scratch
+board is not guaranteed to reopen automatically. Saved boards must remain accessible
+through the existing open workflow. Undo/redo history is memory-only and resets on
+open/restore. Verify IndexedDB and sessionStorage behavior in each native WebView.
+UI preferences may persist independently through localStorage.
 
 ## Pre-distribution gate
 

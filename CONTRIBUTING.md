@@ -7,16 +7,21 @@ Setup, scripts, and icon generation are in the [README](README.md).
 Open an issue before a change that alters behavior or the public interface. Small fixes can go straight to a pull request.
 
 1. Fork the repository and create a branch from `main`.
-2. Install dependencies with `npm ci`.
+2. Install dependencies with `npm ci`. For E2E locally, also run `npm run test:e2e:install` once.
 3. Run `npm run dev` while you work.
 4. Before opening the pull request, run:
 
 ```sh
 npm run lint
+npm run test:unit
 npm run build
+npm run assert:no-e2e-hook
+npm run test:e2e
 ```
 
-`npm run lint` reports problems and leaves files unchanged. There is no test suite: those two commands are the check.
+`npm run lint` reports problems and leaves files unchanged. `test:unit` runs the Node module tests; `test:e2e` builds into `dist-e2e/`, asserts the E2E canary is present, and runs the Playwright Chromium P0 suite. `assert:no-e2e-hook` fails if production `dist/` still contains E2E instrumentation markers.
+
+When adding E2E coverage, prefer accessible selectors (`getByRole`, labels). If an interactive control cannot be selected semantically, improve its HTML semantics before adding a test-only hook.
 
 Regenerate the PWA icons with `npm run generate:icons` only when `tools/icon-template.html` changes. The script needs network access and stops if the Satisfy font does not load.
 

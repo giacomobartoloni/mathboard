@@ -19,9 +19,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 <template>
   <div class="support-panel">
-    <button class="about-button" @click="openAbout" title="About">
+    <button
+      type="button"
+      class="about-button"
+      @click="openAbout"
+      title="About"
+      aria-label="About"
+    >
       <font-awesome-icon :icon="['fas', 'info-circle']" />
-      <span>About</span>
+      <span class="about-label">About</span>
     </button>
     
 
@@ -44,11 +50,50 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           </p>
         </div>
 
+        <div class="shortcuts-section">
+          <button
+            type="button"
+            class="shortcuts-toggle"
+            :aria-expanded="shortcutsExpanded"
+            aria-controls="shortcuts-panel"
+            @click="shortcutsExpanded = !shortcutsExpanded"
+          >
+            <span id="shortcuts-heading"><strong>Keyboard shortcuts</strong></span>
+            <span class="shortcuts-chevron" aria-hidden="true">{{ shortcutsExpanded ? '▾' : '▸' }}</span>
+          </button>
+          <div
+            v-show="shortcutsExpanded"
+            id="shortcuts-panel"
+            role="region"
+            aria-labelledby="shortcuts-heading"
+          >
+            <div
+              v-for="section in shortcutHelp"
+              :key="section.group"
+              class="shortcut-group"
+            >
+              <p class="shortcut-group-title">{{ section.group }}</p>
+              <ul class="shortcut-list">
+                <li v-for="item in section.items" :key="item.id" class="shortcut-row">
+                  <div class="shortcut-main">
+                    <span class="shortcut-label">{{ item.label }}</span>
+                    <kbd class="shortcut-keys">{{ item.keys }}</kbd>
+                  </div>
+                  <p v-if="item.hint" class="shortcut-hint">{{ item.hint }}</p>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         <div class="opensource-section">
           <p><font-awesome-icon :icon="['fas', 'code-branch']" /> <strong>Open Source</strong></p>
           <p>MathBoard is licensed under the <strong>GNU AGPL v3</strong>. The source code is freely available on GitHub. Contributions, issues, and suggestions are welcome!</p>
           <div class="contact-links">
-            <a :href="githubUrl" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink(githubUrl)">
+            <a href="/resources/">
+              Resources &amp; shortcuts
+            </a>
+            <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard')">
               <font-awesome-icon :icon="['fab', 'github']" /> GitHub Repository
             </a>
           </div>
@@ -58,20 +103,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><strong>Get in touch</strong></p>
           <p>Send your feedback, suggestions, or bug reports:</p>
           <div class="contact-links">
-            <a :href="emailUrl" @click.prevent="onExternalLink(emailUrl)">Email me</a>
-            <a :href="linkedInUrl" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink(linkedInUrl)">LinkedIn</a>
+            <a href="mailto:gbartoloni@proton.me" @click.prevent="onExternalLink('mailto:gbartoloni@proton.me')">Email me</a>
+            <a href="https://www.linkedin.com/in/giacomobartoloni/" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://www.linkedin.com/in/giacomobartoloni/')">LinkedIn</a>
           </div>
         </div>
 
         <div class="coffee-section">
           <p>If you find MathBoard useful, consider supporting the project:</p>
-          <a :href="coffeeUrl" target="_blank" rel="noopener noreferrer" class="coffee-link" @click.prevent="onExternalLink(coffeeUrl)">
+          <a href="https://www.buymeacoffee.com/gbartoloni" target="_blank" rel="noopener noreferrer" class="coffee-link" @click.prevent="onExternalLink('https://www.buymeacoffee.com/gbartoloni')">
             <img src="../assets/bmc.png" alt="Buy Me A Coffee" />
             <span>Buy me a coffee</span>
           </a>
         </div>
 
         <div class="legal-links">
+          <a href="/resources/">Resources</a>
+          <span class="separator" aria-hidden="true">·</span>
           <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" @click="onPrivacyPolicy">Privacy Policy</a>
         </div>
       </div>
@@ -84,20 +131,17 @@ import { ref } from 'vue'
 import packageInfo from '../../package.json'
 import { openExternalUrl } from '../platform/externalLinks'
 import { isDesktopRuntime } from '../platform/runtime'
+import { SHORTCUT_HELP } from '../config/shortcuts.js'
 import { trackEvent } from '../analytics'
 import { ANALYTICS_EVENTS } from '../analytics/events.js'
-
-const GITHUB_URL = 'https://github.com/giacomobartoloni/mathboard'
-const EMAIL_URL = 'mailto:gbartoloni@proton.me'
-const LINKEDIN_URL = 'https://www.linkedin.com/in/giacomobartoloni/'
-const COFFEE_URL = 'https://www.buymeacoffee.com/gbartoloni'
-const PRIVACY_POLICY_URL = 'https://mathboard.app/privacy-policy.html'
 
 export default {
   name: 'SupportPanel',
   setup() {
     const showAbout = ref(false)
+    const shortcutsExpanded = ref(false)
     const version = packageInfo.version
+    const shortcutHelp = SHORTCUT_HELP
     const desktopRuntime = isDesktopRuntime()
 
     const onExternalLink = async (url) => {
@@ -110,23 +154,21 @@ export default {
 
     const onPrivacyPolicy = (event) => {
       if (!desktopRuntime) return
-
       event.preventDefault()
-      onExternalLink(PRIVACY_POLICY_URL)
+      onExternalLink('https://mathboard.app/privacy-policy.html')
     }
 
     const openAbout = () => {
       showAbout.value = true
+      shortcutsExpanded.value = false
       trackEvent(ANALYTICS_EVENTS.SUPPORT_OPENED)
     }
 
     return {
       showAbout,
+      shortcutsExpanded,
       version,
-      githubUrl: GITHUB_URL,
-      emailUrl: EMAIL_URL,
-      linkedInUrl: LINKEDIN_URL,
-      coffeeUrl: COFFEE_URL,
+      shortcutHelp,
       onExternalLink,
       onPrivacyPolicy,
       openAbout,
@@ -152,12 +194,6 @@ export default {
   min-height: 40px;
 }
 
-@media (max-width: 768px) {
-  .support-panel {
-    bottom: 25px;
-  }
-}
-
 .about-button {
   background: none;
   border: none;
@@ -176,6 +212,30 @@ export default {
 .about-button:hover {
   background-color: var(--hover-bg);
   transform: translateY(-1px);
+}
+
+.about-button:focus-visible {
+  outline: 2px solid var(--selected-bg);
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .support-panel {
+    top: 12px;
+    bottom: auto;
+  }
+
+  .about-label {
+    display: none;
+  }
+
+  .about-button {
+    padding: 8px;
+    font-size: 16px;
+    min-width: 40px;
+    min-height: 40px;
+    gap: 0;
+  }
 }
 
 .support-panel a {
@@ -286,6 +346,117 @@ export default {
   border-radius: 8px;
   text-align: left;
   margin-top: 20px;
+}
+
+.shortcuts-section {
+  background: var(--callout-neutral-bg);
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-align: left;
+  margin-top: 20px;
+}
+
+.shortcuts-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.shortcuts-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.shortcuts-toggle:focus {
+  outline: none;
+}
+
+.shortcuts-toggle:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.shortcuts-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+#shortcuts-panel {
+  margin-top: 12px;
+}
+
+.shortcut-group + .shortcut-group {
+  margin-top: 14px;
+}
+
+.shortcut-group-title {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shortcut-row {
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.shortcut-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.shortcut-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shortcut-label {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.shortcut-keys {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.shortcut-hint {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
 }
 
 .opensource-section p {

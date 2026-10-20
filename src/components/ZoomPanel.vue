@@ -22,15 +22,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button 
       class="zoom-button" 
       @click="$emit('zoom-in')" 
-      title="Zoom In"
+      title="Zoom In (Ctrl+=)"
     >
       <span>+</span>
     </button>
-    <font-awesome-icon :icon="['fas', 'search']" />
+    <font-awesome-icon class="zoom-search-icon" :icon="['fas', 'search']" aria-hidden="true" />
     <button 
       class="zoom-button" 
       @click="$emit('zoom-out')" 
-      title="Zoom Out"
+      title="Zoom Out (Ctrl+-)"
     >
     <span>−</span>
     </button>
@@ -38,7 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button 
       class="zoom-button reset" 
       @click="$emit('reset-zoom')" 
-      title="Reset Zoom"
+      title="Reset Zoom (Ctrl+0)"
     >
       <span>100%</span>
     </button>
@@ -142,7 +142,16 @@ export default {
 
 @media (max-width: 768px) {
   .zoom-panel {
+    right: 12px;
     bottom: 25px;
+  }
+
+  .zoom-search-icon {
+    display: none;
+  }
+
+  .zoom-level {
+    display: none;
   }
 }
 

@@ -7,7 +7,8 @@ pipeline. The desktop CI workflow only verifies that the application compiles.
 
 `src-tauri/tauri.conf.json` reads the application version from `package.json`. Update
 the `package.json` version before creating release artifacts and commit the resulting
-lockfile change.
+lockfile change. Keep the `src-tauri/Cargo.toml` package version and
+corresponding `src-tauri/Cargo.lock` entry aligned before each release.
 
 The application identifier is `app.mathboard.desktop`. Treat it as permanent after
 distribution: changing it gives the application a different operating-system identity
@@ -32,10 +33,11 @@ host under `src-tauri/target/release/bundle/`. Expected formats include:
 - Windows: NSIS installer and `.msi`
 - Linux: AppImage, Debian package, and RPM where host tooling supports them
 
-Artifacts are platform-native; build and validate them on their target OS. The board
-canvas and undo/redo history remain session-only. A desktop installer does not provide
-document persistence or recovery after the app closes. UI preferences such as the
-selected theme may persist separately through `localStorage`.
+Artifacts are platform-native; build and validate them on their target OS.
+The existing BoardDocument save/open and autosave functionality uses IndexedDB;
+Tauri adds no separate native persistence backend. Undo/redo remains session-only.
+Validate saved-board access after app restart on each OS; do not assume a scratch
+board automatically reopens when sessionStorage is cleared.
 
 ## Pre-release GUI gate
 

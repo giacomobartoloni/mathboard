@@ -1,11 +1,44 @@
+/*
+MathBoard
+
+Copyright (C) 2026 Giacomo Bartoloni
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { COLOR_PRESETS } from '../src/config/colors.js'
 import {
+  getToolShortcutHint,
+  TOOL_SHORTCUTS,
   isDeleteShortcut,
+  isDuplicateShortcut,
   isEscapeShortcut,
+  isGroupShortcut,
+  isPlainColorDigit,
+  isPlainShapeKey,
   isPlainToolKey,
   isRedoShortcut,
+  isShareStampLinkShortcut,
+  isSelectAllShortcut,
+  isUngroupShortcut,
   isUndoShortcut,
+  isZoomInShortcut,
+  isZoomOutShortcut,
+  isZoomResetShortcut,
+  SHORTCUT_HELP,
   shouldIgnoreGlobalShortcut,
 } from '../src/config/shortcuts.js'
 
@@ -72,4 +105,111 @@ test('delete and escape classification', () => {
   assert.equal(isDeleteShortcut({ key: 'Delete', metaKey: true }), false)
   assert.equal(isEscapeShortcut({ key: 'Escape' }), true)
   assert.equal(isEscapeShortcut({ key: 'Esc' }), false)
+})
+
+test('group and ungroup shortcuts', () => {
+  assert.equal(isGroupShortcut({ key: 'g', ctrlKey: true }), true)
+  assert.equal(isGroupShortcut({ key: 'G', metaKey: true }), true)
+  assert.equal(isGroupShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), false)
+  assert.equal(isUngroupShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), true)
+  assert.equal(isUngroupShortcut({ key: 'G', metaKey: true, shiftKey: true }), true)
+  assert.equal(isUngroupShortcut({ key: 'g', ctrlKey: true }), false)
+})
+
+test('share stamp link is ctrl or meta plus shift-l', () => {
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true, shiftKey: true }), true)
+  assert.equal(isShareStampLinkShortcut({ key: 'L', metaKey: true, shiftKey: true }), true)
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true }), false)
+  assert.equal(isShareStampLinkShortcut({ key: 'l', ctrlKey: true, shiftKey: true, altKey: true }), false)
+  assert.equal(isShareStampLinkShortcut({ key: 'g', ctrlKey: true, shiftKey: true }), false)
+})
+
+test('SHORTCUT_HELP lists shipped groups and share link', () => {
+  assert.deepEqual(
+    SHORTCUT_HELP.map((section) => section.group),
+    ['Tools', 'Edit', 'View', 'Colors', 'Other'],
+  )
+  const edit = SHORTCUT_HELP.find((section) => section.group === 'Edit')
+  const share = edit?.items.find((item) => item.id === 'share')
+  assert.equal(share?.label, 'Share link')
+  assert.equal(share?.keys, 'Ctrl/Cmd+Shift+L')
+  assert.match(share?.hint || '', /Select objects first/)
+})
+
+test('zoom in is ctrl or meta plus + or = (shift allowed for +)', () => {
+  assert.equal(isZoomInShortcut({ key: '=', ctrlKey: true }), true)
+  assert.equal(isZoomInShortcut({ key: '+', ctrlKey: true, shiftKey: true }), true)
+  assert.equal(isZoomInShortcut({ key: '+', metaKey: true }), true)
+  assert.equal(isZoomInShortcut({ key: '=', metaKey: true }), true)
+  assert.equal(isZoomInShortcut({ key: '=', ctrlKey: true, altKey: true }), false)
+  assert.equal(isZoomInShortcut({ key: '=' }), false)
+  assert.equal(isZoomInShortcut({ key: '-', ctrlKey: true }), false)
+})
+
+test('zoom out is ctrl or meta plus -', () => {
+  assert.equal(isZoomOutShortcut({ key: '-', ctrlKey: true }), true)
+  assert.equal(isZoomOutShortcut({ key: '-', metaKey: true }), true)
+  assert.equal(isZoomOutShortcut({ key: '_', ctrlKey: true, shiftKey: true }), true)
+  assert.equal(isZoomOutShortcut({ key: '-', ctrlKey: true, altKey: true }), false)
+  assert.equal(isZoomOutShortcut({ key: '-' }), false)
+  assert.equal(isZoomOutShortcut({ key: '=', ctrlKey: true }), false)
+})
+
+test('zoom reset is ctrl or meta plus 0', () => {
+  assert.equal(isZoomResetShortcut({ key: '0', ctrlKey: true }), true)
+  assert.equal(isZoomResetShortcut({ key: '0', metaKey: true }), true)
+  assert.equal(isZoomResetShortcut({ key: '0', ctrlKey: true, shiftKey: true }), false)
+  assert.equal(isZoomResetShortcut({ key: '0' }), false)
+})
+
+test('duplicate is ctrl or meta plus d', () => {
+  assert.equal(isDuplicateShortcut({ key: 'd', ctrlKey: true }), true)
+  assert.equal(isDuplicateShortcut({ key: 'D', metaKey: true }), true)
+  assert.equal(isDuplicateShortcut({ key: 'd', ctrlKey: true, shiftKey: true }), false)
+  assert.equal(isDuplicateShortcut({ key: 'd', ctrlKey: true, altKey: true }), false)
+  assert.equal(isDuplicateShortcut({ key: 'd' }), false)
+})
+
+test('select all is ctrl or meta plus a', () => {
+  assert.equal(isSelectAllShortcut({ key: 'a', ctrlKey: true }), true)
+  assert.equal(isSelectAllShortcut({ key: 'A', metaKey: true }), true)
+  assert.equal(isSelectAllShortcut({ key: 'a', ctrlKey: true, shiftKey: true }), false)
+  assert.equal(isSelectAllShortcut({ key: 'a', ctrlKey: true, altKey: true }), false)
+  assert.equal(isSelectAllShortcut({ key: 'a' }), false)
+})
+
+test('plain shape keys map to shape ids', () => {
+  assert.equal(isPlainShapeKey({ key: 'r' }), 'rectangle')
+  assert.equal(isPlainShapeKey({ key: 'R' }), 'rectangle')
+  assert.equal(isPlainShapeKey({ key: 'c' }), 'circle')
+  assert.equal(isPlainShapeKey({ key: 'l' }), 'arrow')
+  assert.equal(isPlainShapeKey({ key: 'r', shiftKey: true }), null)
+  assert.equal(isPlainShapeKey({ key: 'r', ctrlKey: true }), null)
+  assert.equal(isPlainShapeKey({ key: 'r', repeat: true }), null)
+})
+
+test('plain color digits map to COLOR_PRESETS order', () => {
+  assert.equal(isPlainColorDigit({ key: '1' }), COLOR_PRESETS[0])
+  assert.equal(isPlainColorDigit({ key: '2' }), COLOR_PRESETS[1])
+  assert.equal(isPlainColorDigit({ key: '3' }), COLOR_PRESETS[2])
+  assert.equal(isPlainColorDigit({ key: '4' }), COLOR_PRESETS[3])
+  assert.equal(isPlainColorDigit({ key: '5' }), COLOR_PRESETS[4])
+  assert.equal(COLOR_PRESETS[0].value, null)
+  assert.equal(isPlainColorDigit({ key: '6' }), null)
+  assert.equal(isPlainColorDigit({ key: '1', ctrlKey: true }), null)
+  assert.equal(isPlainColorDigit({ key: '2', shiftKey: true }), null)
+  assert.equal(isPlainColorDigit({ key: '3', repeat: true }), null)
+})
+
+
+test('visible tool hints round-trip to the executable shortcut', () => {
+  const expected = { select: 'V', pan: 'H', pencil: 'P', font: 'T', formula: 'F', shapes: 'S' }
+  for (const [tool, hint] of Object.entries(expected)) {
+    assert.equal(getToolShortcutHint(tool), hint)
+    assert.equal(isPlainToolKey({ key: hint.toLowerCase() }), tool)
+    assert.equal(Object.values(TOOL_SHORTCUTS).filter((id) => id === tool).length, 1)
+  }
+  for (const unsupported of ['stamps', 'rectangle', 'unknown', '', null, undefined]) {
+    assert.equal(getToolShortcutHint(unsupported), null)
+  }
 })

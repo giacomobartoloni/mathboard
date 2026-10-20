@@ -76,7 +76,9 @@ npm run desktop:build -- --no-bundle
 - If CSP blocks a new resource, update the narrow directives in
   `src-tauri/tauri.conf.json`; do not disable the CSP.
 
-Board contents and undo/redo history exist only for the current session. Reloading or
-closing the app discards them because document persistence is not implemented. UI
-preferences such as the selected theme may persist independently through
-`localStorage`.
+The existing BoardDocument workflow persists board data in IndexedDB and supports
+save/open and autosave (ADR 0005); the command-log undo/redo history remains in
+memory. Session-scoped active board identity may be lost across a full application
+restart, so verify saved-board access and recovery on each native platform rather
+than assuming the last scratch board automatically reopens. UI preferences may
+persist independently through `localStorage`.

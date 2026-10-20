@@ -21,11 +21,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * Which contextual actions a selection gets, and where the panel sits.
  * Fabric stays the authority for the active object. This module never sees
  * the canvas and never copies an object graph.
+ * Classification is owned by BoardObjectPolicy (Formula before Group).
  */
+
+import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
 
 export const ACTION_EDIT = 'edit'
 export const ACTION_DUPLICATE = 'duplicate'
 export const ACTION_DELETE = 'delete'
+export const ACTION_GROUP = 'group'
+export const ACTION_UNGROUP = 'ungroup'
 
 export const DUPLICATE_OFFSET = 16
 export const PANEL_GAP = 20
@@ -34,11 +39,6 @@ export const PANEL_BUTTON = 44
 export const PANEL_PAD = 4
 export const PANEL_ACTION_GAP = 4
 
-const FORMULA_TYPE = 'katex-formula'
-const TEXT_TYPES = ['IText', 'Text', 'Textbox']
-const PATH_TYPES = ['Path']
-const SHAPE_TYPES = ['Rect', 'Circle', 'Ellipse', 'Line', 'Triangle', 'Polyline', 'Polygon']
-
 export const EMPTY_SELECTION = {
   hasSelection: false,
   selectionCount: 0,
@@ -46,46 +46,21 @@ export const EMPTY_SELECTION = {
   actions: [],
 }
 
-function isType(object, types) {
-  if (!object) return false
-  if (typeof object.isType === 'function') return object.isType(...types)
-  const actual = String(object.type || '').toLowerCase()
-  return types.some((type) => type.toLowerCase() === actual)
-}
-
-function isActiveSelection(object) {
-  if (!object) return false
-  if (typeof object.isType === 'function') {
-    return object.isType('ActiveSelection', 'activeselection')
-  }
-  const actual = String(object.type || '').toLowerCase()
-  return actual === 'activeselection' || actual === 'activeselection'
-}
-
-function isFormula(object) {
-  if (!object || isActiveSelection(object)) return false
-  if (object.formulaType === FORMULA_TYPE) return true
-  if (object.objectKind === 'formula') return true
-  return Boolean(object.formulaData && object.latex)
-}
+const boardObjectPolicy = new BoardObjectPolicy()
 
 /**
  * Semantic kind. Multi-selection is one kind: no per-type action is added
  * when the selection mixes objects.
  */
 export function selectionKind(object) {
-  if (!object) return null
-  if (isActiveSelection(object)) return 'activeSelection'
-  if (isFormula(object)) return 'formula'
-  if (isType(object, TEXT_TYPES)) return 'text'
-  if (isType(object, PATH_TYPES)) return 'path'
-  if (isType(object, SHAPE_TYPES)) return 'shape'
-  return 'unknown'
+  return boardObjectPolicy.kindOf(object)
 }
 
 export function selectionActions(kind) {
   if (!kind) return []
   if (kind === 'formula') return [ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE]
+  if (kind === 'activeSelection') return [ACTION_GROUP, ACTION_DUPLICATE, ACTION_DELETE]
+  if (kind === 'group') return [ACTION_UNGROUP, ACTION_DUPLICATE, ACTION_DELETE]
   return [ACTION_DUPLICATE, ACTION_DELETE]
 }
 

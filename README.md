@@ -30,6 +30,11 @@ Install dependencies from the lockfile:
 npm ci
 ```
 
+For end-to-end tests, also install the Playwright Chromium browser once after `npm ci` (or after upgrading `@playwright/test`):
+```
+npm run test:e2e:install
+```
+
 ### Compiles and hot-reloads for development
 ```
 npm run dev
@@ -49,6 +54,20 @@ npm run lint
 
 Reports lint errors without modifying files.
 
+### Unit / module tests
+```
+npm run test:unit
+```
+
+Runs the `node:test` suite under `tests/`.
+
+### End-to-end tests (Chromium)
+```
+npm run test:e2e
+```
+
+Builds the app with `vite build --mode e2e --outDir dist-e2e` (read-only `window.__MATHBOARD_E2E__` hook in a separate artifact from production `dist/`), then runs the Playwright P0 suite against `vite preview` on that directory. Use `npm run test:e2e:ui` for the Playwright UI. CI installs Chromium with `npx playwright install --with-deps chromium`.
+
 ### Regenerates PWA icons
 ```
 npm run generate:icons
@@ -60,6 +79,14 @@ Renders `tools/icon-template.html` in headless Chromium and overwrites `public/i
 ```
 npm run preview
 ```
+
+`npm run build` runs the Vite app build, then `tools/build-seo.mjs`, which writes static resource/docs pages into `dist/` and regenerates `sitemap.xml` plus `404.html`.
+
+## Documentation
+
+- [MathBoard resources](https://mathboard.app/resources/)
+- [LaTeX formulas](https://mathboard.app/docs/latex/)
+- [Keyboard shortcuts](https://mathboard.app/docs/keyboard-shortcuts/)
 
 ## License
 

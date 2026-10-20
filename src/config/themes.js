@@ -47,9 +47,9 @@ export const INK_MODE_AUTO = 'auto';
 export const INK_MODE_FIXED = 'fixed';
 
 /**
- * `inkIsLight` states whether `defaultInk` is a light ink. Formula images are
- * rasterized with the board ink and cannot be recolored, so they are adapted
- * through a non-destructive Invert filter that depends on ink polarity.
+ * `inkIsLight` states whether `defaultInk` is a light ink. Kept for callers that
+ * still read polarity; vector formulas recolor via FormulaObject.applyInk and
+ * do not use bitmap Invert filters.
  */
 export const BOARD_THEMES = {
   light: {

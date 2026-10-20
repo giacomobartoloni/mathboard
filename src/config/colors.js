@@ -17,7 +17,11 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { extendedShapeInkPatch, hasPaint, isExtendedShape } from '../board/objects/shapeInk.js'
+import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
 import { INK_MODE_AUTO, INK_MODE_FIXED } from './themes.js'
+
+const boardObjectPolicy = new BoardObjectPolicy()
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Fabric 7 class type is PascalCase; the deprecated instance getter is lowercase.
@@ -28,6 +32,37 @@ const FILL_INK_TYPES = ['i-text', 'IText', 'text', 'Text']
 function isInkType(object, types) {
   if (typeof object.isType === 'function') return object.isType(...types)
   return types.includes(object.type)
+}
+
+/**
+ * Expand Groups / ActiveSelection into leaf objects that can carry board ink.
+ * Formulas are a semantic leaf (including a future Formula Group of paths).
+ * Formulas and other non-ink types stay in the list; callers skip them.
+ */
+export function flattenInkTargets(objects) {
+  const out = []
+  const walk = (object) => {
+    if (!object || typeof object !== 'object') return
+
+    if (boardObjectPolicy.isFormula(object)) {
+      out.push(object)
+      return
+    }
+
+    if (
+      boardObjectPolicy.isBoardGroup(object)
+      || boardObjectPolicy.isActiveSelection(object)
+    ) {
+      const members = typeof object.getObjects === 'function' ? object.getObjects() : []
+      members.forEach(walk)
+      return
+    }
+
+    out.push(object)
+  }
+  if (!Array.isArray(objects)) return out
+  objects.forEach(walk)
+  return out
 }
 
 /**
@@ -57,10 +92,11 @@ export function normalizeHexColor(value) {
  */
 export function paletteColorFromObject(object) {
   if (!object || typeof object !== 'object') return undefined
-  if (object.formulaType) return undefined
+  if (boardObjectPolicy.isFormula(object)) return undefined
 
   let raw = null
-  if (isInkType(object, STROKE_INK_TYPES)) raw = object.stroke
+  if (isExtendedShape(object)) raw = hasPaint(object.stroke) ? object.stroke : object.fill
+  else if (isInkType(object, STROKE_INK_TYPES)) raw = object.stroke
   else if (isInkType(object, FILL_INK_TYPES)) raw = object.fill
   else return undefined
 
@@ -75,11 +111,12 @@ export function paletteColorFromObject(object) {
  * unreadable, or mixed so the toolbar should keep its current color.
  */
 export function paletteColorFromSelection(objects) {
-  if (!Array.isArray(objects) || objects.length === 0) return undefined
+  const targets = flattenInkTargets(objects)
+  if (targets.length === 0) return undefined
 
   let agreed
   let hasReadable = false
-  for (const object of objects) {
+  for (const object of targets) {
     const color = paletteColorFromObject(object)
     if (color === undefined) continue
     if (!hasReadable) {
@@ -95,9 +132,20 @@ export function paletteColorFromSelection(objects) {
 function inkPatchForType(object, color, inkMode) {
   const normalized = normalizeHexColor(color)
   if (!object || typeof object !== 'object' || !normalized) return null
-  if (object.formulaType) return null
+  if (boardObjectPolicy.isFormula(object)) return null
+  const extended = extendedShapeInkPatch(object, normalized)
+  if (extended) return { ...extended, mathboardInkMode: inkMode }
   if (isInkType(object, STROKE_INK_TYPES)) {
-    return { stroke: normalized, mathboardInkMode: inkMode }
+    const patch = { stroke: normalized, mathboardInkMode: inkMode }
+    // Filled circles (e.g. stamp dots) keep fill in sync with stroke ink.
+    if (
+      isInkType(object, ['circle', 'Circle'])
+      && object.fill
+      && object.fill !== 'transparent'
+    ) {
+      patch.fill = normalized
+    }
+    return patch
   }
   if (isInkType(object, FILL_INK_TYPES)) {
     return { fill: normalized, mathboardInkMode: inkMode }

@@ -4,6 +4,8 @@ import {
   ACTION_DELETE,
   ACTION_DUPLICATE,
   ACTION_EDIT,
+  ACTION_GROUP,
+  ACTION_UNGROUP,
   EMPTY_SELECTION,
   panelSize,
   sceneBoxToViewport,
@@ -32,8 +34,22 @@ test('formula is the only single selection that offers Edit', () => {
   assert.equal(selectionKind(formula), 'formula')
   assert.deepEqual(selectionMeta(formula).actions, [ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE])
 
-  const tagged = objectOf('image', { objectKind: 'formula' })
+  const tagged = objectOf('image', { objectKind: 'formula', latex: 'x' })
   assert.equal(selectionKind(tagged), 'formula')
+
+  const taggedWithoutLatex = objectOf('image', { objectKind: 'formula' })
+  assert.equal(selectionKind(taggedWithoutLatex), 'unknown')
+
+  const formulaLikeGroup = objectOf('Group', {
+    formulaType: 'katex-formula',
+    latex: 'x',
+  })
+  assert.equal(selectionKind(formulaLikeGroup), 'formula')
+  assert.deepEqual(selectionMeta(formulaLikeGroup).actions, [
+    ACTION_EDIT,
+    ACTION_DUPLICATE,
+    ACTION_DELETE,
+  ])
 
   const plainImage = objectOf('image')
   assert.equal(selectionKind(plainImage), 'unknown')
@@ -50,7 +66,7 @@ test('text, path, and shape do not get a type-specific Edit action', () => {
   }
 })
 
-test('multi-selection stays generic even when a member is a formula', () => {
+test('multi-selection offers Group with duplicate and delete', () => {
   const multi = {
     type: 'activeselection',
     isType: (...types) => types.includes('ActiveSelection'),
@@ -62,8 +78,14 @@ test('multi-selection stays generic even when a member is a formula', () => {
   const meta = selectionMeta(multi)
   assert.equal(meta.selectionType, 'activeSelection')
   assert.equal(meta.selectionCount, 2)
-  assert.deepEqual(meta.actions, [ACTION_DUPLICATE, ACTION_DELETE])
+  assert.deepEqual(meta.actions, [ACTION_GROUP, ACTION_DUPLICATE, ACTION_DELETE])
   assert.deepEqual(selectionMeta({ ...multi, getObjects: () => [] }), { ...EMPTY_SELECTION, actions: [] })
+})
+
+test('permanent group offers Ungroup', () => {
+  const group = objectOf('Group')
+  assert.equal(selectionKind(group), 'group')
+  assert.deepEqual(selectionActions('group'), [ACTION_UNGROUP, ACTION_DUPLICATE, ACTION_DELETE])
 })
 
 test('panel height follows the action count', () => {
