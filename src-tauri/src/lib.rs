@@ -17,8 +17,51 @@
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
+    let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init());
+
+    // Keep Tauri's default macOS menus, replacing only text-input Undo/Redo
+    // with actions dispatched to MathBoard's existing board command log.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .menu(|handle| {
+            use tauri::menu::{Menu, MenuItem};
+
+            let menu = Menu::default(handle)?;
+            for item in menu.items()? {
+                if let Some(edit) = item.as_submenu() {
+                    if edit.text()? == "Edit" {
+                        edit.remove_at(0)?;
+                        edit.remove_at(0)?;
+                        edit.insert(
+                            &MenuItem::with_id(handle, "mathboard-undo", "Undo", true, None::<&str>)?,
+                            0,
+                        )?;
+                        edit.insert(
+                            &MenuItem::with_id(handle, "mathboard-redo", "Redo", true, None::<&str>)?,
+                            1,
+                        )?;
+                        break;
+                    }
+                }
+            }
+            Ok(menu)
+        })
+        .on_menu_event(|app, event| {
+            use tauri::Emitter;
+
+            let command = if event.id() == "mathboard-undo" {
+                "undo"
+            } else if event.id() == "mathboard-redo" {
+                "redo"
+            } else {
+                return;
+            };
+            if let Err(error) = app.emit_to("main", "mathboard-native-menu", command) {
+                eprintln!("Failed to deliver desktop menu action: {error}");
+            }
+        });
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
 }

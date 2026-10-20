@@ -142,6 +142,7 @@ import {
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
 import { isDesktopRuntime } from './platform/runtime'
+import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
 import { trackEvent } from './analytics'
 import {
   ANALYTICS_EVENTS,
@@ -215,32 +216,37 @@ export default {
     const editingLatex = ref('')
     const editingElement = ref(null)
     const zoomLevel = ref(1)
-    // Mirror of document.fullscreenElement only — never invent a parallel flag.
+    // Web follows the Fullscreen API; desktop follows the native Tauri window.
     const isFullscreen = ref(false)
-    const fullscreenSupported = ref(detectFullscreenSupport())
+    const fullscreenSupported = ref(desktopRuntime || detectFullscreenSupport())
     const boardError = ref(null)
     let fullscreenInitialized = false
     let previousFullscreen = false
+    let disconnectDesktopWindow = null
+    let componentUnmounted = false
 
-    const syncFullscreenState = () => {
-      const next = Boolean(document.fullscreenElement)
+    const setFullscreenState = (next) => {
       isFullscreen.value = next
       if (fullscreenInitialized && next !== previousFullscreen) {
         trackEvent(next ? ANALYTICS_EVENTS.FULLSCREEN_ENTERED : ANALYTICS_EVENTS.FULLSCREEN_EXITED)
       }
       previousFullscreen = next
       fullscreenInitialized = true
-      // Fullscreen changes layout size; reuse DrawBoard's existing resize path
-      // so viewportTransform / zoom / pan stay intact.
+      // Preserve canvas zoom and pan when either fullscreen mechanism resizes.
       nextTick(() => {
         drawBoardRef.value?.updateCanvasSize?.()
       })
+    }
+    const syncWebFullscreenState = () => {
+      setFullscreenState(Boolean(document.fullscreenElement))
     }
 
     const toggleFullscreen = async () => {
       if (!fullscreenSupported.value) return
       try {
-        if (!document.fullscreenElement) {
+        if (desktopRuntime) {
+          setFullscreenState(await toggleDesktopFullscreen())
+        } else if (!document.fullscreenElement) {
           const root = fullscreenRootRef.value
           if (!root?.requestFullscreen) return
           await root.requestFullscreen()
@@ -248,9 +254,8 @@ export default {
           await document.exitFullscreen()
         }
       } catch (err) {
-        // Policy rejection / unsupported — keep the app usable.
         console.warn('Fullscreen request failed:', err)
-        syncFullscreenState()
+        if (!desktopRuntime) syncWebFullscreenState()
       }
     }
 
@@ -314,9 +319,27 @@ export default {
     }
 
     onMounted(async () => {
-      fullscreenSupported.value = detectFullscreenSupport()
-      document.addEventListener('fullscreenchange', syncFullscreenState)
-      syncFullscreenState()
+      fullscreenSupported.value = desktopRuntime || detectFullscreenSupport()
+      if (desktopRuntime) {
+        try {
+          const disconnect = await connectDesktopWindow({
+            onUndo: () => {
+              if (boardSessionReady.value && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
+            },
+            onRedo: () => {
+              if (boardSessionReady.value && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
+            },
+            onFullscreenChange: setFullscreenState,
+          })
+          if (componentUnmounted) disconnect()
+          else disconnectDesktopWindow = disconnect
+        } catch (error) {
+          console.warn('Desktop window integration failed:', error)
+        }
+      } else {
+        document.addEventListener('fullscreenchange', syncWebFullscreenState)
+        syncWebFullscreenState()
+      }
       try {
         const stampLoaded = await bootstrapStampFromUrl()
         if (stampLoaded) {
@@ -336,7 +359,9 @@ export default {
     })
 
     onBeforeUnmount(() => {
-      document.removeEventListener('fullscreenchange', syncFullscreenState)
+      componentUnmounted = true
+      if (desktopRuntime) disconnectDesktopWindow?.()
+      else document.removeEventListener('fullscreenchange', syncWebFullscreenState)
     })
 
     const onToolSelected = (tool) => {
