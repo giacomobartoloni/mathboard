@@ -44,7 +44,7 @@ function findNode(nodes, id) {
 export class BoardController {
   constructor({ getCanvas, boardObjectPolicy, buildFormula, pushHistoryCommand,
     runWithoutHistory = (fn) => fn(), prepareCreatedObject = () => {},
-    afterMutation = () => {}, getBoardId = () => null, isMutationStable,
+    afterMutation = () => {}, prepareUpdatedObject = () => {}, getBoardId = () => null, isMutationStable,
     getLayoutSafeArea = (canvas) => ({ left: 0, top: 0, width: canvas.getWidth(), height: canvas.getHeight() }) }) {
     if (typeof isMutationStable !== 'function') throw new TypeError('isMutationStable must be a function.')
     this._getCanvas = getCanvas
@@ -54,6 +54,7 @@ export class BoardController {
     this._runWithoutHistory = runWithoutHistory
     this._prepareCreatedObject = prepareCreatedObject
     this._afterMutation = afterMutation
+    this._prepareUpdatedObject = prepareUpdatedObject
     this._getBoardId = getBoardId
     this._isMutationStable = isMutationStable
     this._getLayoutSafeArea = getLayoutSafeArea
@@ -200,8 +201,20 @@ export class BoardController {
     const object = this._target(canvas, id)
     validateObjectPatch(patch, this._policy.kindOf(object))
     patch = structuredClone(patch)
-    if (this._policy.isFormula(object) && 'latex' in patch && patch.latex !== object.latex) {
-      return this._replaceFormula(canvas, object, patch, options)
+    const hasPaint = 'fill' in patch || 'stroke' in patch
+    if (hasPaint && !('mathboardInkMode' in patch)) patch.mathboardInkMode = 'fixed'
+    if (this._policy.isFormula(object)) {
+      // Canonicalize the patch before merging with the retained semantic node:
+      // a new stroke must replace an older fill, rather than lose precedence.
+      if (hasPaint) {
+        patch.fill = 'fill' in patch ? patch.fill : patch.stroke
+        delete patch.stroke
+      }
+      if ('latex' in patch || hasPaint || 'mathboardInkMode' in patch) {
+        const current = this._read(object)
+        if (Object.keys(patch).every((key) => patch[key] === current[key])) return current
+        return this._replaceFormula(canvas, object, patch, options)
+      }
     }
     if (this._policy.isActiveSelection(object.group)) canvas.discardActiveObject()
     const before = snapshotObject(object)
@@ -210,6 +223,7 @@ export class BoardController {
     let after
     return this._commit(canvas, () => {
       object.set(transformPatch)
+      this._prepareUpdatedObject(object)
       object.setCoords()
       object.dirty = true
       after = snapshotObject(object)
@@ -224,8 +238,6 @@ export class BoardController {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Formula changed while rendering.')
     }
     this._assertCanMutate()
-    const selected = this._selectionContains(canvas, existing)
-    if (this._policy.isActiveSelection(existing.group)) canvas.discardActiveObject()
     // Re-read the transform after rendering: a human may have moved the retained object meanwhile.
     const current = this._read(existing)
     const transform = {}
@@ -237,6 +249,9 @@ export class BoardController {
     next.setCoords()
     ensureMathBoardObjectId(next, getMathBoardObjectId(existing))
     this._prepareCreatedObject(next, { ...current, ...patch })
+    if (snapshotsEqual(current, this._read(next))) return current
+    const selected = this._selectionContains(canvas, existing)
+    if (this._policy.isActiveSelection(existing.group)) canvas.discardActiveObject()
     const index = canvas.getObjects().indexOf(existing)
     return this._commit(canvas, () => {
       if (selected) canvas.discardActiveObject()

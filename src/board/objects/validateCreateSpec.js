@@ -83,8 +83,25 @@ export function validateObjectPatch(patch, kind) {
   if (!isPlainObject(patch)) invalid(C.INVALID_PATCH)
   const allowed = [...TRANSFORM_KEYS,
     ...(kind === 'text' ? ['text', ...TEXT_KEYS] : []),
-    ...(kind === 'formula' ? ['latex'] : []),
+    ...(kind === 'formula' ? ['latex', 'fill', 'stroke', 'opacity', 'mathboardInkMode'] : []),
+    ...(kind === 'group' ? ['opacity'] : []),
+    ...(['shape', 'path', 'text'].includes(kind) ? [...STYLE_KEYS, 'mathboardInkMode'] : []),
   ]
   if (Object.keys(patch).some((key) => !allowed.includes(key))) invalid(C.INVALID_PATCH)
   validateValues(patch, C.INVALID_PATCH)
+  for (const key of ['stroke', 'fill']) {
+    if (!(key in patch)) continue
+    const paint = patch[key]
+    if (paint !== null && typeof paint !== 'string') invalid(C.INVALID_PATCH)
+    if (kind === 'formula' && (typeof paint !== 'string' || !paint.trim()
+      || ['none', 'transparent'].includes(paint.trim().toLowerCase()))) invalid(C.INVALID_PATCH)
+  }
+  if ('opacity' in patch && (patch.opacity < 0 || patch.opacity > 1)) invalid(C.INVALID_PATCH)
+  if ('strokeWidth' in patch && patch.strokeWidth < 0) invalid(C.INVALID_PATCH)
+  if ('strokeDashArray' in patch && patch.strokeDashArray !== null
+    && (!Array.isArray(patch.strokeDashArray)
+      || !Array.from(patch.strokeDashArray).every((value) => Number.isFinite(value) && value >= 0))) invalid(C.INVALID_PATCH)
+  if ('strokeLineCap' in patch && !['butt', 'round', 'square'].includes(patch.strokeLineCap)) invalid(C.INVALID_PATCH)
+  if ('strokeLineJoin' in patch && !['bevel', 'round', 'miter'].includes(patch.strokeLineJoin)) invalid(C.INVALID_PATCH)
+  if ('mathboardInkMode' in patch && !['auto', 'fixed'].includes(patch.mathboardInkMode)) invalid(C.INVALID_PATCH)
 }

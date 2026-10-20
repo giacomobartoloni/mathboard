@@ -68,11 +68,23 @@ const createSpec = { oneOf: BOARD_OBJECT_TYPES.map(type => {
   if (!typeFields[type]) throw new Error(`Missing local discovery schema for ${type}`)
   return objectSchema({ ...common, type: { const: type }, ...typeFields[type] }, ['type', ...requiredFields[type]])
 }) }
+const nonnegative = { type: 'number', minimum: 0 }
+const stylePatchProperties = {
+  stroke: nullablePaint, fill: nullablePaint, strokeWidth: nonnegative,
+  opacity: { type: 'number', minimum: 0, maximum: 1 },
+  strokeDashArray: { type: ['array', 'null'], items: nonnegative },
+  strokeLineCap: { enum: ['butt', 'round', 'square'] },
+  strokeLineJoin: { enum: ['bevel', 'round', 'miter'] },
+  mathboardInkMode: { enum: ['auto', 'fixed'] },
+}
+const formulaPaint = { type: 'string', minLength: 1, pattern: '\\S',
+  description: 'Nonempty painted ink; none/transparent is rejected at runtime.' }
 const patchSchemas = {
-  shape: objectSchema({ ...transformProperties }),
-  text: objectSchema({ ...transformProperties, text: string, ...textProperties }),
-  formula: objectSchema({ ...transformProperties, latex }),
-  group: objectSchema({ ...transformProperties }),
+  shape: objectSchema({ ...transformProperties, ...stylePatchProperties }),
+  text: objectSchema({ ...transformProperties, text: string, ...textProperties, ...stylePatchProperties }),
+  formula: objectSchema({ ...transformProperties, latex, fill: formulaPaint, stroke: formulaPaint,
+    opacity: stylePatchProperties.opacity, mathboardInkMode: stylePatchProperties.mathboardInkMode }),
+  group: objectSchema({ ...transformProperties, opacity: stylePatchProperties.opacity }),
 }
 const options = { type: 'object', properties: { select: boolean }, additionalProperties: true,
   description: 'Optional selection request; use select:true/false. Other options are ignored. Selection on update applies to formula replacement only.' }
@@ -106,9 +118,9 @@ const descriptors = [
       { type: 'text', text: 'Synthetic equation', left: 240, top: 160, originX: 'left', originY: 'top' },
       { type: 'formula', latex: 'x^2=4', left: 240, top: 240, originX: 'left', originY: 'top' },
     ] } }, execute: (controller, p) => controller.createMany(p.specs, p.options) },
-  { method: 'update', summary: 'Update transforms, text or LaTeX on one existing top-level object.', mutatesBoard: true,
+  { method: 'update', summary: 'Update transforms, text, LaTeX or history-safe style on one top-level object.', mutatesBoard: true,
     paramsSchema: params({ id: nonempty, patch: { anyOf: Object.values(patchSchemas),
-      description: 'Type-dependent union: use patchSchemas for the observed semantic type. Style/ink/geometry patches are not supported in this build.' }, options }, ['id', 'patch']),
+      description: 'Type-dependent union. Use patchSchemas by observed kind; styles are bounded, intrinsic geometry rejected.' }, options }, ['id', 'patch']),
     resultSchema: node, example: { method: 'update', params: { id: 'mbobj_example', patch: { left: 320, top: 200 } } },
     execute: (controller, p) => controller.update(p.id, p.patch, p.options) },
   { method: 'delete', summary: 'Remove one top-level semantic object with one Undo command.', mutatesBoard: true,
@@ -218,7 +230,7 @@ export function getLocalAgentHelp() {
       'measure is read-only. layout uses scene units for gap/left/top and CSS pixels for margin, rejects nested IDs/overflow without mutation, preserves no-op Redo and history.',
       'Coordinates are scene units, independent of viewport pan/zoom. New programmable create/createMany default omitted origins to left/top recursively; explicit named/numeric origins are preserved. Existing documents, Stamps and UI creation are unchanged.',
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
-      'Update schema is a type-dependent union, not permission to apply text/LaTeX fields to every object; style/ink updates reject.',
+      'Update schemas depend on kind. Shape/path/text accept bounded style and ink; Board Group allows opacity; Formula accepts canonical paint, ink mode and opacity with retained replacement. Unsupported geometry patches reject.',
       'Path items are intentionally permissive schema data; materialization may reject malformed path commands.',
       'Examples are synthetic templates. Replace mbobj_example with an observed existing ID. Discovery performs no permission enforcement.',
       'Undo/Redo are UI actions, not bridge methods. Normal dev/production builds do not expose this bridge.',

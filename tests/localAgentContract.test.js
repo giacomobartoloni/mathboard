@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { getLocalAgentHelp, hasLocalAgentMethod, executeLocalAgentCommand } from '../dev-agent/command-contract.js'
-import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS } from '../src/board/objects/constants.js'
+import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from '../src/board/objects/constants.js'
 import { acceptsSchema } from './helpers/check-discovery-schema.js'
 import { validateCreateSpec, validateObjectPatch } from '../src/board/objects/validateCreateSpec.js'
 import { normalizeCreateOrigins } from '../src/board/objects/normalizeCreateOrigins.js'
@@ -82,19 +82,44 @@ test('create inventory, schemas and synthetic examples agree with real validator
     if (d.method === 'createMany') d.example.params.specs.forEach(s => validateCreateSpec(s))
   }
   const update = help.methods.find(m => m.method === 'update')
-  assert.deepEqual(Object.keys(help.patchSchemas.shape.properties), [...TRANSFORM_KEYS])
-  assert.deepEqual(Object.keys(help.patchSchemas.text.properties), [...TRANSFORM_KEYS, 'text', ...TEXT_KEYS])
-  assert.deepEqual(Object.keys(help.patchSchemas.formula.properties), [...TRANSFORM_KEYS, 'latex'])
+  assert.deepEqual(Object.keys(help.patchSchemas.shape.properties), [...TRANSFORM_KEYS, ...STYLE_KEYS, 'mathboardInkMode'])
+  assert.deepEqual(Object.keys(help.patchSchemas.text.properties), [...TRANSFORM_KEYS, 'text', ...TEXT_KEYS,
+    ...STYLE_KEYS, 'mathboardInkMode'])
+  assert.deepEqual(Object.keys(help.patchSchemas.formula.properties), [...TRANSFORM_KEYS, 'latex',
+    'fill', 'stroke', 'opacity', 'mathboardInkMode'])
+  assert.deepEqual(Object.keys(help.patchSchemas.group.properties), [...TRANSFORM_KEYS, 'opacity'])
   assert.doesNotThrow(() => validateObjectPatch(update.example.params.patch, 'text'))
-  for (const kind of ['shape', 'text', 'formula', 'group']) {
-    assert.throws(() => validateObjectPatch({ fill: 'red' }, kind))
+  for (const kind of ['shape', 'text', 'formula']) {
+    assert.doesNotThrow(() => validateObjectPatch({ fill: 'red' }, kind))
     assert.doesNotThrow(() => validateObjectPatch({ left: 200, originX: 'left' }, kind))
   }
+  assert.throws(() => validateObjectPatch({ fill: 'red' }, 'group'))
+  assert.doesNotThrow(() => validateObjectPatch({ opacity: 0.5 }, 'group'))
   assert.match(help.limitations.join(' '), /path/i)
   assert.match(help.limitations.join(' '), /nested/i)
   assert.match(help.limitations.join(' '), /origin/i)
 })
 
+
+test('history-safe update patch schemas agree with executable bounded validators', () => {
+  const help = getLocalAgentHelp()
+  const inputs = [
+    ['shape', { stroke: '#f00', strokeWidth: 2, strokeDashArray: [4, 3], mathboardInkMode: 'fixed' }],
+    ['shape', { fill: null, opacity: 0.4, strokeDashArray: null }],
+    ['shape', { strokeWidth: -1 }], ['shape', { opacity: 1.1 }], ['shape', { strokeDashArray: [-1] }],
+    ['shape', { strokeLineJoin: 'square' }], ['shape', { mathboardInkMode: 'other' }],
+    ['text', { text: 'Color', fill: '#1864ab', opacity: 0.75 }],
+    ['formula', { stroke: '#c92a2a', latex: 'x=2' }],
+    ['formula', { strokeDashArray: [4, 2] }], ['formula', { opacity: -0.1 }],
+    ['group', { opacity: 0.5 }], ['group', { fill: '#fff' }],
+  ]
+  for (const [kind, sample] of inputs) {
+    const accepted = acceptsSchema(help.patchSchemas[kind], sample)
+    let runtime = true
+    try { validateObjectPatch(sample, kind) } catch { runtime = false }
+    assert.equal(accepted, runtime, JSON.stringify({ kind, sample }))
+  }
+})
 
 test('representative accepted and rejected creation/patch inputs agree with published JSON schemas', () => {
   const help = getLocalAgentHelp()
