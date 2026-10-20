@@ -90,7 +90,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><font-awesome-icon :icon="['fas', 'code-branch']" /> <strong>Open Source</strong></p>
           <p>MathBoard is licensed under the <strong>GNU AGPL v3</strong>. The source code is freely available on GitHub. Contributions, issues, and suggestions are welcome!</p>
           <div class="contact-links">
-            <a href="/resources/">
+            <a href="/resources/" @click="onSiteLink($event, '/resources/')">
               Resources &amp; shortcuts
             </a>
             <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard')">
@@ -117,9 +117,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         </div>
 
         <div class="legal-links">
-          <a href="/resources/">Resources</a>
+          <a href="/resources/" @click="onSiteLink($event, '/resources/')">Resources</a>
           <span class="separator" aria-hidden="true">·</span>
-          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" @click="onPrivacyPolicy">Privacy Policy</a>
+          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" @click="onSiteLink($event, '/privacy-policy.html')">Privacy Policy</a>
         </div>
       </div>
     </div>
@@ -130,6 +130,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { ref } from 'vue'
 import packageInfo from '../../package.json'
 import { openExternalUrl } from '../platform/externalLinks'
+import { publicSitePageUrl } from '../platform/siteLinks'
 import { isDesktopRuntime } from '../platform/runtime'
 import { SHORTCUT_HELP } from '../config/shortcuts.js'
 import { trackEvent } from '../analytics'
@@ -152,10 +153,11 @@ export default {
       }
     }
 
-    const onPrivacyPolicy = (event) => {
+    // Keep same-origin navigation on the web; desktop pages live on the public site.
+    const onSiteLink = (event, path) => {
       if (!desktopRuntime) return
       event.preventDefault()
-      onExternalLink('https://mathboard.app/privacy-policy.html')
+      onExternalLink(publicSitePageUrl(path))
     }
 
     const openAbout = () => {
@@ -170,7 +172,7 @@ export default {
       version,
       shortcutHelp,
       onExternalLink,
-      onPrivacyPolicy,
+      onSiteLink,
       openAbout,
     }
   }
