@@ -68,6 +68,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
     
     <FormulaModal 
+      v-if="showFormulaModal"
       :isVisible="showFormulaModal"
       :initialLatex="editingLatex"
       :mode="formulaModalMode"
@@ -77,6 +78,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     />
 
     <ShareStampModal
+      v-if="showShareStampModal"
       :isVisible="showShareStampModal"
       :url="shareStampUrl"
       @close="closeShareStampModal"
@@ -105,11 +107,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
+import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
-import FormulaModal from './components/FormulaModal.vue'
-import ShareStampModal from './components/ShareStampModal.vue'
+// Deferred until opened: FormulaModal brings the KaTeX preview renderer.
+const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
+const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import CookieBanner from './components/CookieBanner.vue'
