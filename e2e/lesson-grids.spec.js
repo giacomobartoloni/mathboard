@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { test, expect } from '@playwright/test'
 import { gotoBoard } from './fixtures.js'
-import { clickRedo, clickUndo, insertStamp } from './helpers/board.js'
+import { clickRedo, clickUndo } from './helpers/board.js'
 import { getBoardState, waitForState } from './helpers/canvas.js'
 
 const TEMPLATES = [
@@ -34,7 +34,8 @@ test('FEAT-4 educational grids insert, undo/redo and reopen from IndexedDB', asy
   await gotoBoard(page)
 
   for (const [index, label] of TEMPLATES.entries()) {
-    await insertStamp(page, label)
+    await page.getByRole('button', { name: 'Stamps', exact: true }).click()
+    await page.getByRole('button', { name: label, exact: true }).click()
     const state = await waitForState(
       page,
       (current) => current.objects.length === index + 1
