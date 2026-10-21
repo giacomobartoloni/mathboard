@@ -246,8 +246,8 @@ export function validateStructuredData(page, html) {
   }
   if (expectedCrumbs.length) {
     const crumbItems = breadcrumbNodes[0].itemListElement || []
-    const visible = html.match(/<nav aria-label="Breadcrumb">([\\s\\S]*?)<\\/nav>/)?.[1] || ''
-    const itemCount = (visible.match(/<li\\b/g) || []).length
+    const visible = html.match(/<nav aria-label="Breadcrumb">([\s\S]*?)<\/nav>/)?.[1] || ''
+    const itemCount = (visible.match(/<li\b/g) || []).length
     if (crumbItems.length !== expectedCrumbs.length || itemCount !== expectedCrumbs.length) {
       throw new Error(`BreadcrumbList length mismatch on ${page.path}`)
     }
