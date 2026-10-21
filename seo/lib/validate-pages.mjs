@@ -84,12 +84,8 @@ export function validatePages(pages) {
   const titles = new Set()
   const descriptions = new Set()
   const h1s = new Set()
-  const byPath = new Map(pages.map((page) => [page.path, page]))
 
   for (const page of pages) {
-    if (!['en', 'it'].includes(page.lang || 'en')) {
-      throw new Error(`Unsupported SEO language on ${page.path}: ${page.lang}`)
-    }
     if (!page.path?.startsWith('/') || !page.path.endsWith('/')) {
       throw new Error(`SEO path must use leading and trailing slash: ${page.path}`)
     }
@@ -130,30 +126,6 @@ export function validatePages(pages) {
     const canonical = page.canonical || `${ORIGIN}${page.path}`
     if (canonical !== `${ORIGIN}${page.path}`) {
       throw new Error(`Canonical must match path for ${page.path}: ${canonical}`)
-    }
-  }
-
-  for (const page of pages) {
-    if (!page.alternates) continue
-    if (['en', 'it', 'x-default'].some((lang) => !page.alternates[lang])) {
-      throw new Error(`Missing hreflang alternates on ${page.path}`)
-    }
-    if (page.alternates[page.lang || 'en'] !== page.path) {
-      throw new Error(`hreflang self-reference mismatch on ${page.path}`)
-    }
-    if (page.alternates['x-default'] !== page.alternates.en) {
-      throw new Error(`x-default must reference English page on ${page.path}`)
-    }
-    for (const lang of ['en', 'it']) {
-      const counterpart = byPath.get(page.alternates[lang])
-      if (!counterpart || (counterpart.lang || 'en') !== lang) {
-        throw new Error(`Missing ${lang} counterpart for ${page.path}`)
-      }
-      for (const variant of ['en', 'it', 'x-default']) {
-        if (counterpart.alternates?.[variant] !== page.alternates[variant]) {
-          throw new Error(`Nonreciprocal hreflang on ${page.path}`)
-        }
-      }
     }
   }
 
@@ -275,15 +247,6 @@ export function validateStructuredData(page, html) {
 }
 
 export function validateRenderedHtml(page, html) {
-  if (!html.includes(`<html lang="${page.lang || 'en'}">`)) {
-    throw new Error(`Incorrect html lang on ${page.path}`)
-  }
-  if (page.alternates) {
-    for (const [lang, path] of Object.entries(page.alternates)) {
-      const tag = `rel="alternate" hreflang="${lang}" href="${ORIGIN}${path}"`
-      if (!html.includes(tag)) throw new Error(`Missing rendered hreflang ${lang} on ${page.path}`)
-    }
-  }
   const h1Matches = html.match(/<h1[\s>]/g)
   if (!h1Matches || h1Matches.length !== 1) {
     throw new Error(`Expected exactly one <h1> on ${page.path}`)

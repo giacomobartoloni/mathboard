@@ -25,12 +25,6 @@ import {
 export default {
   lastmod: '2026-10-21',
   path: '/math-whiteboard/',
-  lang: 'en',
-  alternates: {
-    en: '/math-whiteboard/',
-    it: '/it/lavagna-matematica/',
-    'x-default': '/math-whiteboard/',
-  },
   title: 'MathBoard — Free Online Whiteboard for Math',
   description:
     'A browser-based whiteboard for math: draw freehand, write text, add LaTeX formulas, use shapes, and switch between light, dark, and chalkboard themes.',
@@ -72,10 +66,6 @@ export default {
         Themes include a chalkboard surface when you want that look for teaching or notes.
         Nothing to install — open the board in a browser.
       </p>
-    </section>
-    <section>
-      <h2>Language</h2>
-      <p><a href="/it/lavagna-matematica/" lang="it" hreflang="it">Leggi questa guida in italiano</a>.</p>
     </section>
     <section>
       <h2>Related</h2>
