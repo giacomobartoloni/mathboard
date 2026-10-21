@@ -20,6 +20,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { encodeStampDocument } from './encode.js'
 import { buildCartesianPlaneDocument } from './kits/cartesianPlane.js'
 import { buildUnitCircleDocument } from './kits/unitCircle.js'
+import {
+  buildCartesianGridDocument,
+  buildSquareGridDocument,
+  buildRuledPaperDocument,
+  buildTriangularGridDocument,
+  buildComplexPlaneDocument,
+} from './kits/lessonGrids.js'
 
 const KITS = {
   cartesianPlane: {
@@ -33,6 +40,36 @@ const KITS = {
     label: 'Unit circle',
     category: 'stamp',
     buildDocument: buildUnitCircleDocument,
+  },
+  cartesianGrid: {
+    id: 'cartesianGrid',
+    label: 'Cartesian grid (10×10)',
+    category: 'stamp',
+    buildDocument: buildCartesianGridDocument,
+  },
+  squareGrid: {
+    id: 'squareGrid',
+    label: 'Square grid (5 mm)',
+    category: 'stamp',
+    buildDocument: buildSquareGridDocument,
+  },
+  ruledPaper: {
+    id: 'ruledPaper',
+    label: 'Ruled paper',
+    category: 'stamp',
+    buildDocument: buildRuledPaperDocument,
+  },
+  triangularGrid: {
+    id: 'triangularGrid',
+    label: 'Triangular grid',
+    category: 'stamp',
+    buildDocument: buildTriangularGridDocument,
+  },
+  complexPlane: {
+    id: 'complexPlane',
+    label: 'Complex plane',
+    category: 'stamp',
+    buildDocument: buildComplexPlaneDocument,
   },
 }
 
