@@ -36,9 +36,9 @@ test('localized pages render language, canonical and reciprocal hreflang', () =>
   for (const page of pages) {
     const html = renderLayout(page)
     assert.doesNotThrow(() => validateRenderedHtml(page, html))
-    assert.match(html, new RegExp('<html lang="' + page.lang + '">'))
+    assert.match(html, new RegExp('<html lang="' + (page.lang || 'en') + '">))
     assert.match(html, new RegExp('rel="canonical" href="https://mathboard.app' + page.path + '"'))
-    assert.equal((html.match(/rel="alternate"/g) || []).length, 3)
+    assert.equal((html.match(/rel="alternate"/g) || []).length, page.alternates ? 3 : 0)
   }
   assert.match(renderLayout(italian), /Apri la lavagna/)
 })
