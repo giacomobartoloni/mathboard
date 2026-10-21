@@ -22,11 +22,16 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import english from '../seo/pages/math-whiteboard.mjs'
 import italian from '../seo/pages/italian-math-whiteboard.mjs'
+import resources from '../seo/pages/resources.mjs'
+import latexWhiteboard from '../seo/pages/latex-whiteboard.mjs'
+import openSource from '../seo/pages/open-source-math-whiteboard.mjs'
+import latexDocs from '../seo/pages/latex-docs.mjs'
+import shortcuts from '../seo/pages/keyboard-shortcuts.mjs'
 import { renderLayout } from '../seo/lib/render-layout.mjs'
 import { validatePages, validateRenderedHtml } from '../seo/lib/validate-pages.mjs'
 
 test('localized pages render language, canonical and reciprocal hreflang', () => {
-  const pages = [english, italian]
+  const pages = [english, italian, resources, latexWhiteboard, openSource, latexDocs, shortcuts]
   assert.doesNotThrow(() => validatePages(pages))
   for (const page of pages) {
     const html = renderLayout(page)

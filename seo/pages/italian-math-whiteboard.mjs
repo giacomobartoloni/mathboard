@@ -69,7 +69,7 @@ export default {
       <p>
         Premi <kbd>F</kbd> oppure scegli lo strumento Formula, digita il codice LaTeX,
         controlla l'anteprima e inserisci il risultato. Per esempio,
-        <code>\\\\frac{a}{b}</code> rappresenta una frazione e <code>\\\\sqrt{x}</code> una radice.
+        <code>\\frac{a}{b}</code> rappresenta una frazione e <code>\\sqrt{x}</code> una radice.
         Selezionando una formula già inserita puoi modificarne il contenuto.
         La <a href="/docs/latex/" hreflang="en">guida agli esempi LaTeX (in inglese)</a>
         raccoglie altre espressioni da provare.
