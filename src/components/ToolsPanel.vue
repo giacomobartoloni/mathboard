@@ -186,6 +186,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               <font-awesome-icon
                 :icon="kit.id === 'unitCircle' ? ['fas', 'circle-notch'] : ['fas', 'border-all']"
               />
+              <span class="kit-label">{{ kit.label }}</span>
             </button>
           </div>
         </transition>
@@ -520,6 +521,32 @@ export default {
 .submenu-button {
   padding: 6px 10px;
   border-radius: 5px;
+}
+
+/* Text labels keep a growing kit catalog discoverable without requiring
+   hover/tooltips, and the menu wraps safely on narrow viewports. */
+.kits-submenu {
+  box-sizing: border-box;
+  width: min(392px, calc(100vw - 90px));
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.kits-submenu .submenu-button {
+  flex: 1 0 94px;
+  max-width: 120px;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.kit-label {
+  font-size: 11px;
+  line-height: 1.15;
+  text-align: center;
 }
 
 .submenu-button.selected-shape {
