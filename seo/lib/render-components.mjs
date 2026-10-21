@@ -19,43 +19,43 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { escapeHtml } from './escape-html.mjs'
 
-export function renderOpenBoardCTA({ placement = 'main' } = {}) {
+export function renderOpenBoardCTA({ placement = 'main', lang = 'en' } = {}) {
   return `
     <a
       class="button button-primary"
       href="/"
       data-seo-cta="open-board"
       data-placement="${escapeHtml(placement)}"
-    >Open MathBoard</a>
+    >${lang === 'it' ? 'Apri la lavagna' : 'Open MathBoard'}</a>
   `.trim()
 }
 
-export function renderHeader() {
+export function renderHeader(lang = 'en') {
   return `
     <header class="site-header">
       <a href="/" class="brand" aria-label="MathBoard home">
         <span class="logo">MathBoard</span>
       </a>
       <nav aria-label="Primary">
-        <a href="/resources/">Resources</a>
+        <a href="/resources/">${lang === 'it' ? 'Risorse (EN)' : 'Resources'}</a>
         <a href="https://github.com/giacomobartoloni/mathboard">GitHub</a>
-        ${renderOpenBoardCTA({ placement: 'header' })}
+        ${renderOpenBoardCTA({ placement: 'header', lang })}
       </nav>
     </header>
   `.trim()
 }
 
-export function renderFooter() {
+export function renderFooter(lang = 'en') {
   return `
     <footer class="site-footer">
       <nav aria-label="Footer">
-        <a href="/resources/">Resources</a>
+        <a href="/resources/">${lang === 'it' ? 'Risorse (EN)' : 'Resources'}</a>
         <a href="/docs/keyboard-shortcuts/">Keyboard shortcuts</a>
         <a href="/docs/latex/">LaTeX examples</a>
         <a href="/privacy-policy.html">Privacy Policy</a>
         <a href="https://github.com/giacomobartoloni/mathboard">GitHub</a>
       </nav>
-      <p class="footer-note">MathBoard is free and open source under the GNU AGPL v3.</p>
+      <p class="footer-note">${lang === 'it' ? 'MathBoard è gratuita e open source, con licenza GNU AGPL v3.' : 'MathBoard is free and open source under the GNU AGPL v3.'}</p>
     </footer>
   `.trim()
 }

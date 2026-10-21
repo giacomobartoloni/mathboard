@@ -28,12 +28,17 @@ export function renderLayout(page) {
   const description = escapeHtml(page.description)
   const h1 = escapeHtml(page.h1)
   const breadcrumbs = renderBreadcrumbs(page.breadcrumbs)
+  const alternateLinks = page.alternates
+    ? Object.entries(page.alternates)
+        .map(([lang, href]) => `<link rel="alternate" hreflang="${escapeHtml(lang)}" href="${escapeHtml(absoluteUrl(href))}">`)
+        .join('\n  ')
+    : ''
   const katexCss = page.needsKatex
     ? '<link rel="stylesheet" href="/seo/katex/katex.min.css">'
     : ''
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(page.lang || 'en')}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,6 +46,7 @@ export function renderLayout(page) {
   <title>${title}</title>
   <meta name="description" content="${description}">
   <link rel="canonical" href="${escapeHtml(canonical)}">
+  ${alternateLinks}
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="MathBoard">
@@ -64,7 +70,7 @@ export function renderLayout(page) {
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
-  ${renderHeader()}
+  ${renderHeader(page.lang)}
 
   <main id="main">
     ${breadcrumbs}
@@ -72,7 +78,7 @@ export function renderLayout(page) {
     ${page.body}
   </main>
 
-  ${renderFooter()}
+  ${renderFooter(page.lang)}
 
   <script src="/seo/seo.js" defer></script>
 </body>
