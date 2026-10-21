@@ -103,6 +103,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><strong>Get in touch</strong></p>
           <p>Send your feedback, suggestions, or bug reports:</p>
           <div class="contact-links">
+            <a href="https://github.com/giacomobartoloni/mathboard/issues/new" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard/issues/new')">Suggest a feature / report a bug</a>
             <a href="mailto:gbartoloni@proton.me" @click.prevent="onExternalLink('mailto:gbartoloni@proton.me')">Email me</a>
             <a href="https://www.linkedin.com/in/giacomobartoloni/" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://www.linkedin.com/in/giacomobartoloni/')">LinkedIn</a>
           </div>

@@ -54,6 +54,7 @@ function renderShortcutTables() {
 }
 
 export default {
+  lastmod: '2026-10-21',
   path: '/docs/keyboard-shortcuts/',
   title: 'MathBoard Keyboard Shortcuts',
   description:
@@ -62,6 +63,7 @@ export default {
   structuredData: 'docs',
   aboutSoftware: true,
   breadcrumbs: [
+    { label: 'MathBoard', href: '/' },
     { label: 'Resources', href: '/resources/' },
     { label: 'Keyboard shortcuts' },
   ],

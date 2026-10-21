@@ -50,6 +50,7 @@ function renderSections() {
 }
 
 export default {
+  lastmod: '2026-10-21',
   path: '/docs/latex/',
   title: 'LaTeX in MathBoard — Formula Examples',
   description:
@@ -59,6 +60,7 @@ export default {
   aboutSoftware: true,
   needsKatex: true,
   breadcrumbs: [
+    { label: 'MathBoard', href: '/' },
     { label: 'Resources', href: '/resources/' },
     { label: 'LaTeX formula examples' },
   ],

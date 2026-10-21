@@ -30,6 +30,7 @@ const featured = LATEX_WHITEBOARD_FEATURED.map((source) => {
 }).join('\n')
 
 export default {
+  lastmod: '2026-10-21',
   path: '/latex-whiteboard/',
   title: 'LaTeX Whiteboard — Draw and Add Math Formulas | MathBoard',
   description:
@@ -37,6 +38,11 @@ export default {
   h1: 'Draw first. Drop in LaTeX when you need it.',
   ogImage: '/og-image.png',
   structuredData: 'software-application',
+  breadcrumbs: [
+    { label: 'MathBoard', href: '/' },
+    { label: 'Resources', href: '/resources/' },
+    { label: 'LaTeX whiteboard' },
+  ],
   needsKatex: true,
   body: `
     <p class="lede">

@@ -20,12 +20,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { renderOpenBoardCTA } from '../lib/render-components.mjs'
 
 export default {
+  lastmod: '2026-10-21',
   path: '/open-source-math-whiteboard/',
   title: 'Open-Source Math Whiteboard — MathBoard',
   description:
     'MathBoard is a free, browser-based math whiteboard released under the GNU AGPL v3. View the source, report issues, or contribute on GitHub.',
   h1: 'An open-source whiteboard for math',
   structuredData: 'webpage',
+  breadcrumbs: [
+    { label: 'MathBoard', href: '/' },
+    { label: 'Resources', href: '/resources/' },
+    { label: 'Open-source whiteboard' },
+  ],
   aboutSoftware: true,
   body: `
     <p class="lede">
