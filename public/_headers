@@ -1,0 +1,7 @@
+# Cloudflare Workers Static Assets reads this file from the Vite public/ output.
+# Observe violations before enforcement; report-only does not block requests.
+# https://developers.cloudflare.com/workers/static-assets/headers/
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' https://scripts.simpleanalyticscdn.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://queue.simpleanalyticscdn.com; font-src 'self' data:; connect-src 'self' https://queue.simpleanalyticscdn.com; worker-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'
