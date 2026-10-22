@@ -41,10 +41,9 @@ import { markRaw, toRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
-import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
+import { paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
-import { extendedShapeInkPatch, isExtendedShape } from '../board/objects/shapeInk.js';
-import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
+import { extendedShapeInkPatch } from '../board/objects/shapeInk.js';
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
@@ -66,7 +65,6 @@ import {
   ACTION_EDIT,
   ACTION_GROUP,
   ACTION_UNGROUP,
-  DUPLICATE_OFFSET,
   panelSize,
   sceneBoxToViewport,
   selectionMeta,
@@ -80,6 +78,7 @@ import {
   gestureObjects,
 } from "../history/commandLog";
 import { BoardHistory } from "../history/BoardHistory.js";
+import { SelectionMutations } from "../board/interactions/SelectionMutations.js";
 import {
   trackEvent,
   trackBoardEngaged,
@@ -212,6 +211,12 @@ export default {
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
+    this._selectionMutations = new SelectionMutations({
+      getCanvas: () => this.canvas,
+      history: this._boardHistory,
+      boardObjectPolicy: this._boardObjectPolicy,
+      getDefaultInk: () => this.boardThemeConfig.defaultInk,
+    });
     this._persistence = null;
     this._boardController = null;
     this._persistenceBootstrapped = false;
@@ -375,27 +380,6 @@ export default {
     markPathInk({ path }) {
       if (!path) return;
       path.mathboardInkMode = this.inkMode;
-    },
-    _inkSnapshot(object) {
-      if (!object || this._boardObjectPolicy.isFormula(object)) return null;
-      if (isExtendedShape(object)) {
-        return { stroke: object.stroke, fill: object.fill, mathboardInkMode: object.mathboardInkMode };
-      }
-      if (object.isType(...STROKE_INK_TYPES)) {
-        const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
-        if (
-          object.isType("Circle")
-          && object.fill
-          && object.fill !== "transparent"
-        ) {
-          snapshot.fill = object.fill;
-        }
-        return snapshot;
-      }
-      if (object.isType(...FILL_INK_TYPES)) {
-        return { fill: object.fill, mathboardInkMode: object.mathboardInkMode };
-      }
-      return null;
     },
     applyBrushColor() {
       if (this.canvas?.freeDrawingBrush) {
@@ -661,30 +645,6 @@ export default {
       if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
       root.focus({ preventScroll: true });
     },
-    async _cloneForDuplicate(object) {
-      const placed = snapshotObject(object);
-      const clone = await object.clone(FORMULA_CLONE_PROPS);
-      clone.set({
-        ...placed,
-        left: placed.left + DUPLICATE_OFFSET,
-        top: placed.top + DUPLICATE_OFFSET,
-      });
-      FORMULA_CLONE_PROPS.forEach((key) => {
-        if (object[key] !== undefined) clone[key] = object[key];
-      });
-      // Duplicate always gets fresh identity (including nested board groups).
-      regenerateMathBoardObjectIds(clone);
-      clone.setCoords();
-      return clone;
-    },
-    _selectDuplicates(clones) {
-      if (clones.length === 1) {
-        this.canvas.setActiveObject(clones[0]);
-        return;
-      }
-      const selection = new ActiveSelection(clones, { canvas: this.canvas });
-      this.canvas.setActiveObject(selection);
-    },
     selectAll() {
       if (!this.canvas) return false;
       // toRaw: shapes assigned through data() may be Vue proxies; Fabric's
@@ -704,43 +664,9 @@ export default {
       return true;
     },
     async duplicateSelection() {
-      if (!this.canvas) return;
-      const active = this.canvas.getActiveObject();
-      if (!active || active.isEditing) return;
-      const sources = this.canvas.getActiveObjects().slice();
-      if (!sources.length) return;
-
-      let clones;
-      try {
-        clones = await Promise.all(sources.map((object) => this._cloneForDuplicate(object)));
-      } catch (error) {
-        console.error("Duplicate failed", error);
-        return;
-      }
-      if (!this.canvas || clones.some((clone) => !clone)) return;
-      const stillThere = sources.every((object) => this.canvas.getObjects().includes(object));
-      if (!stillThere) return;
-
-      this._boardHistory.setSuspended(true);
-      try {
-        clones.forEach((clone) => this.canvas.add(clone));
-        this._selectDuplicates(clones);
-      } catch (error) {
-        clones.forEach((clone) => {
-          if (this.canvas.getObjects().includes(clone)) this.canvas.remove(clone);
-        });
-        console.error("Duplicate failed", error);
-        return;
-      } finally {
-        this._boardHistory.setSuspended(false);
-      }
-
-      const entries = clones
-        .map((object) => ({ object, index: this.canvas.getObjects().indexOf(object) }))
-        .filter((entry) => entry.index >= 0);
-      if (entries.length) this._boardHistory.record({ type: "duplicate", entries });
-      this.canvas.requestRenderAll();
-      this.refreshSelectionPanel();
+      const changed = await this._selectionMutations.duplicate();
+      if (changed) this.refreshSelectionPanel();
+      return changed;
     },
     editSelection() {
       const active = this.canvas?.getActiveObject();
@@ -1005,106 +931,25 @@ export default {
       return encodeObjectsAsStamp(sources);
     },
     groupSelection() {
-      if (!this.canvas) return false;
-      const active = this.canvas.getActiveObject();
-      if (!active || !active.isType("ActiveSelection")) return false;
-      const members = active.getObjects().slice();
-      if (members.length < 2) return false;
-
-      const memberEntries = members
-        .map((object) => ({
-          object,
-          index: this.canvas.getObjects().indexOf(object),
-        }))
-        .filter((entry) => entry.index >= 0)
-        .sort((a, b) => a.index - b.index);
-      if (memberEntries.length < 2) return false;
-
-      this.canvas.discardActiveObject();
-      this._boardHistory.setSuspended(true);
-      let group;
-      try {
-        memberEntries.forEach(({ object }) => this.canvas.remove(object));
-        group = new Group(
-          memberEntries.map((entry) => entry.object),
-          { subTargetCheck: false, interactive: false },
-        );
-        // New group identity; children keep theirs.
-        ensureMathBoardObjectId(group);
-        this.canvas.add(group);
-        this.canvas.setActiveObject(group);
-      } finally {
-        this._boardHistory.setSuspended(false);
+      const changed = this._selectionMutations.group();
+      if (changed) {
+        this.refreshSelectionPanel();
+        trackBoardEngaged();
+        recordProductAction();
       }
-
-      const index = this.canvas.getObjects().indexOf(group);
-      if (index < 0) return false;
-      this._boardHistory.record({
-        type: "group",
-        group,
-        index,
-        members: memberEntries,
-      });
-      this.canvas.requestRenderAll();
-      this.refreshSelectionPanel();
-      trackBoardEngaged();
-      recordProductAction();
-      return true;
+      return changed;
     },
     ungroupSelection() {
-      if (!this.canvas) return false;
-      const active = this.canvas.getActiveObject();
-      // Use semantic Board Group check: a Formula may be a Fabric Group.
-      if (!this._boardObjectPolicy.isBoardGroup(active)) {
-        return false;
+      const changed = this._selectionMutations.ungroup();
+      if (changed) {
+        const objects = this.canvas.getActiveObjects();
+        const chrome = selectionObjectChromeForBoard(this.boardTheme);
+        objects.forEach((object) => applySelectionObjectChrome(object, chrome));
+        this.refreshSelectionPanel();
+        trackBoardEngaged();
+        recordProductAction();
       }
-
-      const group = active;
-      const groupIndex = this.canvas.getObjects().indexOf(group);
-      if (groupIndex < 0) return false;
-
-      // Match history undo: discard before removeAll so children return to
-      // canvas plane rather than selection/group local coordinates.
-      this.canvas.discardActiveObject();
-      this._boardHistory.setSuspended(true);
-      let items;
-      try {
-        items = group.removeAll();
-        this.canvas.remove(group);
-        items.forEach((object) => this.canvas.add(object));
-      } finally {
-        this._boardHistory.setSuspended(false);
-      }
-
-      const members = items
-        .map((object) => ({
-          object,
-          index: this.canvas.getObjects().indexOf(object),
-        }))
-        .filter((entry) => entry.index >= 0);
-
-      this._boardHistory.record({
-        type: "ungroup",
-        group,
-        index: groupIndex,
-        members,
-      });
-
-      const objectChrome = selectionObjectChromeForBoard(this.boardTheme);
-      items.forEach((object) => applySelectionObjectChrome(object, objectChrome));
-
-      if (items.length > 1) {
-        this.canvas.setActiveObject(new ActiveSelection(items, { canvas: this.canvas }));
-      } else if (items.length === 1) {
-        this.canvas.setActiveObject(items[0]);
-      } else {
-        this.canvas.discardActiveObject();
-      }
-      this.canvas.requestRenderAll();
-      this.refreshSelectionPanel();
-      trackBoardEngaged();
-      recordProductAction();
-      return true;
+      return changed;
     },
     enablePanning() {
       this.canvas.isDrawingMode = false;
@@ -1478,78 +1323,16 @@ export default {
      * drag coalesces into one history entry; a swatch click is its own undo step.
      */
     recolorSelection(color, options = {}) {
-      if (!this.canvas) return false;
-      const active = this.canvas.getActiveObject();
-      if (!active) return false;
-
-      // Permanent Groups (stamps) and ActiveSelection: recolor leaf members.
-      const targets = flattenInkTargets([active]);
-
-      const useAuto = color === null;
-      const ink = useAuto ? this.boardThemeConfig.defaultInk : color;
-
-      const entries = [];
-      targets.forEach((obj) => {
-        const before = this._inkSnapshot(obj);
-        if (!before) return;
-        const applied = useAuto
-          ? applyAutoInk(obj, ink)
-          : applyExplicitInk(obj, ink);
-        if (!applied) return;
-        entries.push({ object: obj, before, after: this._inkSnapshot(obj) });
-      });
-      if (entries.length === 0) return false;
-
-      if (active.isType("ActiveSelection") || active.isType("Group")) {
-        active.set("dirty", true);
-      }
-
-      try {
-        this._boardHistory.record(
-          { type: "recolor", entries },
-          { coalesce: Boolean(options.coalesce) },
-        );
-      } catch (error) {
-        // The log is already restored by BoardHistory. Restore UI paint too.
-        entries.forEach(({ object, before }) => {
-          object.set(before);
-          object.dirty = true;
-        });
-        this.canvas.requestRenderAll();
-        throw error;
-      }
-      this.canvas.requestRenderAll();
-      return true;
+      return this._selectionMutations.recolor(color, options);
     },
 
     deleteSelection() {
-      if (!this.canvas) return;
-      const active = this.canvas.getActiveObject();
-      if (!active || active.isEditing) return;
-
-      // An ActiveSelection is not in canvas._objects, so removing it leaves
-      // the children in place. Delete the children, one command for the gesture.
-      const objects = this.canvas.getActiveObjects();
-      if (!objects.length) return;
-
-      const entries = objects
-        .map((object) => ({
-          object,
-          index: this.canvas.getObjects().indexOf(object)
-        }))
-        .filter((entry) => entry.index >= 0)
-        .sort((a, b) => a.index - b.index);
-      if (!entries.length) return;
-
+      const removed = this._selectionMutations.delete();
+      if (!removed.length) return;
       const deletionMetadata = buildObjectDeletedMetadata(
-        entries.map(({ object }) => object),
+        removed,
         (object) => this._boardObjectPolicy.kindOf(object),
       );
-
-      this.canvas.discardActiveObject();
-      entries.forEach(({ object }) => this.canvas.remove(object));
-      this.canvas.requestRenderAll();
-      this._boardHistory.record({ type: 'delete', entries });
       trackBoardEngaged();
       recordProductAction();
       trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, deletionMetadata);
