@@ -82,6 +82,7 @@ import { SelectionMutations } from "../board/interactions/SelectionMutations.js"
 import { ShapeGesture } from "../board/interactions/ShapeGesture.js";
 import { TextInsertionSession } from "../board/interactions/TextInsertionSession.js";
 import { PanGesture } from "../board/interactions/PanGesture.js";
+import { subscribeCanvasEvents } from "../board/canvasEventSubscriptions.js";
 import {
   trackEvent,
   trackBoardEngaged,
@@ -197,6 +198,8 @@ export default {
     this._shapeGesture = null;
     this._panGesture = null;
     this._textInsertion = null;
+    this._relayCanvasEventsCleanup = null;
+    this._behaviorCanvasEventsCleanup = null;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
@@ -385,10 +388,10 @@ export default {
       }
     },
     createEvents() {
-      CANVAS_EVENTS.forEach((event) => {
-        const vueEvent = event.replace(/:/g, '-');
-        this.canvas.on(event, (e) => this.$emit(vueEvent, e));
-      });
+      this._relayCanvasEventsCleanup?.();
+      this._relayCanvasEventsCleanup = subscribeCanvasEvents(this.canvas, CANVAS_EVENTS.map((event) => [
+        event, (e) => this.$emit(event.replace(/:/g, '-'), e),
+      ]));
     },
     updateCanvasSize() {
       this.windowWidth = document.documentElement.clientWidth;
@@ -1292,39 +1295,37 @@ export default {
       });
       this.canvas.freeDrawingBrush = brush;
     },
+    onCanvasDoubleClick(opt) {
+      const target = opt.target;
+      if (target && target.isType(...FILL_INK_TYPES) && target.editable) {
+        target.enterEditing();
+        target.selectAll();
+      } else if (target && this._boardObjectPolicy.isFormula(target)) {
+        this.$emit('edit-formula', {
+          latex: target.latex,
+          position: { x: target.left, y: target.top },
+          fabricObject: target,
+        });
+      }
+    },
     setupEventListeners() {
-      // Pencil strokes are Path objects built by the brush. "before:path:created"
-      // fires before the path is added, so the ink mode is set on that instance.
-      // The command is the finished path, recorded once "path:created" fires.
-      this.canvas.on('before:path:created', this.markPathInk);
-      this.canvas.on('path:created', this.onPathCreated);
-      this.canvas.on('before:transform', this.onBeforeTransform);
-      this.canvas.on('object:modified', this.onObjectModified);
-      this.canvas.on('text:editing:entered', this.onTextEditingEntered);
-      this.canvas.on('text:editing:exited', this.onTextEditingExited);
-
-      this.canvas.on('selection:created', this.onSelectionChanged);
-      this.canvas.on('selection:updated', this.onSelectionChanged);
-      this.canvas.on('selection:cleared', this.onSelectionCleared);
-      this.canvas.on('mouse:down', this.onPencilPointerDown);
-      this.canvas.on('mouse:up', this.onSelectionPointerUp);
-
-      // Enable double-click editing for text objects and formulas
-      this.canvas.on('mouse:dblclick', (opt) => {
-        const target = opt.target;
-        if (target && target.isType(...FILL_INK_TYPES) && target.editable) {
-          target.enterEditing();
-          target.selectAll();
-        } else if (target && this._boardObjectPolicy.isFormula(target)) {
-          // Edit formula
-          this.$emit('edit-formula', { 
-            latex: target.latex, 
-            position: { x: target.left, y: target.top },
-            fabricObject: target
-          });
-        }
-      });
-      
+      // Each subscription is owned by DrawBoard; a disposer removes exactly
+      // those callbacks without affecting gesture modules or other observers.
+      this._behaviorCanvasEventsCleanup?.();
+      this._behaviorCanvasEventsCleanup = subscribeCanvasEvents(this.canvas, [
+        ['before:path:created', this.markPathInk],
+        ['path:created', this.onPathCreated],
+        ['before:transform', this.onBeforeTransform],
+        ['object:modified', this.onObjectModified],
+        ['text:editing:entered', this.onTextEditingEntered],
+        ['text:editing:exited', this.onTextEditingExited],
+        ['selection:created', this.onSelectionChanged],
+        ['selection:updated', this.onSelectionChanged],
+        ['selection:cleared', this.onSelectionCleared],
+        ['mouse:down', this.onPencilPointerDown],
+        ['mouse:up', this.onSelectionPointerUp],
+        ['mouse:dblclick', this.onCanvasDoubleClick],
+      ]);
       window.addEventListener('resize', this.updateCanvasSize);
     },
     initializeCanvas() {
@@ -1436,21 +1437,10 @@ export default {
     this._textInsertion?.dispose();
     this._panGesture?.dispose();
     this._persistence?.dispose();
-    CANVAS_EVENTS.forEach((event) => {
-      this.canvas.off(event);
-    });
-    
-    this.canvas.off('before:path:created', this.markPathInk);
-    this.canvas.off('path:created', this.onPathCreated);
-    this.canvas.off('before:transform', this.onBeforeTransform);
-    this.canvas.off('object:modified', this.onObjectModified);
-    this.canvas.off('text:editing:entered', this.onTextEditingEntered);
-    this.canvas.off('text:editing:exited', this.onTextEditingExited);
-    this.canvas.off('selection:created', this.onSelectionChanged);
-    this.canvas.off('selection:updated', this.onSelectionChanged);
-    this.canvas.off('selection:cleared', this.onSelectionCleared);
-    this.canvas.off('mouse:down', this.onPencilPointerDown);
-    this.canvas.off('mouse:up', this.onSelectionPointerUp);
+    this._relayCanvasEventsCleanup?.();
+    this._behaviorCanvasEventsCleanup?.();
+    this._relayCanvasEventsCleanup = null;
+    this._behaviorCanvasEventsCleanup = null;
     
     window.removeEventListener('resize', this.updateCanvasSize);
   },
