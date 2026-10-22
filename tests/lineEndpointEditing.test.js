@@ -160,6 +160,7 @@ test('Shift-drag constrains either endpoint in board coordinates under rotation,
       const fixed = at(obj, opposite)
       const wanted = fixed.add(new Point(-93, -39))
       const before = snapshotObject(obj, { includeGeometry: true })
+      const original = at(obj, id)
       assert.equal(lineGeometryAdapter.moveHandle(obj, id, wanted, { shiftKey: true }), true)
       const snapped = at(obj, id)
       near(at(obj, opposite), fixed)
@@ -168,10 +169,7 @@ test('Shift-drag constrains either endpoint in board coordinates under rotation,
       assert.ok(Math.abs(angle / 15 - Math.round(angle / 15)) < 1e-7)
       const after = snapshotObject(obj, { includeGeometry: true })
       applySnapshot(obj, before)
-      near(at(obj, id), new Point(
-        // Rebuild the original endpoint from a fresh equivalent object.
-        ...((p) => [p.x, p.y])(at(line(15, 30, 115, 90, { left: 240, top: 160, ...transformed }), id)),
-      ))
+      near(at(obj, id), original)
       applySnapshot(obj, after)
       near(at(obj, id), snapped)
       near(at(obj, opposite), fixed)
