@@ -98,17 +98,18 @@ test('privacy page navigation stays in sync with static SEO navigation', () => {
   }
 })
 
+
 test('editorial download hero keeps a single h1, anchor navigation and browser alternative', () => {
   const hub = renderLayout(download)
-  assert.match(hub, /class="download-page download-page--editorial"/)
-  assert.equal((hub.match(/<h1[\\s>]/g) || []).length, 1)
-  assert.match(hub, /<h1>MathBoard for desktop<\\/h1>/)
-  assert.match(hub, /href="#download-options"/)
-  assert.match(hub, /id="download-options"/)
-  assert.match(hub, /data-placement="download-hero-browser-alternative"/)
-  assert.match(hub, /Illustration of the MathBoard logo/)
+  assert.ok(hub.includes('class="download-page download-page--editorial"'))
+  assert.equal(hub.split('<h1>').length - 1, 1)
+  assert.ok(hub.includes('<h1>MathBoard for desktop</h1>'))
+  assert.ok(hub.includes('href="#download-options"'))
+  assert.ok(hub.includes('id="download-options"'))
+  assert.ok(hub.includes('data-placement="download-hero-browser-alternative"'))
+  assert.ok(hub.includes('Illustration of the MathBoard logo'))
   assert.ok(hub.indexOf('Unsigned public beta:</strong>') < hub.indexOf('data-download-asset="macosArm64"'))
   const css = readFileSync(new URL('../public/seo/seo.css', import.meta.url), 'utf8')
-  assert.match(css, /\\.download-page--editorial \\.download-hero/)
-  assert.match(css, /prefers-reduced-motion: reduce/)
+  assert.ok(css.includes('.download-page--editorial .download-hero'))
+  assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'))
 })
