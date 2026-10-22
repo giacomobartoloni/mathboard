@@ -97,6 +97,15 @@ test('controls expose only two endpoint handles with viewport-aware positions an
   near(rendered, expected)
   assert.equal(isGeometryHandleTransform({ corner: 'geometry-start' }), true)
   assert.equal(isGeometryHandleTransform({ action: 'drag' }), false)
+  // The cached Fabric hit regions must use the same keys as the current controls.
+  // Otherwise findControl() tries to read shouldActivate on a missing control.
+  const initialControls = obj.controls
+  obj.controls = controls
+  obj.setCoords()
+  assert.deepEqual(Object.keys(obj.oCoords).sort(), Object.keys(controls).sort())
+  obj.controls = initialControls
+  obj.setCoords()
+  assert.deepEqual(Object.keys(obj.oCoords).sort(), Object.keys(initialControls).sort())
   const original = at(obj, 'start')
   assert.equal(controls['geometry-start'].actionHandler(null, {
     target: obj, mathboardCancelled: true,

@@ -603,6 +603,9 @@ export default {
       if (hadOwnControls) object.controls = controls;
       else delete object.controls;
       object.hasBorders = hasBorders;
+      // Fabric keeps cached hit regions (oCoords) keyed by the control names.
+      // Restore those regions together with the original controls.
+      object.setCoords();
       this._geometryEditing = null;
     },
     _syncGeometryEditing() {
@@ -623,12 +626,13 @@ export default {
       };
       editable.controls = geometryControls(lineGeometryAdapter);
       editable.hasBorders = false;
+      // Rebuild oCoords before the next hit test: stale native keys crash findControl.
+      editable.setCoords();
       this.canvas.requestRenderAll();
     },
     onSelectionChanged() {
-      // ActiveSelection is a transient Fabric wrapper, not a canvas object.
-      // Apply controls here as well so newly selected objects and multi-selects
-      // hide side handles without changing their resize corners or rotation.
+      // Preserve PR #85: ActiveSelection is a transient wrapper, not a canvas object.
+      // Apply native selection chrome (including side-control visibility) on selection.
       const active = this.canvas?.getActiveObject();
       if (active) {
         applySelectionObjectChrome(active, selectionObjectChromeForBoard(this.boardTheme));

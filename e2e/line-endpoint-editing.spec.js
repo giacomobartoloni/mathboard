@@ -35,6 +35,8 @@ async function createAndSelectLine(page) {
 }
 
 test('line endpoint drag changes geometry in one Undo step and keeps the same object', async ({ page }) => {
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
   await createAndSelectLine(page)
   const before = await getBoardState(page)
   const original = before.objects[0]
@@ -61,6 +63,7 @@ test('line endpoint drag changes geometry in one Undo step and keeps the same ob
   state = await waitForState(page, (s) => s.history.step === before.history.step + 1)
   expect(state.objects[0].width).toBeGreaterThan(original.width + 25)
   expect(state.objects[0].mathboardId).toBe(originalId)
+  expect(pageErrors).toEqual([])
 })
 
 test('Escape during endpoint drag restores geometry without a history command', async ({ page }) => {
