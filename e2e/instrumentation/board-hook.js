@@ -103,6 +103,8 @@ function snapshotForE2e(obj, { includeChildren = true } = {}) {
       ? obj.formulaType
       : null,
     inkMode: obj.mathboardInkMode ?? null,
+    stroke: typeof obj.stroke === 'string' ? obj.stroke : null,
+    fill: typeof obj.fill === 'string' ? obj.fill : null,
     renderedInkIsLight: obj.mathboardRenderedInkIsLight === undefined
       ? null
       : Boolean(obj.mathboardRenderedInkIsLight),
@@ -215,6 +217,17 @@ export function installBoardE2eHook(getBoard, bootstrapGate) {
     flushPersistence: () => getBoard()?.flushPersistence?.(),
     createObjects: (specs, options) => getBoard().getBoardController().createMany(specs, options),
     updateObject: (id, patch) => getBoard().getBoardController().update(id, patch),
+    recolorSelected: (color, options) => getBoard().recolorSelection(color, options),
+    failNextDocumentChange: () => {
+      const persistence = getBoard()?._persistence
+      if (!persistence) return false
+      const original = persistence.notifyDocumentChanged
+      persistence.notifyDocumentChanged = function (...args) {
+        persistence.notifyDocumentChanged = original
+        throw new Error('Injected document-change failure')
+      }
+      return true
+    },
     deleteObject: (id) => getBoard().getBoardController().delete(id),
     measureObject: (id) => getBoard().getBoardController().measure(id),
     layoutObjects: (options) => getBoard().getBoardController().layout(options),
