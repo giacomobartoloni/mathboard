@@ -61,6 +61,48 @@ test('native selection polish keeps marquee separate from object handles', () =>
   assert.equal(selectionChromeForBoard('chalkboard').cornerColor, '#fffaf0')
 })
 
+test('selection controls hide side midpoints while keeping corners and rotation', () => {
+  const makeObject = (type, children = []) => {
+    const visibility = {
+      tl: true, tr: true, br: true, bl: true, mtr: true,
+      mt: true, mr: true, mb: true, ml: true,
+    }
+    return {
+      type,
+      visibility,
+      padding: 12,
+      isType: (...types) => types.includes(type),
+      getObjects: () => children,
+      set(patch) {
+        Object.assign(this, patch)
+      },
+      setControlsVisibility(patch) {
+        Object.assign(visibility, patch)
+      },
+    }
+  }
+
+  const path = makeObject('Path')
+  const group = makeObject('Group', [path])
+  const activeSelection = makeObject('ActiveSelection')
+  const chrome = selectionObjectChromeForBoard('light')
+
+  applySelectionObjectChrome(group, chrome)
+  // ActiveSelection is a transient wrapper: apply it when selection changes.
+  applySelectionObjectChrome(activeSelection, chrome)
+
+  for (const object of [path, group, activeSelection]) {
+    for (const key of ['mt', 'mr', 'mb', 'ml']) {
+      assert.equal(object.visibility[key], false, `${object.type}.${key}`)
+    }
+    for (const key of ['tl', 'tr', 'br', 'bl', 'mtr']) {
+      assert.equal(object.visibility[key], true, `${object.type}.${key}`)
+    }
+    assert.equal(object.padding, 12)
+    assert.equal(object.borderColor, chrome.borderColor)
+  }
+})
+
 test('applySelectionObjectChrome updates nested Group members', () => {
   const darkPatch = selectionObjectChromeForBoard('dark')
   const inner = {

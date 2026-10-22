@@ -595,6 +595,13 @@ export default {
       if (!same) this.selectionPanel = next;
     },
     onSelectionChanged() {
+      // ActiveSelection is a transient Fabric wrapper, not a canvas object.
+      // Apply controls here as well so newly selected objects and multi-selects
+      // hide side handles without changing their resize corners or rotation.
+      const active = this.canvas?.getActiveObject();
+      if (active) {
+        applySelectionObjectChrome(active, selectionObjectChromeForBoard(this.boardTheme));
+      }
       this.emitSelectionColor();
       this.refreshSelectionPanel();
     },

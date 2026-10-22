@@ -67,6 +67,14 @@ export function selectionChromeForBoard(boardTheme) {
   }
 }
 
+// Fabric control keys at side midpoints. Keep corner scaling and rotation handles.
+const HIDDEN_SIDE_CONTROLS = Object.freeze({
+  mt: false,
+  mr: false,
+  mb: false,
+  ml: false,
+})
+
 const CANVAS_MARQUEE_KEYS = [
   'selectionColor',
   'selectionBorderColor',
@@ -95,6 +103,7 @@ export function applySelectionObjectChrome(object, objectChrome) {
   const themeChrome = { ...objectChrome }
   delete themeChrome.padding
   object.set(themeChrome)
+  object.setControlsVisibility?.(HIDDEN_SIDE_CONTROLS)
 
   const isGroup = typeof object.isType === 'function' && object.isType('Group')
   if (!isGroup || typeof object.getObjects !== 'function') return
