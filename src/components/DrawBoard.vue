@@ -493,12 +493,14 @@ export default {
         selectionColor,
         selectionBorderColor,
         selectionLineWidth,
+        selectionDashArray,
       } = chrome;
       const objectChrome = selectionObjectChromeForBoard(this.boardTheme);
       Object.assign(InteractiveFabricObject.ownDefaults, objectChrome);
       this.canvas.selectionColor = selectionColor;
       this.canvas.selectionBorderColor = selectionBorderColor;
       this.canvas.selectionLineWidth = selectionLineWidth;
+      this.canvas.selectionDashArray = selectionDashArray;
 
       this._suspendHistory = true;
       try {
@@ -593,6 +595,13 @@ export default {
       if (!same) this.selectionPanel = next;
     },
     onSelectionChanged() {
+      // ActiveSelection is a transient Fabric wrapper, not a canvas object.
+      // Apply controls here as well so newly selected objects and multi-selects
+      // hide side handles without changing their resize corners or rotation.
+      const active = this.canvas?.getActiveObject();
+      if (active) {
+        applySelectionObjectChrome(active, selectionObjectChromeForBoard(this.boardTheme));
+      }
       this.emitSelectionColor();
       this.refreshSelectionPanel();
     },
