@@ -43,7 +43,7 @@ import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import { paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
-import { extendedShapeInkPatch, isExtendedShape } from '../board/objects/shapeInk.js';
+import { extendedShapeInkPatch } from '../board/objects/shapeInk.js';
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
