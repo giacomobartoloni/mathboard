@@ -25,9 +25,11 @@ export default {
     { label: 'Windows' },
   ],
   body: `
-    <p class="lede">Download the free MathBoard desktop beta for 64-bit Windows
-      to draw mathematical diagrams, write text and edit LaTeX formulas.</p>
-    ${renderReleaseContext()}
+    <div class="reading-intro">
+      <p class="lede">Download the free MathBoard desktop beta for 64-bit Windows
+        to draw mathematical diagrams, write text and edit LaTeX formulas.</p>
+      ${renderReleaseContext()}
+    </div>
     <div class="download-options">
       <div class="download-option">
         <h2>Standard setup (EXE)</h2>

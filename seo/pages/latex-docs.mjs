@@ -65,10 +65,12 @@ export default {
     { label: 'LaTeX formula examples' },
   ],
   body: `
-    <p class="lede">
-      Short examples for the Formula tool. MathBoard renders LaTeX with KaTeX; these samples are compiled during the site build.
-    </p>
-    <p class="cta-row">${renderOpenBoardCTA({ placement: 'latex-docs-hero' })}</p>
+    <div class="reading-intro">
+      <p class="lede">
+        Short examples for the Formula tool. MathBoard renders LaTeX with KaTeX; these samples are compiled during the site build.
+      </p>
+      <p class="cta-row">${renderOpenBoardCTA({ placement: 'latex-docs-hero' })}</p>
+    </div>
     ${renderSections()}
     <p>
       Workflow: <a href="/latex-whiteboard/">LaTeX whiteboard</a> ·

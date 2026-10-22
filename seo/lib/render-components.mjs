@@ -110,10 +110,11 @@ export function renderScreenshot({
   `.trim()
 }
 
-export function renderResourceCard({ href, title, description }) {
+export function renderResourceCard({ href, title, description, headingLevel = 2 }) {
+  const headingTag = headingLevel === 3 ? 'h3' : 'h2'
   return `
     <a class="resource-card" href="${escapeHtml(href)}">
-      <h2>${escapeHtml(title)}</h2>
+      <${headingTag}>${escapeHtml(title)}</${headingTag}>
       <p>${escapeHtml(description)}</p>
     </a>
   `.trim()

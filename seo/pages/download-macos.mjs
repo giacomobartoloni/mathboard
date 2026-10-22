@@ -25,9 +25,11 @@ export default {
     { label: 'macOS' },
   ],
   body: `
-    <p class="lede">Get the free MathBoard desktop beta for your Mac.
-      It combines freehand drawing, shapes and editable mathematical formulas.</p>
-    ${renderReleaseContext()}
+    <div class="reading-intro">
+      <p class="lede">Get the free MathBoard desktop beta for your Mac.
+        It combines freehand drawing, shapes and editable mathematical formulas.</p>
+      ${renderReleaseContext()}
+    </div>
     <div class="download-options">
       <div class="download-option">
         <h2>Mac with Apple Silicon (M1, M2, M3, M4 or newer)</h2>

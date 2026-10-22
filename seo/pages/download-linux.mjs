@@ -25,9 +25,11 @@ export default {
     { label: 'Linux' },
   ],
   body: `
-    <p class="lede">Use the free MathBoard whiteboard on 64-bit Linux.
-      Draw diagrams and work with mathematical text and LaTeX notation in the desktop beta.</p>
-    ${renderReleaseContext()}
+    <div class="reading-intro">
+      <p class="lede">Use the free MathBoard whiteboard on 64-bit Linux.
+        Draw diagrams and work with mathematical text and LaTeX notation in the desktop beta.</p>
+      ${renderReleaseContext()}
+    </div>
     <div class="download-options">
       <div class="download-option">
         <h2>AppImage (x86-64)</h2>

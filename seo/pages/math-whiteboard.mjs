@@ -37,17 +37,21 @@ export default {
     { label: 'Math whiteboard' },
   ],
   body: `
-    <p class="lede">
-      MathBoard combines freehand drawing, text, shapes, and LaTeX formulas on one canvas. It runs in the browser and is free and open source.
-    </p>
-    <p class="cta-row">${renderOpenBoardCTA({ placement: 'math-whiteboard-hero' })}
-      <a class="button" href="/download/">Download desktop beta</a></p>
-    ${renderScreenshot({
-      src: '/og-image.png',
-      alt: 'MathBoard canvas with handwritten notes and a rendered math formula',
-      eager: true,
-      caption: 'MathBoard in the browser — draw, type, and place formulas on one board.',
-    })}
+    <div class="site-hero site-hero--with-art">
+      <div>
+        <p class="lede">
+          MathBoard combines freehand drawing, text, shapes, and LaTeX formulas on one canvas. It runs in the browser and is free and open source.
+        </p>
+        <p class="cta-row">${renderOpenBoardCTA({ placement: 'math-whiteboard-hero' })}
+          <a class="button" href="/download/">Download desktop beta</a></p>
+      </div>
+      ${renderScreenshot({
+        src: '/og-image.png',
+        alt: 'MathBoard canvas with handwritten notes and a rendered math formula',
+        eager: true,
+        caption: 'MathBoard in the browser — draw, type, and place formulas on one board.',
+      })}
+    </div>
     <section>
       <h2>What you can do</h2>
       <ul>

@@ -24,10 +24,12 @@ export default {
     { label: 'Security' },
   ],
   body: `
-    <p class="lede">MathBoard Desktop is free and open source, but the initial public beta is
-      distributed without verified publisher code-signing certificates. Decide whether
-      that is appropriate for your device before installing.</p>
-    ${renderReleaseContext()}
+    <div class="reading-intro">
+      <p class="lede">MathBoard Desktop is free and open source, but the initial public beta is
+        distributed without verified publisher code-signing certificates. Decide whether
+        that is appropriate for your device before installing.</p>
+      ${renderReleaseContext()}
+    </div>
     ${renderSecurityNotice()}
     <section>
       <h2>Check the file you downloaded</h2>

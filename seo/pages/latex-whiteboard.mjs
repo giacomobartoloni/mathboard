@@ -45,10 +45,12 @@ export default {
   ],
   needsKatex: true,
   body: `
-    <p class="lede">
-      Use the Formula tool to type LaTeX, preview the result, and place the rendered formula on the board. Existing formulas can be selected and edited again.
-    </p>
-    <p class="cta-row">${renderOpenBoardCTA({ placement: 'latex-whiteboard-hero' })}</p>
+    <div class="site-hero">
+      <p class="lede">
+        Use the Formula tool to type LaTeX, preview the result, and place the rendered formula on the board. Existing formulas can be selected and edited again.
+      </p>
+      <p class="cta-row">${renderOpenBoardCTA({ placement: 'latex-whiteboard-hero' })}</p>
+    </div>
     <section>
       <h2>How to add a formula</h2>
       <ol>
