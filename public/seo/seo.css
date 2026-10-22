@@ -1092,6 +1092,19 @@ main > .download-status-note {
   color: #292929;
 }
 
+/* The Open MathBoard helper is primary elsewhere; here it is the secondary CTA. */
+.download-page--editorial .download-hero-actions a[data-seo-cta="open-board"] {
+  border-color: #cfc0ad;
+  background: rgba(255, 255, 255, 0.58);
+  color: #3d3d3d;
+}
+
+.download-page--editorial .download-hero-actions a[data-seo-cta="open-board"]:hover {
+  border-color: #b49c80;
+  background: #ffffff;
+  color: #292929;
+}
+
 .download-page--editorial .download-hero .download-version {
   margin: 1.15rem 0 0;
   color: #645f58;
