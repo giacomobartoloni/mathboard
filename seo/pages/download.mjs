@@ -43,12 +43,16 @@ export default {
       })}
     </section>
     <h2 class="download-choice-title">Choose your operating system</h2>
+    <p class="download-preflight"><strong>Unsigned public beta:</strong> installers are not code-signed
+      and may be blocked by your device. <a href="/download/security/">Read the safety and verification guide</a>
+      before downloading.</p>
     <div class="download-grid">
       <section class="download-card" aria-labelledby="macos-download">
         <p class="download-platform">macOS</p>
         <h3 id="macos-download">MathBoard for Mac</h3>
         <p>Choose the disk image that matches your Mac's chip.</p>
-        <p class="download-status-note">${renderVerifiedNote('macos-arm64')} — Apple Silicon only.</p>
+        <p class="download-status-note">Apple Silicon DMG: ${renderVerifiedNote('macos-arm64')}<br>
+          Intel DMG: ${renderVerifiedNote('macos-intel')}</p>
         <p class="download-actions">
           ${renderDownloadLink('macosArm64', 'Apple Silicon (DMG)', 'hub-macos')}
           ${renderDownloadLink('macosIntel', 'Intel (DMG)', 'hub-macos', { primary: false })}
