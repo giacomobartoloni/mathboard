@@ -72,7 +72,7 @@ test('the beta clearly distinguishes validated and untested platforms', () => {
   assert.match(macos.body, /Apple Silicon/)
   assert.match(windows.body, /Smart App Control/)
   assert.match(linux.body, /package repository identity/)
-  assert.match(windows.body, /Get-FileHash \.\\\\MathBoard_/)
+  assert.ok(windows.body.includes('Get-FileHash .\\MathBoard_'))
   assert.match(linux.body, /chmod \+x MathBoard_/)
   assert.match(security.body, /does not independently authenticate/)
 })
