@@ -104,14 +104,17 @@ test('readiness refuses active interactions and pending work without cleaning up
   const { isCaptureStable, waitForCapturePaint }=await import('../dev-agent/capture/visual-capture.js')
   const canvas={getActiveObject:()=>null}
   const stale={isEditing:false}
-  const board={canvas,sessionReady:true,_uncommittedText:stale}
+  const flags={pan:false,shape:false,pencil:false,transform:false,textEdit:false}
+  const board={canvas,sessionReady:true,_uncommittedText:stale,
+    readInteractionState:()=>({...flags,textInsertionEditing:stale.isEditing})}
   assert.equal(isCaptureStable(board),true)
   assert.equal(board._uncommittedText,stale)
-  for(const key of ['isPanning','isDrawingShape','currentShape','_pencilGesture','_pendingTransform','_pendingText']) {
-    board[key]=true;assert.equal(isCaptureStable(board),false,key);delete board[key]
+  for(const key of Object.keys(flags)) {
+    flags[key]=true;assert.equal(isCaptureStable(board),false,key);flags[key]=false
   }
   assert.equal(isCaptureStable(board,1),false)
   stale.isEditing=true;assert.equal(isCaptureStable(board),false)
+  assert.equal(board._uncommittedText,stale)
   const signal=new AbortController()
   const waiting=waitForCapturePaint({document:{fonts:{ready:new Promise(()=>{})}}},signal.signal)
   signal.abort()
@@ -143,7 +146,7 @@ test('failed Fabric clones reject capture rather than silently dropping rendered
   }
   classRegistry.setClass(FailedCaptureClone)
   const object=new FailedCaptureClone({width:40,height:30})
-  const board={sessionReady:true,canvas:makeControllerCanvas([object]),getBoardId:()=> 'synthetic-board'}
+  const board={sessionReady:true,canvas:makeControllerCanvas([object]),getBoardId:()=> 'synthetic-board',readInteractionState:()=>({})}
   const environment={document:{fonts:{ready:Promise.resolve()}},
     requestAnimationFrame:callback=>{queueMicrotask(callback);return 1},cancelAnimationFrame:()=>{}}
   const capture=createVisualCaptureAdapter(()=>board,environment)
