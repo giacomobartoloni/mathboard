@@ -123,12 +123,16 @@ export class TextInsertionSession {
     return true;
   }
 
-  dispose() {
-    this.deactivate();
+  reset() {
     if (this.pending && this._finalize) {
       this.pending.off("editing:exited", this._finalize);
     }
     this.pending = null;
     this._finalize = null;
+  }
+
+  dispose() {
+    this.deactivate();
+    this.reset();
   }
 }
