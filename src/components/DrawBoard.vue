@@ -38,7 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
-import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
+import { Canvas, Pattern, PencilBrush, Shadow, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import { paletteColorFromSelection } from "../config/colors";
@@ -79,6 +79,9 @@ import {
 } from "../history/commandLog";
 import { BoardHistory } from "../history/BoardHistory.js";
 import { SelectionMutations } from "../board/interactions/SelectionMutations.js";
+import { ShapeGesture } from "../board/interactions/ShapeGesture.js";
+import { TextInsertionSession } from "../board/interactions/TextInsertionSession.js";
+import { PanGesture } from "../board/interactions/PanGesture.js";
 import {
   trackEvent,
   trackBoardEngaged,
@@ -106,9 +109,6 @@ const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
 // Objects whose board ink lives on "fill".
 const FILL_INK_TYPES = ["IText", "Text"];
 
-// Fabric 7 defaults origin to center/center; keep left/top for click-to-place UX.
-const LEFT_TOP_ORIGIN = { originX: "left", originY: "top" };
-
 // Constants
 const CANVAS_EVENTS = [
   "before:render", "after:render", "canvas:cleared", "object:added", "object:removed",
@@ -129,12 +129,6 @@ const DEFAULT_BRUSH_CONFIG = {
   shadowOffsetX: 0,
   shadowOffsetY: 0,
   shadowColor: "#000000"
-};
-
-const DEFAULT_TEXT_CONFIG = {
-  content: 'Text',
-  fontSize: 32,
-  fontFamily: 'Arial'
 };
 
 const CURSOR_TYPES = {
@@ -170,13 +164,6 @@ export default {
       type: "canvas",
       windowWidth: 0,
       windowHeight: 0,
-      isPanning: false,
-      lastPosX: 0,
-      lastPosY: 0,
-      isDrawingShape: false,
-      shapeStartX: 0,
-      shapeStartY: 0,
-      currentShape: null,
       selectionPanel: {
         visible: false,
         x: 0,
@@ -204,10 +191,12 @@ export default {
     });
     this._pendingTransform = null;
     this._pendingText = null;
-    this._uncommittedText = null;
     this._pencilGesture = false;
     this._selectionGesture = false;
     this._geometryEditing = null;
+    this._shapeGesture = null;
+    this._panGesture = null;
+    this._textInsertion = null;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
@@ -271,16 +260,25 @@ export default {
       });
       return this._boardController;
     },
+    /** Immutable, read-only interaction flags for the local visual capture bridge. */
+    readInteractionState() {
+      return {
+        pan: Boolean(this._panGesture?.isActive()),
+        shape: Boolean(this._shapeGesture?.isActive()),
+        pencil: Boolean(this._pencilGesture),
+        transform: Boolean(this._pendingTransform),
+        textEdit: Boolean(this._pendingText),
+        textInsertionEditing: Boolean(this._textInsertion?.isPendingEditing()),
+      };
+    },
     _isBoardInteractionStable() {
       if (!this.canvas) return false;
-      if (this.isDrawingShape || this.currentShape || this._pencilGesture) return false;
+      if (this._shapeGesture?.isActive() || this._pencilGesture) return false;
       // Guard against stale reference: if the uncommitted text object is no longer
       // in editing mode (e.g. editing:exited event was missed due to tab focus loss
       // or a context switch), clear it so it does not permanently block mutations.
-      if (this._uncommittedText && !this._uncommittedText.isEditing) {
-        this._uncommittedText = null;
-      }
-      if (this._uncommittedText || this._pendingTransform || this._pendingText) return false;
+      this._textInsertion?.clearStale();
+      if (this._textInsertion?.hasPending() || this._pendingTransform || this._pendingText) return false;
       return !this.canvas.getActiveObject()?.isEditing;
     },
 
@@ -425,7 +423,7 @@ export default {
     applyToolCursor(tool) {
       if (!this.canvas) return;
       if (tool === 'pan') {
-        if (!this.isPanning) this.setCursor(CURSOR_TYPES.grab);
+        if (!this._panGesture?.isActive()) this.setCursor(CURSOR_TYPES.grab);
         return;
       }
       if (tool === 'pencil' || tool === 'shapes') {
@@ -476,7 +474,7 @@ export default {
       this.canvas.requestRenderAll();
     },
     _panelAllowed() {
-      if (this.selectionPanelSuspended || this._selectionGesture || this.isPanning) return false;
+      if (this.selectionPanelSuspended || this._selectionGesture || this._panGesture?.isActive()) return false;
       return this.selectedTool === "select" || this.selectedTool === "pan";
     },
     _hideSelectionPanel() {
@@ -863,7 +861,7 @@ export default {
       this._boardHistory.reset();
       this._pendingTransform = null;
       this._pendingText = null;
-      this._uncommittedText = null;
+      this._textInsertion?.reset();
     },
     _clearBoardContents() {
       if (!this.canvas) return;
@@ -957,69 +955,22 @@ export default {
       this.setObjectsSelectable(false);
       this.setCursor(CURSOR_TYPES.grab);
       this.canvas.allowTouchScrolling = false;
-      
-      this.canvas.on('mouse:down', this.startPanning);
-      this.canvas.on('mouse:move', this.continuePanning);
-      this.canvas.on('mouse:up', this.stopPanning);
-      this.canvas.on('touch:start', this.startPanning);
-      this.canvas.on('touch:move', this.continuePanning);
-      this.canvas.on('touch:end', this.stopPanning);
+      this._panGesture.activate();
     },
     disablePanning() {
-      this.isPanning = false;
-      this.canvas.off('mouse:down', this.startPanning);
-      this.canvas.off('mouse:move', this.continuePanning);
-      this.canvas.off('mouse:up', this.stopPanning);
-      this.canvas.off('touch:start', this.startPanning);
-      this.canvas.off('touch:move', this.continuePanning);
-      this.canvas.off('touch:end', this.stopPanning);
-      
+      this._panGesture.deactivate();
       this.canvas.selection = true;
       this.setObjectsSelectable(true);
-      // The board fills the viewport. Touch drags select and move; they do not
-      // scroll the page. Pan uses the same flag and moves the viewport itself.
       this.canvas.allowTouchScrolling = false;
-    },
-    startPanning(opt) {
-      if (this.selectedTool !== 'pan') return;
-      
-      const evt = opt.e;
-      evt.preventDefault();
-      this.isPanning = true;
-      this._hideSelectionPanel();
-      this.lastPosX = evt.touches ? evt.touches[0].clientX : evt.clientX;
-      this.lastPosY = evt.touches ? evt.touches[0].clientY : evt.clientY;
-      this.canvas.selection = false;
-      this.setCursor(CURSOR_TYPES.grabbing);
-    },
-    continuePanning(opt) {
-      if (!this.isPanning) return;
-      const evt = opt.e;
-      evt.preventDefault();
-      const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
-      const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
-      const vpt = this.canvas.viewportTransform;
-      vpt[4] += clientX - this.lastPosX;
-      vpt[5] += clientY - this.lastPosY;
-      this.canvas.requestRenderAll();
-      this.lastPosX = clientX;
-      this.lastPosY = clientY;
-    },
-    stopPanning() {
-      this.isPanning = false;
-      if (this.selectedTool === 'pan') {
-        this.setCursor(CURSOR_TYPES.grab);
-      }
-      this.refreshSelectionPanel();
     },
     enableTextInsertion() {
       this.canvas.isDrawingMode = false;
       this.canvas.selection = true;
       this.setObjectsSelectable(true);
-      this.canvas.on('mouse:down', this.addText);
+      this._textInsertion.activate();
     },
     disableTextInsertion() {
-      this.canvas.off('mouse:down', this.addText);
+      this._textInsertion.deactivate();
     },
     enableFormulaInsertion() {
       this.canvas.isDrawingMode = false;
@@ -1097,207 +1048,21 @@ export default {
       this.canvas.isDrawingMode = false;
       this.canvas.selection = false;
       this.setObjectsSelectable(false);
-      
-      this.canvas.on('mouse:down', this.startDrawingShape);
-      this.canvas.on('mouse:move', this.continueDrawingShape);
-      this.canvas.on('mouse:up', this.finishDrawingShape);
+      this._shapeGesture.activate();
     },
     disableShapeDrawing() {
-      // Tool switches drop the mouse-up listener. Close the gesture first so
-      // the shape still has one command.
-      this.finishDrawingShape();
-      this.canvas.off('mouse:down', this.startDrawingShape);
-      this.canvas.off('mouse:move', this.continueDrawingShape);
-      this.canvas.off('mouse:up', this.finishDrawingShape);
-      
+      // Complete the current gesture before dropping mouse subscriptions.
+      this._shapeGesture.deactivate();
       this.canvas.selection = true;
       this.setObjectsSelectable(true);
     },
-    startDrawingShape(opt) {
-      if (this.selectedTool !== 'shapes') return;
-      
-      const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
-      this.isDrawingShape = true;
-      this.shapeStartX = pointer.x;
-      this.shapeStartY = pointer.y;
-      
-      // markRaw: currentShape lives in data(); a Vue proxy on the canvas
-      // breaks Fabric ActiveSelection identity checks (objects jump on select-all).
-      this.currentShape = markRaw(this.createShape(pointer.x, pointer.y, 0, 0));
-      this.canvas.add(this.currentShape);
-      this.canvas.renderAll();
-    },
-    continueDrawingShape(opt) {
-      if (!this.isDrawingShape || !this.currentShape) return;
-      
-      const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
-      const width = pointer.x - this.shapeStartX;
-      const height = pointer.y - this.shapeStartY;
-      
-      // Aggiorna la forma in base al tipo
-      if (this.selectedShape === 'rectangle') {
-        this.currentShape.set({
-          width: Math.abs(width),
-          height: Math.abs(height),
-          left: width > 0 ? this.shapeStartX : pointer.x,
-          top: height > 0 ? this.shapeStartY : pointer.y
-        });
-      } else if (this.selectedShape === 'circle') {
-        const radius = Math.sqrt(width * width + height * height) / 2;
-        this.currentShape.set({
-          radius: radius,
-          left: this.shapeStartX,
-          top: this.shapeStartY,
-          originX: 'center',
-          originY: 'center'
-        });
-      } else if (this.selectedShape === 'arrow') {
-        this.currentShape.set({
-          x2: pointer.x,
-          y2: pointer.y
-        });
-      }
-      
-      this.canvas.renderAll();
-    },
-    finishDrawingShape() {
-      const shape = this.currentShape;
-      this.isDrawingShape = false;
-      this.currentShape = null;
-      // One gesture, including a click that leaves a 0×0 shape. The add at
-      // mouse-down is not a command; object:added is not a history hook.
-      if (shape) {
-        shape.setCoords();
-        this._recordAdd(shape);
-        trackBoardEngaged();
-        recordProductAction();
-        trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-          object_type: ANALYTICS_OBJECT_TYPES.SHAPE,
-          shape: this.selectedShape,
-        });
-
-        // One-shot completion, like Text and Formula. Skip it when an explicit
-        // tool switch finalized the gesture through disableShapeDrawing(), so
-        // Pan/Pen/Select chosen mid-gesture is never overridden.
-        if (this.selectedTool === 'shapes') {
-          this.$emit('shape-drawing-completed');
-        }
-      }
-    },
-    createShape(x, y, width, height) {
-      const commonProps = {
-        fill: 'transparent',
-        stroke: this.activeInk,
-        strokeWidth: 2,
-        // While Shapes is active this object is still being authored.
-        // The 'select' tool watcher re-enables interaction after commit.
-        selectable: false
-      };
-      
-      let shape;
-      if (this.selectedShape === 'rectangle') {
-        shape = new Rect({
-          left: x,
-          top: y,
-          width: width,
-          height: height,
-          ...LEFT_TOP_ORIGIN,
-          ...commonProps
-        });
-      } else if (this.selectedShape === 'circle') {
-        shape = new Circle({
-          left: x,
-          top: y,
-          radius: 0,
-          ...commonProps,
-          originX: 'center',
-          originY: 'center'
-        });
-      } else if (this.selectedShape === 'arrow') {
-        shape = new Line([x, y, x, y], {
-          ...LEFT_TOP_ORIGIN,
-          ...commonProps,
-          strokeWidth: 3
-        });
-      }
-
-      // Explicit palette ink stays fixed. Automatic ink still follows the board theme.
-      shape.mathboardInkMode = this.inkMode;
-      return shape;
-    },
+    // Keep public adapter entry points for existing integrations.
+    startDrawingShape(opt) { this._shapeGesture?.start(opt); },
+    continueDrawingShape(opt) { this._shapeGesture?.move(opt); },
+    finishDrawingShape() { return this._shapeGesture?.finish(this.selectedTool === 'shapes') || false; },
+    createShape(x, y) { return this._shapeGesture?.createShape(x, y) || null; },
     addText(opt) {
-      if (this.selectedTool !== 'font' || opt.target) return;
-      
-      const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
-      const text = new IText(DEFAULT_TEXT_CONFIG.content, {
-        left: pointer.x,
-        top: pointer.y,
-        ...LEFT_TOP_ORIGIN,
-        fontSize: DEFAULT_TEXT_CONFIG.fontSize,
-        fill: this.activeInk,
-        fontFamily: DEFAULT_TEXT_CONFIG.fontFamily,
-        editable: true,
-        selectable: true,
-        evented: true,
-        hasControls: true,
-        hasBorders: true,
-        lockMovementX: false,
-        lockMovementY: false,
-        lockRotation: false,
-        lockScalingX: false,
-        lockScalingY: false,
-        lockScalingFlip: false,
-        lockSkewingX: false,
-        lockSkewingY: false
-      });
-      
-      // Explicit palette ink stays fixed. Automatic ink still follows the board theme.
-      // The placeholder is not a command. The add is recorded when editing
-      // exits with real text; an empty or unchanged placeholder is removed.
-      text.mathboardInkMode = this.inkMode;
-      this._uncommittedText = text;
-      
-      this.canvas.add(text);
-      this.canvas.setActiveObject(text);
-
-      trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_STARTED);
-
-      // Enter editing mode immediately
-      this.$nextTick(() => {
-        text.enterEditing();
-        text.selectAll();
-        text.hiddenTextarea?.focus();
-      });
-
-      // One-shot: only the initial creation session may commit or cancel.
-      const finalizeInitialText = () => {
-        text.off('editing:exited', finalizeInitialText);
-
-        if (this._uncommittedText !== text) return;
-
-        this._uncommittedText = null;
-
-        if (text.text.trim() === '' || text.text === DEFAULT_TEXT_CONFIG.content) {
-          this._boardHistory.removeRetained(text);
-          trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_CANCELLED);
-        } else {
-          this._recordAdd(text);
-          trackBoardEngaged();
-          recordProductAction();
-          trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-            object_type: ANALYTICS_OBJECT_TYPES.TEXT,
-          });
-        }
-        this.canvas.requestRenderAll();
-
-        // Disabilita immediatamente il text insertion per evitare creazione di nuovo testo
-        this.disableTextInsertion();
-
-        // Emit event to switch to select tool
-        this.$emit('text-editing-completed');
-      };
-
-      text.on('editing:exited', finalizeInitialText);
+      return this._textInsertion?.start(opt) || false;
     },
     /**
      * Mirror the active selection into the toolbar palette. Automatic ink
@@ -1350,20 +1115,7 @@ export default {
       return true;
     },
     cancelInProgressShape() {
-      if (!this.isDrawingShape || !this.currentShape || !this.canvas) return false;
-      const shape = this.currentShape;
-      this.isDrawingShape = false;
-      this.currentShape = null;
-      // The add is recorded only when the gesture finishes, so cancelling
-      // removes the shape and leaves the command log untouched.
-      this._boardHistory.setSuspended(true);
-      try {
-        this.canvas.remove(shape);
-      } finally {
-        this._boardHistory.setSuspended(false);
-      }
-      this.canvas.requestRenderAll();
-      return true;
+      return this._shapeGesture?.cancel() || false;
     },
     clearSelection() {
       if (!this.canvas?.getActiveObject()) return false;
@@ -1454,7 +1206,7 @@ export default {
     },
     onTextEditingEntered({ target }) {
       this._hideSelectionPanel();
-      if (!target || target === this._uncommittedText) return;
+      if (!target || this._textInsertion?.owns(target)) return;
       this._pendingText = { object: target, before: snapshotObject(target) };
       trackEvent(ANALYTICS_EVENTS.TEXT_EDIT_STARTED);
     },
@@ -1586,6 +1338,53 @@ export default {
       }));
       
       this._ensureBoardController();
+      this._shapeGesture = new ShapeGesture({
+        canvas: this.canvas,
+        getShape: () => this.selectedShape,
+        getInk: () => this.activeInk,
+        getInkMode: () => this.inkMode,
+        onCommitted: (shape, shapeType) => {
+          this._recordAdd(shape);
+          trackBoardEngaged();
+          recordProductAction();
+          trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+            object_type: ANALYTICS_OBJECT_TYPES.SHAPE,
+            shape: shapeType,
+          });
+        },
+        onComplete: () => this.$emit('shape-drawing-completed'),
+      });
+      this._panGesture = new PanGesture({
+        canvas: this.canvas,
+        onStart: () => {
+          this._hideSelectionPanel();
+          this.setCursor(CURSOR_TYPES.grabbing);
+        },
+        onFinish: () => {
+          if (this.selectedTool === 'pan') this.setCursor(CURSOR_TYPES.grab);
+          this.refreshSelectionPanel();
+        },
+      });
+      this._textInsertion = new TextInsertionSession({
+        canvas: this.canvas,
+        getInk: () => this.activeInk,
+        getInkMode: () => this.inkMode,
+        scheduleFocus: async (callback) => { await this.$nextTick(); callback(); },
+        onStarted: () => trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_STARTED),
+        onCancelled: (text) => {
+          this._boardHistory.removeRetained(text);
+          trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_CANCELLED);
+        },
+        onCommitted: (text) => {
+          this._recordAdd(text);
+          trackBoardEngaged();
+          recordProductAction();
+          trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
+            object_type: ANALYTICS_OBJECT_TYPES.TEXT,
+          });
+        },
+        onComplete: () => this.$emit('text-editing-completed'),
+      });
       this.initializeBrush();
       this.setBackgroundPattern();
       this.applySelectionChrome();
@@ -1633,6 +1432,9 @@ export default {
   },
   beforeUnmount() {
     this._clearGeometryEditing();
+    this._shapeGesture?.dispose();
+    this._textInsertion?.dispose();
+    this._panGesture?.dispose();
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);

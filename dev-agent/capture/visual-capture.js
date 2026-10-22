@@ -27,9 +27,11 @@ const notReady=()=>{throw captureError('board_not_ready','Wait for a stable, ful
 /** A read-only guard: unlike the existing observer, never cleans up a stale editing reference. */
 export function isCaptureStable(board,pending=0) {
   const c=board?.canvas
-  return Boolean(c && board.sessionReady && !pending && !board.isPanning && !board.isDrawingShape
-    && !board.currentShape && !board._pencilGesture && !board._pendingTransform && !board._pendingText
-    && !board._uncommittedText?.isEditing && !c.getActiveObject()?.isEditing
+  const interaction=board?.readInteractionState?.()
+  return Boolean(c && board.sessionReady && !pending && interaction
+    && !interaction.pan && !interaction.shape && !interaction.pencil
+    && !interaction.transform && !interaction.textEdit && !interaction.textInsertionEditing
+    && !c.getActiveObject()?.isEditing
     && !c._currentTransform && !c._groupSelector && !c._isCurrentlyDrawing)
 }
 
