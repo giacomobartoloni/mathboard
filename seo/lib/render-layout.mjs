@@ -27,6 +27,8 @@ export function renderLayout(page) {
   const title = escapeHtml(page.title)
   const description = escapeHtml(page.description)
   const h1 = escapeHtml(page.h1)
+  // Only pages that render an in-body heading opt out of the shared h1 slot.
+  const heading = page.h1InBody ? '' : `<h1>${h1}</h1>`
   const breadcrumbs = renderBreadcrumbs(page.breadcrumbs)
   const katexCss = page.needsKatex
     ? '<link rel="stylesheet" href="/seo/katex/katex.min.css">'
@@ -68,7 +70,7 @@ export function renderLayout(page) {
 
   <main id="main">
     ${breadcrumbs}
-    <h1>${h1}</h1>
+    ${heading}
     ${page.body}
   </main>
 
