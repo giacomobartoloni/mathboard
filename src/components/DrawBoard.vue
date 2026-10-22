@@ -99,6 +99,7 @@ import {
   encodeObjectsAsStamp,
 } from "../stamps/index.js";
 import { resolveStampRoot } from "../stamps/resolveStampRoot.js";
+import { geometryControls, lineGeometryAdapter, isGeometryHandleTransform } from "../board/geometry/geometryHandles.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -207,6 +208,7 @@ export default {
     this._pencilGesture = false;
     this._historyTipKind = "command";
     this._selectionGesture = false;
+    this._geometryEditing = null;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
@@ -594,18 +596,56 @@ export default {
         && prev.actions.join() === next.actions.join();
       if (!same) this.selectionPanel = next;
     },
+    _clearGeometryEditing() {
+      const previous = this._geometryEditing;
+      if (!previous) return;
+      const { object, controls, hadOwnControls, hasBorders } = previous;
+      if (hadOwnControls) object.controls = controls;
+      else delete object.controls;
+      object.hasBorders = hasBorders;
+      // Fabric keeps cached hit regions (oCoords) keyed by the control names.
+      // Restore those regions together with the original controls.
+      object.setCoords();
+      this._geometryEditing = null;
+      // The old endpoint controls may still be painted on the upper canvas.
+      // Keep visual controls and hit regions in sync immediately.
+      this.canvas?.requestRenderAll();
+    },
+    _syncGeometryEditing() {
+      const active = this.canvas?.getActiveObject();
+      // Geometry editing is deliberately limited to top-level, singly selected lines.
+      const editable = this.selectedTool === 'select'
+        && active?.isType?.('Line')
+        && this.canvas.getObjects().includes(active)
+        && this.canvas.getActiveObjects().length === 1 ? active : null;
+      if (this._geometryEditing?.object === editable) return;
+      this._clearGeometryEditing();
+      if (!editable) return;
+      this._geometryEditing = {
+        object: editable,
+        controls: editable.controls,
+        hadOwnControls: Object.prototype.hasOwnProperty.call(editable, 'controls'),
+        hasBorders: editable.hasBorders,
+      };
+      editable.controls = geometryControls(lineGeometryAdapter);
+      editable.hasBorders = false;
+      // Rebuild oCoords before the next hit test: stale native keys crash findControl.
+      editable.setCoords();
+      this.canvas.requestRenderAll();
+    },
     onSelectionChanged() {
-      // ActiveSelection is a transient Fabric wrapper, not a canvas object.
-      // Apply controls here as well so newly selected objects and multi-selects
-      // hide side handles without changing their resize corners or rotation.
+      // Preserve PR #85: ActiveSelection is a transient wrapper, not a canvas object.
+      // Apply native selection chrome (including side-control visibility) on selection.
       const active = this.canvas?.getActiveObject();
       if (active) {
         applySelectionObjectChrome(active, selectionObjectChromeForBoard(this.boardTheme));
       }
+      this._syncGeometryEditing();
       this.emitSelectionColor();
       this.refreshSelectionPanel();
     },
     onSelectionCleared() {
+      this._syncGeometryEditing();
       this.refreshSelectionPanel();
     },
     onPencilPointerDown() {
@@ -1580,8 +1620,30 @@ export default {
       this.canvas.requestRenderAll();
       return true;
     },
+    _cancelGeometryTransform() {
+      const transform = this.canvas?._currentTransform;
+      if (!transform || !isGeometryHandleTransform(transform)) return false;
+
+      // A tool switch or Escape cancels the entire in-flight gesture, not just
+      // subsequent pointer moves. Restore the original object without history.
+      transform.mathboardCancelled = true;
+      const pending = this._pendingTransform?.find(({ object }) => object === transform.target);
+      if (pending) applySnapshot(pending.object, pending.before);
+      this._pendingTransform = null;
+      this._selectionGesture = false;
+
+      // Fabric's public interruption API finalizes the pointer transform.
+      // Clear its modified flag first to suppress a spurious object:modified
+      // event (and accidental history/persistence writes) after the rollback.
+      transform.actionPerformed = false;
+      this.canvas.endCurrentTransform();
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      return true;
+    },
     cancelTransientAction() {
       if (this.cancelInProgressShape()) return true;
+      if (this._cancelGeometryTransform()) return true;
       return this.clearSelection();
     },
     _pushCommand(command) {
@@ -1783,9 +1845,11 @@ export default {
       // A text edit commits on exit, before a later drag can start. Drop a
       // snapshot left behind by an edit that did not change the text.
       this._pendingText = null;
+      const includeGeometry = isGeometryHandleTransform(transform);
       this._pendingTransform = gestureObjects(transform.target).map((object) => ({
         object,
-        before: snapshotObject(object)
+        includeGeometry,
+        before: snapshotObject(object, { includeGeometry })
       }));
     },
     onTextEditingEntered({ target }) {
@@ -1812,10 +1876,10 @@ export default {
           this._pendingTransform = null;
           if (!pending) return;
           const entries = pending
-            .map(({ object, before }) => ({
+            .map(({ object, before, includeGeometry }) => ({
               object,
               before,
-              after: snapshotObject(object)
+              after: snapshotObject(object, { includeGeometry })
             }))
             .filter((entry) => !snapshotsEqual(entry.before, entry.after));
           if (entries.length) this._pushCommand({ type: 'modify', entries });
@@ -1968,6 +2032,7 @@ export default {
     });
   },
   beforeUnmount() {
+    this._clearGeometryEditing();
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
@@ -2024,7 +2089,10 @@ export default {
     },
     selectedTool(newTool) {
       if (!this.canvas) return;
-      
+
+      // Switching tools during endpoint editing must roll back the whole drag
+      // before the native controls are restored, even while the mouse is down.
+      this._cancelGeometryTransform();
       this.disablePanning();
       this.disableTextInsertion();
       this.disableShapeDrawing();
@@ -2062,6 +2130,7 @@ export default {
           break;
       }
       this.applyToolCursor(newTool);
+      this._syncGeometryEditing();
       this.refreshSelectionPanel();
     },
     selectionPanelSuspended() {
