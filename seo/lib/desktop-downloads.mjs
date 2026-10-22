@@ -53,12 +53,16 @@ export function releaseUrl(release = desktopRelease) {
   return `${REPO_RELEASES}/tag/${release.tag}`
 }
 
-export function assetUrl(key, release = desktopRelease) {
+export function assetName(key, release = desktopRelease) {
   validateDesktopRelease(release)
   if (!Object.hasOwn(ASSET_FORMATS, key)) {
     throw new Error(`Unknown desktop release asset: ${key}`)
   }
-  return `${REPO_RELEASES}/download/${release.tag}/${encodeURIComponent(release.assets[key])}`
+  return release.assets[key]
+}
+
+export function assetUrl(key, release = desktopRelease) {
+  return `${REPO_RELEASES}/download/${release.tag}/${encodeURIComponent(assetName(key, release))}`
 }
 
 export function renderDownloadLink(key, label, placement, { primary = true } = {}) {

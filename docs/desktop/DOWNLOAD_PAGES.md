@@ -24,7 +24,7 @@ When preparing the next approved public desktop release:
 2. Inspect the actual release's seven assets on GitHub, including
    `SHA256SUMS.txt`. Check the version, asset filenames and checksum entries.
    Do not use `releases/latest` to select an unsigned prerelease.
-3. Update only the version, tag and reviewed asset names in
+3. Update the version, tag and reviewed asset names in
    `seo/data/desktop-release.mjs`. Set `testedPlatforms` based on *recorded*
    manual validation of each specific installer, never packaging CI alone.
    Keep the status `unsigned-public-beta` until a separately approved signed

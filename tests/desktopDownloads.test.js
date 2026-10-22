@@ -8,7 +8,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { desktopRelease } from '../seo/data/desktop-release.mjs'
 import {
-  assetUrl, releaseUrl, validateDesktopRelease,
+  assetName, assetUrl, releaseUrl, validateDesktopRelease,
 } from '../seo/lib/desktop-downloads.mjs'
 import download from '../seo/pages/download.mjs'
 import macos from '../seo/pages/download-macos.mjs'
@@ -24,7 +24,7 @@ test('download pages have unique paths and valid rendered HTML, structured data 
   const { paths } = validatePages(pages)
   for (const page of pages) {
     assert.ok(paths.has(page.path))
-    assert.equal(page.lastmod, '2026-10-22')
+    assert.match(page.lastmod, /^\d{4}-\d{2}-\d{2}$/)
     const html = renderLayout(page)
     assert.doesNotThrow(() => validateRenderedHtml(page, html))
     assert.match(html, /href="\/download\/security\/"/)
@@ -36,8 +36,9 @@ test('all download links resolve directly to official versioned GitHub assets', 
   assert.doesNotThrow(() => validateDesktopRelease())
   assert.equal(releaseUrl(), 'https://github.com/giacomobartoloni/mathboard/releases/tag/v1.8.0')
   for (const [key, name] of Object.entries(desktopRelease.assets)) {
+    assert.equal(assetName(key), name)
     assert.equal(assetUrl(key),
-      `https://github.com/giacomobartoloni/mathboard/releases/download/v1.8.0/${name}`)
+      `https://github.com/giacomobartoloni/mathboard/releases/download/${desktopRelease.tag}/${name}`)
   }
   assert.doesNotMatch(pages.map((p) => p.body).join(' '), /releases\/latest/)
   const hub = renderLayout(download)
@@ -71,5 +72,7 @@ test('the beta clearly distinguishes validated and untested platforms', () => {
   assert.match(macos.body, /Apple Silicon/)
   assert.match(windows.body, /Smart App Control/)
   assert.match(linux.body, /package repository identity/)
+  assert.match(windows.body, /Get-FileHash \.\\\\MathBoard_/)
+  assert.match(linux.body, /chmod \+x MathBoard_/)
   assert.match(security.body, /does not independently authenticate/)
 })

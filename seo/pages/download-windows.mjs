@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { renderOpenBoardCTA } from '../lib/render-components.mjs'
 import {
-  renderChecksumsLink, renderDownloadLink, renderReleaseContext,
+  assetName, renderChecksumsLink, renderDownloadLink, renderReleaseContext,
   renderSecurityNotice, renderVerifiedNote,
 } from '../lib/desktop-downloads.mjs'
 
@@ -46,7 +46,7 @@ export default {
       <ol>
         <li>Download the official EXE or MSI and verify its SHA-256 checksum
           against ${renderChecksumsLink()}. In PowerShell use
-          <code>Get-FileHash .\MathBoard_1.8.0_x64-setup.exe -Algorithm SHA256</code>
+          <code>Get-FileHash .\\${assetName('windowsExe')} -Algorithm SHA256</code>
           (or the exact name of your MSI).</li>
         <li>Run the verified installer using your normal Windows installation process.</li>
         <li>These installers are not Authenticode-signed. Defender SmartScreen,

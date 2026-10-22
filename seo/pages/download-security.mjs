@@ -44,7 +44,7 @@ export default {
           <thead><tr><th>System</th><th>Command</th></tr></thead>
           <tbody>
             <tr><td>macOS</td><td><code>shasum -a 256 filename.dmg</code></td></tr>
-            <tr><td>Windows PowerShell</td><td><code>Get-FileHash .\filename.exe -Algorithm SHA256</code></td></tr>
+            <tr><td>Windows PowerShell</td><td><code>Get-FileHash .\\filename.exe -Algorithm SHA256</code></td></tr>
             <tr><td>Linux</td><td><code>sha256sum downloaded-file</code></td></tr>
           </tbody>
         </table>

@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { renderOpenBoardCTA } from '../lib/render-components.mjs'
 import {
-  renderChecksumsLink, renderDownloadLink, renderReleaseContext,
+  assetName, renderChecksumsLink, renderDownloadLink, renderReleaseContext,
   renderSecurityNotice, renderVerifiedNote,
 } from '../lib/desktop-downloads.mjs'
 
@@ -48,7 +48,7 @@ export default {
         <li>Download the appropriate package from GitHub and compare
           <code>sha256sum downloaded-file</code> against ${renderChecksumsLink()}.</li>
         <li>For AppImage, make the verified file executable with
-          <code>chmod +x MathBoard_1.8.0_amd64.AppImage</code>, then run the file.</li>
+          <code>chmod +x ${assetName('linuxAppImage')}</code>, then run the file.</li>
         <li>For DEB, install the verified package with your distribution's package manager;
           review any missing dependency warnings.</li>
       </ol>
