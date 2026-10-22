@@ -83,7 +83,7 @@ async function snapshot(page, remember = false) {
     const board = window.__captureTestBoard, canvas = board.canvas
     if (remember) window.__captureTestRefs = {
       canvas, objects: canvas.getObjects().slice(), active: canvas.getActiveObject(),
-      history: board._history.slice(), viewport: canvas.viewportTransform,
+      history: board._boardHistory._entries.slice(), viewport: canvas.viewportTransform,
     }
     const refs = window.__captureTestRefs
     const databases = []
@@ -107,14 +107,14 @@ async function snapshot(page, remember = false) {
     return {
       boardId: board.getBoardId(), objects: canvas.getObjects().map(object => object.toObject(['mathboardId', 'latex', 'mathboardInkMode'])),
       selection: canvas.getActiveObjects().map(object => object.mathboardId),
-      historyLength: board._history.length, historyStep: board._historyStep,
+      historyLength: board._boardHistory.summary().length, historyStep: board._boardHistory.summary().step,
       viewport: canvas.viewportTransform.slice(), zoom: canvas.getZoom(),
       local: { ...localStorage }, session: { ...sessionStorage }, databases,
       identities: {
         canvas: refs.canvas === canvas,
         objects: canvas.getObjects().every((object, i) => object === refs.objects[i]),
         active: refs.active === canvas.getActiveObject(),
-        history: board._history.every((entry, i) => entry === refs.history[i]),
+        history: board._boardHistory._entries.every((entry, i) => entry === refs.history[i]),
         viewport: refs.viewport === canvas.viewportTransform,
       },
     }
