@@ -50,6 +50,23 @@
     }
   }
 
+  function trackDownload(event) {
+    var link = event.target.closest('[data-download-asset]')
+    if (!link || !isAnalyticsEnabled()) return
+    ensureEventQueue()
+    try {
+      window.sa_event('download_clicked', {
+        page: pageSlug(),
+        platform: link.getAttribute('data-download-platform') || 'unknown',
+        asset: link.getAttribute('data-download-asset') || 'unknown',
+        version: link.getAttribute('data-download-version') || 'unknown',
+        placement: link.getAttribute('data-download-placement') || 'unknown',
+      })
+    } catch (_) {
+      /* analytics must never interrupt navigation to GitHub */
+    }
+  }
+
   function setupCopyButtons() {
     document.addEventListener('click', function (event) {
       var button = event.target.closest('[data-copy-latex]')
@@ -70,5 +87,6 @@
 
   loadAnalytics()
   document.addEventListener('click', trackCta)
+  document.addEventListener('click', trackDownload)
   setupCopyButtons()
 })()

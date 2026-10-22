@@ -84,6 +84,8 @@ npm run preview
 
 ## Documentation
 
+- [Download MathBoard Desktop](https://mathboard.app/download/) — macOS, Windows and Linux unsigned public beta installers hosted on official GitHub Releases.
+- [Desktop installation and security](https://mathboard.app/download/security/) — checksums, unsigned-binary limitations and platform guides.
 - [MathBoard resources](https://mathboard.app/resources/)
 - [LaTeX formulas](https://mathboard.app/docs/latex/)
 - [Keyboard shortcuts](https://mathboard.app/docs/keyboard-shortcuts/)

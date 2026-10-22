@@ -34,14 +34,16 @@ export default {
   ],
   aboutSoftware: true,
   body: `
-    <p class="lede">
-      MathBoard is released under the <strong>GNU Affero General Public License v3</strong>.
-      You can run it locally, inspect the code, and contribute.
-    </p>
-    <p class="cta-row">
-      ${renderOpenBoardCTA({ placement: 'open-source-hero' })}
-      <a class="button" href="https://github.com/giacomobartoloni/mathboard">View source on GitHub</a>
-    </p>
+    <div class="site-hero">
+      <p class="lede">
+        MathBoard is released under the <strong>GNU Affero General Public License v3</strong>.
+        You can run it locally, inspect the code, and contribute.
+      </p>
+      <p class="cta-row">
+        ${renderOpenBoardCTA({ placement: 'open-source-hero' })}
+        <a class="button" href="https://github.com/giacomobartoloni/mathboard">View source on GitHub</a>
+      </p>
+    </div>
     <section>
       <h2>Repository</h2>
       <ul>
