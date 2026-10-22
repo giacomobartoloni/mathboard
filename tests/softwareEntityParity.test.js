@@ -21,6 +21,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   SOFTWARE_ID,
+  AUTHOR_ID,
   assertSoftwareEntityParity,
   buildMathboardSoftwareEntity,
   softwareComparable,
@@ -32,6 +33,8 @@ test('buildMathboardSoftwareEntity returns a fresh object each call', () => {
   assert.notEqual(a, b)
   assert.deepEqual(a, b)
   assert.equal(a['@id'], SOFTWARE_ID)
+  assert.equal(a.author['@id'], AUTHOR_ID)
+  assert.equal(a.author.url, 'https://github.com/giacomobartoloni')
 })
 
 test('softwareComparable ignores @type order', () => {

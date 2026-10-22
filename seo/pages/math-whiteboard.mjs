@@ -23,6 +23,7 @@ import {
 } from '../lib/render-components.mjs'
 
 export default {
+  lastmod: '2026-10-21',
   path: '/math-whiteboard/',
   title: 'MathBoard — Free Online Whiteboard for Math',
   description:
@@ -30,6 +31,11 @@ export default {
   h1: 'A whiteboard built for math',
   ogImage: '/og-image.png',
   structuredData: 'software-application',
+  breadcrumbs: [
+    { label: 'MathBoard', href: '/' },
+    { label: 'Resources', href: '/resources/' },
+    { label: 'Math whiteboard' },
+  ],
   body: `
     <p class="lede">
       MathBoard combines freehand drawing, text, shapes, and LaTeX formulas on one canvas. It runs in the browser and is free and open source.
