@@ -99,6 +99,7 @@ import {
   encodeObjectsAsStamp,
 } from "../stamps/index.js";
 import { resolveStampRoot } from "../stamps/resolveStampRoot.js";
+import { geometryControls, lineGeometryAdapter, isGeometryHandleTransform } from "../board/geometry/geometryHandles.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -207,6 +208,7 @@ export default {
     this._pencilGesture = false;
     this._historyTipKind = "command";
     this._selectionGesture = false;
+    this._geometryEditing = null;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
@@ -594,6 +596,35 @@ export default {
         && prev.actions.join() === next.actions.join();
       if (!same) this.selectionPanel = next;
     },
+    _clearGeometryEditing() {
+      const previous = this._geometryEditing;
+      if (!previous) return;
+      const { object, controls, hadOwnControls, hasBorders } = previous;
+      if (hadOwnControls) object.controls = controls;
+      else delete object.controls;
+      object.hasBorders = hasBorders;
+      this._geometryEditing = null;
+    },
+    _syncGeometryEditing() {
+      const active = this.canvas?.getActiveObject();
+      // Geometry editing is deliberately limited to top-level, singly selected lines.
+      const editable = this.selectedTool === 'select'
+        && active?.isType?.('Line')
+        && this.canvas.getObjects().includes(active)
+        && this.canvas.getActiveObjects().length === 1 ? active : null;
+      if (this._geometryEditing?.object === editable) return;
+      this._clearGeometryEditing();
+      if (!editable) return;
+      this._geometryEditing = {
+        object: editable,
+        controls: editable.controls,
+        hadOwnControls: Object.prototype.hasOwnProperty.call(editable, 'controls'),
+        hasBorders: editable.hasBorders,
+      };
+      editable.controls = geometryControls(lineGeometryAdapter);
+      editable.hasBorders = false;
+      this.canvas.requestRenderAll();
+    },
     onSelectionChanged() {
       // ActiveSelection is a transient Fabric wrapper, not a canvas object.
       // Apply controls here as well so newly selected objects and multi-selects
@@ -602,10 +633,12 @@ export default {
       if (active) {
         applySelectionObjectChrome(active, selectionObjectChromeForBoard(this.boardTheme));
       }
+      this._syncGeometryEditing();
       this.emitSelectionColor();
       this.refreshSelectionPanel();
     },
     onSelectionCleared() {
+      this._syncGeometryEditing();
       this.refreshSelectionPanel();
     },
     onPencilPointerDown() {
@@ -1582,6 +1615,18 @@ export default {
     },
     cancelTransientAction() {
       if (this.cancelInProgressShape()) return true;
+      // Escape during endpoint drag restores the original line and blocks later pointer moves.
+      const transform = this.canvas?._currentTransform;
+      if (transform && isGeometryHandleTransform(transform) && this._pendingTransform?.length === 1) {
+        transform.mathboardCancelled = true;
+        const { object, before } = this._pendingTransform[0];
+        applySnapshot(object, before);
+        this._pendingTransform = null;
+        this._selectionGesture = false;
+        this.canvas.requestRenderAll();
+        this.refreshSelectionPanel();
+        return true;
+      }
       return this.clearSelection();
     },
     _pushCommand(command) {
@@ -1783,9 +1828,11 @@ export default {
       // A text edit commits on exit, before a later drag can start. Drop a
       // snapshot left behind by an edit that did not change the text.
       this._pendingText = null;
+      const includeGeometry = isGeometryHandleTransform(transform);
       this._pendingTransform = gestureObjects(transform.target).map((object) => ({
         object,
-        before: snapshotObject(object)
+        includeGeometry,
+        before: snapshotObject(object, { includeGeometry })
       }));
     },
     onTextEditingEntered({ target }) {
@@ -1812,10 +1859,10 @@ export default {
           this._pendingTransform = null;
           if (!pending) return;
           const entries = pending
-            .map(({ object, before }) => ({
+            .map(({ object, before, includeGeometry }) => ({
               object,
               before,
-              after: snapshotObject(object)
+              after: snapshotObject(object, { includeGeometry })
             }))
             .filter((entry) => !snapshotsEqual(entry.before, entry.after));
           if (entries.length) this._pushCommand({ type: 'modify', entries });
@@ -1968,6 +2015,7 @@ export default {
     });
   },
   beforeUnmount() {
+    this._clearGeometryEditing();
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
@@ -2062,6 +2110,7 @@ export default {
           break;
       }
       this.applyToolCursor(newTool);
+      this._syncGeometryEditing();
       this.refreshSelectionPanel();
     },
     selectionPanelSuspended() {
