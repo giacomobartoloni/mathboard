@@ -74,12 +74,12 @@ import {
 } from "../config/selectionActions";
 import SelectionActionsPanel from "./SelectionActionsPanel.vue";
 import {
-  HISTORY_LIMIT,
   snapshotObject,
   applySnapshot,
   snapshotsEqual,
   gestureObjects,
 } from "../history/commandLog";
+import { BoardHistory } from "../history/BoardHistory.js";
 import {
   trackEvent,
   trackBoardEngaged,
@@ -197,16 +197,16 @@ export default {
     };
   },
   created() {
-    // The stack holds Fabric instances. It stays off Vue's reactive state so
-    // those instances are not proxied.
-    this._history = [];
-    this._historyStep = -1;
-    this._suspendHistory = false;
+    // History retains Fabric instances outside reactive Vue data.
+    this._boardHistory = new BoardHistory({
+      getCanvas: () => this.canvas,
+      onDocumentChanged: () => this._notifyDocumentChanged(),
+      syncAutoInk: () => this.syncAutoInk(this.boardThemeConfig),
+    });
     this._pendingTransform = null;
     this._pendingText = null;
     this._uncommittedText = null;
     this._pencilGesture = false;
-    this._historyTipKind = "command";
     this._selectionGesture = false;
     this._geometryEditing = null;
     // Services stay off data() so they are not reactive proxies.
@@ -238,9 +238,7 @@ export default {
         getCanvas: () => this.canvas,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
         resetHistory: () => this._resetHistory(),
-        suspendHistory: (flag) => {
-          this._suspendHistory = Boolean(flag);
-        },
+        suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
       });
       return this._persistence;
@@ -254,22 +252,8 @@ export default {
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
-        pushHistoryCommand: (command) => {
-          // A notification can fail after _pushCommand mutates the log. Keep
-          // the history boundary atomic with the controller's canvas rollback.
-          const entries = this._history.slice();
-          const step = this._historyStep;
-          const tip = this._historyTipKind;
-          try {
-            this._pushCommand(command);
-          } catch (error) {
-            this._history.splice(0, this._history.length, ...entries);
-            this._historyStep = step;
-            this._historyTipKind = tip;
-            throw error;
-          }
-        },
-        runWithoutHistory: (callback) => this._runWithoutHistory(callback),
+        pushHistoryCommand: (command) => this._boardHistory.record(command),
+        runWithoutHistory: (callback) => this._boardHistory.runSuspended(callback),
         prepareCreatedObject: (object) => {
           this._applyBoardDefaultInkToObjectTree(object);
           applySelectionObjectChrome(object, selectionObjectChromeForBoard(this.boardTheme));
@@ -281,15 +265,6 @@ export default {
         getLayoutSafeArea: () => workspaceSafeArea(this.canvas, this.$el.closest("#app")),
       });
       return this._boardController;
-    },
-    _runWithoutHistory(callback) {
-      const previous = this._suspendHistory;
-      this._suspendHistory = true;
-      try {
-        return callback();
-      } finally {
-        this._suspendHistory = previous;
-      }
     },
     _isBoardInteractionStable() {
       if (!this.canvas) return false;
@@ -504,7 +479,7 @@ export default {
       this.canvas.selectionLineWidth = selectionLineWidth;
       this.canvas.selectionDashArray = selectionDashArray;
 
-      this._suspendHistory = true;
+      this._boardHistory.setSuspended(true);
       try {
         this.canvas.forEachObject((obj) => applySelectionObjectChrome(obj, objectChrome));
         const active = this.canvas.getActiveObject();
@@ -512,7 +487,7 @@ export default {
           applySelectionObjectChrome(active, objectChrome);
         }
       } finally {
-        this._suspendHistory = false;
+        this._boardHistory.setSuspended(false);
       }
       this.canvas.requestRenderAll();
     },
@@ -746,7 +721,7 @@ export default {
       const stillThere = sources.every((object) => this.canvas.getObjects().includes(object));
       if (!stillThere) return;
 
-      this._suspendHistory = true;
+      this._boardHistory.setSuspended(true);
       try {
         clones.forEach((clone) => this.canvas.add(clone));
         this._selectDuplicates(clones);
@@ -757,13 +732,13 @@ export default {
         console.error("Duplicate failed", error);
         return;
       } finally {
-        this._suspendHistory = false;
+        this._boardHistory.setSuspended(false);
       }
 
       const entries = clones
         .map((object) => ({ object, index: this.canvas.getObjects().indexOf(object) }))
         .filter((entry) => entry.index >= 0);
-      if (entries.length) this._pushCommand({ type: "duplicate", entries });
+      if (entries.length) this._boardHistory.record({ type: "duplicate", entries });
       this.canvas.requestRenderAll();
       this.refreshSelectionPanel();
     },
@@ -959,22 +934,20 @@ export default {
       return { ok: true, group };
     },
     _resetHistory() {
-      this._history = [];
-      this._historyStep = -1;
+      this._boardHistory.reset();
       this._pendingTransform = null;
       this._pendingText = null;
       this._uncommittedText = null;
-      this._historyTipKind = "command";
     },
     _clearBoardContents() {
       if (!this.canvas) return;
       this.canvas.discardActiveObject();
       const objects = this.canvas.getObjects().slice();
-      this._suspendHistory = true;
+      this._boardHistory.setSuspended(true);
       try {
         objects.forEach((object) => this.canvas.remove(object));
       } finally {
-        this._suspendHistory = false;
+        this._boardHistory.setSuspended(false);
       }
       this._resetHistory();
       this.refreshSelectionPanel();
@@ -1048,7 +1021,7 @@ export default {
       if (memberEntries.length < 2) return false;
 
       this.canvas.discardActiveObject();
-      this._suspendHistory = true;
+      this._boardHistory.setSuspended(true);
       let group;
       try {
         memberEntries.forEach(({ object }) => this.canvas.remove(object));
@@ -1061,12 +1034,12 @@ export default {
         this.canvas.add(group);
         this.canvas.setActiveObject(group);
       } finally {
-        this._suspendHistory = false;
+        this._boardHistory.setSuspended(false);
       }
 
       const index = this.canvas.getObjects().indexOf(group);
       if (index < 0) return false;
-      this._pushCommand({
+      this._boardHistory.record({
         type: "group",
         group,
         index,
@@ -1093,14 +1066,14 @@ export default {
       // Match history undo: discard before removeAll so children return to
       // canvas plane rather than selection/group local coordinates.
       this.canvas.discardActiveObject();
-      this._suspendHistory = true;
+      this._boardHistory.setSuspended(true);
       let items;
       try {
         items = group.removeAll();
         this.canvas.remove(group);
         items.forEach((object) => this.canvas.add(object));
       } finally {
-        this._suspendHistory = false;
+        this._boardHistory.setSuspended(false);
       }
 
       const members = items
@@ -1110,7 +1083,7 @@ export default {
         }))
         .filter((entry) => entry.index >= 0);
 
-      this._pushCommand({
+      this._boardHistory.record({
         type: "ungroup",
         group,
         index: groupIndex,
@@ -1460,7 +1433,7 @@ export default {
         this._uncommittedText = null;
 
         if (text.text.trim() === '' || text.text === DEFAULT_TEXT_CONFIG.content) {
-          this._removeRetained(text);
+          this._boardHistory.removeRetained(text);
           trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_CANCELLED);
         } else {
           this._recordAdd(text);
@@ -1531,24 +1504,19 @@ export default {
         active.set("dirty", true);
       }
 
-      const coalesce = Boolean(options.coalesce);
-      const tip = this._history[this._historyStep];
-      const replaceTip = coalesce
-        && this._historyTipKind === "recolor-coalesce"
-        && tip
-        && tip.type === "recolor"
-        && this._historyStep === this._history.length - 1;
-      if (replaceTip) {
-        const byObject = new Map(tip.entries.map((entry) => [entry.object, entry]));
-        entries.forEach((entry) => {
-          const existing = byObject.get(entry.object);
-          if (existing) existing.after = entry.after;
-          else tip.entries.push(entry);
+      try {
+        this._boardHistory.record(
+          { type: "recolor", entries },
+          { coalesce: Boolean(options.coalesce) },
+        );
+      } catch (error) {
+        // The log is already restored by BoardHistory. Restore UI paint too.
+        entries.forEach(({ object, before }) => {
+          object.set(before);
+          object.dirty = true;
         });
-        this._notifyDocumentChanged();
-      } else {
-        this._pushCommand({ type: "recolor", entries });
-        if (coalesce) this._historyTipKind = "recolor-coalesce";
+        this.canvas.requestRenderAll();
+        throw error;
       }
       this.canvas.requestRenderAll();
       return true;
@@ -1581,7 +1549,7 @@ export default {
       this.canvas.discardActiveObject();
       entries.forEach(({ object }) => this.canvas.remove(object));
       this.canvas.requestRenderAll();
-      this._pushCommand({ type: 'delete', entries });
+      this._boardHistory.record({ type: 'delete', entries });
       trackBoardEngaged();
       recordProductAction();
       trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, deletionMetadata);
@@ -1605,11 +1573,11 @@ export default {
       this.currentShape = null;
       // The add is recorded only when the gesture finishes, so cancelling
       // removes the shape and leaves the command log untouched.
-      this._suspendHistory = true;
+      this._boardHistory.setSuspended(true);
       try {
         this.canvas.remove(shape);
       } finally {
-        this._suspendHistory = false;
+        this._boardHistory.setSuspended(false);
       }
       this.canvas.requestRenderAll();
       return true;
@@ -1646,170 +1614,19 @@ export default {
       if (this._cancelGeometryTransform()) return true;
       return this.clearSelection();
     },
-    _pushCommand(command) {
-      if (this._suspendHistory) return;
-
-      this._history.splice(this._historyStep + 1);
-      this._history.push(command);
-      this._historyStep = this._history.length - 1;
-
-      if (this._history.length > HISTORY_LIMIT) {
-        this._history.shift();
-        this._historyStep--;
-      }
-      this._historyTipKind = "command";
-      this._notifyDocumentChanged();
-    },
     _recordAdd(object) {
       if (!object || !this.canvas) return;
       this._ensureObjectId(object);
       const index = this.canvas.getObjects().indexOf(object);
       if (index < 0) return;
-      this._pushCommand({ type: 'add', object, index });
-    },
-    _insertRetained(object, index) {
-      if (!object || this.canvas.getObjects().includes(object)) return;
-      const at = Math.max(0, Math.min(index, this.canvas.getObjects().length));
-      this.canvas.insertAt(at, object);
-    },
-    _selectionHolds(object) {
-      const active = this.canvas.getActiveObject();
-      if (!active) return false;
-      if (active === object) return true;
-      return active.isType('ActiveSelection') && active.getObjects().includes(object);
-    },
-    _removeRetained(object) {
-      if (!object || !this.canvas.getObjects().includes(object)) return;
-      if (this._selectionHolds(object)) {
-        this.canvas.discardActiveObject();
-      }
-      this.canvas.remove(object);
-    },
-    _applyCommand(command, direction) {
-      const canvas = this.canvas;
-      const previous = canvas.renderOnAddRemove;
-      canvas.renderOnAddRemove = false;
-      try {
-        if (command.type === 'add') {
-          if (direction === 'forward') this._insertRetained(command.object, command.index);
-          else this._removeRetained(command.object);
-          return;
-        }
-
-        if (command.type === 'duplicate' || command.type === 'batch-add') {
-          if (direction === 'forward') {
-            command.entries.slice().sort((a, b) => a.index - b.index)
-              .forEach(({ object, index }) => this._insertRetained(object, index));
-          } else {
-            canvas.discardActiveObject();
-            command.entries.forEach(({ object }) => this._removeRetained(object));
-          }
-          return;
-        }
-
-        if (command.type === 'delete') {
-          if (direction === 'forward') {
-            canvas.discardActiveObject();
-            command.entries.forEach(({ object }) => canvas.remove(object));
-          } else {
-            // Lowest index first, so each stored index still lands in the gap
-            // left by the objects deleted after it.
-            command.entries.forEach(({ object, index }) => this._insertRetained(object, index));
-          }
-          return;
-        }
-
-        if (command.type === 'replace') {
-          canvas.discardActiveObject();
-          if (direction === 'forward') {
-            this._removeRetained(command.removed);
-            this._insertRetained(command.added, command.index);
-          } else {
-            this._removeRetained(command.added);
-            this._insertRetained(command.removed, command.index);
-          }
-          return;
-        }
-
-        if (command.type === 'recolor') {
-          command.entries.forEach(({ object, before, after }) => {
-            object.set(direction === 'forward' ? after : before);
-            object.dirty = true;
-          });
-          return;
-        }
-
-        if (command.type === 'group') {
-          if (direction === 'forward') {
-            canvas.discardActiveObject();
-            command.members.forEach(({ object }) => this._removeRetained(object));
-            if (typeof command.group.size === 'function' && command.group.size() === 0) {
-              command.group.add(...command.members.map((entry) => entry.object));
-            }
-            this._insertRetained(command.group, command.index);
-          } else {
-            canvas.discardActiveObject();
-            if (typeof command.group.size === 'function' && command.group.size() > 0) {
-              command.group.removeAll();
-            }
-            this._removeRetained(command.group);
-            command.members.forEach(({ object, index }) => this._insertRetained(object, index));
-          }
-          return;
-        }
-
-        if (command.type === 'ungroup') {
-          if (direction === 'forward') {
-            canvas.discardActiveObject();
-            if (typeof command.group.size === 'function' && command.group.size() > 0) {
-              command.group.removeAll();
-            }
-            this._removeRetained(command.group);
-            command.members.forEach(({ object, index }) => this._insertRetained(object, index));
-          } else {
-            canvas.discardActiveObject();
-            command.members.forEach(({ object }) => this._removeRetained(object));
-            if (typeof command.group.size === 'function' && command.group.size() === 0) {
-              command.group.add(...command.members.map((entry) => entry.object));
-            }
-            this._insertRetained(command.group, command.index);
-          }
-          return;
-        }
-
-        if (command.type === 'modify') {
-          // Absolute left/top written while the object is still in a selection
-          // are group coordinates, and the object jumps. Leave the selection first.
-          canvas.discardActiveObject();
-          command.entries.forEach(({ object, before, after }) => {
-            applySnapshot(object, direction === 'forward' ? after : before);
-          });
-        }
-      } finally {
-        canvas.renderOnAddRemove = previous;
-      }
+      this._boardHistory.record({ type: 'add', object, index });
     },
     _runHistory(direction) {
       if (!this.canvas) return null;
-      if (direction === 'undo' && this._historyStep < 0) return null;
-      if (direction === 'redo' && this._historyStep >= this._history.length - 1) return null;
-
-      const index = direction === 'undo' ? this._historyStep : this._historyStep + 1;
-      const command = this._history[index];
       this._pendingTransform = null;
       this._pendingText = null;
-      this._suspendHistory = true;
-      try {
-        this._applyCommand(command, direction === 'undo' ? 'inverse' : 'forward');
-        // Retained instances and snapshots may contain an earlier theme's AUTO
-        // ink. Resolve presentation now, without adding a history command.
-        this.syncAutoInk(this.boardThemeConfig);
-        this._historyStep = direction === 'undo' ? index - 1 : index;
-      } finally {
-        this._suspendHistory = false;
-      }
-      this.canvas.requestRenderAll();
-      this.refreshSelectionPanel();
+      const command = direction === "undo" ? this._boardHistory.undo() : this._boardHistory.redo();
+      if (command) this.refreshSelectionPanel();
       return command;
     },
     undo() {
@@ -1838,7 +1655,7 @@ export default {
         this._selectionGesture = true;
         this._hideSelectionPanel();
       }
-      if (this._suspendHistory || !transform || !transform.target) return;
+      if (this._boardHistory.isSuspended() || !transform || !transform.target) return;
       // Native IText editing can start on mouse-down before Fabric announces
       // the same click as a transform. Keep the edit's history snapshot.
       if (transform.target.isEditing) return;
@@ -1869,7 +1686,7 @@ export default {
     onObjectModified(opt) {
       this._selectionGesture = false;
       try {
-        if (this._suspendHistory || !opt) return;
+        if (this._boardHistory.isSuspended() || !opt) return;
 
         if (opt.transform) {
           const pending = this._pendingTransform;
@@ -1882,7 +1699,7 @@ export default {
               after: snapshotObject(object, { includeGeometry })
             }))
             .filter((entry) => !snapshotsEqual(entry.before, entry.after));
-          if (entries.length) this._pushCommand({ type: 'modify', entries });
+          if (entries.length) this._boardHistory.record({ type: 'modify', entries });
           return;
         }
 
@@ -1891,7 +1708,7 @@ export default {
         this._pendingText = null;
         const after = snapshotObject(opt.target);
         if (snapshotsEqual(pendingText.before, after)) return;
-        this._pushCommand({
+        this._boardHistory.record({
           type: 'modify',
           entries: [{ object: opt.target, before: pendingText.before, after }]
         });

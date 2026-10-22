@@ -153,7 +153,7 @@ function getBoardState(board) {
     }
   }
 
-  const tip = board._history?.[board._historyStep]
+  const history = board._boardHistory?.summary() ?? { length: 0, step: -1, tipType: null }
   const active = canvas.getActiveObject()
 
   const selectionCount = active
@@ -169,11 +169,7 @@ function getBoardState(board) {
   return {
     zoom: Number(canvas.getZoom()),
     viewportTransform: [...canvas.viewportTransform],
-    history: {
-      length: board._history?.length ?? 0,
-      step: board._historyStep ?? -1,
-      tipType: tip?.type ?? null,
-    },
+    history,
     active: {
       type: objectType(active),
       selectionCount,
