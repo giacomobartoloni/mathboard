@@ -80,6 +80,7 @@ import {
   gestureObjects,
 } from "../history/commandLog";
 import { BoardHistory } from "../history/BoardHistory.js";
+import { SelectionMutations } from "../board/interactions/SelectionMutations.js";
 import {
   trackEvent,
   trackBoardEngaged,
@@ -212,6 +213,12 @@ export default {
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
+    this._selectionMutations = new SelectionMutations({
+      getCanvas: () => this.canvas,
+      history: this._boardHistory,
+      boardObjectPolicy: this._boardObjectPolicy,
+      getDefaultInk: () => this.boardThemeConfig.defaultInk,
+    });
     this._persistence = null;
     this._boardController = null;
     this._persistenceBootstrapped = false;
@@ -1005,106 +1012,25 @@ export default {
       return encodeObjectsAsStamp(sources);
     },
     groupSelection() {
-      if (!this.canvas) return false;
-      const active = this.canvas.getActiveObject();
-      if (!active || !active.isType("ActiveSelection")) return false;
-      const members = active.getObjects().slice();
-      if (members.length < 2) return false;
-
-      const memberEntries = members
-        .map((object) => ({
-          object,
-          index: this.canvas.getObjects().indexOf(object),
-        }))
-        .filter((entry) => entry.index >= 0)
-        .sort((a, b) => a.index - b.index);
-      if (memberEntries.length < 2) return false;
-
-      this.canvas.discardActiveObject();
-      this._boardHistory.setSuspended(true);
-      let group;
-      try {
-        memberEntries.forEach(({ object }) => this.canvas.remove(object));
-        group = new Group(
-          memberEntries.map((entry) => entry.object),
-          { subTargetCheck: false, interactive: false },
-        );
-        // New group identity; children keep theirs.
-        ensureMathBoardObjectId(group);
-        this.canvas.add(group);
-        this.canvas.setActiveObject(group);
-      } finally {
-        this._boardHistory.setSuspended(false);
+      const changed = this._selectionMutations.group();
+      if (changed) {
+        this.refreshSelectionPanel();
+        trackBoardEngaged();
+        recordProductAction();
       }
-
-      const index = this.canvas.getObjects().indexOf(group);
-      if (index < 0) return false;
-      this._boardHistory.record({
-        type: "group",
-        group,
-        index,
-        members: memberEntries,
-      });
-      this.canvas.requestRenderAll();
-      this.refreshSelectionPanel();
-      trackBoardEngaged();
-      recordProductAction();
-      return true;
+      return changed;
     },
     ungroupSelection() {
-      if (!this.canvas) return false;
-      const active = this.canvas.getActiveObject();
-      // Use semantic Board Group check: a Formula may be a Fabric Group.
-      if (!this._boardObjectPolicy.isBoardGroup(active)) {
-        return false;
+      const changed = this._selectionMutations.ungroup();
+      if (changed) {
+        const objects = this.canvas.getActiveObjects();
+        const chrome = selectionObjectChromeForBoard(this.boardTheme);
+        objects.forEach((object) => applySelectionObjectChrome(object, chrome));
+        this.refreshSelectionPanel();
+        trackBoardEngaged();
+        recordProductAction();
       }
-
-      const group = active;
-      const groupIndex = this.canvas.getObjects().indexOf(group);
-      if (groupIndex < 0) return false;
-
-      // Match history undo: discard before removeAll so children return to
-      // canvas plane rather than selection/group local coordinates.
-      this.canvas.discardActiveObject();
-      this._boardHistory.setSuspended(true);
-      let items;
-      try {
-        items = group.removeAll();
-        this.canvas.remove(group);
-        items.forEach((object) => this.canvas.add(object));
-      } finally {
-        this._boardHistory.setSuspended(false);
-      }
-
-      const members = items
-        .map((object) => ({
-          object,
-          index: this.canvas.getObjects().indexOf(object),
-        }))
-        .filter((entry) => entry.index >= 0);
-
-      this._boardHistory.record({
-        type: "ungroup",
-        group,
-        index: groupIndex,
-        members,
-      });
-
-      const objectChrome = selectionObjectChromeForBoard(this.boardTheme);
-      items.forEach((object) => applySelectionObjectChrome(object, objectChrome));
-
-      if (items.length > 1) {
-        this.canvas.setActiveObject(new ActiveSelection(items, { canvas: this.canvas }));
-      } else if (items.length === 1) {
-        this.canvas.setActiveObject(items[0]);
-      } else {
-        this.canvas.discardActiveObject();
-      }
-      this.canvas.requestRenderAll();
-      this.refreshSelectionPanel();
-      trackBoardEngaged();
-      recordProductAction();
-      return true;
+      return changed;
     },
     enablePanning() {
       this.canvas.isDrawingMode = false;
@@ -1523,33 +1449,12 @@ export default {
     },
 
     deleteSelection() {
-      if (!this.canvas) return;
-      const active = this.canvas.getActiveObject();
-      if (!active || active.isEditing) return;
-
-      // An ActiveSelection is not in canvas._objects, so removing it leaves
-      // the children in place. Delete the children, one command for the gesture.
-      const objects = this.canvas.getActiveObjects();
-      if (!objects.length) return;
-
-      const entries = objects
-        .map((object) => ({
-          object,
-          index: this.canvas.getObjects().indexOf(object)
-        }))
-        .filter((entry) => entry.index >= 0)
-        .sort((a, b) => a.index - b.index);
-      if (!entries.length) return;
-
+      const removed = this._selectionMutations.delete();
+      if (!removed.length) return;
       const deletionMetadata = buildObjectDeletedMetadata(
-        entries.map(({ object }) => object),
+        removed,
         (object) => this._boardObjectPolicy.kindOf(object),
       );
-
-      this.canvas.discardActiveObject();
-      entries.forEach(({ object }) => this.canvas.remove(object));
-      this.canvas.requestRenderAll();
-      this._boardHistory.record({ type: 'delete', entries });
       trackBoardEngaged();
       recordProductAction();
       trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, deletionMetadata);
