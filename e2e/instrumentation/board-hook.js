@@ -23,6 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
 import { snapshotObject } from '../../src/history/commandLog.js'
+import { getKitById } from '../../src/stamps/registry.js'
 
 const E2E_MARKER = 'MATHBOARD_E2E_INSTRUMENTATION_V1'
 
@@ -218,6 +219,7 @@ export function installBoardE2eHook(getBoard, bootstrapGate) {
     createObjects: (specs, options) => getBoard().getBoardController().createMany(specs, options),
     updateObject: (id, patch) => getBoard().getBoardController().update(id, patch),
     recolorSelected: (color, options) => getBoard().recolorSelection(color, options),
+    insertKit: (kitId) => getBoard().insertStamp(getKitById(kitId)),
     failNextDocumentChange: () => {
       const persistence = getBoard()?._persistence
       if (!persistence) return false
