@@ -93,7 +93,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <a href="/resources/" @click="onSiteLink($event, '/resources/')">
               Resources &amp; shortcuts
             </a>
-            <a href="/download/" @click="onSiteLink($event, '/download/')">
+            <a href="/download/" target="_blank" rel="noopener noreferrer" @click="onSiteLink($event, '/download/')">
               Download desktop beta
             </a>
             <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard')">
