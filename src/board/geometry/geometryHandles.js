@@ -30,6 +30,9 @@ export function geometryControls(adapter) {
     new Control({
       actionName: 'modifyGeometry',
       cursorStyle: 'crosshair',
+      // Larger touch hit area without increasing the painted handle size.
+      touchSizeX: 44,
+      touchSizeY: 44,
       positionHandler: (_dim, _matrix, object) => {
         const point = adapter.readHandle(object, id)
         return util.transformPoint(new Point(point.x, point.y), object.getViewportTransform())
