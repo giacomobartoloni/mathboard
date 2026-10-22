@@ -33,6 +33,7 @@ import {
  *   buildFormula: Function,
  *   resetHistory: Function,
  *   suspendHistory?: (flag: boolean) => void,
+ *   runWithoutHistory?: (callback: Function) => unknown,
  *   afterReplace?: Function,
  * }} args
  */
@@ -42,6 +43,7 @@ export async function replaceBoardFromDocument({
   buildFormula,
   resetHistory,
   suspendHistory,
+  runWithoutHistory,
   afterReplace,
 }) {
   if (!canvas || typeof canvas.getObjects !== 'function') {
@@ -65,15 +67,15 @@ export async function replaceBoardFromDocument({
     canvas.discardActiveObject()
   }
 
-  const setSuspend = typeof suspendHistory === 'function' ? suspendHistory : () => {}
-  setSuspend(true)
-  try {
+  const scoped = runWithoutHistory || ((callback) => {
+    suspendHistory?.(true)
+    try { return callback() } finally { suspendHistory?.(false) }
+  })
+  scoped(() => {
     const current = canvas.getObjects().slice()
     current.forEach((object) => canvas.remove(object))
     objects.forEach((object) => canvas.add(object))
-  } finally {
-    setSuspend(false)
-  }
+  })
 
   resetHistory()
   if (typeof canvas.requestRenderAll === 'function') {
