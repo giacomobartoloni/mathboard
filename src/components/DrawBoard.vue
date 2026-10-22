@@ -109,9 +109,6 @@ const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
 // Objects whose board ink lives on "fill".
 const FILL_INK_TYPES = ["IText", "Text"];
 
-// Fabric 7 defaults origin to center/center; keep left/top for click-to-place UX.
-const LEFT_TOP_ORIGIN = { originX: "left", originY: "top" };
-
 // Constants
 const CANVAS_EVENTS = [
   "before:render", "after:render", "canvas:cleared", "object:added", "object:removed",
@@ -1372,7 +1369,7 @@ export default {
         canvas: this.canvas,
         getInk: () => this.activeInk,
         getInkMode: () => this.inkMode,
-        scheduleFocus: (callback) => this.$nextTick(callback),
+        scheduleFocus: (callback) => this.$nextTick(() => callback()),
         onStarted: () => trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_STARTED),
         onCancelled: (text) => {
           this._boardHistory.removeRetained(text);
