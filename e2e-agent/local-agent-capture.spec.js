@@ -224,9 +224,9 @@ test('capture errors and readiness deadline preserve the live board', async ({ p
   for (const ids of [['mbobj_missing'], [group.objects[0].id]]) await rejected(request, { target: { kind: 'objectIds', ids } }, 'object_not_found')
   await rejected(request, { target: { kind: 'sceneRect', rect: { x: 0, y: 0, width: 2049, height: 20 } } }, 'capture_too_large')
   await rejected(request, { target: { kind: 'sceneRect', rect: { x: 0, y: 0, width: 2048, height: 2048 } } }, 'capture_too_large')
-  await page.evaluate(() => { window.__captureTestBoard.isPanning = true })
+  await page.evaluate(() => { window.__captureTestBoard._panGesture.dragging = true })
   await rejected(request, { target: { kind: 'viewport' } }, 'board_not_ready')
-  await page.evaluate(() => { window.__captureTestBoard.isPanning = false })
+  await page.evaluate(() => { window.__captureTestBoard._panGesture.dragging = false })
   expect(await snapshot(page)).toEqual(before)
   // A blocked FontFaceSet promise exercises the real ten-second readiness deadline.
   await page.evaluate(() => {
