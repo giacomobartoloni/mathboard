@@ -113,3 +113,64 @@ test('Shift + endpoint drag snaps to the nearest 15 degrees and is undoable', as
   expect(redone.objects[0].mathboardId).toBe(initial.objects[0].mathboardId)
   expect(pageErrors).toEqual([])
 })
+
+
+test('switching to Pan during an endpoint drag cancels geometry and history immediately', async ({ page }) => {
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  await createAndSelectLine(page)
+  const before = await getBoardState(page)
+  const box = await canvasBox(page)
+
+  await page.mouse.move(box.x + drawn.x1, box.y + drawn.y1)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 305, box.y + 128, { steps: 10 })
+
+  // The shortcut changes tools while the physical mouse button is still held.
+  await page.keyboard.press('h')
+  await expect(page.getByRole('button', { name: 'Pan', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
+  const switched = await getBoardState(page)
+  expect(switched.history.length).toBe(before.history.length)
+  expect(switched.objects[0].left).toBeCloseTo(before.objects[0].left, 2)
+  expect(switched.objects[0].top).toBeCloseTo(before.objects[0].top, 2)
+  expect(switched.objects[0].width).toBeCloseTo(before.objects[0].width, 2)
+  expect(switched.objects[0].height).toBeCloseTo(before.objects[0].height, 2)
+
+  // A stale Fabric action handler must not resume the cancelled edit.
+  await page.mouse.move(box.x + 280, box.y + 110, { steps: 10 })
+  await page.mouse.up()
+  const after = await getBoardState(page)
+  expect(after.history.length).toBe(before.history.length)
+  expect(after.objects[0].mathboardId).toBe(before.objects[0].mathboardId)
+  for (const key of ['left', 'top', 'width', 'height']) {
+    expect(after.objects[0][key]).toBeCloseTo(before.objects[0][key], 2)
+  }
+
+  // Switching back must rebuild the geometry control hit regions correctly.
+  await page.keyboard.press('v')
+  await expect(page.getByRole('button', { name: 'Select', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await dragOnCanvas(page, { x1: drawn.x1, y1: drawn.y1, x2: 310, y2: 145 })
+  const edited = await waitForState(page, (s) => s.history.length === before.history.length + 1)
+  expect(edited.history.tipType).toBe('modify')
+  expect(edited.objects[0].mathboardId).toBe(before.objects[0].mathboardId)
+  expect(pageErrors).toEqual([])
+})
+
+test('switching tools with a selected line restores native controls for the next selection', async ({ page }) => {
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await createAndSelectLine(page)
+  const original = await getBoardState(page)
+  await page.keyboard.press('h')
+  await expect(page.getByRole('button', { name: 'Pan', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('v')
+  await expect(page.getByRole('button', { name: 'Select', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true')
+  await dragOnCanvas(page, { x1: drawn.x2, y1: drawn.y2, x2: 490, y2: 320 })
+  const edited = await waitForState(page, (state) => state.history.length === original.history.length + 1)
+  expect(edited.objects[0].mathboardId).toBe(original.objects[0].mathboardId)
+  expect(errors).toEqual([])
+})

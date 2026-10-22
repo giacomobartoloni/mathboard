@@ -607,6 +607,9 @@ export default {
       // Restore those regions together with the original controls.
       object.setCoords();
       this._geometryEditing = null;
+      // The old endpoint controls may still be painted on the upper canvas.
+      // Keep visual controls and hit regions in sync immediately.
+      this.canvas?.requestRenderAll();
     },
     _syncGeometryEditing() {
       const active = this.canvas?.getActiveObject();
@@ -1617,20 +1620,30 @@ export default {
       this.canvas.requestRenderAll();
       return true;
     },
+    _cancelGeometryTransform() {
+      const transform = this.canvas?._currentTransform;
+      if (!transform || !isGeometryHandleTransform(transform)) return false;
+
+      // A tool switch or Escape cancels the entire in-flight gesture, not just
+      // subsequent pointer moves. Restore the original object without history.
+      transform.mathboardCancelled = true;
+      const pending = this._pendingTransform?.find(({ object }) => object === transform.target);
+      if (pending) applySnapshot(pending.object, pending.before);
+      this._pendingTransform = null;
+      this._selectionGesture = false;
+
+      // Fabric's public interruption API finalizes the pointer transform.
+      // Clear its modified flag first to suppress a spurious object:modified
+      // event (and accidental history/persistence writes) after the rollback.
+      transform.actionPerformed = false;
+      this.canvas.endCurrentTransform();
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      return true;
+    },
     cancelTransientAction() {
       if (this.cancelInProgressShape()) return true;
-      // Escape during endpoint drag restores the original line and blocks later pointer moves.
-      const transform = this.canvas?._currentTransform;
-      if (transform && isGeometryHandleTransform(transform) && this._pendingTransform?.length === 1) {
-        transform.mathboardCancelled = true;
-        const { object, before } = this._pendingTransform[0];
-        applySnapshot(object, before);
-        this._pendingTransform = null;
-        this._selectionGesture = false;
-        this.canvas.requestRenderAll();
-        this.refreshSelectionPanel();
-        return true;
-      }
+      if (this._cancelGeometryTransform()) return true;
       return this.clearSelection();
     },
     _pushCommand(command) {
@@ -2076,7 +2089,10 @@ export default {
     },
     selectedTool(newTool) {
       if (!this.canvas) return;
-      
+
+      // Switching tools during endpoint editing must roll back the whole drag
+      // before the native controls are restored, even while the mouse is down.
+      this._cancelGeometryTransform();
       this.disablePanning();
       this.disableTextInsertion();
       this.disableShapeDrawing();

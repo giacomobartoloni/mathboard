@@ -14,7 +14,7 @@ The Fabric control layer owns control rendering, zoom-aware positions, hit targe
 
 ### History
 
-`before:transform` detects geometry controls; only then does `snapshotObject({ includeGeometry: true })` retain Line intrinsic endpoints. A completed drag pushes one existing `modify` command through the standard history path; a no-op does not. Ordinary object transforms continue to use transform-only Line snapshots, consistent with ADR 0001. Escape during a geometry drag restores the snapshot and cancels further handle mutations until pointer release.
+`before:transform` detects geometry controls; only then does `snapshotObject({ includeGeometry: true })` retain Line intrinsic endpoints. A completed drag pushes one existing `modify` command through the standard history path; a no-op does not. Ordinary object transforms continue to use transform-only Line snapshots, consistent with ADR 0001. Escape **or switching tools during an endpoint drag** restores the initial geometry, terminates the Fabric transform and creates no history command. Restoring native controls also requests an immediate repaint so that visible handles match their hit regions.
 
 ### Persistence and limits
 
