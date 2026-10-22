@@ -28,6 +28,12 @@ import latexWhiteboard from '../seo/pages/latex-whiteboard.mjs'
 import openSource from '../seo/pages/open-source-math-whiteboard.mjs'
 import shortcuts from '../seo/pages/keyboard-shortcuts.mjs'
 import latexDocs from '../seo/pages/latex-docs.mjs'
+import download from '../seo/pages/download.mjs'
+import downloadMacos from '../seo/pages/download-macos.mjs'
+import downloadWindows from '../seo/pages/download-windows.mjs'
+import downloadLinux from '../seo/pages/download-linux.mjs'
+import downloadSecurity from '../seo/pages/download-security.mjs'
+import { validateDesktopRelease } from '../seo/lib/desktop-downloads.mjs'
 import { render404, renderLayout } from '../seo/lib/render-layout.mjs'
 import { renderSitemap } from '../seo/lib/sitemap.mjs'
 import {
@@ -53,6 +59,11 @@ const pages = [
   openSource,
   shortcuts,
   latexDocs,
+  download,
+  downloadMacos,
+  downloadWindows,
+  downloadLinux,
+  downloadSecurity,
 ]
 
 async function pathExists(target) {
@@ -83,6 +94,7 @@ async function main() {
     throw new Error('dist/ is missing. Run vite build (npm run build:app) first.')
   }
 
+  validateDesktopRelease()
   const { paths: knownPaths } = validatePages(pages)
   const needsKatex = pages.some((page) => page.needsKatex)
   if (needsKatex) {

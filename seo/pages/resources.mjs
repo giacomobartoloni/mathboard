@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { renderOpenBoardCTA, renderResourceCard } from '../lib/render-components.mjs'
 
 export default {
-  lastmod: '2026-10-21',
+  lastmod: '2026-10-22',
   path: '/resources/',
   title: 'MathBoard Resources — Guides, LaTeX and Shortcuts',
   description:
@@ -56,6 +56,11 @@ export default {
         href: '/docs/keyboard-shortcuts/',
         title: 'Keyboard shortcuts',
         description: 'Tool keys, undo/redo, selection, zoom, and other shipped shortcuts.',
+      })}
+      ${renderResourceCard({
+        href: '/download/',
+        title: 'Download MathBoard Desktop',
+        description: 'Desktop beta installers for macOS, Windows and Linux, with security and installation guides.',
       })}
       ${renderResourceCard({
         href: '/open-source-math-whiteboard/',

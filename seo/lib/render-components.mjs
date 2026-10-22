@@ -38,6 +38,7 @@ export function renderHeader() {
       </a>
       <nav aria-label="Primary">
         <a href="/resources/">Resources</a>
+        <a href="/download/">Download</a>
         <a href="https://github.com/giacomobartoloni/mathboard">GitHub</a>
         ${renderOpenBoardCTA({ placement: 'header' })}
       </nav>
@@ -50,6 +51,7 @@ export function renderFooter() {
     <footer class="site-footer">
       <nav aria-label="Footer">
         <a href="/resources/">Resources</a>
+        <a href="/download/">Desktop downloads</a>
         <a href="/docs/keyboard-shortcuts/">Keyboard shortcuts</a>
         <a href="/docs/latex/">LaTeX examples</a>
         <a href="/privacy-policy.html">Privacy Policy</a>

@@ -399,3 +399,97 @@ pre code {
     align-items: flex-start;
   }
 }
+
+/* Desktop distribution: readable download choices on small screens. */
+.download-version {
+  margin: 0.6rem 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.download-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr));
+  gap: 1rem;
+  align-items: stretch;
+  margin: 1.5rem 0;
+}
+
+.download-card,
+.download-option {
+  padding: 1.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.download-card h2,
+.download-option h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.2rem;
+}
+
+.download-card > p:not(.download-actions):not(.download-platform) {
+  color: var(--muted);
+}
+
+.download-platform {
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--brand-dark);
+  margin: 0 0 0.5rem;
+}
+
+.download-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.download-actions .button {
+  text-align: center;
+}
+
+.download-options {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  margin: 1.5rem 0;
+}
+
+.download-status {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #255e43;
+}
+
+.download-status-untested {
+  color: #8a4c16;
+}
+
+.download-status-note {
+  line-height: 1.4;
+}
+
+.download-notice {
+  padding: 1rem 1.25rem;
+  margin: 2rem 0;
+  border: 1px solid #c8b59b;
+  border-left: 4px solid #9d7848;
+  border-radius: 8px;
+  background: #fffaf1;
+}
+
+.download-notice a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .download-card, .download-option { padding: 1rem; }
+}

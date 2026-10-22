@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 const PUBLIC_SITE_ORIGIN = 'https://mathboard.app'
-const PUBLIC_SITE_PAGES = new Set(['/resources/', '/privacy-policy.html'])
+const PUBLIC_SITE_PAGES = new Set(['/resources/', '/download/', '/privacy-policy.html'])
 
 /** Resolve explicitly supported site pages for opening outside the desktop WebView. */
 export function publicSitePageUrl(path) {

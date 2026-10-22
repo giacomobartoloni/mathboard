@@ -23,7 +23,7 @@ import {
 } from '../lib/render-components.mjs'
 
 export default {
-  lastmod: '2026-10-21',
+  lastmod: '2026-10-22',
   path: '/math-whiteboard/',
   title: 'MathBoard — Free Online Whiteboard for Math',
   description:
@@ -40,7 +40,8 @@ export default {
     <p class="lede">
       MathBoard combines freehand drawing, text, shapes, and LaTeX formulas on one canvas. It runs in the browser and is free and open source.
     </p>
-    <p class="cta-row">${renderOpenBoardCTA({ placement: 'math-whiteboard-hero' })}</p>
+    <p class="cta-row">${renderOpenBoardCTA({ placement: 'math-whiteboard-hero' })}
+      <a class="button" href="/download/">Download desktop beta</a></p>
     ${renderScreenshot({
       src: '/og-image.png',
       alt: 'MathBoard canvas with handwritten notes and a rendered math formula',
@@ -70,6 +71,7 @@ export default {
     <section>
       <h2>Related</h2>
       <ul>
+        <li><a href="/download/">Desktop beta downloads</a> — macOS, Windows and Linux</li>
         <li><a href="/latex-whiteboard/">LaTeX whiteboard</a> — formula workflow and examples</li>
         <li><a href="/docs/keyboard-shortcuts/">Keyboard shortcuts</a></li>
         <li><a href="/open-source-math-whiteboard/">Open-source details</a></li>

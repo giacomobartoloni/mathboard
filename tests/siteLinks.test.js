@@ -4,6 +4,7 @@ import { publicSitePageUrl } from '../src/platform/siteLinks.js'
 
 test('desktop resources and privacy pages resolve to public HTTPS pages', () => {
   assert.equal(publicSitePageUrl('/resources/'), 'https://mathboard.app/resources/')
+  assert.equal(publicSitePageUrl('/download/'), 'https://mathboard.app/download/')
   assert.equal(publicSitePageUrl('/privacy-policy.html'), 'https://mathboard.app/privacy-policy.html')
 })
 

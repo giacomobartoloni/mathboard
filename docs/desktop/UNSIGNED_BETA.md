@@ -13,7 +13,8 @@ https://mathboard.app/ or wait for signed builds.
 
 ## Download and verify
 
-1. Download **only** from the official
+1. Choose the correct platform from [MathBoard's download guide](https://mathboard.app/download/),
+   which links directly to the official release assets. Download **only** from the official
    [MathBoard GitHub Releases](https://github.com/giacomobartoloni/mathboard/releases).
    Look for a release explicitly marked **Pre-release / Unsigned Public Beta**.
 2. Choose the installer matching your OS and CPU. macOS Apple Silicon and Intel
