@@ -233,6 +233,7 @@ export default {
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
         resetHistory: () => this._resetHistory(),
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
+        runWithoutHistory: (callback) => this._boardHistory.runSuspended(callback),
         isDocumentStable: () => this._isBoardInteractionStable(),
       });
       return this._persistence;
@@ -461,16 +462,13 @@ export default {
       this.canvas.selectionLineWidth = selectionLineWidth;
       this.canvas.selectionDashArray = selectionDashArray;
 
-      this._boardHistory.setSuspended(true);
-      try {
+      this._boardHistory.runSuspended(() => {
         this.canvas.forEachObject((obj) => applySelectionObjectChrome(obj, objectChrome));
         const active = this.canvas.getActiveObject();
         if (active?.isType?.("ActiveSelection")) {
           applySelectionObjectChrome(active, objectChrome);
         }
-      } finally {
-        this._boardHistory.setSuspended(false);
-      }
+      });
       this.canvas.requestRenderAll();
     },
     _panelAllowed() {
@@ -867,12 +865,9 @@ export default {
       if (!this.canvas) return;
       this.canvas.discardActiveObject();
       const objects = this.canvas.getObjects().slice();
-      this._boardHistory.setSuspended(true);
-      try {
+      this._boardHistory.runSuspended(() => {
         objects.forEach((object) => this.canvas.remove(object));
-      } finally {
-        this._boardHistory.setSuspended(false);
-      }
+      });
       this._resetHistory();
       this.refreshSelectionPanel();
     },
