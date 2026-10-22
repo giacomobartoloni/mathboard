@@ -1369,7 +1369,7 @@ export default {
         canvas: this.canvas,
         getInk: () => this.activeInk,
         getInkMode: () => this.inkMode,
-        scheduleFocus: (callback) => this.$nextTick(() => callback()),
+        scheduleFocus: async (callback) => { await this.$nextTick(); callback(); },
         onStarted: () => trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_STARTED),
         onCancelled: (text) => {
           this._boardHistory.removeRetained(text);
