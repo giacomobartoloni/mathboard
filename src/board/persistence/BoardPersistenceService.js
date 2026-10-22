@@ -67,6 +67,7 @@ export class BoardPersistenceService {
     buildFormula,
     resetHistory,
     suspendHistory,
+    runWithoutHistory,
     getTitle = () => 'Untitled board',
     isDocumentStable = () => true,
     sessionStorage = globalThis.sessionStorage,
@@ -80,6 +81,11 @@ export class BoardPersistenceService {
     this._buildFormula = buildFormula
     this._resetHistory = resetHistory
     this._suspendHistory = suspendHistory
+    // Prefer the scoped callback: boolean toggles cannot restore an outer suspension.
+    this._runWithoutHistory = runWithoutHistory || ((callback) => {
+      this._suspendHistory?.(true)
+      try { return callback() } finally { this._suspendHistory?.(false) }
+    })
     this._getTitle = getTitle
     this._isDocumentStable = isDocumentStable
     this._sessionStorage = sessionStorage
@@ -273,12 +279,9 @@ export class BoardPersistenceService {
     if (typeof canvas?.discardActiveObject === 'function') {
       canvas.discardActiveObject()
     }
-    this._suspendHistory?.(true)
-    try {
+    this._runWithoutHistory(() => {
       canvas.getObjects().slice().forEach((object) => canvas.remove(object))
-    } finally {
-      this._suspendHistory?.(false)
-    }
+    })
     this._resetHistory?.()
     canvas?.requestRenderAll?.()
 
@@ -306,6 +309,7 @@ export class BoardPersistenceService {
       buildFormula: this._buildFormula,
       resetHistory: this._resetHistory,
       suspendHistory: this._suspendHistory,
+      runWithoutHistory: this._runWithoutHistory,
     })
 
     this.boardId = record.id
