@@ -20,6 +20,7 @@ export default {
   description:
     'Download the free, open-source MathBoard desktop beta for macOS, Windows or Linux. Official GitHub installers, platform-specific guides and security details.',
   h1: 'MathBoard for desktop',
+  h1InBody: true,
   structuredData: 'webpage',
   aboutSoftware: true,
   breadcrumbs: [
@@ -27,22 +28,35 @@ export default {
     { label: 'Desktop downloads' },
   ],
   body: `
-    <div class="download-page">
+    <div class="download-page download-page--editorial">
     <section class="download-hero" aria-label="MathBoard desktop beta">
       <div class="download-hero-copy">
-        <p class="download-hero-lead">Draw diagrams, add notes, and work with editable LaTeX formulas on your computer.</p>
-        <p class="lede">Choose your operating system below. Desktop is currently a public beta;
-          the browser app remains available without installation.</p>
+        <p class="download-eyebrow">The math whiteboard / Desktop beta</p>
+        <h1>MathBoard for desktop</h1>
+        <p class="download-hero-lead">Less setup. More room for math.</p>
+        <p class="lede">Draw diagrams, add notes, and work with editable LaTeX formulas on your computer.
+          The browser app is still available without installation.</p>
+        <div class="download-hero-actions">
+          <a class="button button-primary" href="#download-options">Choose your download <span aria-hidden="true">↓</span></a>
+          ${renderOpenBoardCTA({ placement: 'download-hero-browser-alternative' })}
+        </div>
         ${renderReleaseContext()}
       </div>
-      ${renderScreenshot({
-        src: '/og-image.png',
-        alt: 'MathBoard logo on graph paper with mathematical drawings and formulas',
-        eager: true,
-        caption: 'MathBoard combines drawing and mathematical notation in a single whiteboard.',
-      })}
+      <div class="download-product-frame">
+        <div class="download-product-frame-bar" aria-hidden="true">
+          <span class="download-product-frame-dots"><i></i><i></i><i></i></span>
+          <span>MathBoard</span>
+          <span>Preview</span>
+        </div>
+        ${renderScreenshot({
+          src: '/og-image.png',
+          alt: 'Illustration of the MathBoard logo on graph paper with mathematical drawings and formulas',
+          eager: true,
+          caption: 'Drawing and mathematical notation, together in one whiteboard.',
+        })}
+      </div>
     </section>
-    <h2 class="download-choice-title">Choose your operating system</h2>
+    <h2 id="download-options" class="download-choice-title">Choose your operating system</h2>
     <p class="download-preflight"><strong>Unsigned public beta:</strong> installers are not code-signed
       and may be blocked by your device. <a href="/download/security/">Read the safety and verification guide</a>
       before downloading.</p>
