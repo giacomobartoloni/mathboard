@@ -28,14 +28,20 @@ import latexWhiteboard from '../seo/pages/latex-whiteboard.mjs'
 import openSource from '../seo/pages/open-source-math-whiteboard.mjs'
 import shortcuts from '../seo/pages/keyboard-shortcuts.mjs'
 import latexDocs from '../seo/pages/latex-docs.mjs'
+import download from '../seo/pages/download.mjs'
+import downloadMacos from '../seo/pages/download-macos.mjs'
+import downloadWindows from '../seo/pages/download-windows.mjs'
+import downloadLinux from '../seo/pages/download-linux.mjs'
+import downloadSecurity from '../seo/pages/download-security.mjs'
+import { validateDesktopRelease } from '../seo/lib/desktop-downloads.mjs'
 import { render404, renderLayout } from '../seo/lib/render-layout.mjs'
+import { renderSitemap } from '../seo/lib/sitemap.mjs'
 import {
   collectInternalHrefs,
   validatePages,
   validateRenderedHtml,
 } from '../seo/lib/validate-pages.mjs'
 import {
-  ORIGIN,
   SOFTWARE_ID,
   assertSchemaContext,
   assertSoftwareEntityParity,
@@ -53,6 +59,11 @@ const pages = [
   openSource,
   shortcuts,
   latexDocs,
+  download,
+  downloadMacos,
+  downloadWindows,
+  downloadLinux,
+  downloadSecurity,
 ]
 
 async function pathExists(target) {
@@ -78,30 +89,12 @@ async function copyKatexAssets() {
   })
 }
 
-function renderSitemap(urls) {
-  const unique = [...new Set(urls)]
-  if (unique.length !== urls.length) {
-    throw new Error('Duplicate URLs in sitemap')
-  }
-  const entries = unique
-    .map(
-      (loc) => `  <url>
-    <loc>${loc}</loc>
-  </url>`,
-    )
-    .join('\n')
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${entries}
-</urlset>
-`
-}
-
 async function main() {
   if (!(await pathExists(DIST))) {
     throw new Error('dist/ is missing. Run vite build (npm run build:app) first.')
   }
 
+  validateDesktopRelease()
   const { paths: knownPaths } = validatePages(pages)
   const needsKatex = pages.some((page) => page.needsKatex)
   if (needsKatex) {
@@ -129,9 +122,9 @@ async function main() {
     console.log(`✓ ${page.path}`)
   }
 
-  const sitemapUrls = [`${ORIGIN}/`, ...pages.map((page) => `${ORIGIN}${page.path}`)]
-  await fs.writeFile(path.join(DIST, 'sitemap.xml'), renderSitemap(sitemapUrls), 'utf8')
-  console.log(`✓ sitemap.xml (${sitemapUrls.length} URLs including /)`)
+  const sitemapEntries = [{ path: '/' }, ...pages.map(({ path, lastmod }) => ({ path, lastmod }))]
+  await fs.writeFile(path.join(DIST, 'sitemap.xml'), renderSitemap(sitemapEntries), 'utf8')
+  console.log(`✓ sitemap.xml (${sitemapEntries.length} URLs including /)`)
 
   await fs.writeFile(path.join(DIST, '404.html'), render404(), 'utf8')
   console.log('✓ 404.html')

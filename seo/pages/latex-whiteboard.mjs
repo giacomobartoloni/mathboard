@@ -30,6 +30,7 @@ const featured = LATEX_WHITEBOARD_FEATURED.map((source) => {
 }).join('\n')
 
 export default {
+  lastmod: '2026-10-21',
   path: '/latex-whiteboard/',
   title: 'LaTeX Whiteboard — Draw and Add Math Formulas | MathBoard',
   description:
@@ -37,12 +38,19 @@ export default {
   h1: 'Draw first. Drop in LaTeX when you need it.',
   ogImage: '/og-image.png',
   structuredData: 'software-application',
+  breadcrumbs: [
+    { label: 'MathBoard', href: '/' },
+    { label: 'Resources', href: '/resources/' },
+    { label: 'LaTeX whiteboard' },
+  ],
   needsKatex: true,
   body: `
-    <p class="lede">
-      Use the Formula tool to type LaTeX, preview the result, and place the rendered formula on the board. Existing formulas can be selected and edited again.
-    </p>
-    <p class="cta-row">${renderOpenBoardCTA({ placement: 'latex-whiteboard-hero' })}</p>
+    <div class="site-hero">
+      <p class="lede">
+        Use the Formula tool to type LaTeX, preview the result, and place the rendered formula on the board. Existing formulas can be selected and edited again.
+      </p>
+      <p class="cta-row">${renderOpenBoardCTA({ placement: 'latex-whiteboard-hero' })}</p>
+    </div>
     <section>
       <h2>How to add a formula</h2>
       <ol>

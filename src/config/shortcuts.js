@@ -199,6 +199,12 @@ export const SHORTCUT_HELP = [
       { id: 'group', label: 'Group', keys: 'Ctrl/Cmd+G' },
       { id: 'ungroup', label: 'Ungroup', keys: 'Ctrl/Cmd+Shift+G' },
       {
+        id: 'lineAngleSnap',
+        label: 'Constrain line angle',
+        keys: 'Shift + drag endpoint',
+        hint: 'Select a line and drag an endpoint to snap its angle in 15° steps.',
+      },
+      {
         id: 'share',
         label: 'Share link',
         keys: 'Ctrl/Cmd+Shift+L',

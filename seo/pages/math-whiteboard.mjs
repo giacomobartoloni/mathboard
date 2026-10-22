@@ -23,6 +23,7 @@ import {
 } from '../lib/render-components.mjs'
 
 export default {
+  lastmod: '2026-10-22',
   path: '/math-whiteboard/',
   title: 'MathBoard — Free Online Whiteboard for Math',
   description:
@@ -30,17 +31,27 @@ export default {
   h1: 'A whiteboard built for math',
   ogImage: '/og-image.png',
   structuredData: 'software-application',
+  breadcrumbs: [
+    { label: 'MathBoard', href: '/' },
+    { label: 'Resources', href: '/resources/' },
+    { label: 'Math whiteboard' },
+  ],
   body: `
-    <p class="lede">
-      MathBoard combines freehand drawing, text, shapes, and LaTeX formulas on one canvas. It runs in the browser and is free and open source.
-    </p>
-    <p class="cta-row">${renderOpenBoardCTA({ placement: 'math-whiteboard-hero' })}</p>
-    ${renderScreenshot({
-      src: '/og-image.png',
-      alt: 'MathBoard canvas with handwritten notes and a rendered math formula',
-      eager: true,
-      caption: 'MathBoard in the browser — draw, type, and place formulas on one board.',
-    })}
+    <div class="site-hero site-hero--with-art">
+      <div>
+        <p class="lede">
+          MathBoard combines freehand drawing, text, shapes, and LaTeX formulas on one canvas. It runs in the browser and is free and open source.
+        </p>
+        <p class="cta-row">${renderOpenBoardCTA({ placement: 'math-whiteboard-hero' })}
+          <a class="button" href="/download/">Download desktop beta</a></p>
+      </div>
+      ${renderScreenshot({
+        src: '/og-image.png',
+        alt: 'MathBoard canvas with handwritten notes and a rendered math formula',
+        eager: true,
+        caption: 'MathBoard in the browser — draw, type, and place formulas on one board.',
+      })}
+    </div>
     <section>
       <h2>What you can do</h2>
       <ul>
@@ -64,6 +75,7 @@ export default {
     <section>
       <h2>Related</h2>
       <ul>
+        <li><a href="/download/">Desktop beta downloads</a> — macOS, Windows and Linux</li>
         <li><a href="/latex-whiteboard/">LaTeX whiteboard</a> — formula workflow and examples</li>
         <li><a href="/docs/keyboard-shortcuts/">Keyboard shortcuts</a></li>
         <li><a href="/open-source-math-whiteboard/">Open-source details</a></li>

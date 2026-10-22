@@ -54,6 +54,7 @@ function renderShortcutTables() {
 }
 
 export default {
+  lastmod: '2026-10-21',
   path: '/docs/keyboard-shortcuts/',
   title: 'MathBoard Keyboard Shortcuts',
   description:
@@ -62,14 +63,17 @@ export default {
   structuredData: 'docs',
   aboutSoftware: true,
   breadcrumbs: [
+    { label: 'MathBoard', href: '/' },
     { label: 'Resources', href: '/resources/' },
     { label: 'Keyboard shortcuts' },
   ],
   body: `
-    <p class="lede">
-      Shortcuts shipped in MathBoard. The same list appears in the About panel inside the board.
-    </p>
-    <p class="cta-row">${renderOpenBoardCTA({ placement: 'shortcuts-hero' })}</p>
+    <div class="reading-intro">
+      <p class="lede">
+        Shortcuts shipped in MathBoard. The same list appears in the About panel inside the board.
+      </p>
+      <p class="cta-row">${renderOpenBoardCTA({ placement: 'shortcuts-hero' })}</p>
+    </div>
     ${renderShortcutTables()}
     <p><a href="/resources/">Back to resources</a> · <a href="/">Open MathBoard</a></p>
   `,

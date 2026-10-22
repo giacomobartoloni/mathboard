@@ -211,6 +211,33 @@ export function validateStructuredData(page, html) {
     )
   }
 
+  const breadcrumbNodes = nodes.filter((node) => hasType(node, 'BreadcrumbList'))
+  const expectedCrumbs = page.breadcrumbs || []
+  if (breadcrumbNodes.length !== (expectedCrumbs.length ? 1 : 0)) {
+    throw new Error(`BreadcrumbList count does not match visible breadcrumbs on ${page.path}`)
+  }
+  if (expectedCrumbs.length) {
+    const crumbItems = breadcrumbNodes[0].itemListElement || []
+    const visible = html.match(/<nav aria-label="Breadcrumb">([\s\S]*?)<\/nav>/)?.[1] || ''
+    const itemCount = (visible.match(/<li\b/g) || []).length
+    if (crumbItems.length !== expectedCrumbs.length || itemCount !== expectedCrumbs.length) {
+      throw new Error(`BreadcrumbList length mismatch on ${page.path}`)
+    }
+    for (let i = 0; i < expectedCrumbs.length; i += 1) {
+      const actual = crumbItems[i]
+      const expected = expectedCrumbs[i]
+      const href = expected.href || (i === expectedCrumbs.length - 1 ? page.path : undefined)
+      if (
+        actual['@type'] !== 'ListItem'
+        || actual.position !== i + 1
+        || actual.name !== expected.label
+        || (href && actual.item !== `${ORIGIN}${href}`)
+      ) {
+        throw new Error(`BreadcrumbList parity mismatch on ${page.path}`)
+      }
+    }
+  }
+
   const pageSpecificSoftwareId = `${pageUrl}#software`
   if (html.includes(pageSpecificSoftwareId)) {
     throw new Error(
