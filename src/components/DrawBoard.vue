@@ -477,7 +477,7 @@ export default {
       this.canvas.requestRenderAll();
     },
     _panelAllowed() {
-      if (this.selectionPanelSuspended || this._selectionGesture || this.isPanning) return false;
+      if (this.selectionPanelSuspended || this._selectionGesture || this._panGesture?.isActive()) return false;
       return this.selectedTool === "select" || this.selectedTool === "pan";
     },
     _hideSelectionPanel() {
@@ -864,7 +864,7 @@ export default {
       this._boardHistory.reset();
       this._pendingTransform = null;
       this._pendingText = null;
-      this._uncommittedText = null;
+      this._textInsertion?.reset();
     },
     _clearBoardContents() {
       if (!this.canvas) return;
