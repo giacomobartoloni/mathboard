@@ -845,10 +845,24 @@ export default {
       regenerateMathBoardObjectIds(group);
       this._applyBoardDefaultInkToObjectTree(group);
       this._placeGroupAtViewportCenter(group);
+      const previousActive = this.canvas.getActiveObject();
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
       this.canvas.requestRenderAll();
-      this._recordAdd(group);
+      try {
+        this._recordAdd(group);
+      } catch (error) {
+        // The command recorder restored its state; also restore the canvas and
+        // selection so an unsuccessful notification leaves no phantom Stamp.
+        this._boardHistory.runSuspended(() => {
+          this.canvas.discardActiveObject();
+          this.canvas.remove(group);
+          if (previousActive) this.canvas.setActiveObject(previousActive);
+        });
+        this.canvas.requestRenderAll();
+        this.refreshSelectionPanel();
+        throw error;
+      }
       this.refreshSelectionPanel();
       trackBoardEngaged();
       recordProductAction();
