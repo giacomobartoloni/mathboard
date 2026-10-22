@@ -82,3 +82,34 @@ test('Escape during endpoint drag restores geometry without a history command', 
   expect(after.objects[0].width).toBeCloseTo(before.objects[0].width, 2)
   expect(after.objects[0].height).toBeCloseTo(before.objects[0].height, 2)
 })
+
+
+test('Shift + endpoint drag snaps to the nearest 15 degrees and is undoable', async ({ page }) => {
+  const pageErrors = []
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+  await createAndSelectLine(page)
+  const initial = await getBoardState(page)
+  await page.keyboard.down('Shift')
+  try {
+    await dragOnCanvas(page, { x1: 360, y1: 180, x2: 330, y2: 220 })
+  } finally {
+    await page.keyboard.up('Shift')
+  }
+
+  const updated = await waitForState(page, (state) => state.history.length === initial.history.length + 1)
+  expect(updated.history.tipType).toBe('modify')
+  const scene = await page.evaluate(() => window.__MATHBOARD_E2E__.observeBoard())
+  const edited = scene.objects[0]
+  expect(edited.type).toBe('line')
+  const angle = Math.atan2(edited.y1 - edited.y2, edited.x1 - edited.x2) * 180 / Math.PI
+  expect(Math.abs(angle / 15 - Math.round(angle / 15))).toBeLessThan(0.01)
+
+  await clickUndo(page)
+  const undone = await waitForState(page, (state) => state.history.step === initial.history.step)
+  expect(undone.objects[0].width).toBeCloseTo(initial.objects[0].width, 2)
+  expect(undone.objects[0].height).toBeCloseTo(initial.objects[0].height, 2)
+  await clickRedo(page)
+  const redone = await waitForState(page, (state) => state.history.step === initial.history.step + 1)
+  expect(redone.objects[0].mathboardId).toBe(initial.objects[0].mathboardId)
+  expect(pageErrors).toEqual([])
+})

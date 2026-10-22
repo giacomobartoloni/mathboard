@@ -22,6 +22,7 @@ import assert from 'node:assert/strict'
 import { Line, Point, util } from 'fabric'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { lineGeometryAdapter } from '../src/board/geometry/lineGeometryAdapter.js'
+import { snapPointToAngle } from '../src/board/geometry/angleConstraints.js'
 import { geometryControls, isGeometryHandleTransform } from '../src/board/geometry/geometryHandles.js'
 import { snapshotObject, applySnapshot, snapshotsEqual } from '../src/history/commandLog.js'
 import { serializeBoardDocument } from '../src/board/persistence/serializeBoardDocument.js'
@@ -127,4 +128,67 @@ test('edited line geometry survives BoardDocument and Stamp materialization', as
   const copied = await materializeStampDocument(stamp, { buildFormula: async () => null })
   near(at(copied[0], 'end'), wanted)
   near(at(copied[0], 'start'), originalStart)
+})
+
+
+test('angle snapping rounds to fifteen-degree increments without changing vector length', () => {
+  const anchor = { x: 12, y: -8 }
+  for (const input of [
+    { x: 100, y: 31 }, { x: 16, y: 111 }, { x: -60, y: -50 },
+    { x: 10, y: -101 }, { x: -52, y: 93 },
+  ]) {
+    const snapped = snapPointToAngle(anchor, input)
+    const radius = Math.hypot(input.x - anchor.x, input.y - anchor.y)
+    near(snapped, {
+      x: anchor.x + radius * Math.cos(Math.round(Math.atan2(input.y - anchor.y, input.x - anchor.x) / (Math.PI / 12)) * Math.PI / 12),
+      y: anchor.y + radius * Math.sin(Math.round(Math.atan2(input.y - anchor.y, input.x - anchor.x) / (Math.PI / 12)) * Math.PI / 12),
+    })
+    assert.ok(Math.abs(Math.hypot(snapped.x - anchor.x, snapped.y - anchor.y) - radius) < EPSILON)
+  }
+  assert.deepEqual(snapPointToAngle(anchor, anchor), anchor)
+})
+
+test('Shift-drag constrains either endpoint in board coordinates under rotation, scale and skew', () => {
+  for (const transformed of [
+    {},
+    { angle: 37, scaleX: 1.3, scaleY: 0.75, skewX: 12 },
+    { angle: -120, scaleX: 0.8, flipX: true, flipY: true },
+  ]) {
+    for (const id of ['start', 'end']) {
+      const obj = line(15, 30, 115, 90, { left: 240, top: 160, ...transformed })
+      const opposite = id === 'start' ? 'end' : 'start'
+      const fixed = at(obj, opposite)
+      const wanted = fixed.add(new Point(-93, -39))
+      const before = snapshotObject(obj, { includeGeometry: true })
+      assert.equal(lineGeometryAdapter.moveHandle(obj, id, wanted, { shiftKey: true }), true)
+      const snapped = at(obj, id)
+      near(at(obj, opposite), fixed)
+      near(snapped, snapPointToAngle(fixed, wanted))
+      const angle = Math.atan2(snapped.y - fixed.y, snapped.x - fixed.x) * 180 / Math.PI
+      assert.ok(Math.abs(angle / 15 - Math.round(angle / 15)) < 1e-7)
+      const after = snapshotObject(obj, { includeGeometry: true })
+      applySnapshot(obj, before)
+      near(at(obj, id), new Point(
+        // Rebuild the original endpoint from a fresh equivalent object.
+        ...((p) => [p.x, p.y])(at(line(15, 30, 115, 90, { left: 240, top: 160, ...transformed }), id)),
+      ))
+      applySnapshot(obj, after)
+      near(at(obj, id), snapped)
+      near(at(obj, opposite), fixed)
+    }
+  }
+})
+
+test('geometry controls forward the live Shift modifier and return to free drag when released', () => {
+  const obj = line(15, 25, 115, 75, { left: 220, top: 180 })
+  const controls = geometryControls(lineGeometryAdapter)
+  const fixed = at(obj, 'end')
+  const desired = fixed.add(new Point(-95, -37))
+  const drag = { target: obj }
+  assert.equal(controls['geometry-start'].actionHandler({ shiftKey: true }, drag, desired.x, desired.y), true)
+  near(at(obj, 'start'), snapPointToAngle(fixed, desired))
+  const free = fixed.add(new Point(-83, -29))
+  assert.equal(controls['geometry-start'].actionHandler({ shiftKey: false }, drag, free.x, free.y), true)
+  near(at(obj, 'start'), free)
+  near(at(obj, 'end'), fixed)
 })

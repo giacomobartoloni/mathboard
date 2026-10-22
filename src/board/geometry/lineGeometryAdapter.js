@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { Point, util } from 'fabric'
+import { snapPointToAngle } from './angleConstraints.js'
 
 const ENDPOINTS = ['start', 'end']
 
@@ -36,10 +37,16 @@ export const lineGeometryAdapter = {
     return util.transformPoint(new Point(x, y), line.calcTransformMatrix())
   },
 
-  moveHandle(line, id, scenePoint) {
+  moveHandle(line, id, scenePoint, { shiftKey = false } = {}) {
     if (!ENDPOINTS.includes(id) || !Number.isFinite(scenePoint.x) || !Number.isFinite(scenePoint.y)) return false
+    // Snap in scene space (rather than the scaled/rotated local frame) so
+    // 15-degree increments match the visible board angle at any transform.
+    const opposite = id === 'start' ? 'end' : 'start'
+    const target = shiftKey
+      ? snapPointToAngle(this.readHandle(line, opposite), scenePoint)
+      : scenePoint
     const matrix = line.calcTransformMatrix()
-    const local = util.transformPoint(new Point(scenePoint.x, scenePoint.y), util.invertTransform(matrix))
+    const local = util.transformPoint(new Point(target.x, target.y), util.invertTransform(matrix))
     if (!Number.isFinite(local.x) || !Number.isFinite(local.y)) return false
     const points = line.calcLinePoints()
     const fixed = id === 'start'

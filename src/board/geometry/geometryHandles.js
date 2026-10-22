@@ -37,9 +37,13 @@ export function geometryControls(adapter) {
         const point = adapter.readHandle(object, id)
         return util.transformPoint(new Point(point.x, point.y), object.getViewportTransform())
       },
-      actionHandler: (_event, transform, x, y) => {
+      actionHandler: (event, transform, x, y) => {
         if (transform.mathboardCancelled) return false
-        return adapter.moveHandle(transform.target, id, new Point(x, y))
+        // Read the modifier on every move, so Shift can be pressed or
+        // released during an existing drag without starting a new gesture.
+        return adapter.moveHandle(transform.target, id, new Point(x, y), {
+          shiftKey: Boolean(event?.shiftKey),
+        })
       },
     }),
   ]))
