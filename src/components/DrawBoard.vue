@@ -493,12 +493,14 @@ export default {
         selectionColor,
         selectionBorderColor,
         selectionLineWidth,
+        selectionDashArray,
       } = chrome;
       const objectChrome = selectionObjectChromeForBoard(this.boardTheme);
       Object.assign(InteractiveFabricObject.ownDefaults, objectChrome);
       this.canvas.selectionColor = selectionColor;
       this.canvas.selectionBorderColor = selectionBorderColor;
       this.canvas.selectionLineWidth = selectionLineWidth;
+      this.canvas.selectionDashArray = selectionDashArray;
 
       this._suspendHistory = true;
       try {

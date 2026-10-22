@@ -19,7 +19,7 @@ test('selection chrome follows the board and does not carry document ink', () =>
   assert.notEqual(light.borderColor, chalk.borderColor)
   assert.deepEqual(fallback, light)
 
-  assert.equal(light.cornerSize, 14)
+  assert.equal(light.cornerSize, 11)
   assert.equal(light.touchCornerSize, 32)
   assert.ok(light.touchCornerSize > light.cornerSize)
 
@@ -28,6 +28,37 @@ test('selection chrome follows the board and does not carry document ink', () =>
       assert.equal(Object.prototype.hasOwnProperty.call(chrome, key), false)
     }
   }
+})
+
+test('native selection polish keeps marquee separate from object handles', () => {
+  const colors = {
+    light: 'rgba(21, 101, 192, 0.08)',
+    dark: 'rgba(128, 222, 234, 0.10)',
+    chalkboard: 'rgba(255, 224, 130, 0.10)',
+  }
+
+  for (const [theme, marqueeColor] of Object.entries(colors)) {
+    const canvasChrome = selectionChromeForBoard(theme)
+    const objectChrome = selectionObjectChromeForBoard(theme)
+
+    assert.equal(canvasChrome.cornerSize, 11)
+    assert.equal(canvasChrome.touchCornerSize, 32)
+    assert.equal(canvasChrome.borderScaleFactor, 1.35)
+    assert.equal(canvasChrome.selectionLineWidth, 1)
+    assert.deepEqual(canvasChrome.selectionDashArray, [5, 4])
+    assert.equal(canvasChrome.selectionColor, marqueeColor)
+    assert.equal(objectChrome.cornerStyle, 'circle')
+    assert.equal(objectChrome.transparentCorners, false)
+    assert.equal(objectChrome.padding, 4)
+
+    for (const key of ['selectionColor', 'selectionBorderColor', 'selectionLineWidth', 'selectionDashArray']) {
+      assert.equal(Object.prototype.hasOwnProperty.call(objectChrome, key), false)
+    }
+  }
+
+  assert.equal(selectionChromeForBoard('light').cornerColor, '#ffffff')
+  assert.equal(selectionChromeForBoard('dark').cornerColor, '#ffffff')
+  assert.equal(selectionChromeForBoard('chalkboard').cornerColor, '#fffaf0')
 })
 
 test('applySelectionObjectChrome updates nested Group members', () => {
