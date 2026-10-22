@@ -96,3 +96,32 @@ test('E2E-P0-006 group ungroup reversible', async ({ page }) => {
   state = await waitForState(page, (s) => s.objects.length === 2 && !s.objects.some((o) => o.type === 'Group'))
   assertLayout(state.objects)
 })
+
+test('UI groups an existing Board Group with a loose shape in one reversible command', async ({ page }) => {
+  await gotoBoard(page)
+  await drawRect(page, { x1: 280, y1: 180, x2: 350, y2: 245 })
+  await drawCircle(page, { x1: 390, y1: 180, x2: 455, y2: 245 })
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.press('ControlOrMeta+G')
+  await waitForState(page, (s) => s.objects.length === 1 && s.objects[0].type === 'Group')
+
+  await drawRect(page, { x1: 500, y1: 180, x2: 560, y2: 245 })
+  const before = await waitForState(page, (s) => s.objects.length === 2)
+  const originalGroup = before.objects.find((obj) => obj.type === 'Group')
+  expect(originalGroup.childCount).toBe(2)
+
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.press('ControlOrMeta+G')
+  const nested = await waitForState(page, (s) => s.history.tipType === 'group' && s.objects.length === 1)
+  expect(nested.history.length).toBe(before.history.length + 1)
+  expect(nested.objects[0].childCount).toBe(2)
+  expect(nested.objects[0].children.some((obj) => obj.type === 'Group')).toBe(true)
+
+  await clickUndo(page)
+  const undone = await waitForState(page, (s) => s.objects.length === 2)
+  expect(undone.history.step).toBe(nested.history.step - 1)
+  expect(undone.objects.find((obj) => obj.type === 'Group').mathboardId).toBe(originalGroup.mathboardId)
+  await clickRedo(page)
+  const redone = await waitForState(page, (s) => s.history.step === nested.history.step && s.objects.length === 1)
+  expect(redone.objects[0].childCount).toBe(2)
+})
