@@ -19,7 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ActiveSelection, Rect, Group } from 'fabric';
+import { ActiveSelection, Rect, Group, Circle, Path } from 'fabric';
+import { ensureMathBoardObjectId, getMathBoardObjectId } from '../src/board/ids.js';
+import { FormulaObject } from '../src/formulas/FormulaObject.js';
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js';
 import { makeControllerCanvas } from './helpers/controller-canvas.js';
 import { BoardHistory } from '../src/history/BoardHistory.js';
@@ -31,6 +33,8 @@ installFabricDomStub();
 function setup(reject = false) {
   const canvas = makeControllerCanvas();
   canvas.add = (...objects) => objects.forEach((object) => canvas.insertAt(canvas.getObjects().length, object));
+  canvas.fire = () => {};
+  canvas.getRetinaScaling = () => 1;
   const history = new BoardHistory({
     getCanvas: () => canvas,
     syncAutoInk: () => {},
@@ -126,4 +130,103 @@ test('empty/no-op selection actions leave redo intact', () => {
   assert.equal(mutations.group(), false);
   assert.equal(mutations.ungroup(), false);
   assert.deepEqual(history.summary(), before);
+});
+
+test('duplicate gives a nested group fresh IDs and keeps retained sources', async () => {
+  const { canvas, history, mutations } = setup();
+  const a = rect(0), b = rect(80);
+  const original = new Group([a, b]);
+  ensureMathBoardObjectId(original);
+  ensureMathBoardObjectId(a);
+  ensureMathBoardObjectId(b);
+  canvas.add(original);
+  canvas.setActiveObject(original);
+  assert.equal(await mutations.duplicate(), true);
+  const [source, clone] = roots(canvas);
+  assert.equal(source, original);
+  assert.notEqual(getMathBoardObjectId(source), getMathBoardObjectId(clone));
+  const originalIds = source.getObjects().map(getMathBoardObjectId);
+  const clonedIds = clone.getObjects().map(getMathBoardObjectId);
+  clonedIds.forEach((id) => assert.ok(!originalIds.includes(id)));
+  assert.equal(history.summary().tipType, 'duplicate');
+  history.undo();
+  assert.deepEqual(roots(canvas), [original]);
+  history.redo();
+  assert.deepEqual(roots(canvas), [original, clone]);
+});
+
+test('duplicate retains Formula semantic metadata', async () => {
+  const { canvas, mutations } = setup();
+  const formula = new FormulaObject([new Path('M 0 0 L 20 20')], { latex: 'x+1', mathboardInkMode: 'fixed', fill: '#123456' });
+  canvas.add(formula);
+  canvas.setActiveObject(formula);
+  assert.equal(await mutations.duplicate(), true);
+  const clone = roots(canvas)[1];
+  assert.equal(clone.latex, formula.latex);
+  assert.equal(clone.formulaType, formula.formulaType);
+  assert.notEqual(getMathBoardObjectId(clone), getMathBoardObjectId(formula));
+});
+
+test('clone rejection does not change roots or history', async () => {
+  const { canvas, history, mutations } = setup();
+  const a = rect(0);
+  a.clone = async () => { throw new Error('cannot clone'); };
+  canvas.add(a);
+  canvas.setActiveObject(a);
+  assert.equal(await mutations.duplicate(), false);
+  assert.deepEqual(roots(canvas), [a]);
+  assert.equal(history.summary().length, 0);
+});
+
+test('history rejection during duplicate restores selection and objects', async () => {
+  const { canvas, history, mutations } = setup(true);
+  const a = rect(0);
+  canvas.add(a);
+  canvas.setActiveObject(a);
+  await assert.rejects(() => mutations.duplicate(), /notification rejected/);
+  assert.deepEqual(roots(canvas), [a]);
+  assert.equal(canvas.getActiveObject(), a);
+  assert.equal(history.summary().length, 0);
+});
+
+test('coalesced selection recolors notify each time but produce one undo step', () => {
+  const { canvas, history, mutations } = setup();
+  const rectA = rect(0);
+  rectA.set({ stroke: '#010101', mathboardInkMode: 'fixed' });
+  canvas.add(rectA);
+  canvas.setActiveObject(rectA);
+  let notifications = 0;
+  history._onDocumentChanged = () => { notifications++; };
+  assert.equal(mutations.recolor('#aa0000', { coalesce: true }), true);
+  assert.equal(mutations.recolor('#bb0000', { coalesce: true }), true);
+  assert.equal(notifications, 2);
+  assert.equal(history.summary().length, 1);
+  assert.equal(rectA.stroke, '#bb0000');
+  history.undo();
+  assert.equal(rectA.stroke, '#010101');
+  history.redo();
+  assert.equal(rectA.stroke, '#bb0000');
+  assert.equal(mutations.recolor(null), true);
+  assert.equal(rectA.mathboardInkMode, 'auto');
+  assert.equal(rectA.stroke, '#111111');
+});
+
+test('coalesced notification failure restores original entry and paint', () => {
+  const { canvas, history, mutations } = setup();
+  const a = new Circle({ left: 20, top: 30, radius: 12, fill: 'transparent', stroke: '#101010' });
+  a.mathboardInkMode = 'fixed';
+  canvas.add(a);
+  canvas.setActiveObject(a);
+  assert.equal(mutations.recolor('#220000', { coalesce: true }), true);
+  const before = history._entries[0].entries[0].before;
+  const summary = history.summary();
+  history._onDocumentChanged = () => { throw new Error('notification rejected'); };
+  assert.throws(() => mutations.recolor('#330000', { coalesce: true }), /notification rejected/);
+  assert.equal(a.stroke, '#220000');
+  assert.equal(a.fill, 'transparent');
+  assert.deepEqual(history._entries[0].entries[0].before, before);
+  assert.deepEqual(history.summary(), summary);
+  history._onDocumentChanged = () => {};
+  history.undo();
+  assert.equal(a.stroke, '#101010');
 });

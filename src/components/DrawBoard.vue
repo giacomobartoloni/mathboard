@@ -41,10 +41,9 @@ import { markRaw, toRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, Rect, Circle, Line, IText, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
-import { applyAutoInk, applyExplicitInk, flattenInkTargets, paletteColorFromSelection } from "../config/colors";
+import { paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
 import { extendedShapeInkPatch, isExtendedShape } from '../board/objects/shapeInk.js';
-import { FORMULA_CLONE_PROPS } from "../formulas/constants.js";
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
@@ -66,7 +65,6 @@ import {
   ACTION_EDIT,
   ACTION_GROUP,
   ACTION_UNGROUP,
-  DUPLICATE_OFFSET,
   panelSize,
   sceneBoxToViewport,
   selectionMeta,
@@ -383,27 +381,6 @@ export default {
       if (!path) return;
       path.mathboardInkMode = this.inkMode;
     },
-    _inkSnapshot(object) {
-      if (!object || this._boardObjectPolicy.isFormula(object)) return null;
-      if (isExtendedShape(object)) {
-        return { stroke: object.stroke, fill: object.fill, mathboardInkMode: object.mathboardInkMode };
-      }
-      if (object.isType(...STROKE_INK_TYPES)) {
-        const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
-        if (
-          object.isType("Circle")
-          && object.fill
-          && object.fill !== "transparent"
-        ) {
-          snapshot.fill = object.fill;
-        }
-        return snapshot;
-      }
-      if (object.isType(...FILL_INK_TYPES)) {
-        return { fill: object.fill, mathboardInkMode: object.mathboardInkMode };
-      }
-      return null;
-    },
     applyBrushColor() {
       if (this.canvas?.freeDrawingBrush) {
         this.canvas.freeDrawingBrush.color = this.activeInk;
@@ -668,30 +645,6 @@ export default {
       if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
       root.focus({ preventScroll: true });
     },
-    async _cloneForDuplicate(object) {
-      const placed = snapshotObject(object);
-      const clone = await object.clone(FORMULA_CLONE_PROPS);
-      clone.set({
-        ...placed,
-        left: placed.left + DUPLICATE_OFFSET,
-        top: placed.top + DUPLICATE_OFFSET,
-      });
-      FORMULA_CLONE_PROPS.forEach((key) => {
-        if (object[key] !== undefined) clone[key] = object[key];
-      });
-      // Duplicate always gets fresh identity (including nested board groups).
-      regenerateMathBoardObjectIds(clone);
-      clone.setCoords();
-      return clone;
-    },
-    _selectDuplicates(clones) {
-      if (clones.length === 1) {
-        this.canvas.setActiveObject(clones[0]);
-        return;
-      }
-      const selection = new ActiveSelection(clones, { canvas: this.canvas });
-      this.canvas.setActiveObject(selection);
-    },
     selectAll() {
       if (!this.canvas) return false;
       // toRaw: shapes assigned through data() may be Vue proxies; Fabric's
@@ -711,43 +664,9 @@ export default {
       return true;
     },
     async duplicateSelection() {
-      if (!this.canvas) return;
-      const active = this.canvas.getActiveObject();
-      if (!active || active.isEditing) return;
-      const sources = this.canvas.getActiveObjects().slice();
-      if (!sources.length) return;
-
-      let clones;
-      try {
-        clones = await Promise.all(sources.map((object) => this._cloneForDuplicate(object)));
-      } catch (error) {
-        console.error("Duplicate failed", error);
-        return;
-      }
-      if (!this.canvas || clones.some((clone) => !clone)) return;
-      const stillThere = sources.every((object) => this.canvas.getObjects().includes(object));
-      if (!stillThere) return;
-
-      this._boardHistory.setSuspended(true);
-      try {
-        clones.forEach((clone) => this.canvas.add(clone));
-        this._selectDuplicates(clones);
-      } catch (error) {
-        clones.forEach((clone) => {
-          if (this.canvas.getObjects().includes(clone)) this.canvas.remove(clone);
-        });
-        console.error("Duplicate failed", error);
-        return;
-      } finally {
-        this._boardHistory.setSuspended(false);
-      }
-
-      const entries = clones
-        .map((object) => ({ object, index: this.canvas.getObjects().indexOf(object) }))
-        .filter((entry) => entry.index >= 0);
-      if (entries.length) this._boardHistory.record({ type: "duplicate", entries });
-      this.canvas.requestRenderAll();
-      this.refreshSelectionPanel();
+      const changed = await this._selectionMutations.duplicate();
+      if (changed) this.refreshSelectionPanel();
+      return changed;
     },
     editSelection() {
       const active = this.canvas?.getActiveObject();
@@ -1404,48 +1323,7 @@ export default {
      * drag coalesces into one history entry; a swatch click is its own undo step.
      */
     recolorSelection(color, options = {}) {
-      if (!this.canvas) return false;
-      const active = this.canvas.getActiveObject();
-      if (!active) return false;
-
-      // Permanent Groups (stamps) and ActiveSelection: recolor leaf members.
-      const targets = flattenInkTargets([active]);
-
-      const useAuto = color === null;
-      const ink = useAuto ? this.boardThemeConfig.defaultInk : color;
-
-      const entries = [];
-      targets.forEach((obj) => {
-        const before = this._inkSnapshot(obj);
-        if (!before) return;
-        const applied = useAuto
-          ? applyAutoInk(obj, ink)
-          : applyExplicitInk(obj, ink);
-        if (!applied) return;
-        entries.push({ object: obj, before, after: this._inkSnapshot(obj) });
-      });
-      if (entries.length === 0) return false;
-
-      if (active.isType("ActiveSelection") || active.isType("Group")) {
-        active.set("dirty", true);
-      }
-
-      try {
-        this._boardHistory.record(
-          { type: "recolor", entries },
-          { coalesce: Boolean(options.coalesce) },
-        );
-      } catch (error) {
-        // The log is already restored by BoardHistory. Restore UI paint too.
-        entries.forEach(({ object, before }) => {
-          object.set(before);
-          object.dirty = true;
-        });
-        this.canvas.requestRenderAll();
-        throw error;
-      }
-      this.canvas.requestRenderAll();
-      return true;
+      return this._selectionMutations.recolor(color, options);
     },
 
     deleteSelection() {

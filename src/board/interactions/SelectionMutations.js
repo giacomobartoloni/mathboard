@@ -18,13 +18,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { Group, ActiveSelection } from "fabric";
-import { ensureMathBoardObjectId } from "../ids.js";
+import { ensureMathBoardObjectId, regenerateMathBoardObjectIds } from "../ids.js";
+import { FORMULA_CLONE_PROPS } from "../../formulas/constants.js";
+import { DUPLICATE_OFFSET } from "../../config/selectionActions.js";
+import { applyAutoInk, applyExplicitInk, flattenInkTargets } from "../../config/colors.js";
+import { isExtendedShape } from "../objects/shapeInk.js";
 import { snapshotObject, applySnapshot } from "../../history/commandLog.js";
 
 /**
  * Owns direct UI selection mutations and their history commands.
  * Presentation, analytics, and App-facing methods stay in DrawBoard.
  */
+const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
+const FILL_INK_TYPES = ["IText", "Text"];
+
 export class SelectionMutations {
   constructor({ getCanvas, history, boardObjectPolicy, getDefaultInk }) {
     this._getCanvas = getCanvas;
@@ -202,4 +209,125 @@ export class SelectionMutations {
     canvas.requestRenderAll();
     return entries.map(({ object }) => object);
   }
+  async _cloneForDuplicate(object) {
+    const placed = snapshotObject(object);
+    const clone = await object.clone(FORMULA_CLONE_PROPS);
+    clone.set({
+      ...placed,
+      left: placed.left + DUPLICATE_OFFSET,
+      top: placed.top + DUPLICATE_OFFSET,
+    });
+    FORMULA_CLONE_PROPS.forEach((key) => {
+      if (object[key] !== undefined) clone[key] = object[key];
+    });
+    // Cloned Board Groups and their descendants must never reuse source IDs.
+    regenerateMathBoardObjectIds(clone);
+    clone.setCoords();
+    return clone;
+  }
+
+  async duplicate() {
+    const canvas = this._getCanvas();
+    const active = canvas?.getActiveObject();
+    if (!active || active.isEditing) return false;
+    const sources = canvas.getActiveObjects().slice();
+    if (!sources.length) return false;
+
+    let clones;
+    try {
+      clones = await Promise.all(sources.map((object) => this._cloneForDuplicate(object)));
+    } catch (error) {
+      console.error("Duplicate failed", error);
+      return false;
+    }
+    if (this._getCanvas() !== canvas || clones.some((clone) => !clone)) return false;
+    if (!sources.every((object) => canvas.getObjects().includes(object))) return false;
+
+    const selection = this._selection(canvas);
+    try {
+      this._history.runSuspended(() => {
+        clones.forEach((clone) => canvas.add(clone));
+        if (clones.length === 1) {
+          canvas.setActiveObject(clones[0]);
+        } else {
+          canvas.setActiveObject(new ActiveSelection(clones, { canvas }));
+        }
+      });
+      const entries = clones.map((object) => ({
+        object, index: canvas.getObjects().indexOf(object),
+      }));
+      if (entries.some(({ index }) => index < 0)) {
+        throw new Error("Duplicate was not inserted.");
+      }
+      this._record({ type: "duplicate", entries });
+    } catch (error) {
+      this._history.runSuspended(() => {
+        canvas.discardActiveObject();
+        clones.forEach((clone) => canvas.remove(clone));
+        this._restoreSelection(canvas, selection);
+      });
+      canvas.requestRenderAll();
+      throw error;
+    }
+    canvas.requestRenderAll();
+    return true;
+  }
+
+  _inkSnapshot(object) {
+    if (!object || this._policy.isFormula(object)) return null;
+    if (isExtendedShape(object)) {
+      return { stroke: object.stroke, fill: object.fill, mathboardInkMode: object.mathboardInkMode };
+    }
+    if (object.isType(...STROKE_INK_TYPES)) {
+      const snapshot = { stroke: object.stroke, mathboardInkMode: object.mathboardInkMode };
+      if (object.isType("Circle") && object.fill && object.fill !== "transparent") {
+        snapshot.fill = object.fill;
+      }
+      return snapshot;
+    }
+    if (object.isType(...FILL_INK_TYPES)) {
+      return { fill: object.fill, mathboardInkMode: object.mathboardInkMode };
+    }
+    return null;
+  }
+
+  recolor(color, { coalesce = false } = {}) {
+    const canvas = this._getCanvas();
+    const active = canvas?.getActiveObject();
+    if (!active) return false;
+    const targets = flattenInkTargets([active]);
+    const snapshots = targets.map((object) => ({
+      object, before: this._inkSnapshot(object),
+    })).filter(({ before }) => before !== null);
+    if (!snapshots.length) return false;
+
+    const useAuto = color === null;
+    const ink = useAuto ? this._getDefaultInk() : color;
+    const entries = [];
+    try {
+      snapshots.forEach(({ object, before }) => {
+        const applied = useAuto ? applyAutoInk(object, ink) : applyExplicitInk(object, ink);
+        if (applied) entries.push({ object, before, after: this._inkSnapshot(object) });
+      });
+      if (!entries.length) return false;
+      if (active.isType("ActiveSelection") || active.isType("Group")) {
+        active.set("dirty", true);
+      }
+      if (!this._history.record({ type: "recolor", entries }, { coalesce: Boolean(coalesce) })) {
+        throw new Error("Selection recolor could not be recorded.");
+      }
+    } catch (error) {
+      // BoardHistory restores its log/coalesced tip. Revert every live target,
+      // including ones painted before another target raised an exception.
+      snapshots.forEach(({ object, before }) => {
+        object.set(before);
+        object.dirty = true;
+      });
+      canvas.requestRenderAll();
+      throw error;
+    }
+    canvas.requestRenderAll();
+    return true;
+  }
+
 }
