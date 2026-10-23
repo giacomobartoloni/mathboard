@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <h2 id="board-library-heading">Board library</h2>
         <button type="button" :disabled="busy" aria-label="Close board library" @click="$emit('close')">×</button>
       </header>
-      <p>Boards are stored locally in this browser, not in a cloud account.</p>
+      <p>Boards are stored locally, not in a cloud account. Drafts are autosaved but may be cleaned up after 30 days of inactivity; Saved boards are kept until you delete them or clear local app data.</p>
       <form class="board-library-create" @submit.prevent="createBoard">
         <label for="new-board-title">New board name (optional)</label>
         <div>
@@ -48,10 +48,29 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
               @click="$emit('action', { action: 'open', boardId: board.id })">{{ board.title }}</button>
             <span class="board-library-kind">{{ board.kind === 'saved' ? 'Saved' : 'Draft' }}<span v-if="board.isActive"> · Current</span></span>
             <button type="button" :disabled="busy" @click="beginRename(board)">Rename</button>
+            <button type="button" :disabled="busy" @click="beginDelete(board)">Delete</button>
           </template>
+          <div v-if="confirmDeleteId === board.id" class="board-library-delete-confirm" role="group" :aria-label="'Confirm deletion of ' + board.title">
+            <span>Move “{{ board.title }}” to trash? You can restore it later.</span>
+            <button type="button" :disabled="busy" @click="$emit('action', { action: 'trash', boardId: board.id })">Move to trash</button>
+            <button type="button" :disabled="busy" @click="confirmDeleteId = null">Cancel</button>
+          </div>
         </li>
       </ul>
       <p v-if="!boards.length" role="status">No local boards yet.</p>
+      <button type="button" class="board-library-trash-toggle" :aria-expanded="showTrash" @click="showTrash = !showTrash">
+        {{ showTrash ? 'Hide trash' : 'Trash' }} ({{ trashBoards.length }})
+      </button>
+      <div v-if="showTrash" class="board-library-trash">
+        <p>Trashed boards are hidden from the library but remain on this device until local data is cleared.</p>
+        <ul class="board-library-list">
+          <li v-for="board in trashBoards" :key="board.id">
+            <span class="board-library-trash-title">{{ board.title }}</span>
+            <button type="button" :disabled="busy" @click="$emit('action', { action: 'restore', boardId: board.id })">Restore</button>
+          </li>
+        </ul>
+        <p v-if="!trashBoards.length" role="status">Trash is empty.</p>
+      </div>
     </section>
   </div>
 </template>
@@ -63,6 +82,7 @@ export default {
   name: 'BoardLibraryModal',
   props: {
     boards: { type: Array, default: () => [] },
+    trashBoards: { type: Array, default: () => [] },
     busy: { type: Boolean, default: false },
   },
   emits: ['close', 'action'],
@@ -70,6 +90,8 @@ export default {
     const newTitle = ref('')
     const renameId = ref(null)
     const renameTitle = ref('')
+    const confirmDeleteId = ref(null)
+    const showTrash = ref(false)
     const createBoard = () => {
       emit('action', { action: 'create', title: newTitle.value.trim() || undefined })
       newTitle.value = ''
@@ -78,12 +100,16 @@ export default {
       renameId.value = board.id
       renameTitle.value = board.title
     }
+    const beginDelete = (board) => {
+      renameId.value = null
+      confirmDeleteId.value = board.id
+    }
     const submitRename = (boardId) => {
       if (!renameTitle.value.trim()) return
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { newTitle, renameId, renameTitle, createBoard, beginRename, submitRename }
+    return { newTitle, renameId, renameTitle, confirmDeleteId, showTrash, createBoard, beginRename, submitRename, beginDelete }
   },
 }
 </script>
@@ -140,4 +166,8 @@ export default {
 .board-library-kind { font-size: 12px; color: var(--text-secondary); }
 .board-library-rename { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 8px; }
 .board-library-rename input { flex: 1; min-width: 120px; }
+.board-library-delete-confirm { display: flex; gap: 8px; width: 100%; flex-wrap: wrap; align-items: center; font-size: 13px; }
+.board-library-delete-confirm span { flex: 1; min-width: 160px; }
+.board-library-trash-toggle { margin-top: 18px; }
+.board-library-trash-title { flex: 1; min-width: 100px; overflow-wrap: anywhere; }
 </style>
