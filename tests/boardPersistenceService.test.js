@@ -377,6 +377,7 @@ test('scratch garbage collection only deletes expired unprotected scratch record
     ['mb_active', { id: 'mb_active', kind: 'scratch', updatedAt: daysAgo(100), document }],
     ['mb_expired', { id: 'mb_expired', kind: 'scratch', updatedAt: daysAgo(31), document }],
     ['mb_recent', { id: 'mb_recent', kind: 'scratch', updatedAt: daysAgo(10), document }],
+    ['mb_trashed', { id: 'mb_trashed', kind: 'scratch', updatedAt: daysAgo(100), trashedAt: daysAgo(90), document }],
     ['mb_saved', { id: 'mb_saved', kind: 'saved', updatedAt: daysAgo(200), document }],
     ['mb_unknown', { id: 'mb_unknown', kind: 'future-kind', updatedAt: daysAgo(200), document }],
     ['mb_legacy', { id: 'mb_legacy', updatedAt: daysAgo(200), document }],
@@ -400,6 +401,7 @@ test('scratch garbage collection only deletes expired unprotected scratch record
     'mb_recent',
     'mb_recovery',
     'mb_saved',
+    'mb_trashed',
     'mb_unknown',
   ])
   assert.deepEqual(repository.deletes, ['mb_expired'])
