@@ -217,6 +217,10 @@ export class BoardPersistenceService {
       try {
         const document = this.serializeCurrent()
         const existing = await this._repository.get(this.boardId)
+        if (existing?.trashedAt) {
+          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED,
+            'Active board was moved to trash in another tab; restore it before saving.')
+        }
         const now = this._now()
         const kind = existing?.kind ?? BOARD_RECORD_KINDS.SCRATCH
         const record = createBoardRecord({
