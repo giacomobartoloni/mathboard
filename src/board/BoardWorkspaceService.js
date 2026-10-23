@@ -72,8 +72,8 @@ export class BoardWorkspaceService {
     return this._run(async () => this._summary(await this._persistence.unarchiveBoard(boardId)))
   }
 
-  delete({ boardId } = {}) {
-    return this._run(() => this._persistence.deleteBoard(boardId))
+  delete({ boardId, confirm } = {}) {
+    return this._run(() => this._persistence.deleteBoard(boardId, { confirm }))
   }
 
 }
