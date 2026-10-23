@@ -30,7 +30,7 @@ export function createBoardId() {
 
 export function createBoardRecord({
   id,
-  kind = BOARD_RECORD_KINDS.SCRATCH,
+  kind = BOARD_RECORD_KINDS.SAVED,
   title,
   document,
   createdAt,
