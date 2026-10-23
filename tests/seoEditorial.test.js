@@ -67,6 +67,18 @@ test('guides, reference documents, privacy and 404 keep readable editorial struc
   assert.equal((notFound.match(/<h1(?:\s|>)/g) || []).length, 1)
 })
 
+test('shared editorial layout preserves the original 960px container and header navigation', () => {
+  const css = readFileSync(new URL('../public/seo/seo.css', import.meta.url), 'utf8')
+  const shared = css.split('Shared chalkboard/editorial language for all static MathBoard routes.')[1]
+  assert.ok(shared, 'expected shared editorial section')
+  assert.ok(css.includes('width: min(100% - 32px, 960px)'))
+  assert.ok(!shared.includes('1120px'))
+  assert.ok(!shared.includes('.site-header nav {'))
+  assert.ok(!shared.includes('.site-header nav a:not(.button) {'))
+  assert.ok(shared.includes('main .button,'))
+  assert.ok(shared.includes('--muted: #5b6572;'))
+})
+
 test('shared editorial styles retain accessible contrast, reduced motion and practical content', () => {
   const css = readFileSync(new URL('../public/seo/seo.css', import.meta.url), 'utf8')
   assert.ok(css.includes('Shared chalkboard/editorial language'))
