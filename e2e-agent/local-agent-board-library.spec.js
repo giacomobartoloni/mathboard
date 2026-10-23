@@ -81,7 +81,7 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await currentRow.getByRole('button', { name: 'Delete', exact: true }).click()
   await expect(currentRow.getByText(/Permanently delete.*Algebra B/)).toBeVisible()
   await currentRow.getByRole('button', { name: 'Permanently delete' }).click()
-  expect((await send(request, 'observe')).boardId).not.toBe(created.id)
+  await expect.poll(async () => (await send(request, 'observe')).boardId).not.toBe(created.id)
   expect((await send(request, 'boards.listArchived')).some(board => board.id === created.id)).toBe(false)
   expect((await send(request, 'boards.list')).some(board => board.id === created.id)).toBe(false)
 })
