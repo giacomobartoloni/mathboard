@@ -1292,3 +1292,453 @@ main > .download-status-note {
     transition: none;
   }
 }
+
+
+/*
+ * Shared chalkboard/editorial language for all static MathBoard routes.
+ * The downloadable beta hub retains its own scoped hero composition above.
+ * These changes are visual only; documentation and release claims stay intact.
+ */
+:root {
+  --bg: #f8f8f8;
+  --text: #292a28;
+  --muted: #625f5a;
+  --border: #e1ddd7;
+  --focus: #292a28;
+  --editorial-ink: #292a28;
+  --editorial-paper: #f8f8f8;
+  --editorial-bone: #fffbf4;
+  --editorial-line: #e1ddd7;
+}
+
+body {
+  background: var(--editorial-paper);
+}
+
+.site-header,
+.site-footer,
+main {
+  width: min(100% - 32px, 1120px);
+}
+
+.site-header {
+  margin-top: 1.2rem;
+  margin-bottom: 0.75rem;
+  padding: 0.85rem clamp(1rem, 2.5vw, 1.65rem);
+  border: 1px solid #e7e2db;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2px 8px rgba(41, 42, 40, 0.04);
+}
+
+.site-header nav {
+  gap: clamp(0.45rem, 1.5vw, 0.85rem);
+}
+
+.site-header nav a:not(.button) {
+  padding: 0.45rem 0.65rem;
+  border-radius: 20px;
+  color: #4a4946;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.site-header nav a:not(.button):hover {
+  color: #292a28;
+  background: #f0eee9;
+}
+
+.site-header nav .button {
+  border-radius: 20px;
+}
+
+main {
+  padding-top: 1.6rem;
+  padding-bottom: 4.5rem;
+}
+
+main > h1,
+.privacy-heading h1,
+.not-found h1 {
+  max-width: 19ch;
+  margin: 0 0 1.45rem;
+  color: var(--editorial-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.75rem, 5.1vw, 4.5rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+main > section {
+  margin-top: clamp(3rem, 6vw, 4.25rem);
+}
+
+main > section > h2 {
+  margin-top: 0;
+  font-size: clamp(1.65rem, 2.9vw, 2.25rem);
+  font-weight: 650;
+  line-height: 1.18;
+  letter-spacing: -0.045em;
+}
+
+main > section > p,
+main > section > ul,
+main > section > ol {
+  line-height: 1.7;
+}
+
+.button,
+.copy-latex {
+  border-radius: 20px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.button-primary:hover {
+  filter: none;
+  background: #2e2f2e;
+}
+
+.site-footer {
+  margin-bottom: 2rem;
+  padding: clamp(1.5rem, 3vw, 2.3rem);
+  border: 1px solid #343632;
+  border-radius: 20px;
+  color: #d2ceca;
+  background: var(--editorial-ink);
+}
+
+.site-footer nav {
+  gap: 0.8rem 1.2rem;
+}
+
+.site-footer a {
+  color: #e7e2dc;
+}
+
+.site-footer a:hover {
+  color: #ffffff;
+}
+
+.site-footer a:focus-visible {
+  outline-color: #ffffff;
+}
+
+.site-hero {
+  margin: 0.5rem 0 3.5rem;
+  padding: clamp(1.6rem, 4vw, 3.5rem);
+  border: 1px solid #494540;
+  border-radius: 24px;
+  color: #f8f7f4;
+  background-color: var(--editorial-ink);
+  background-image:
+    radial-gradient(circle at 94% 4%, rgba(210, 180, 140, 0.13), transparent 42%),
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: auto, 30px 30px, 30px 30px;
+}
+
+.site-hero h1 {
+  max-width: 14ch;
+  margin: 0 0 1.35rem;
+  color: #fffdf9;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.75rem, 5.1vw, 4.5rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.editorial-eyebrow,
+.reading-intro::before {
+  display: block;
+  margin: 0 0 1.2rem;
+  color: #e2bd91;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.site-hero .lede {
+  max-width: 56ch;
+  margin: 0;
+  color: #e1ded9;
+  font-size: clamp(1.06rem, 1.75vw, 1.22rem);
+  font-weight: 450;
+  line-height: 1.6;
+}
+
+.site-hero .button {
+  border-radius: 20px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.site-hero .button-primary {
+  border-color: #f7f4ee;
+  background: #f7f4ee;
+  color: var(--editorial-ink);
+}
+
+.site-hero .button-primary:hover {
+  border-color: #e8d8c0;
+  background: #e8d8c0;
+  color: var(--editorial-ink);
+}
+
+.site-hero .button:not(.button-primary) {
+  border-color: #9a9489;
+  background: rgba(255, 255, 255, 0.055);
+  color: #f7f4ee;
+}
+
+.site-hero .button:not(.button-primary):hover {
+  border-color: #e1d5c6;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.site-hero a:focus-visible {
+  outline-color: #ffffff;
+  outline-offset: 3px;
+}
+
+.site-hero--with-art .screenshot {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dedbd6;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 18px 24px rgba(0, 0, 0, 0.12),
+    0 32px 56px rgba(0, 0, 0, 0.18);
+}
+
+.site-hero--with-art .screenshot img {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.site-hero--with-art .screenshot figcaption {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  color: #625f59;
+  background: #ffffff;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.reading-intro {
+  margin: 0.5rem 0 2.7rem;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  border: 1px solid #e3d9cb;
+  border-radius: 20px;
+  background: var(--editorial-bone);
+}
+
+.reading-intro::before {
+  content: "MathBoard / Guide";
+  margin-bottom: 0.85rem;
+  color: #79634c;
+}
+
+.privacy-heading::before {
+  content: "MathBoard / Privacy";
+}
+
+.reading-intro .lede {
+  max-width: 65ch;
+  margin: 0;
+  color: #4e4c49;
+  font-size: clamp(1.05rem, 1.65vw, 1.17rem);
+  line-height: 1.65;
+}
+
+.resource-group {
+  counter-increment: editorial-chapter;
+  margin-top: clamp(3.25rem, 6vw, 4.75rem);
+}
+
+.resource-group > h2 {
+  margin: 0;
+  font-size: clamp(1.65rem, 2.9vw, 2.25rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+}
+
+.resource-group > h2::before {
+  content: counter(editorial-chapter, decimal-leading-zero) " / Explore";
+  display: block;
+  margin-bottom: 0.65rem;
+  color: #6c645c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.77rem;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.resource-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+  margin-top: 1.3rem;
+}
+
+.resource-card,
+.formula-example,
+.download-option {
+  border: 1px solid var(--editorial-line);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.resource-card {
+  padding: clamp(1.4rem, 2.4vw, 1.9rem);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.resource-card:hover {
+  border-color: #bd9f7d;
+  background: #fffcf7;
+}
+
+.resource-card h2,
+.resource-card h3 {
+  font-weight: 650;
+  font-size: clamp(1.2rem, 2vw, 1.4rem);
+  letter-spacing: -0.035em;
+}
+
+.resource-grid--featured .resource-card {
+  background: #fffcf7;
+}
+
+.resource-grid--featured .resource-card:hover {
+  background: #fff8ed;
+}
+
+.formula-example {
+  padding: 1.35rem;
+}
+
+.formula-label,
+.download-option h2 {
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.copy-latex {
+  background: #f5f1e9;
+}
+
+.copy-latex:hover {
+  background: #eae1d4;
+}
+
+.table-wrap {
+  border-color: var(--editorial-line);
+  border-radius: 16px;
+}
+
+th {
+  background: #f1eee8;
+  font-weight: 650;
+}
+
+.download-option {
+  padding: clamp(1.25rem, 2.6vw, 1.7rem);
+}
+
+.download-option .button {
+  border-radius: 20px;
+}
+
+.privacy-content {
+  max-width: 840px;
+}
+
+.not-found {
+  margin-top: 2rem;
+  margin-bottom: 4rem;
+  padding: clamp(2rem, 5vw, 4rem);
+  border: 1px solid #494540;
+  border-radius: 24px;
+  color: #e1ded9;
+  background-color: var(--editorial-ink);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+.not-found h1 {
+  color: #fffdf9;
+}
+
+.not-found .button-primary {
+  border-color: #f7f4ee;
+  background: #f7f4ee;
+  color: #292a28;
+}
+
+.not-found .button-primary:hover {
+  background: #e8d8c0;
+  color: #292a28;
+}
+
+@media (max-width: 720px) {
+  .resource-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-hero {
+    border-radius: 20px;
+  }
+
+  .site-header nav {
+    gap: 0.4rem;
+  }
+
+  .site-header nav a:not(.button) {
+    padding: 0.35rem 0.45rem;
+  }
+}
+
+@media (max-width: 440px) {
+  .site-header {
+    padding: 0.85rem;
+  }
+
+  .site-header nav {
+    justify-content: flex-start;
+  }
+
+  main > h1,
+  .privacy-heading h1,
+  .not-found h1,
+  .site-hero h1 {
+    font-size: clamp(2.55rem, 10vw, 3.2rem);
+  }
+
+  .site-footer {
+    padding: 1.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header nav a:not(.button),
+  .site-hero .button,
+  .resource-card,
+  .button,
+  .copy-latex {
+    transition: none;
+  }
+}
