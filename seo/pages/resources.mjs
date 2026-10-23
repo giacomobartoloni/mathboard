@@ -20,12 +20,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { renderOpenBoardCTA, renderResourceCard } from '../lib/render-components.mjs'
 
 export default {
-  lastmod: '2026-10-22',
+  lastmod: '2026-10-23',
   path: '/resources/',
   title: 'MathBoard Resources — Guides, LaTeX and Shortcuts',
   description:
     'Practical MathBoard resources: LaTeX examples, keyboard shortcuts, product guides, and the open-source repository.',
   h1: 'MathBoard resources',
+  h1InBody: true,
   structuredData: 'webpage',
   breadcrumbs: [
     { label: 'MathBoard', href: '/' },
@@ -33,6 +34,8 @@ export default {
   ],
   body: `
     <div class="site-hero">
+      <p class="editorial-eyebrow">MathBoard / Field notes</p>
+      <h1>MathBoard resources</h1>
       <p class="lede">
         Short references and guides for using MathBoard. No account or setup guide is required to start drawing — open the board whenever you want.
       </p>
