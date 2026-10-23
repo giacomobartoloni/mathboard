@@ -1315,40 +1315,11 @@ body {
   background: var(--editorial-paper);
 }
 
-.site-header,
-.site-footer,
-main {
-  width: min(100% - 32px, 1120px);
-}
-
+/* Keep the original 960px content measure and pre-experiment header layout. */
 .site-header {
-  margin-top: 1.2rem;
-  margin-bottom: 0.75rem;
-  padding: 0.85rem clamp(1rem, 2.5vw, 1.65rem);
-  border: 1px solid #e7e2db;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 2px 8px rgba(41, 42, 40, 0.04);
-}
-
-.site-header nav {
-  gap: clamp(0.45rem, 1.5vw, 0.85rem);
-}
-
-.site-header nav a:not(.button) {
-  padding: 0.45rem 0.65rem;
-  border-radius: 20px;
-  color: #4a4946;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.site-header nav a:not(.button):hover {
-  color: #292a28;
-  background: #f0eee9;
-}
-
-.site-header nav .button {
-  border-radius: 20px;
+  --text: #2c3e50;
+  --muted: #5b6572;
+  --focus: #2c3e50;
 }
 
 main {
@@ -1388,13 +1359,13 @@ main > section > ol {
   line-height: 1.7;
 }
 
-.button,
+main .button,
 .copy-latex {
   border-radius: 20px;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-.button-primary:hover {
+main .button-primary:hover {
   filter: none;
   background: #2e2f2e;
 }
@@ -1661,10 +1632,6 @@ th {
   border-radius: 20px;
 }
 
-.privacy-content {
-  max-width: 840px;
-}
-
 .not-found {
   margin-top: 2rem;
   margin-bottom: 4rem;
@@ -1703,23 +1670,9 @@ th {
     border-radius: 20px;
   }
 
-  .site-header nav {
-    gap: 0.4rem;
-  }
-
-  .site-header nav a:not(.button) {
-    padding: 0.35rem 0.45rem;
-  }
 }
 
 @media (max-width: 440px) {
-  .site-header {
-    padding: 0.85rem;
-  }
-
-  .site-header nav {
-    justify-content: flex-start;
-  }
 
   main > h1,
   .privacy-heading h1,
@@ -1734,10 +1687,9 @@ th {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .site-header nav a:not(.button),
   .site-hero .button,
   .resource-card,
-  .button,
+  main .button,
   .copy-latex {
     transition: none;
   }
