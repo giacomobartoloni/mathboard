@@ -63,7 +63,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button class="board-library-trigger" type="button" :disabled="!boardSessionReady"
       :aria-expanded="showBoardLibrary" aria-haspopup="dialog" @click="openBoardLibrary">Boards</button>
 
-    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :trash-boards="trashList" :busy="boardLibraryBusy"
+    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList" :busy="boardLibraryBusy"
       @close="closeBoardLibrary" @action="onBoardLibraryAction" />
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
@@ -233,16 +233,16 @@ export default {
     const boardError = ref(null)
     const showBoardLibrary = ref(false)
     const boardList = ref([])
-    const trashList = ref([])
+    const archivedList = ref([])
     const boardLibraryBusy = ref(false)
     const closeBoardLibrary = () => { if (!boardLibraryBusy.value) showBoardLibrary.value = false }
     const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
     const refreshBoardLibrary = async () => {
       const workspace = boardWorkspace()
       if (!workspace) throw new Error('Board workspace is not ready.')
-      const [boards, trash] = await Promise.all([workspace.list(), workspace.listTrash()])
+      const [boards, archived] = await Promise.all([workspace.list(), workspace.listArchived()])
       boardList.value = boards
-      trashList.value = trash
+      archivedList.value = archived
     }
     const openBoardLibrary = async () => {
       if (!boardSessionReady.value) return
@@ -258,12 +258,12 @@ export default {
         if (action === 'create') await workspace.create({ title })
         else if (action === 'open') await workspace.open({ boardId })
         else if (action === 'rename') await workspace.rename({ boardId, title })
-        else if (action === 'save') await workspace.save()
-        else if (action === 'trash') await workspace.trash({ boardId })
-        else if (action === 'restore') await workspace.restore({ boardId })
+        else if (action === 'archive') await workspace.archive({ boardId })
+        else if (action === 'unarchive') await workspace.unarchive({ boardId })
+        else if (action === 'delete') await workspace.delete({ boardId })
         else throw new Error('Unsupported board library action.')
         await refreshBoardLibrary()
-        if (action === 'trash') selectedTool.value = 'select'
+        if ((action === 'archive' || action === 'delete') && !boardList.value.some(board => board.isActive)) selectedTool.value = 'select'
         if (action === 'create' || action === 'open') {
           selectedTool.value = 'select'
           showBoardLibrary.value = false
@@ -752,7 +752,7 @@ export default {
       boardError,
       showBoardLibrary,
       boardList,
-      trashList,
+      archivedList,
       boardLibraryBusy,
       openBoardLibrary,
       closeBoardLibrary,
