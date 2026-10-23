@@ -61,7 +61,7 @@ test('guides, reference documents, privacy and 404 keep readable editorial struc
   const privacy = readFileSync(new URL('../public/privacy-policy.html', import.meta.url), 'utf8')
   assert.ok(privacy.includes('class="reading-intro privacy-heading"'))
   assert.ok(privacy.includes('Last updated: October 1, 2026'))
-  assert.ok(privacy.includes('id="simple-analytics-script"'))
+  assert.ok(privacy.includes("script.id = 'simple-analytics-script'"))
   const notFound = render404()
   assert.ok(notFound.includes('class="not-found"'))
   assert.equal((notFound.match(/<h1(?:\s|>)/g) || []).length, 1)
