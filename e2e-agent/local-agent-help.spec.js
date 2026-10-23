@@ -50,7 +50,7 @@ test('help does not change transport state or advertise unrelated pending featur
   expect(response.status()).toBe(200)
   expect(response.headers()['content-type']).toContain('application/json')
   const help = await response.json()
-  expect(help.methods.map(m => m.method)).toEqual(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot', 'boards.list', 'boards.create', 'boards.open', 'boards.rename', 'boards.save'])
+  expect(help.methods.map(m => m.method)).toEqual(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot', 'boards.list', 'boards.create', 'boards.open', 'boards.rename', 'boards.listTrash', 'boards.trash', 'boards.restore', 'boards.save'])
   expect(help.objectTypes).toEqual(['rect', 'circle', 'ellipse', 'polygon', 'arrow', 'line', 'path', 'text', 'formula', 'group'])
   const polygonSchema = help.methods.find((method) => method.method === 'create')
     .paramsSchema.$defs.createSpec.oneOf.find((shape) => shape.properties.type.const === 'polygon')
