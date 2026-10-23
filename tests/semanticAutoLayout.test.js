@@ -140,12 +140,24 @@ test('selected skewed roots use committed bounds so row gaps remain exact', asyn
 
 test('viewport safe area clears visible cookie banner and protruding tool submenu', () => {
   const rects = { '.left-chrome': { left: 12, right: 66, top: 120, bottom: 590, width: 54, height: 470 },
+    '.board-library-trigger': { left: 480, right: 800, top: 16, bottom: 60, width: 320, height: 44 },
     '.cookie-banner': { left: 0, right: 1280, top: 640, bottom: 800, width: 1280, height: 160 },
     '.left-chrome .shapes-submenu': { left: 76, right: 260, top: 250, bottom: 420, width: 184, height: 170 } }
   const root = { querySelector: s => rects[s] ? { getClientRects: () => [1], getBoundingClientRect: () => rects[s] } : null }
   const canvas = { getWidth: () => 1280, getHeight: () => 800,
     upperCanvasEl: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } }
-  assert.deepEqual(workspaceSafeArea(canvas, root), { left: 260, top: 0, width: 1020, height: 640 })
+  assert.deepEqual(workspaceSafeArea(canvas, root), { left: 260, top: 60, width: 1020, height: 580 })
+})
+
+test('viewport safe area uses space below a horizontal short-screen toolbar', () => {
+  const rects = { '.left-chrome': { left: 12, right: 308, top: 154, bottom: 250, width: 296, height: 96 },
+    '.board-library-trigger': { left: 12, right: 308, top: 78, bottom: 122, width: 296, height: 44 },
+    '.zoom-panel': { left: 12, right: 308, top: 504, bottom: 556, width: 296, height: 52 } }
+  const root = { querySelector: selector => rects[selector]
+    ? { getClientRects: () => [1], getBoundingClientRect: () => rects[selector] } : null }
+  const canvas = { getWidth: () => 320, getHeight: () => 568,
+    upperCanvasEl: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } }
+  assert.deepEqual(workspaceSafeArea(canvas, root), { left: 0, top: 250, width: 320, height: 254 })
 })
 
 test('measuring selected text does not replace its mutable style metadata', async () => {

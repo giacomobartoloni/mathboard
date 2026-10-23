@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 import { BoardPersistenceService, BOARD_PERSISTENCE_ERROR_CODES } from '../src/board/persistence/BoardPersistenceService.js'
 import { BoardWorkspaceService } from '../src/board/BoardWorkspaceService.js'
 
-function fixture() {
+function fixture({ onActiveBoardChanged } = {}) {
   const records = new Map()
   const repository = {
     fail: false,
@@ -57,10 +57,32 @@ function fixture() {
       removeItem: key => session.delete(key),
     },
     now: () => '2026-10-23T12:00:00Z',
+    onActiveBoardChanged,
   })
   const workspace = new BoardWorkspaceService(service)
   return { workspace, repository, service, records, session }
 }
+
+test('active board identity is reported after committed transitions', async () => {
+  const changes = []
+  const { workspace, service } = fixture({ onActiveBoardChanged: board => changes.push(board) })
+  const algebra = await workspace.create({ title: 'Algebra' })
+  const geometry = await workspace.create({ title: 'Geometry' })
+  await workspace.open({ boardId: algebra.id })
+  await workspace.rename({ boardId: algebra.id, title: 'Quadratics' })
+  await workspace.delete({ boardId: algebra.id, confirm: true })
+
+  assert.deepEqual(changes.slice(0, 4), [
+    { id: algebra.id, title: 'Algebra' },
+    { id: geometry.id, title: 'Geometry' },
+    { id: algebra.id, title: 'Algebra' },
+    { id: algebra.id, title: 'Quadratics' },
+  ])
+  assert.equal(changes.length, 5)
+  assert.notEqual(changes[4].id, algebra.id)
+  assert.equal(changes[4].title, 'Untitled board')
+  service.dispose()
+})
 
 test('every newly persisted board is retained without a manual save step', async () => {
   const { workspace, records, service, session } = fixture()

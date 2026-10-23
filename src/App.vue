@@ -41,8 +41,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @request-formula="onRequestFormula"
         @edit-formula="onEditFormula"
         @text-editing-completed="onTextEditingCompleted"
-      @shape-drawing-completed="onShapeDrawingCompleted"
+        @shape-drawing-completed="onShapeDrawingCompleted"
         @selection-color="onSelectionColor"
+        @active-board-changed="onActiveBoardChanged"
       />
       <ToolsPanel
         :selectedTool="selectedTool"
@@ -54,16 +55,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @tool-selected="onToolSelected"
         @shape-selected="onShapeSelected"
         @color-selected="onColorSelected"
-        @undo="onUndo"
-        @redo="onRedo"
         @insert-kit="onInsertKit"
       />
 
     </div>
-    <button class="board-library-trigger" type="button" :disabled="!boardSessionReady"
-      :aria-expanded="showBoardLibrary" aria-haspopup="dialog" @click="openBoardLibrary">Boards</button>
+    <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
+      :aria-label="`Boards: ${currentBoardTitle}`" :title="currentBoardTitle"
+      :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
+      <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
+      <span class="board-library-current-title">{{ currentBoardTitle }}</span>
+      <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
+    </button>
 
-    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList" :busy="boardLibraryBusy"
+    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
+      :busy="boardLibraryBusy" :loading="boardLibraryLoading"
       @close="closeBoardLibrary" @action="onBoardLibraryAction" />
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
@@ -93,6 +98,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     />
     
     <ZoomPanel 
+      :inert="showBoardLibrary"
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
       :is-fullscreen="isFullscreen"
@@ -100,13 +106,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @zoom-in="onZoomIn"
       @zoom-out="onZoomOut"
       @reset-zoom="onResetZoom"
+      @undo="onUndo"
+      @redo="onRedo"
       @cycle-theme="onCycleTheme"
       @toggle-fullscreen="toggleFullscreen"
     />
     
-    <SupportPanel class="secondary-chrome" />
+    <SupportPanel class="secondary-chrome" :inert="showBoardLibrary" />
     
-    <CookieBanner v-if="!desktopRuntime" v-show="!isFullscreen" />
+    <CookieBanner v-if="!desktopRuntime" v-show="!isFullscreen" :inert="showBoardLibrary" />
     
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
@@ -187,6 +195,8 @@ export default {
   setup() {
     const desktopRuntime = isDesktopRuntime()
     const boardSessionReady = ref(false)
+    const currentBoardTitle = ref('Untitled board')
+    const onActiveBoardChanged = ({ title }) => { currentBoardTitle.value = title || 'Untitled board' }
     // Persisted presentation preferences. DrawBoard adapts objects authored with
     // the automatic board ink when boardTheme changes; explicit ink stays put.
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
@@ -232,10 +242,17 @@ export default {
     const fullscreenSupported = ref(desktopRuntime || detectFullscreenSupport())
     const boardError = ref(null)
     const showBoardLibrary = ref(false)
+    const boardLibraryTriggerRef = ref(null)
     const boardList = ref([])
     const archivedList = ref([])
     const boardLibraryBusy = ref(false)
-    const closeBoardLibrary = () => { if (!boardLibraryBusy.value) showBoardLibrary.value = false }
+    const boardLibraryLoading = ref(false)
+    const closeBoardLibrary = async () => {
+      if (boardLibraryBusy.value) return
+      showBoardLibrary.value = false
+      await nextTick()
+      boardLibraryTriggerRef.value?.focus()
+    }
     const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
     const refreshBoardLibrary = async () => {
       const workspace = boardWorkspace()
@@ -246,8 +263,12 @@ export default {
     }
     const openBoardLibrary = async () => {
       if (!boardSessionReady.value) return
+      boardList.value = []
+      archivedList.value = []
+      boardLibraryLoading.value = true
       showBoardLibrary.value = true
       try { await refreshBoardLibrary() } catch (error) { boardError.value = error.message }
+      finally { boardLibraryLoading.value = false }
     }
     const onBoardLibraryAction = async ({ action, boardId, title }) => {
       if (boardLibraryBusy.value) return
@@ -269,6 +290,8 @@ export default {
         if (action === 'create' || action === 'open') {
           selectedTool.value = 'select'
           showBoardLibrary.value = false
+          await nextTick()
+          boardLibraryTriggerRef.value?.focus()
         }
       } catch (error) {
         boardError.value = error?.message || 'Board library operation failed.'
@@ -382,10 +405,12 @@ export default {
         try {
           const disconnect = await connectDesktopWindow({
             onUndo: () => {
-              if (boardSessionReady.value && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
+              if (boardSessionReady.value && !showBoardLibrary.value
+                && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
             },
             onRedo: () => {
-              if (boardSessionReady.value && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
+              if (boardSessionReady.value && !showBoardLibrary.value
+                && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
             },
             onFullscreenChange: setFullscreenState,
           })
@@ -499,6 +524,11 @@ export default {
           event.preventDefault()
           return
         }
+        if (showBoardLibrary.value) {
+          closeBoardLibrary()
+          event.preventDefault()
+          return
+        }
         if (drawBoardRef.value?.isTextEditing()) {
           drawBoardRef.value.exitTextEditing()
           event.preventDefault()
@@ -513,6 +543,7 @@ export default {
       if (
         showFormulaModal.value
         || showShareStampModal.value
+        || showBoardLibrary.value
         || shouldIgnoreGlobalShortcut(event)
         || drawBoardRef.value?.isTextEditing()
       ) return
@@ -730,6 +761,8 @@ export default {
     return {
       desktopRuntime,
       boardSessionReady,
+      currentBoardTitle,
+      onActiveBoardChanged,
       selectedTool,
       selectedShape,
       drawBoardRef,
@@ -753,9 +786,11 @@ export default {
       onInsertKit,
       boardError,
       showBoardLibrary,
+      boardLibraryTriggerRef,
       boardList,
       archivedList,
       boardLibraryBusy,
+      boardLibraryLoading,
       openBoardLibrary,
       closeBoardLibrary,
       onBoardLibraryAction,
@@ -855,12 +890,6 @@ body {
   display: none !important;
 }
 
-/* Support panel is hidden in fullscreen; reclaim its bottom-right space. */
-#app[data-fullscreen="true"] .zoom-panel,
-#app:fullscreen .zoom-panel {
-  right: 12px;
-}
-
 .logo {
   font-family: 'Satisfy', cursive;
   font-size: normal;
@@ -890,26 +919,43 @@ body {
 .board-library-trigger {
   position: fixed;
   top: 16px;
-  right: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(330px, calc(100vw - 350px));
+  min-height: 44px;
   padding: 9px 14px;
-  border: 1px solid var(--border-color);
+  border: 0;
   border-radius: 8px;
   background: var(--surface-secondary);
   color: var(--text-primary);
   box-shadow: var(--panel-shadow);
+  font: inherit;
+  font-weight: 600;
   cursor: pointer;
 }
+.board-library-trigger:hover:not(:disabled) { box-shadow: var(--panel-shadow), inset 0 0 0 1px var(--border-color); }
+.board-library-trigger:focus-visible { outline: 2px solid var(--selected-bg); outline-offset: 2px; }
+.board-library-current-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.board-library-trigger > svg:last-child { color: var(--text-muted); font-size: 12px; }
 .board-library-trigger:disabled { opacity: .6; cursor: default; }
 
 .copyright {
   position: absolute;
   bottom: 12px;
-  left: 12px;
+  left: 50%;
+  transform: translateX(-50%);
   color: var(--text-muted);
   font-size: 12px;
   z-index: 1000;
   white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .copyright { display: none; }
 }
 
 .stamp-error {
@@ -950,6 +996,14 @@ body {
     left: 50%;
     transform: translateX(-50%);
   }
+}
+
+@media (max-width: 600px) {
+  .board-library-trigger {
+    top: 78px;
+    width: calc(100vw - 24px);
+  }
+  .copyright { display: none; }
 }
 
 .board-session-loading {

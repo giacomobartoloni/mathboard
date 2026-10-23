@@ -133,6 +133,8 @@ for (const viewport of [
   { width: 1024, height: 768 },
   { width: 640, height: 600 },
   { width: 1280, height: 600 },
+  { width: 320, height: 568 },
+  { width: 844, height: 390 },
 ]) {
   test(`hints degrade gracefully at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport)
@@ -140,11 +142,16 @@ for (const viewport of [
     for (const [name] of tools) {
       const button = page.getByRole('button', { name, exact: true })
       await expect(button).toBeInViewport()
+      await button.click({ trial: true })
       const hint = button.locator('span')
       if (viewport.height <= 700 || viewport.width <= 600) await expect(hint).toBeHidden()
       else await expect(hint).toBeVisible()
     }
     await expect(page.getByRole('button', { name: 'Redo', exact: true })).toBeInViewport()
+    const rail = await page.locator('.left-chrome').boundingBox()
+    const viewControls = await page.getByRole('toolbar', { name: 'Board view and history' }).boundingBox()
+    expect(rail.y + rail.height).toBeLessThanOrEqual(viewControls.y - 8)
+    expect(rail.x + rail.width).toBeLessThanOrEqual(viewport.width)
     expect(await getBoardState(page)).toEqual(before)
     const path = testInfo.outputPath('constrained.png')
     await page.screenshot({ path, animations: 'disabled' })

@@ -236,6 +236,7 @@ export default {
         resetHistory: () => this._resetHistory(),
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
+        onActiveBoardChanged: (board) => this.$emit('active-board-changed', board),
       });
       return this._persistence;
     },

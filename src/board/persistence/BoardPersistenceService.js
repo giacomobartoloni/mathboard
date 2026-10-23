@@ -82,6 +82,7 @@ export class BoardPersistenceService {
     now = () => new Date().toISOString(),
     idleDebounceMs = IDLE_DEBOUNCE_MS,
     maxWaitMs = MAX_WAIT_MS,
+    onActiveBoardChanged = () => {},
   }) {
     this._repository = repository
     this._boardObjectPolicy = boardObjectPolicy
@@ -93,6 +94,7 @@ export class BoardPersistenceService {
     this._isDocumentStable = isDocumentStable
     this._sessionStorage = sessionStorage
     this._now = now
+    this._onActiveBoardChanged = onActiveBoardChanged
     this._idleDebounceMs = idleDebounceMs
     this._maxWaitMs = maxWaitMs
 
@@ -112,6 +114,10 @@ export class BoardPersistenceService {
 
   _setStatus(patch) {
     this.status = { ...this.status, ...patch }
+  }
+
+  _reportActiveBoard() {
+    this._onActiveBoardChanged({ id: this.boardId, title: this.title })
   }
 
   _readActiveBoardId() {
@@ -305,6 +311,7 @@ export class BoardPersistenceService {
     this.changeVersion = 0
     this._writeActiveBoardId(record.id)
     this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: record.updatedAt, error: null })
+    this._reportActiveBoard()
     return record
   }
 
@@ -406,6 +413,7 @@ export class BoardPersistenceService {
     if (boardId === this.boardId) {
       this.title = title
       this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: updatedAt, error: null })
+      this._reportActiveBoard()
     }
     return renamed
   }
@@ -445,6 +453,7 @@ export class BoardPersistenceService {
       lastSavedAt: record.updatedAt || null,
       error: null,
     })
+    this._reportActiveBoard()
     return record
   }
 
@@ -476,6 +485,7 @@ export class BoardPersistenceService {
       lastSavedAt: record.updatedAt,
       error: null,
     })
+    this._reportActiveBoard()
     return record
   }
 

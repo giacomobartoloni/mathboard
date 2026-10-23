@@ -227,8 +227,8 @@ export default {
 
 @media (max-width: 768px) {
   .support-panel {
-    top: 12px;
-    bottom: auto;
+    top: auto;
+    bottom: max(80px, calc(env(safe-area-inset-bottom) + 68px));
   }
 
   .about-label {
