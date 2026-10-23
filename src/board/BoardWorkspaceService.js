@@ -41,6 +41,7 @@ export class BoardWorkspaceService {
       createdAt: record.createdAt || null,
       updatedAt: record.updatedAt || null,
       isActive: record.id === this._persistence.boardId,
+      ...(record.trashedAt ? { trashedAt: record.trashedAt } : {}),
     }
   }
 
