@@ -58,7 +58,7 @@ const MAX_WAIT_MS = 5000
 
 export function normalizeBoardTitle(title) {
   if (typeof title !== 'string' || !title.trim() || title.trim().length > 120
-    || /[\u0000-\u001f\u007f]/.test(title)) {
+    || [...title].some(ch => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127)) {
     throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.INVALID_TITLE, 'Board title must contain 1–120 printable characters.')
   }
   return title.trim()
