@@ -69,9 +69,10 @@ async function inspectBoard(page, action) {
     if (action === 'flush') await board.flushPersistence()
     const active = board.canvas.getActiveObject()
     return {
-      history: board._history.map(({ type, entries }) => ({ type, ids: entries?.map(({ object }) => object.mathboardId) })),
-      step: board._historyStep,
-      tip: board._historyTipKind,
+      // E2E-only command inspection retains the identity/redo rollback assertions.
+      history: board._boardHistory._entries.map(({ type, entries }) => ({ type, ids: entries?.map(({ object }) => object.mathboardId) })),
+      step: board._boardHistory.summary().step,
+      tip: board._boardHistory._tipKind,
       selected: board.canvas.getActiveObjects().map((object) => object.mathboardId),
       selectionTransform: active ? { left: active.left, top: active.top, angle: active.angle, scaleX: active.scaleX, scaleY: active.scaleY } : null,
     }

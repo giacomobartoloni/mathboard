@@ -99,7 +99,7 @@ test('missed initial editing exit recovers liveness without a reset API', async 
   // Access stays in the development browser test, with no production hooks.
   await page.evaluate(() => {
     const board = document.querySelector('#app').__vue_app__._instance.proxy.drawBoardRef
-    const text = board._uncommittedText
+    const text = board._textInsertion.pending
     if (!text?.isEditing) throw new Error('Expected initial text editing')
     text.off('editing:exited')
     text.isEditing = false

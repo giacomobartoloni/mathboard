@@ -54,7 +54,7 @@ async function inspect(page, action) {
     const read = (object) => ({ id: object.mathboardId, fill: object.fill, stroke: object.stroke,
       opacity: object.opacity, mode: object.mathboardInkMode, dash: object.strokeDashArray,
       children: object.getObjects?.().map(read) })
-    return { history: { length: board._history.length, step: board._historyStep }, objects: board.canvas.getObjects().map(read) }
+    return { history: { length: board._boardHistory.summary().length, step: board._boardHistory.summary().step }, objects: board.canvas.getObjects().map(read) }
   }, action)
 }
 

@@ -63,7 +63,7 @@ async function runtime(page, action) {
       })),
       retained: board._groupTestRoots?.every((o) => flatten(canvas.getObjects()).includes(o)),
       sameGroup: board._groupTestComposite ? canvas.getObjects().includes(board._groupTestComposite) : null,
-      history: board._history.map((o) => o.type), step: board._historyStep, tip: board._historyTipKind,
+      history: board._boardHistory._entries.map((o) => o.type), step: board._boardHistory.summary().step, tip: board._boardHistory._tipKind,
       selection: canvas.getActiveObjects().map((o) => o.mathboardId),
       selectionMatrix: active?.calcTransformMatrix(),
     }
