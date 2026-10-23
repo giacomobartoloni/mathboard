@@ -51,7 +51,7 @@ Once the browser is connected, the response should look like:
 
 ## API discovery for local LLMs
 
-Call `GET /__mathboard_agent/help` in `npm run dev:agent` to obtain build-accurate JSON descriptions of the sixteen executable methods (eleven canvas methods and five local library methods), including read-only `screenshot` with its three capture targets and PNG limits. Discovery is available without a connected browser and does not inspect or change the board. A local LLM adapter may translate these descriptors into tool declarations, but discovery never grants permission to mutate. See [Local API Help](local-agent-api-help.md) for the schema and integration example. Ordinary development and production modes do not expose this route.
+Call `GET /__mathboard_agent/help` in `npm run dev:agent` to obtain build-accurate JSON descriptions of the nineteen executable methods (eleven canvas methods and eight local library methods), including read-only `screenshot` with its three capture targets and PNG limits. Discovery is available without a connected browser and does not inspect or change the board. A local LLM adapter may translate these descriptors into tool declarations, but discovery never grants permission to mutate. See [Local API Help](local-agent-api-help.md) for the schema and integration example. Ordinary development and production modes do not expose this route.
 
 ## Command API
 
@@ -75,6 +75,9 @@ Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the reque
 | `boards.open` | `boardId` |
 | `boards.rename` | `boardId`, `title` |
 | `boards.save` | No required parameters; promotes active scratch board to saved |
+| `boards.listTrash` | No required parameters; lists metadata of recoverable trashed boards |
+| `boards.trash` | `boardId`; moves a board to trash and creates a blank replacement if active |
+| `boards.restore` | `boardId`; returns the board to the library |
 
 See [Local Agent Visual Capture](local-agent-visual-capture.md) for the read-only screenshot contract, limits, local PNG review and F033 integration gate. Screenshot uses a development-only capture adapter; semantic mutations delegate to the corresponding `BoardController` methods and returns their semantic JSON results. It does not expose Fabric, history internals or arbitrary method execution. Board library methods delegate to the shared persistence-backed workspace, never direct filesystem access.
 
@@ -164,7 +167,7 @@ Re-observe after each change to confirm the board's current state. Formula updat
 
 ## Local board library workflow
 
-The UI **Boards** dialog and the local agent call the same `BoardWorkspaceService` backed by `BoardPersistenceService` and IndexedDB. Use `boards.list` to obtain `{id,title,kind,createdAt,updatedAt,isActive}` metadata (not document contents); `boards.create` creates and activates a scratch board; `boards.open` safely flushes the active board, atomically restores the selected document and resets in-memory Undo/Redo; `boards.rename` persists the name in both record and BoardDocument; `boards.save` deliberately promotes the active scratch board to a saved library record, distinct from autosave. Titles are trimmed and limited to 120 printable characters.
+The UI **Boards** dialog and the local agent call the same `BoardWorkspaceService` backed by `BoardPersistenceService` and IndexedDB. Use `boards.list` to obtain `{id,title,kind,createdAt,updatedAt,isActive}` metadata (not document contents); `boards.create` creates and activates a scratch board; `boards.open` safely flushes the active board, atomically restores the selected document and resets in-memory Undo/Redo; `boards.rename` persists the name in both record and BoardDocument; `boards.save` deliberately promotes the active scratch board to a saved library record, distinct from autosave. Titles are trimmed and limited to 120 printable characters. Drafts are auto-saved and can be cleaned after 30 days; Saved boards are explicitly retained. The UI Delete action is a confirmed move to recoverable Trash, not permanent erasure; Restore preserves BoardDocument and object identity. Trashed boards remain locally until app storage is cleared.
 
 ```bash
 curl -s -X POST http://127.0.0.1:5173/__mathboard_agent/command \
@@ -172,7 +175,7 @@ curl -s -X POST http://127.0.0.1:5173/__mathboard_agent/command \
   -d '{"method":"boards.list","params":{}}'
 ```
 
-Commands are processed in arrival order in the agent browser bridge. Re-observe after changing the active board and do not assume earlier object IDs belong to the new board. Board IDs are local browser-origin records, not shared server objects. Multiple tabs editing the same stored board can still overwrite each other's changes; avoid this workflow until cross-tab revisions or locks are implemented. No local library command is exposed in production HTTP, normal dev mode, or remote MCP. Deleting, duplicating, portable export and cloud sync are deliberately outside this first slice.
+Commands are processed in arrival order in the agent browser bridge. Re-observe after changing the active board and do not assume earlier object IDs belong to the new board. Board IDs are local browser-origin records, not shared server objects. Multiple tabs editing the same stored board can still overwrite each other's changes; avoid this workflow until cross-tab revisions or locks are implemented. No local library command is exposed in production HTTP, normal dev mode, or remote MCP. Permanent deletion, duplication, portable export and cloud sync are deliberately outside this first slice.
 
 ## Recommended agent workflow
 
@@ -209,6 +212,6 @@ BoardController errors return a concise `code` and `message`. A transport error 
 
 ## Scope
 
-The bridge exposes the eleven canvas operations plus `boards.list`, `boards.create`, `boards.open`, `boards.rename`, and `boards.save`. Grouping requires two or more existing top-level groupable objects; nested grouping and nested editing are not supported. It has no programmatic undo, redo, ungroup, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
+The bridge exposes the eleven canvas operations plus `boards.list`, `boards.create`, `boards.open`, `boards.rename`, `boards.save`, `boards.listTrash`, `boards.trash` and `boards.restore`. Grouping requires two or more existing top-level groupable objects; nested grouping and nested editing are not supported. It has no programmatic undo, redo, ungroup, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
 
 After using the bridge in real development, record repeated friction before proposing more commands. In particular, check whether coordinates, observation detail, board dimensions, or a missing operation repeatedly block useful work.
