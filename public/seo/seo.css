@@ -1087,6 +1087,12 @@ main > .download-status-note {
   color: #2b2c2b;
 }
 
+.download-page--editorial .download-hero .button:focus-visible,
+.download-page--editorial .download-hero a:not(.button):focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
 /* Shared CTA helper uses primary styling; here the browser path is secondary. */
 .download-page--editorial .download-hero-actions a[data-seo-cta="open-board"] {
   border-color: #9a9489;
