@@ -33,8 +33,8 @@ export const BOARD_PERSISTENCE_ERROR_CODES = Object.freeze({
   BOARD_RESTORE_FAILED: 'board_restore_failed',
   EDIT_IN_PROGRESS: 'edit_in_progress',
   INVALID_TITLE: 'invalid_board_title',
-  BOARD_TRASHED: 'board_trashed',
-  BOARD_NOT_TRASHED: 'board_not_trashed',
+  BOARD_ARCHIVED: 'board_archived',
+  BOARD_NOT_ARCHIVED: 'board_not_archived',
 })
 
 export class BoardPersistenceError extends Error {
@@ -51,9 +51,6 @@ export const SAVE_STATES = Object.freeze({
   SAVING: 'saving',
   ERROR: 'error',
 })
-
-export const SCRATCH_BOARD_RETENTION_DAYS = 30
-const SCRATCH_BOARD_RETENTION_MS = SCRATCH_BOARD_RETENTION_DAYS * 24 * 60 * 60 * 1000
 
 const IDLE_DEBOUNCE_MS = 1000
 const MAX_WAIT_MS = 5000
@@ -217,12 +214,16 @@ export class BoardPersistenceService {
       try {
         const document = this.serializeCurrent()
         const existing = await this._repository.get(this.boardId)
-        if (existing?.trashedAt) {
-          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED,
-            'Active board was moved to trash in another tab; restore it before saving.')
+        if (!existing) {
+          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND,
+            'This board was deleted from local storage; changes cannot be saved.')
+        }
+        if (existing.archivedAt || existing.trashedAt) {
+          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED,
+            'This board was archived in another tab; unarchive it before editing.')
         }
         const now = this._now()
-        const kind = existing?.kind ?? BOARD_RECORD_KINDS.SCRATCH
+        const kind = BOARD_RECORD_KINDS.SAVED
         const record = createBoardRecord({
           id: this.boardId,
           kind,
@@ -279,7 +280,7 @@ export class BoardPersistenceService {
     const document = createEmptyBoardDocument(title)
     const record = createBoardRecord({
       id: createBoardId(),
-      kind: BOARD_RECORD_KINDS.SCRATCH,
+      kind: BOARD_RECORD_KINDS.SAVED,
       title: document.title,
       document,
     })
@@ -306,73 +307,81 @@ export class BoardPersistenceService {
     return record
   }
 
+  // Historical scratch records are retained. Legacy trashedAt records
+  // become archived and can be recovered using the Archive UI.
+  _isArchived(record) {
+    return Boolean(record?.archivedAt || record?.trashedAt)
+  }
+
+  _boardSummary(record) {
+    return {
+      id: record.id,
+      title: record.title || 'Untitled board',
+      createdAt: record.createdAt || null,
+      updatedAt: record.updatedAt || null,
+      isActive: record.id === this.boardId,
+      ...(this._isArchived(record) ? { archivedAt: record.archivedAt || record.trashedAt } : {}),
+    }
+  }
+
   async listBoards() {
     const records = await this._repository.list()
-    return records.filter(record => !record.trashedAt).map(({ id, title, kind, createdAt, updatedAt }) => ({
-      id, title: title || 'Untitled board', kind: kind || BOARD_RECORD_KINDS.SCRATCH,
-      createdAt: createdAt || null, updatedAt: updatedAt || null,
-      isActive: id === this.boardId,
-    }))
+    return records.filter(record => !this._isArchived(record)).map(record => this._boardSummary(record))
   }
 
-  async listTrashedBoards() {
+  async listArchivedBoards() {
     const records = await this._repository.list()
-    return records.filter(record => !!record.trashedAt).map(({ id, title, kind, createdAt, updatedAt, trashedAt }) => ({
-      id, title: title || 'Untitled board', kind: kind || BOARD_RECORD_KINDS.SCRATCH,
-      createdAt: createdAt || null, updatedAt: updatedAt || null,
-      trashedAt, isActive: false,
-    }))
+    return records.filter(record => this._isArchived(record)).map(record => this._boardSummary(record))
   }
 
-  async trashBoard(boardId) {
+  async archiveBoard(boardId) {
     let record = await this._repository.get(boardId)
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (record.trashedAt) {
-      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Board is already in the trash.')
+    if (this._isArchived(record)) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Board is already archived.')
     }
     if (boardId === this.boardId) {
-      // Flush first; keep the old board intact if creating the replacement fails.
-      await this._flushBeforeTransition()
       await this.createNewBoard('Untitled board')
       record = await this._repository.get(boardId)
+      if (!record?.document) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
+      }
     }
-    const trashedAt = this._now()
-    const trashed = { ...record, trashedAt, updatedAt: trashedAt }
-    await this._repository.put(trashed)
-    return trashed
+    const archived = { ...record, archivedAt: this._now() }
+    delete archived.trashedAt
+    await this._repository.put(archived)
+    return archived
   }
 
-  async restoreBoard(boardId) {
+  async unarchiveBoard(boardId) {
     const record = await this._repository.get(boardId)
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (!record.trashedAt) {
-      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_TRASHED, 'Board is not in the trash.')
+    if (!this._isArchived(record)) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_ARCHIVED, 'Board is not archived.')
     }
-    const restored = { ...record, updatedAt: this._now() }
+    const restored = { ...record }
+    delete restored.archivedAt
     delete restored.trashedAt
     await this._repository.put(restored)
     return restored
   }
 
-  async saveCurrentBoard() {
-    await this._flushBeforeTransition()
-    const record = await this._repository.get(this.boardId)
+  async deleteBoard(boardId) {
+    const record = await this._repository.get(boardId)
     if (!record?.document) {
-      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, 'Active board is unavailable.')
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (record.trashedAt) {
-      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Cannot save a trashed board.')
+    if (boardId === this.boardId) {
+      // Persist a blank replacement before irreversibly deleting the active board.
+      await this.createNewBoard('Untitled board')
     }
-    if (record.kind === BOARD_RECORD_KINDS.SAVED) return record
-    const updatedAt = this._now()
-    const saved = { ...record, kind: BOARD_RECORD_KINDS.SAVED, updatedAt }
-    await this._repository.put(saved)
-    this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: updatedAt, error: null })
-    return saved
+    await this._repository.delete(boardId)
+    if (this._readRecoveryBoardId() === boardId) this._writeRecoveryBoardId(null)
+    return { id: boardId, deleted: true }
   }
 
   async renameBoard(boardId, title) {
@@ -382,8 +391,8 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (record.trashedAt) {
-      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board before renaming it.')
+    if (this._isArchived(record)) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before renaming it.')
     }
     if (record.title === title && record.document.title === title) return record
     const updatedAt = this._now()
@@ -406,8 +415,8 @@ export class BoardPersistenceService {
       )
     }
 
-    if (record.trashedAt) {
-      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board before opening it.')
+    if (this._isArchived(record)) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before opening it.')
     }
 
     await replaceBoardFromDocument({
@@ -448,7 +457,7 @@ export class BoardPersistenceService {
     const document = this.serializeCurrent()
     const record = createBoardRecord({
       id: createBoardId(),
-      kind: BOARD_RECORD_KINDS.SCRATCH,
+      kind: BOARD_RECORD_KINDS.SAVED,
       title: document.title,
       document,
     })
@@ -466,8 +475,8 @@ export class BoardPersistenceService {
   }
 
   /**
-   * Bootstrap: restore this tab's active board or create a new local board,
-   * then run a best-effort pass that drops expired scratch records.
+   * Bootstrap: restore this tab's active board or create a new local board.
+   * Historical scratch records are retained; no automatic garbage collection.
    */
   async bootstrap() {
     const activeId = this._readActiveBoardId()
@@ -500,37 +509,7 @@ export class BoardPersistenceService {
       result = await this.createNewBoard()
     }
 
-    await this._pruneOldScratchBoards()
     return result
   }
 
-  /**
-   * Delete scratch records older than the retention window.
-   * Best effort: never fails bootstrap and never touches anything that is not
-   * explicitly marked scratch, the active board, or the recovery board.
-   */
-  async _pruneOldScratchBoards() {
-    try {
-      const records = await this._repository.list()
-      const recoveryBoardId = this._readRecoveryBoardId()
-      const nowMs = Date.parse(this._now())
-      if (!Number.isFinite(nowMs)) return
-
-      const cutoff = nowMs - SCRATCH_BOARD_RETENTION_MS
-
-      for (const record of records) {
-        if (record?.kind !== BOARD_RECORD_KINDS.SCRATCH || record.trashedAt) continue
-        if (record.id === this.boardId) continue
-        if (record.id === recoveryBoardId) continue
-
-        const timestamp = Date.parse(record.updatedAt || record.createdAt)
-        if (!Number.isFinite(timestamp)) continue
-        if (timestamp >= cutoff) continue
-
-        await this._repository.delete(record.id)
-      }
-    } catch (error) {
-      console.warn('Old scratch board cleanup failed.', error)
-    }
-  }
 }
