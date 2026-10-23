@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { render404, renderLayout } from '../seo/lib/render-layout.mjs'
 import { validateRenderedHtml } from '../seo/lib/validate-pages.mjs'
 import download from '../seo/pages/download.mjs'
@@ -67,8 +67,22 @@ test('guides, reference documents, privacy and 404 keep readable editorial struc
   assert.equal((notFound.match(/<h1(?:\s|>)/g) || []).length, 1)
 })
 
+test('all static routes and standalone privacy use the renamed site stylesheet', () => {
+  const href = 'href="/seo/site.css"'
+  for (const page of pages) {
+    const html = renderLayout(page)
+    assert.ok(html.includes(href), page.path)
+    assert.ok(!html.includes('/seo/seo.css'), page.path)
+  }
+  assert.ok(render404().includes(href))
+  const privacy = readFileSync(new URL('../public/privacy-policy.html', import.meta.url), 'utf8')
+  assert.ok(privacy.includes(href))
+  assert.equal(existsSync(new URL('../public/seo/site.css', import.meta.url)), true)
+  assert.equal(existsSync(new URL('../public/seo/seo.css', import.meta.url)), false)
+})
+
 test('shared editorial layout preserves the original 960px container and header navigation', () => {
-  const css = readFileSync(new URL('../public/seo/seo.css', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../public/seo/site.css', import.meta.url), 'utf8')
   const shared = css.split('Shared chalkboard/editorial language for all static MathBoard routes.')[1]
   assert.ok(shared, 'expected shared editorial section')
   assert.ok(css.includes('width: min(100% - 32px, 960px)'))
@@ -80,7 +94,7 @@ test('shared editorial layout preserves the original 960px container and header 
 })
 
 test('shared editorial styles retain accessible contrast, reduced motion and practical content', () => {
-  const css = readFileSync(new URL('../public/seo/seo.css', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../public/seo/site.css', import.meta.url), 'utf8')
   assert.ok(css.includes('Shared chalkboard/editorial language'))
   assert.ok(css.includes('.site-hero h1'))
   assert.ok(css.includes('.reading-intro::before'))

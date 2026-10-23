@@ -58,7 +58,7 @@ export function renderLayout(page) {
 
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/seo/seo.css">
+  <link rel="stylesheet" href="/seo/site.css">
   ${katexCss}
 
   ${renderStructuredData(page)}
@@ -92,7 +92,7 @@ export function render404() {
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/seo/seo.css">
+  <link rel="stylesheet" href="/seo/site.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>

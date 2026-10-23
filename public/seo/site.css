@@ -4,6 +4,8 @@ Copyright (C) 2026 Giacomo Bartoloni
 SPDX-License-Identifier: AGPL-3.0-or-later
 */
 
+/* Static information-site styles. The interactive Vue whiteboard has its own CSS. */
+
 :root {
   --bg: #f9f9f9;
   --surface: #ffffff;
@@ -286,8 +288,8 @@ button:focus-visible {
 }
 
 .resource-card:hover {
-  border-color: var(--accent);
-  background: var(--warm-surface);
+  border-color: #bd9f7d;
+  background: #fffcf7;
 }
 
 .resource-card h2,
@@ -491,16 +493,17 @@ pre code {
 }
 
 .site-hero {
-  margin: 0.5rem 0 2.5rem;
-  padding: clamp(1.5rem, 4vw, 2.5rem);
-  border: 2px solid var(--accent);
-  border-radius: 16px;
-  color: #f7f5f1;
-  background-color: var(--brand-dark);
+  margin: 0.5rem 0 3.5rem;
+  padding: clamp(1.6rem, 4vw, 3.5rem);
+  border: 1px solid #494540;
+  border-radius: 24px;
+  color: #f8f7f4;
+  background-color: var(--editorial-ink);
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
-  background-size: 28px 28px;
+    radial-gradient(circle at 94% 4%, rgba(210, 180, 140, 0.13), transparent 42%),
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: auto, 30px 30px, 30px 30px;
 }
 
 .site-hero--with-art {
@@ -511,11 +514,12 @@ pre code {
 }
 
 .site-hero .lede {
-  max-width: 52ch;
+  max-width: 56ch;
   margin: 0;
-  font-size: clamp(1.25rem, 2.15vw, 1.55rem);
-  font-weight: 550;
-  line-height: 1.45;
+  color: #e1ded9;
+  font-size: clamp(1.06rem, 1.75vw, 1.22rem);
+  font-weight: 450;
+  line-height: 1.6;
 }
 
 .site-hero .cta-row {
@@ -523,9 +527,9 @@ pre code {
 }
 
 .site-hero .button-primary {
-  border-color: #ead1ab;
-  background: #f4e5ce;
-  color: var(--brand-dark);
+  border-color: #f7f4ee;
+  background: #f7f4ee;
+  color: var(--editorial-ink);
 }
 
 .site-hero .button-primary:hover {
@@ -535,14 +539,15 @@ pre code {
 }
 
 .site-hero .button:not(.button-primary) {
-  border-color: #d3bc99;
-  background: rgba(61, 61, 61, 0.65);
-  color: #f7f5f1;
+  border-color: #9a9489;
+  background: rgba(255, 255, 255, 0.055);
+  color: #f7f4ee;
 }
 
 .site-hero .button:not(.button-primary):hover {
-  background: #56514a;
-  color: #fff;
+  border-color: #e1d5c6;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
 }
 
 .site-hero .screenshot {
@@ -559,11 +564,11 @@ pre code {
 }
 
 .reading-intro {
-  margin: 0.5rem 0 2.5rem;
-  padding: clamp(1.25rem, 3vw, 1.8rem);
-  border: 1px solid var(--warm-border);
-  border-radius: 14px;
-  background: var(--warm-surface);
+  margin: 0.5rem 0 2.7rem;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  border: 1px solid #e3d9cb;
+  border-radius: 20px;
+  background: var(--editorial-bone);
 }
 
 .reading-intro .lede {
@@ -596,7 +601,7 @@ pre code {
 }
 
 .resource-grid--featured .resource-card:hover {
-  background: #f8efdf;
+  background: #fff8ed;
 }
 
 @media (max-width: 720px) {
@@ -1395,19 +1400,7 @@ main .button-primary:hover {
   outline-color: #ffffff;
 }
 
-.site-hero {
-  margin: 0.5rem 0 3.5rem;
-  padding: clamp(1.6rem, 4vw, 3.5rem);
-  border: 1px solid #494540;
-  border-radius: 24px;
-  color: #f8f7f4;
-  background-color: var(--editorial-ink);
-  background-image:
-    radial-gradient(circle at 94% 4%, rgba(210, 180, 140, 0.13), transparent 42%),
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: auto, 30px 30px, 30px 30px;
-}
+
 
 .site-hero h1 {
   max-width: 14ch;
@@ -1434,25 +1427,14 @@ main .button-primary:hover {
   text-transform: uppercase;
 }
 
-.site-hero .lede {
-  max-width: 56ch;
-  margin: 0;
-  color: #e1ded9;
-  font-size: clamp(1.06rem, 1.75vw, 1.22rem);
-  font-weight: 450;
-  line-height: 1.6;
-}
+
 
 .site-hero .button {
   border-radius: 20px;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
-.site-hero .button-primary {
-  border-color: #f7f4ee;
-  background: #f7f4ee;
-  color: var(--editorial-ink);
-}
+
 
 .site-hero .button-primary:hover {
   border-color: #e8d8c0;
@@ -1460,17 +1442,9 @@ main .button-primary:hover {
   color: var(--editorial-ink);
 }
 
-.site-hero .button:not(.button-primary) {
-  border-color: #9a9489;
-  background: rgba(255, 255, 255, 0.055);
-  color: #f7f4ee;
-}
 
-.site-hero .button:not(.button-primary):hover {
-  border-color: #e1d5c6;
-  background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-}
+
+
 
 .site-hero a:focus-visible {
   outline-color: #ffffff;
@@ -1505,13 +1479,7 @@ main .button-primary:hover {
   line-height: 1.5;
 }
 
-.reading-intro {
-  margin: 0.5rem 0 2.7rem;
-  padding: clamp(1.4rem, 3vw, 2rem);
-  border: 1px solid #e3d9cb;
-  border-radius: 20px;
-  background: var(--editorial-bone);
-}
+
 
 .reading-intro::before {
   content: "MathBoard / Guide";
@@ -1576,10 +1544,7 @@ main .button-primary:hover {
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-.resource-card:hover {
-  border-color: #bd9f7d;
-  background: #fffcf7;
-}
+
 
 .resource-card h2,
 .resource-card h3 {
@@ -1592,9 +1557,7 @@ main .button-primary:hover {
   background: #fffcf7;
 }
 
-.resource-grid--featured .resource-card:hover {
-  background: #fff8ed;
-}
+
 
 .formula-example {
   padding: 1.35rem;
