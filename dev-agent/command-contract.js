@@ -91,15 +91,15 @@ const options = { type: 'object', properties: { select: boolean }, additionalPro
 const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty, type: { enum: [...BOARD_OBJECT_TYPES] } },
   additionalProperties: true, description: 'Detached semantic node, with type-specific geometry, transforms and ink metadata. Formula retains LaTeX, not internal vector paths.' }
 const errors = [
-  { status: 400, codes: ['invalid_command'], description: 'Malformed envelope/JSON or unsupported method.' },
+  { status: 400, codes: ['invalid_command'], description: 'Invalid method or JSON.' },
   { status: 409, codes: ['board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
     'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed', 'local_agent_bridge_error'],
-  description: 'Board/domain rejection; inspect the returned code and re-observe before retrying.' },
-  { status: 503, codes: ['board_unavailable', 'board_disconnected'], description: 'No connected browser, or browser disconnected. Re-observe after reconnecting.' },
-  { status: 504, codes: ['command_timeout'], description: 'Delivery outcome may be uncertain; re-observe before any mutation retry.' },
+  description: 'Board/domain rejected; re-observe.' },
+  { status: 503, codes: ['board_unavailable', 'board_disconnected'], description: 'Browser unavailable; reconnect.' },
+  { status: 504, codes: ['command_timeout'], description: 'Timeout; observe before retry.' },
 ]
 const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: true,
-  description: 'Command params object; unrecognized envelope parameters are ignored by the existing adapter.',
+  description: 'Method parameters.',
   ...(defs ? { $defs: defs } : {}) })
 const descriptors = [
   { method: 'observe', summary: 'Read semantic objects, selection, viewport and interaction stability.', mutatesBoard: false,
