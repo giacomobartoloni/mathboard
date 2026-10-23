@@ -256,8 +256,8 @@ export function getLocalAgentHelp() {
       discoveryGrantsAuthorization: false, containsBoardData: false },
     limitations: [
       'Only commands in methods are executable in this build; planned operations are absent.',
-      'Only top-level IDs are mutable; nested edits reject. Bulk removal is atomic and empty removal is a no-op.',
-      'group needs two top-level objects, refuses nested/groups, and preserves child identity. Ungroup and history remain UI actions.',
+      'Only top-level IDs are mutable; nested edits reject. deleteMany and empty-board clear are no-ops on empty input; bulk removal is atomic.',
+      'group requires two top-level IDs; Board Groups and nested IDs reject. Ungroup and history remain UI actions.',
       'measure is read-only; layout is atomic, scene-based, with a CSS-pixel margin.',
       'Scene coordinates ignore pan/zoom; create/createMany default omitted origins to left/top recursively. Stamps and UI creation are unchanged.',
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
