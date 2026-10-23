@@ -270,6 +270,8 @@ export default {
         }
       } catch (error) {
         boardError.value = error?.message || 'Board library operation failed.'
+        // A failed post-transition metadata write may still leave a new active board.
+        try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
       } finally {
         boardLibraryBusy.value = false
       }
