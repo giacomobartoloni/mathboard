@@ -60,6 +60,18 @@ export class BoardWorkspaceService {
     return this._run(async () => this._summary(await this._persistence.renameBoard(boardId, title)))
   }
 
+  listTrash() {
+    return this._run(() => this._persistence.listTrashedBoards())
+  }
+
+  trash({ boardId } = {}) {
+    return this._run(async () => this._summary(await this._persistence.trashBoard(boardId)))
+  }
+
+  restore({ boardId } = {}) {
+    return this._run(async () => this._summary(await this._persistence.restoreBoard(boardId)))
+  }
+
   save() {
     return this._run(async () => this._summary(await this._persistence.saveCurrentBoard()))
   }
