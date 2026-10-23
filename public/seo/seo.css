@@ -1573,7 +1573,7 @@ main > section > ol {
 }
 
 .resource-group > h2::before {
-  content: counter(editorial-chapter, decimal-leading-zero) " / Explore";
+  content: counter(editorial-chapter, decimal-leading-zero) " / Section";
   display: block;
   margin-bottom: 0.65rem;
   color: #6c645c;
