@@ -63,7 +63,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <button class="board-library-trigger" type="button" :disabled="!boardSessionReady"
       :aria-expanded="showBoardLibrary" aria-haspopup="dialog" @click="openBoardLibrary">Boards</button>
 
-    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :busy="boardLibraryBusy"
+    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :trash-boards="trashList" :busy="boardLibraryBusy"
       @close="closeBoardLibrary" @action="onBoardLibraryAction" />
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
@@ -233,13 +233,16 @@ export default {
     const boardError = ref(null)
     const showBoardLibrary = ref(false)
     const boardList = ref([])
+    const trashList = ref([])
     const boardLibraryBusy = ref(false)
     const closeBoardLibrary = () => { if (!boardLibraryBusy.value) showBoardLibrary.value = false }
     const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
     const refreshBoardLibrary = async () => {
       const workspace = boardWorkspace()
       if (!workspace) throw new Error('Board workspace is not ready.')
-      boardList.value = await workspace.list()
+      const [boards, trash] = await Promise.all([workspace.list(), workspace.listTrash()])
+      boardList.value = boards
+      trashList.value = trash
     }
     const openBoardLibrary = async () => {
       if (!boardSessionReady.value) return
@@ -256,8 +259,11 @@ export default {
         else if (action === 'open') await workspace.open({ boardId })
         else if (action === 'rename') await workspace.rename({ boardId, title })
         else if (action === 'save') await workspace.save()
+        else if (action === 'trash') await workspace.trash({ boardId })
+        else if (action === 'restore') await workspace.restore({ boardId })
         else throw new Error('Unsupported board library action.')
         await refreshBoardLibrary()
+        if (action === 'trash') selectedTool.value = 'select'
         if (action === 'create' || action === 'open') {
           selectedTool.value = 'select'
           showBoardLibrary.value = false
@@ -744,6 +750,7 @@ export default {
       boardError,
       showBoardLibrary,
       boardList,
+      trashList,
       boardLibraryBusy,
       openBoardLibrary,
       closeBoardLibrary,
