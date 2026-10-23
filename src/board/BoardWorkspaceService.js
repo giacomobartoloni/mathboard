@@ -37,11 +37,10 @@ export class BoardWorkspaceService {
     return {
       id: record.id,
       title: record.title,
-      kind: record.kind || 'scratch',
       createdAt: record.createdAt || null,
       updatedAt: record.updatedAt || null,
       isActive: record.id === this._persistence.boardId,
-      ...(record.trashedAt ? { trashedAt: record.trashedAt } : {}),
+      ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
     }
   }
 
@@ -61,19 +60,20 @@ export class BoardWorkspaceService {
     return this._run(async () => this._summary(await this._persistence.renameBoard(boardId, title)))
   }
 
-  listTrash() {
-    return this._run(() => this._persistence.listTrashedBoards())
+  listArchived() {
+    return this._run(() => this._persistence.listArchivedBoards())
   }
 
-  trash({ boardId } = {}) {
-    return this._run(async () => this._summary(await this._persistence.trashBoard(boardId)))
+  archive({ boardId } = {}) {
+    return this._run(async () => this._summary(await this._persistence.archiveBoard(boardId)))
   }
 
-  restore({ boardId } = {}) {
-    return this._run(async () => this._summary(await this._persistence.restoreBoard(boardId)))
+  unarchive({ boardId } = {}) {
+    return this._run(async () => this._summary(await this._persistence.unarchiveBoard(boardId)))
   }
 
-  save() {
-    return this._run(async () => this._summary(await this._persistence.saveCurrentBoard()))
+  delete({ boardId } = {}) {
+    return this._run(() => this._persistence.deleteBoard(boardId))
   }
+
 }
