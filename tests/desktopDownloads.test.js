@@ -111,5 +111,8 @@ test('editorial download hero keeps a single h1, anchor navigation and browser a
   assert.ok(hub.indexOf('Unsigned public beta:</strong>') < hub.indexOf('data-download-asset="macosArm64"'))
   const css = readFileSync(new URL('../public/seo/seo.css', import.meta.url), 'utf8')
   assert.ok(css.includes('.download-page--editorial .download-hero'))
+  assert.ok(css.includes('background-color: #292a28'))
+  assert.ok(css.includes('font-family: Georgia, "Times New Roman", serif'))
+  assert.ok(hub.includes('class="download-section-eyebrow"'))
   assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'))
 })
