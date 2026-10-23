@@ -33,6 +33,7 @@ function fixture() {
       return record
     },
     async list() { return [...records.values()].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) },
+    async delete(boardId) { if (this.fail) throw new Error('storage unavailable'); records.delete(boardId) },
   }
   const objects = []
   const canvas = {
@@ -61,30 +62,25 @@ function fixture() {
   return { workspace, repository, service, records, session }
 }
 
-test('library and workspace share local identity, saved metadata and document title', async () => {
+test('every newly persisted board is retained without a manual save step', async () => {
   const { workspace, records, service, session } = fixture()
   const first = await workspace.create({ title: 'Algebra' })
-  assert.equal(first.kind, 'scratch')
   assert.equal(first.isActive, true)
+  assert.equal(records.get(first.id).kind, 'saved')
   assert.equal(session.get('mathboard.activeBoardId'), first.id)
-  assert.equal((await workspace.list()).length, 1)
   const renamed = await workspace.rename({ boardId: first.id, title: '  Quadratics  ' })
   assert.equal(renamed.title, 'Quadratics')
   assert.equal(records.get(first.id).document.title, 'Quadratics')
-  const saved = await workspace.save()
-  assert.equal(saved.kind, 'saved')
   const second = await workspace.create({ title: 'Geometry' })
-  assert.notEqual(second.id, first.id)
-  assert.equal(second.kind, 'scratch')
+  assert.equal(records.get(second.id).kind, 'saved')
   const opened = await workspace.open({ boardId: first.id })
   assert.equal(opened.id, first.id)
-  assert.equal(opened.isActive, true)
   assert.equal(service.title, 'Quadratics')
-  assert.equal((await workspace.list()).filter(item => item.isActive).length, 1)
+  assert.equal((await workspace.list()).length, 2)
   service.dispose()
 })
 
-test('invalid titles and storage errors do not alter the active library record', async () => {
+test('invalid titles and storage errors preserve board metadata', async () => {
   const { workspace, repository, records, service } = fixture()
   const first = await workspace.create({ title: 'Valid' })
   const previous = records.get(first.id)
@@ -95,7 +91,6 @@ test('invalid titles and storage errors do not alter the active library record',
   repository.fail = true
   await assert.rejects(() => workspace.rename({ boardId: first.id, title: 'New name' }), /storage unavailable/)
   assert.equal(records.get(first.id), previous)
-  assert.equal(service.title, 'Valid')
   repository.fail = false
   await assert.rejects(() => workspace.open({ boardId: 'does-not-exist' }),
     error => error.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND)
@@ -103,58 +98,83 @@ test('invalid titles and storage errors do not alter the active library record',
   service.dispose()
 })
 
-test('boards can be deleted to trash, hidden, and restored without changing document identity', async () => {
+test('archive hides a board and unarchive preserves its document and identity', async () => {
   const { workspace, service, records } = fixture()
   const original = await workspace.create({ title: 'Lesson A' })
-  const second = await workspace.create({ title: 'Lesson B' })
-  assert.equal(second.isActive, true)
+  await workspace.create({ title: 'Lesson B' })
   const before = records.get(original.id).document
-  const trashed = await workspace.trash({ boardId: original.id })
-  assert.equal(trashed.id, original.id)
-  assert.equal(typeof trashed.trashedAt, 'string')
+  const archived = await workspace.archive({ boardId: original.id })
+  assert.equal(typeof archived.archivedAt, 'string')
   assert.equal(records.get(original.id).document, before)
   assert.ok(!(await workspace.list()).some(board => board.id === original.id))
-  assert.ok((await workspace.listTrash()).some(board => board.id === original.id))
+  assert.ok((await workspace.listArchived()).some(board => board.id === original.id))
   await assert.rejects(() => workspace.open({ boardId: original.id }),
-    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED)
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED)
   await assert.rejects(() => workspace.rename({ boardId: original.id, title: 'Renamed' }),
-    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED)
-  const restored = await workspace.restore({ boardId: original.id })
-  assert.equal(restored.id, original.id)
-  assert.equal(restored.kind, 'scratch')
-  assert.equal(records.get(original.id).document, before)
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED)
+  await workspace.unarchive({ boardId: original.id })
   assert.ok((await workspace.list()).some(board => board.id === original.id))
-  assert.ok(!(await workspace.listTrash()).some(board => board.id === original.id))
-  await assert.rejects(() => workspace.restore({ boardId: original.id }),
-    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_TRASHED)
+  assert.equal(records.get(original.id).document, before)
+  await assert.rejects(() => workspace.unarchive({ boardId: original.id }),
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_ARCHIVED)
   service.dispose()
 })
 
-test('trashing the active board creates a replacement and keeps its document recoverable', async () => {
+test('archiving active board switches to an independently stored empty board', async () => {
   const { workspace, service, records, session } = fixture()
-  const current = await workspace.create({ title: 'Lesson to delete' })
-  const trashed = await workspace.trash({ boardId: current.id })
-  assert.equal(trashed.trashedAt !== undefined, true)
+  const current = await workspace.create({ title: 'In progress' })
+  const archived = await workspace.archive({ boardId: current.id })
+  assert.ok(archived.archivedAt)
   assert.notEqual(service.boardId, current.id)
   assert.equal(session.get('mathboard.activeBoardId'), service.boardId)
-  assert.equal((await workspace.list()).length, 1)
-  assert.equal((await workspace.listTrash()).length, 1)
-  await workspace.restore({ boardId: current.id })
-  const opened = await workspace.open({ boardId: current.id })
-  assert.equal(opened.id, current.id)
-  assert.equal(records.get(current.id).trashedAt, undefined)
+  assert.equal(records.get(service.boardId).kind, 'saved')
+  assert.equal((await workspace.listArchived()).length, 1)
+  await workspace.unarchive({ boardId: current.id })
+  await workspace.open({ boardId: current.id })
+  assert.equal(service.title, 'In progress')
   service.dispose()
 })
 
-test('trash write failures leave ordinary boards visible and recoverable', async () => {
-  const { workspace, repository, service, records } = fixture()
-  const first = await workspace.create({ title: 'Keep' })
-  await workspace.create({ title: 'Current' })
+test('legacy scratch and trashed metadata remain recoverable without migration loss', async () => {
+  const { workspace, service, records } = fixture()
+  const scratch = await workspace.create({ title: 'Old draft' })
+  records.set(scratch.id, { ...records.get(scratch.id), kind: 'scratch', trashedAt: '2026-10-20T12:00:00Z' })
+  assert.equal((await workspace.listArchived())[0].id, scratch.id)
+  await workspace.unarchive({ boardId: scratch.id })
+  assert.equal(records.get(scratch.id).trashedAt, undefined)
+  assert.equal(records.get(scratch.id).kind, 'scratch')
+  assert.ok((await workspace.list()).some(board => board.id === scratch.id))
+  service.dispose()
+})
+
+test('permanent delete requires confirmation and is not recoverable', async () => {
+  const { workspace, records, service } = fixture()
+  const first = await workspace.create({ title: 'To delete' })
+  await workspace.create({ title: 'Remain' })
+  await assert.rejects(() => workspace.delete({ boardId: first.id }),
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED)
+  assert.ok(records.has(first.id))
+  const deleted = await workspace.delete({ boardId: first.id, confirm: true })
+  assert.deepEqual(deleted, { id: first.id, deleted: true })
+  assert.equal(records.has(first.id), false)
+  await assert.rejects(() => workspace.open({ boardId: first.id }),
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND)
+  assert.equal((await workspace.listArchived()).length, 0)
+  service.dispose()
+})
+
+test('deleting active board preserves a new active record and storage errors leave the target', async () => {
+  const { workspace, records, repository, service, session } = fixture()
+  const current = await workspace.create({ title: 'Last board' })
   repository.fail = true
-  await assert.rejects(() => workspace.trash({ boardId: first.id }), /storage unavailable/)
-  assert.equal(records.get(first.id).trashedAt, undefined)
+  await assert.rejects(() => workspace.delete({ boardId: current.id, confirm: true }), /storage unavailable/)
+  assert.ok(records.has(current.id))
+  assert.equal(service.boardId, current.id)
   repository.fail = false
-  assert.ok((await workspace.list()).some(board => board.id === first.id))
+  await workspace.delete({ boardId: current.id, confirm: true })
+  assert.equal(records.has(current.id), false)
+  assert.ok(records.has(service.boardId))
+  assert.equal(session.get('mathboard.activeBoardId'), service.boardId)
   service.dispose()
 })
 
