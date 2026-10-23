@@ -52,7 +52,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           </template>
           <div v-if="confirmDeleteId === board.id" class="board-library-delete-confirm" role="group" :aria-label="'Confirm deletion of ' + board.title">
             <span>Move “{{ board.title }}” to trash? You can restore it later.</span>
-            <button type="button" :disabled="busy" @click="$emit('action', { action: 'trash', boardId: board.id })">Move to trash</button>
+            <button type="button" :disabled="busy" @click="submitTrash(board.id)">Move to trash</button>
             <button type="button" :disabled="busy" @click="confirmDeleteId = null">Cancel</button>
           </div>
         </li>
@@ -104,12 +104,16 @@ export default {
       renameId.value = null
       confirmDeleteId.value = board.id
     }
+    const submitTrash = (boardId) => {
+      confirmDeleteId.value = null
+      emit('action', { action: 'trash', boardId })
+    }
     const submitRename = (boardId) => {
       if (!renameTitle.value.trim()) return
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { newTitle, renameId, renameTitle, confirmDeleteId, showTrash, createBoard, beginRename, submitRename, beginDelete }
+    return { newTitle, renameId, renameTitle, confirmDeleteId, showTrash, createBoard, beginRename, submitRename, beginDelete, submitTrash }
   },
 }
 </script>
