@@ -30,12 +30,13 @@ const featured = LATEX_WHITEBOARD_FEATURED.map((source) => {
 }).join('\n')
 
 export default {
-  lastmod: '2026-10-21',
+  lastmod: '2026-10-23',
   path: '/latex-whiteboard/',
   title: 'LaTeX Whiteboard — Draw and Add Math Formulas | MathBoard',
   description:
     'Draw on a browser whiteboard and insert rendered LaTeX formulas with live preview. MathBoard uses KaTeX and is free and open source.',
   h1: 'Draw first. Drop in LaTeX when you need it.',
+  h1InBody: true,
   ogImage: '/og-image.png',
   structuredData: 'software-application',
   breadcrumbs: [
@@ -46,6 +47,8 @@ export default {
   needsKatex: true,
   body: `
     <div class="site-hero">
+      <p class="editorial-eyebrow">MathBoard / Math notation</p>
+      <h1>Draw first. Drop in LaTeX when you need it.</h1>
       <p class="lede">
         Use the Formula tool to type LaTeX, preview the result, and place the rendered formula on the board. Existing formulas can be selected and edited again.
       </p>
