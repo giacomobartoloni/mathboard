@@ -1542,10 +1542,9 @@ export default {
 };
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
+<!-- Fabric creates canvas wrappers dynamically, so keep the descendant canvas selector global but anchored to this board. -->
 <style>
 div#boardcontainer {
-  background: red;
   position: absolute;
   top: 0;
   right: 0;
@@ -1562,7 +1561,7 @@ div#boardcontainer:focus {
   z-index: 5;
   pointer-events: none;
 }
-canvas {
+#boardcontainer canvas {
   width: 100%;
   height: 100%;
 }
