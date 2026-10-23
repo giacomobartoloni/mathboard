@@ -79,16 +79,29 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                   <span v-else-if="!board.isActive">Saved locally</span>
                 </span>
               </div>
-              <button v-if="showArchived" class="board-library-restore" type="button" :disabled="busy"
-                :aria-label="'Unarchive ' + board.title" @click="submitAction('unarchive', board.id)">
-                <font-awesome-icon :icon="['fas', 'undo']" aria-hidden="true" />
-                <span>Unarchive</span>
-              </button>
-              <button :id="'actions-' + board.id" class="board-library-icon-button board-library-more" type="button"
-                :aria-label="'Actions for ' + board.title" :aria-expanded="actionMenuId === board.id"
-                :disabled="busy" @click="toggleActions(board.id)">
-                <font-awesome-icon :icon="['fas', 'ellipsis']" aria-hidden="true" />
-              </button>
+              <div class="board-library-row-actions" role="group" :aria-label="'Actions for ' + board.title">
+                <button :id="'rename-action-' + board.id" type="button" :disabled="busy || showArchived"
+                  :aria-label="'Rename ' + board.title + (showArchived ? ' (unarchive first)' : '')"
+                  :title="showArchived ? 'Unarchive before renaming' : 'Rename ' + board.title"
+                  @click="beginRename(board)">
+                  <font-awesome-icon :icon="['fas', 'pen-to-square']" aria-hidden="true" />
+                </button>
+                <button v-if="showArchived" type="button" :disabled="busy"
+                  :aria-label="'Unarchive ' + board.title" :title="'Unarchive ' + board.title"
+                  @click="submitAction('unarchive', board.id)">
+                  <font-awesome-icon :icon="['fas', 'undo']" aria-hidden="true" />
+                </button>
+                <button v-else type="button" :disabled="busy"
+                  :aria-label="'Archive ' + board.title" :title="'Archive ' + board.title"
+                  @click="submitAction('archive', board.id)">
+                  <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" />
+                </button>
+                <button :id="'delete-action-' + board.id" class="board-library-danger" type="button"
+                  :disabled="busy" :aria-label="'Delete ' + board.title" :title="'Delete ' + board.title"
+                  @click="beginDelete(board)">
+                  <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             <form v-if="renameId === board.id" class="board-library-rename" @submit.prevent="submitRename(board.id)"
@@ -100,19 +113,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                 <button type="button" :disabled="busy" @click="cancelInline(board.id)">Cancel</button>
               </div>
             </form>
-
-            <div v-if="actionMenuId === board.id" class="board-library-actions" role="group"
-              :aria-label="'Actions for ' + board.title" @keydown.esc.stop.prevent="cancelInline(board.id)">
-              <button v-if="!showArchived" type="button" :disabled="busy" @click="beginRename(board)">
-                <font-awesome-icon :icon="['fas', 'pen-to-square']" aria-hidden="true" /> Rename
-              </button>
-              <button v-if="!showArchived" type="button" :disabled="busy" @click="submitAction('archive', board.id)">
-                <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" /> Archive
-              </button>
-              <button class="board-library-danger" type="button" :disabled="busy" @click="beginDelete(board)">
-                <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" /> Delete
-              </button>
-            </div>
 
             <div v-if="confirmDeleteId === board.id" class="board-library-delete-confirm" role="group"
               :aria-label="'Confirm deletion of ' + board.title" @keydown.esc.stop.prevent="cancelInline(board.id)">
@@ -152,7 +152,6 @@ export default {
     const renameId = ref(null)
     const renameTitle = ref('')
     const confirmDeleteId = ref(null)
-    const actionMenuId = ref(null)
     const showArchived = ref(false)
     const closeButton = ref(null)
     const dialogPanel = ref(null)
@@ -166,7 +165,7 @@ export default {
       await nextTick()
       const target = pendingFocus.value === 'close'
         ? closeButton.value
-        : document.getElementById('actions-' + pendingFocus.value)
+        : document.getElementById('rename-action-' + pendingFocus.value)
       const focusTarget = target || closeButton.value
       focusTarget?.focus()
       pendingFocus.value = null
@@ -201,7 +200,6 @@ export default {
     }
     const selectView = (archived) => {
       showArchived.value = archived
-      actionMenuId.value = null
       renameId.value = null
       confirmDeleteId.value = null
     }
@@ -209,35 +207,29 @@ export default {
       emit('action', { action: 'create', title: newTitle.value.trim() || undefined })
       newTitle.value = ''
     }
-    const toggleActions = (boardId) => {
-      actionMenuId.value = actionMenuId.value === boardId ? null : boardId
-      renameId.value = null
-      confirmDeleteId.value = null
-    }
     const submitAction = (action, boardId) => {
-      actionMenuId.value = null
       awaitActionFocus('close')
       emit('action', { action, boardId })
     }
     const beginRename = async (board) => {
-      actionMenuId.value = null
+      confirmDeleteId.value = null
       renameId.value = board.id
       renameTitle.value = board.title
       await nextTick()
       document.getElementById('rename-' + board.id)?.focus()
     }
     const beginDelete = async (board) => {
-      actionMenuId.value = null
+      renameId.value = null
       confirmDeleteId.value = board.id
       await nextTick()
       document.getElementById('confirm-delete-' + board.id)?.focus()
     }
     const cancelInline = async (boardId) => {
-      actionMenuId.value = null
+      const actionId = renameId.value === boardId ? 'rename-action-' : 'delete-action-'
       renameId.value = null
       confirmDeleteId.value = null
       await nextTick()
-      document.getElementById('actions-' + boardId)?.focus()
+      document.getElementById(actionId + boardId)?.focus()
     }
     const submitDelete = (boardId) => {
       confirmDeleteId.value = null
@@ -250,8 +242,8 @@ export default {
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { newTitle, renameId, renameTitle, confirmDeleteId, actionMenuId, showArchived, closeButton, dialogPanel,
-      visibleBoards, formatBoardDate, selectView, createBoard, toggleActions, submitAction,
+    return { newTitle, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, dialogPanel,
+      visibleBoards, formatBoardDate, selectView, createBoard, submitAction,
       submitRename, beginRename, beginDelete, cancelInline, submitDelete, trapTab }
   },
 }
@@ -337,7 +329,7 @@ export default {
 }
 .board-library-panel input::placeholder { color: var(--text-placeholder); }
 .board-library-panel button { font: inherit; }
-.board-library-create-fields button, .board-library-rename button, .board-library-actions button,
+.board-library-create-fields button, .board-library-rename button,
 .board-library-delete-confirm button {
   min-height: 40px;
   padding: 8px 12px;
@@ -348,7 +340,7 @@ export default {
   cursor: pointer;
 }
 .board-library-create-fields button:hover:enabled, .board-library-rename button:hover:enabled,
-.board-library-actions button:hover:enabled, .board-library-delete-confirm button:hover:enabled {
+.board-library-delete-confirm button:hover:enabled {
   box-shadow: inset 0 0 0 1px var(--border-color);
 }
 .board-library-create-fields .board-library-primary-button {
@@ -421,32 +413,31 @@ export default {
 .board-library-open:hover:enabled { text-decoration: underline; text-underline-offset: 3px; }
 .board-library-meta { color: var(--text-secondary); font-size: 12px; }
 .board-library-kind { color: var(--text-primary); font-weight: 600; }
-.board-library-restore {
+.board-library-row-actions { display: flex; align-items: center; flex: none; gap: 2px; }
+.board-library-row-actions button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  flex: none;
-  min-height: 40px;
-  padding: 8px 9px;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--icon-color);
   cursor: pointer;
 }
-.board-library-restore:hover:enabled { background: var(--hover-bg); }
-.board-library-actions, .board-library-delete-confirm, .board-library-rename {
+.board-library-row-actions button:hover:enabled { background: var(--hover-bg); }
+.board-library-delete-confirm, .board-library-rename {
   margin: 2px 0 12px 54px;
   padding: 9px;
   border-radius: 8px;
   background: var(--surface-tertiary);
 }
-.board-library-actions { display: flex; flex-wrap: wrap; gap: 5px; }
-.board-library-actions button { display: inline-flex; align-items: center; gap: 7px; background: transparent; }
 .board-library-rename > div { flex-wrap: wrap; }
 .board-library-delete-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
 .board-library-delete-confirm span { flex: 1 1 100%; font-size: 13px; line-height: 1.4; }
-.board-library-actions .board-library-danger, .board-library-delete-confirm .board-library-danger { color: var(--danger); }
+.board-library-row-actions .board-library-danger, .board-library-delete-confirm .board-library-danger { color: var(--danger); }
 .board-library-empty {
   min-height: 144px;
   display: flex;
@@ -472,7 +463,17 @@ export default {
   .board-library-create { padding: 0 16px 18px; }
   .board-library-tabs { padding: 0 16px; }
   .board-library-content { flex: 1; padding: 4px 16px max(24px, env(safe-area-inset-bottom)); }
-  .board-library-restore span { display: none; }
-  .board-library-actions, .board-library-delete-confirm, .board-library-rename { margin-left: 0; }
+  .board-library-delete-confirm, .board-library-rename { margin-left: 0; }
+}
+@media (max-width: 420px) {
+  .board-library-row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 4px 12px;
+    padding: 6px 0;
+  }
+  .board-library-glyph { grid-column: 1; grid-row: 1; }
+  .board-library-details { grid-column: 2; grid-row: 1; }
+  .board-library-row-actions { grid-column: 2; grid-row: 2; justify-self: end; }
 }
 </style>
