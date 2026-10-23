@@ -14,7 +14,7 @@ import {
 } from '../lib/desktop-downloads.mjs'
 
 export default {
-  lastmod: '2026-10-22',
+  lastmod: '2026-10-23',
   path: '/download/',
   title: 'Download MathBoard Desktop for Mac, Windows and Linux',
   description:
@@ -46,7 +46,7 @@ export default {
         <div class="download-product-frame-bar" aria-hidden="true">
           <span class="download-product-frame-dots"><i></i><i></i><i></i></span>
           <span>MathBoard</span>
-          <span>Preview</span>
+          <span>Illustration</span>
         </div>
         ${renderScreenshot({
           src: '/og-image.png',
@@ -56,6 +56,7 @@ export default {
         })}
       </div>
     </section>
+    <p class="download-section-eyebrow">01 / Downloads</p>
     <h2 id="download-options" class="download-choice-title">Choose your operating system</h2>
     <p class="download-preflight"><strong>Unsigned public beta:</strong> installers are not code-signed
       and may be blocked by your device. <a href="/download/security/">Read the safety and verification guide</a>
