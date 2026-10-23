@@ -23,7 +23,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <h2 id="board-library-heading">Board library</h2>
         <button type="button" :disabled="busy" aria-label="Close board library" @click="$emit('close')">×</button>
       </header>
-      <p>Boards are stored locally, not in a cloud account. Drafts are autosaved but may be cleaned up after 30 days of inactivity; Saved boards are kept until you delete them or clear local app data.</p>
+      <p>All boards are saved automatically in this browser after edits. Archived boards are hidden from this list; deleting a board permanently removes its local document. Local storage is not a backup.</p>
       <form class="board-library-create" @submit.prevent="createBoard">
         <label for="new-board-title">New board name (optional)</label>
         <div>
@@ -31,9 +31,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           <button type="submit" :disabled="busy">New board</button>
         </div>
       </form>
-      <button type="button" class="board-library-save" :disabled="busy" @click="$emit('action', { action: 'save' })">
-        Save current board to library
-      </button>
       <h3>Recent boards</h3>
       <ul class="board-library-list">
         <li v-for="board in boards" :key="board.id">
@@ -46,30 +43,37 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           <template v-else>
             <button type="button" class="board-library-open" :disabled="busy || board.isActive"
               @click="$emit('action', { action: 'open', boardId: board.id })">{{ board.title }}</button>
-            <span class="board-library-kind">{{ board.kind === 'saved' ? 'Saved' : 'Draft' }}<span v-if="board.isActive"> · Current</span></span>
+            <span v-if="board.isActive" class="board-library-kind">Current</span>
             <button type="button" :disabled="busy" @click="beginRename(board)">Rename</button>
+            <button type="button" :disabled="busy" @click="$emit('action', { action: 'archive', boardId: board.id })">Archive</button>
             <button type="button" :disabled="busy" @click="beginDelete(board)">Delete</button>
           </template>
           <div v-if="confirmDeleteId === board.id" class="board-library-delete-confirm" role="group" :aria-label="'Confirm deletion of ' + board.title">
-            <span>Move “{{ board.title }}” to trash? You can restore it later.</span>
-            <button type="button" :disabled="busy" @click="submitTrash(board.id)">Move to trash</button>
+            <span>Permanently delete “{{ board.title }}” from this device? This cannot be undone.</span>
+            <button type="button" :disabled="busy" @click="submitDelete(board.id)">Permanently delete</button>
             <button type="button" :disabled="busy" @click="confirmDeleteId = null">Cancel</button>
           </div>
         </li>
       </ul>
       <p v-if="!boards.length" role="status">No local boards yet.</p>
-      <button type="button" class="board-library-trash-toggle" :aria-expanded="showTrash" @click="showTrash = !showTrash">
-        {{ showTrash ? 'Hide trash' : 'Trash' }} ({{ trashBoards.length }})
+      <button type="button" class="board-library-trash-toggle" :aria-expanded="showArchived" @click="showArchived = !showArchived">
+        {{ showArchived ? 'Hide archived' : 'Archived' }} ({{ archivedBoards.length }})
       </button>
-      <div v-if="showTrash" class="board-library-trash">
-        <p>Trashed boards are hidden from the library but remain on this device until local data is cleared.</p>
+      <div v-if="showArchived" class="board-library-trash">
+        <p>Archived boards remain editable after unarchiving. Archiving does not delete their content.</p>
         <ul class="board-library-list">
-          <li v-for="board in trashBoards" :key="board.id">
+          <li v-for="board in archivedBoards" :key="board.id">
             <span class="board-library-trash-title">{{ board.title }}</span>
-            <button type="button" :disabled="busy" @click="$emit('action', { action: 'restore', boardId: board.id })">Restore</button>
+            <button type="button" :disabled="busy" @click="$emit('action', { action: 'unarchive', boardId: board.id })">Unarchive</button>
+            <button type="button" :disabled="busy" @click="beginDelete(board)">Delete</button>
+            <div v-if="confirmDeleteId === board.id" class="board-library-delete-confirm" role="group" :aria-label="'Confirm deletion of ' + board.title">
+              <span>Permanently delete “{{ board.title }}” from this device? This cannot be undone.</span>
+              <button type="button" :disabled="busy" @click="submitDelete(board.id)">Permanently delete</button>
+              <button type="button" :disabled="busy" @click="confirmDeleteId = null">Cancel</button>
+            </div>
           </li>
         </ul>
-        <p v-if="!trashBoards.length" role="status">Trash is empty.</p>
+        <p v-if="!archivedBoards.length" role="status">No archived boards.</p>
       </div>
     </section>
   </div>
@@ -82,7 +86,7 @@ export default {
   name: 'BoardLibraryModal',
   props: {
     boards: { type: Array, default: () => [] },
-    trashBoards: { type: Array, default: () => [] },
+    archivedBoards: { type: Array, default: () => [] },
     busy: { type: Boolean, default: false },
   },
   emits: ['close', 'action'],
@@ -91,12 +95,13 @@ export default {
     const renameId = ref(null)
     const renameTitle = ref('')
     const confirmDeleteId = ref(null)
-    const showTrash = ref(false)
+    const showArchived = ref(false)
     const createBoard = () => {
       emit('action', { action: 'create', title: newTitle.value.trim() || undefined })
       newTitle.value = ''
     }
     const beginRename = (board) => {
+      confirmDeleteId.value = null
       renameId.value = board.id
       renameTitle.value = board.title
     }
@@ -104,16 +109,17 @@ export default {
       renameId.value = null
       confirmDeleteId.value = board.id
     }
-    const submitTrash = (boardId) => {
+    const submitDelete = (boardId) => {
       confirmDeleteId.value = null
-      emit('action', { action: 'trash', boardId })
+      emit('action', { action: 'delete', boardId })
     }
     const submitRename = (boardId) => {
       if (!renameTitle.value.trim()) return
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { newTitle, renameId, renameTitle, confirmDeleteId, showTrash, createBoard, beginRename, submitRename, beginDelete, submitTrash }
+    return { newTitle, renameId, renameTitle, confirmDeleteId, showArchived,
+      createBoard, beginRename, submitRename, beginDelete, submitDelete }
   },
 }
 </script>
