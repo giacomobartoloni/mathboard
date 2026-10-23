@@ -32,6 +32,7 @@ export const BOARD_PERSISTENCE_ERROR_CODES = Object.freeze({
   BOARD_NOT_FOUND: 'board_not_found',
   BOARD_RESTORE_FAILED: 'board_restore_failed',
   EDIT_IN_PROGRESS: 'edit_in_progress',
+  INVALID_TITLE: 'invalid_board_title',
 })
 
 export class BoardPersistenceError extends Error {
@@ -54,6 +55,14 @@ const SCRATCH_BOARD_RETENTION_MS = SCRATCH_BOARD_RETENTION_DAYS * 24 * 60 * 60 *
 
 const IDLE_DEBOUNCE_MS = 1000
 const MAX_WAIT_MS = 5000
+
+export function normalizeBoardTitle(title) {
+  if (typeof title !== 'string' || !title.trim() || title.trim().length > 120
+    || /[\u0000-\u001f\u007f]/.test(title)) {
+    throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.INVALID_TITLE, 'Board title must contain 1–120 printable characters.')
+  }
+  return title.trim()
+}
 
 /**
  * Orchestrates BoardDocument serialize/save/load against a board repository.
@@ -257,10 +266,11 @@ export class BoardPersistenceService {
     }
   }
 
-  async createNewBoard() {
+  async createNewBoard(title = this._getTitle()) {
+    title = normalizeBoardTitle(title)
     await this._flushBeforeTransition()
     const canvas = this._getCanvas()
-    const document = createEmptyBoardDocument(this._getTitle())
+    const document = createEmptyBoardDocument(title)
     const record = createBoardRecord({
       id: createBoardId(),
       kind: BOARD_RECORD_KINDS.SCRATCH,
@@ -288,6 +298,47 @@ export class BoardPersistenceService {
     this._writeActiveBoardId(record.id)
     this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: record.updatedAt, error: null })
     return record
+  }
+
+  async listBoards() {
+    const records = await this._repository.list()
+    return records.map(({ id, title, kind, createdAt, updatedAt }) => ({
+      id, title: title || 'Untitled board', kind: kind || BOARD_RECORD_KINDS.SCRATCH,
+      createdAt: createdAt || null, updatedAt: updatedAt || null,
+      isActive: id === this.boardId,
+    }))
+  }
+
+  async saveCurrentBoard() {
+    await this._flushBeforeTransition()
+    const record = await this._repository.get(this.boardId)
+    if (!record?.document) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, 'Active board is unavailable.')
+    }
+    if (record.kind === BOARD_RECORD_KINDS.SAVED) return record
+    const updatedAt = this._now()
+    const saved = { ...record, kind: BOARD_RECORD_KINDS.SAVED, updatedAt }
+    await this._repository.put(saved)
+    this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: updatedAt, error: null })
+    return saved
+  }
+
+  async renameBoard(boardId, title) {
+    title = normalizeBoardTitle(title)
+    if (boardId === this.boardId) await this._flushBeforeTransition()
+    const record = await this._repository.get(boardId)
+    if (!record?.document) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
+    }
+    if (record.title === title && record.document.title === title) return record
+    const updatedAt = this._now()
+    const renamed = { ...record, title, document: { ...record.document, title }, updatedAt }
+    await this._repository.put(renamed)
+    if (boardId === this.boardId) {
+      this.title = title
+      this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: updatedAt, error: null })
+    }
+    return renamed
   }
 
   async openBoard(boardId) {
