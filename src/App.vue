@@ -251,6 +251,8 @@ export default {
     }
     const onBoardLibraryAction = async ({ action, boardId, title }) => {
       if (boardLibraryBusy.value) return
+      const switchedAwayFromActive = (action === 'archive' || action === 'delete')
+        && boardList.value.some(board => board.id === boardId && board.isActive)
       boardLibraryBusy.value = true
       try {
         const workspace = boardWorkspace()
@@ -263,7 +265,7 @@ export default {
         else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
         else throw new Error('Unsupported board library action.')
         await refreshBoardLibrary()
-        if ((action === 'archive' || action === 'delete') && !boardList.value.some(board => board.isActive)) selectedTool.value = 'select'
+        if (switchedAwayFromActive) selectedTool.value = 'select'
         if (action === 'create' || action === 'open') {
           selectedTool.value = 'select'
           showBoardLibrary.value = false
