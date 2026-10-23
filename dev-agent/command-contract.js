@@ -57,7 +57,7 @@ const typeFields = {
     headLength: { type: 'number', exclusiveMinimum: 0, default: 16 },
     headWidth: { type: 'number', exclusiveMinimum: 0, default: 12 } },
   line: { x1: number, y1: number, x2: number, y2: number },
-  path: { path: { type: 'array', description: 'Permissive Fabric path-command data; rendering can still reject invalid contents.', items: {} } },
+  path: { path: { type: 'array', description: 'Path-command data; runtime validates.', items: {} } },
   text: { text: string, ...textProperties },
   formula: { latex },
   group: { objects: { type: 'array', items: { $ref: '#/$defs/createSpec' } } },
@@ -87,9 +87,9 @@ const patchSchemas = {
   group: objectSchema({ ...transformProperties, opacity: stylePatchProperties.opacity }),
 }
 const options = { type: 'object', properties: { select: boolean }, additionalProperties: true,
-  description: 'Optional selection request; use select:true/false. Other options are ignored. Selection on update applies to formula replacement only.' }
+  description: 'Optional boolean selection.' }
 const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty, type: { enum: [...BOARD_OBJECT_TYPES] } },
-  additionalProperties: true, description: 'Detached semantic node, with type-specific geometry, transforms and ink metadata. Formula retains LaTeX, not internal vector paths.' }
+  additionalProperties: true, description: 'Detached semantic node; formula retains LaTeX.' }
 const errors = [
   { status: 400, codes: ['invalid_command'], description: 'Invalid method or JSON.' },
   { status: 409, codes: ['board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
@@ -272,7 +272,7 @@ export function getLocalAgentHelp() {
       'Scene coordinates ignore pan/zoom; create/createMany default omitted origins to left/top recursively. Stamps and UI creation are unchanged.',
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
       'Update schemas vary by kind: bounded style for shapes/text, opacity for groups, paint/ink for formulas. Geometry patches reject.',
-      'Path items are intentionally permissive schema data; materialization may reject malformed path commands.',
+      'Path commands undergo runtime validation.',
       'Examples are synthetic; replace example IDs. Discovery does not authorize changes.',
       'Undo/Redo are UI actions, not bridge methods. Normal dev/production builds do not expose this bridge.',
       'Screenshot exports bounded canvas pixels only, not DOM overlays.',
