@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <span class="logo">MathBoard</span>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady">
+    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
