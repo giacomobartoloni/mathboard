@@ -53,6 +53,7 @@ import {
   regenerateMathBoardObjectIds,
 } from "../board/ids.js";
 import { BoardPersistenceService } from "../board/persistence/BoardPersistenceService.js";
+import { BoardWorkspaceService } from "../board/BoardWorkspaceService.js";
 import { IndexedDbBoardRepository } from "../storage/local/IndexedDbBoardRepository.js";
 import {
   applySelectionObjectChrome,
@@ -207,6 +208,7 @@ export default {
       getDefaultInk: () => this.boardThemeConfig.defaultInk,
     });
     this._persistence = null;
+    this._boardWorkspace = null;
     this._boardController = null;
     this._persistenceBootstrapped = false;
   },
@@ -239,6 +241,12 @@ export default {
     },
     getBoardController() {
       return this._ensureBoardController();
+    },
+    getBoardWorkspace() {
+      if (!this._boardWorkspace) {
+        this._boardWorkspace = new BoardWorkspaceService(this._ensurePersistenceService());
+      }
+      return this._boardWorkspace;
     },
     _ensureBoardController() {
       if (this._boardController) return this._boardController;
