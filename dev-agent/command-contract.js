@@ -167,6 +167,31 @@ const descriptors = [
     example: { method: 'layout', params: { ids: ['mbobj_example_a', 'mbobj_example_b'], direction: 'stack', gap: 24, margin: 16 } },
     execute: (controller, p) => controller.layout(p) },
   { ...getScreenshotDescriptor(), execute: (_controller, p, capture) => capture.screenshot(p) },
+  { method: 'boards.list', summary: 'List this browser origin local board records, without exposing document objects.', mutatesBoard: false,
+    paramsSchema: params({}),
+    resultSchema: { type: 'array', items: { type: 'object', required: ['id', 'title', 'kind', 'isActive'] } },
+    example: { method: 'boards.list', params: {} },
+    execute: (_controller, _p, _capture, workspace) => workspace.list() },
+  { method: 'boards.create', summary: 'Create and activate a new local scratch board after safely saving the old board.', mutatesBoard: true,
+    paramsSchema: params({ title: { type: 'string', minLength: 1, maxLength: 120 } }),
+    resultSchema: { type: 'object', required: ['id', 'title', 'kind', 'isActive'] },
+    example: { method: 'boards.create', params: { title: 'Algebra lesson' } },
+    execute: (_controller, p, _capture, workspace) => workspace.create(p) },
+  { method: 'boards.open', summary: 'Open a stored local board; validates and resets in-memory history.', mutatesBoard: true,
+    paramsSchema: params({ boardId: nonempty }, ['boardId']),
+    resultSchema: { type: 'object', required: ['id', 'title', 'kind', 'isActive'] },
+    example: { method: 'boards.open', params: { boardId: 'mb_example' } },
+    execute: (_controller, p, _capture, workspace) => workspace.open(p) },
+  { method: 'boards.rename', summary: 'Rename local board metadata and its saved semantic document.', mutatesBoard: true,
+    paramsSchema: params({ boardId: nonempty, title: { type: 'string', minLength: 1, maxLength: 120 } }, ['boardId', 'title']),
+    resultSchema: { type: 'object', required: ['id', 'title', 'kind', 'isActive'] },
+    example: { method: 'boards.rename', params: { boardId: 'mb_example', title: 'Quadratics' } },
+    execute: (_controller, p, _capture, workspace) => workspace.rename(p) },
+  { method: 'boards.save', summary: 'Flush the active board and retain it as a saved library item.', mutatesBoard: true,
+    paramsSchema: params({}),
+    resultSchema: { type: 'object', required: ['id', 'title', 'kind', 'isActive'] },
+    example: { method: 'boards.save', params: {} },
+    execute: (_controller, _p, _capture, workspace) => workspace.save() },
 ]
 
 export function hasLocalAgentMethod(method) {
@@ -178,10 +203,10 @@ export function localAgentMethodMutatesBoard(method) {
   return descriptors.find(entry => entry.method === method)?.mutatesBoard ?? false
 }
 
-export function executeLocalAgentCommand(controller, command, capture) {
+export function executeLocalAgentCommand(controller, command, capture, workspace) {
   const entry = descriptors.find(candidate => candidate.method === command?.method)
   if (!entry) throw new Error(`Unsupported local agent method: ${command?.method}`)
-  return entry.execute(controller, command.params || {}, capture)
+  return entry.execute(controller, command.params || {}, capture, workspace)
 }
 
 /** Detached metadata only: this function never observes or accesses a board. */
@@ -219,6 +244,7 @@ export function getLocalAgentHelp() {
       'group joins at least two already-created top-level groupable IDs; it preserves child IDs and creates a new retained group ID with one Undo.',
       'measure reports a top-level object scene AABB; layout stacks/rows ordered top-level IDs with one Undo for effective changes.',
       'Use the read-only screenshot method to inspect canvas pixels; decode its base64 PNG as an image in a multimodal host.',
+      'Use boards.list, boards.create, boards.open, boards.rename and boards.save for local library management; re-observe after changing the active board.',
       'On timeout/disconnect, re-observe after reconnecting before deciding whether to retry a mutation.',
     ],
     safety: { localDevelopmentOnly: true, loopbackHost: '127.0.0.1', requireStableBeforeMutation: true,
@@ -234,6 +260,8 @@ export function getLocalAgentHelp() {
       'Path items are intentionally permissive schema data; materialization may reject malformed path commands.',
       'Examples are synthetic templates. Replace mbobj_example with an observed existing ID. Discovery performs no permission enforcement.',
       'Undo/Redo are UI actions, not bridge methods. Normal dev/production builds do not expose this bridge.',
+      'Library commands use this browser origin IndexedDB, not a filesystem or cloud account. Opening a board resets in-memory history; unsaved edits must flush first.',
+      'Cross-tab concurrent editing of one board is not conflict-safe; avoid opening the same board for edits in two tabs.',
       'Screenshot exports only canvas pixels, not toolbars or DOM overlays; follow its own limits, stable-board requirement and safety guidance.',
     ],
   })
