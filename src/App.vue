@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <span class="logo">MathBoard</span>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal">
+    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || showBoardLibrary">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
@@ -60,6 +60,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       />
 
     </div>
+    <button class="board-library-trigger" type="button" :disabled="!boardSessionReady"
+      :aria-expanded="showBoardLibrary" aria-haspopup="dialog" @click="openBoardLibrary">Boards</button>
+
+    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :busy="boardLibraryBusy"
+      @close="closeBoardLibrary" @action="onBoardLibraryAction" />
+
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
 
     <div v-if="boardError" class="stamp-error" role="alert">
@@ -109,6 +115,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
+import BoardLibraryModal from './components/BoardLibraryModal.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 // Deferred until opened: FormulaModal brings the KaTeX preview renderer.
 const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
@@ -169,6 +176,7 @@ export default {
   name: 'App',
   components: {
     DrawBoard,
+    BoardLibraryModal,
     ToolsPanel,
     FormulaModal,
     ShareStampModal,
@@ -223,6 +231,43 @@ export default {
     const isFullscreen = ref(false)
     const fullscreenSupported = ref(desktopRuntime || detectFullscreenSupport())
     const boardError = ref(null)
+    const showBoardLibrary = ref(false)
+    const boardList = ref([])
+    const boardLibraryBusy = ref(false)
+    const closeBoardLibrary = () => { if (!boardLibraryBusy.value) showBoardLibrary.value = false }
+    const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
+    const refreshBoardLibrary = async () => {
+      const workspace = boardWorkspace()
+      if (!workspace) throw new Error('Board workspace is not ready.')
+      boardList.value = await workspace.list()
+    }
+    const openBoardLibrary = async () => {
+      if (!boardSessionReady.value) return
+      showBoardLibrary.value = true
+      try { await refreshBoardLibrary() } catch (error) { boardError.value = error.message }
+    }
+    const onBoardLibraryAction = async ({ action, boardId, title }) => {
+      if (boardLibraryBusy.value) return
+      boardLibraryBusy.value = true
+      try {
+        const workspace = boardWorkspace()
+        if (!workspace) throw new Error('Board workspace is not ready.')
+        if (action === 'create') await workspace.create({ title })
+        else if (action === 'open') await workspace.open({ boardId })
+        else if (action === 'rename') await workspace.rename({ boardId, title })
+        else if (action === 'save') await workspace.save()
+        else throw new Error('Unsupported board library action.')
+        await refreshBoardLibrary()
+        if (action === 'create' || action === 'open') {
+          selectedTool.value = 'select'
+          showBoardLibrary.value = false
+        }
+      } catch (error) {
+        boardError.value = error?.message || 'Board library operation failed.'
+      } finally {
+        boardLibraryBusy.value = false
+      }
+    }
     let fullscreenInitialized = false
     let previousFullscreen = false
     let disconnectDesktopWindow = null
@@ -697,6 +742,12 @@ export default {
       onRedo,
       onInsertKit,
       boardError,
+      showBoardLibrary,
+      boardList,
+      boardLibraryBusy,
+      openBoardLibrary,
+      closeBoardLibrary,
+      onBoardLibraryAction,
       onRequestFormula,
       onEditFormula,
       onInsertFormula,
@@ -824,6 +875,21 @@ body {
                 0 2px 4px rgba(0, 0, 0, 0.1);
 
 }
+
+.board-library-trigger {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1100;
+  padding: 9px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--panel-shadow);
+  cursor: pointer;
+}
+.board-library-trigger:disabled { opacity: .6; cursor: default; }
 
 .copyright {
   position: absolute;
