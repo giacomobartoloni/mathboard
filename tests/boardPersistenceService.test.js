@@ -105,7 +105,7 @@ class MapStorage {
 test('flush defers an unstable document until it becomes committed', async () => {
   const rect = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(rect, 'mbobj_rect')
-  const repository = makeRepository()
+  const repository = makeRepository(new Map([['mb_current', { id: 'mb_current', kind: 'saved', title: 'Board', document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }]]))
   let stable = false
   const service = makeService({
     canvas: makeCanvas([rect]),
@@ -131,7 +131,7 @@ test('failed flush blocks opening another board and preserves the current canvas
   const current = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(current, 'mbobj_current')
   const canvas = makeCanvas([current])
-  const repository = makeRepository(new Map([['mb_target', {
+  const repository = makeRepository(new Map([['mb_current', { id: 'mb_current', kind: 'saved', title: 'Board', document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }], ['mb_target', {
     id: 'mb_target',
     title: 'Target',
     document: { format: 'mathboard-board', version: 1, title: 'Target', objects: [] },
@@ -266,7 +266,7 @@ test('a fresh tab session bootstraps a new board and records it as active', asyn
   assert.match(result.id, /^mb_/)
   assert.equal(service.boardId, result.id)
   assert.equal(records.has(result.id), true)
-  assert.equal(records.get(result.id).kind, 'scratch')
+  assert.equal(records.get(result.id).kind, 'saved')
   assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), service.boardId)
   service.dispose()
 })
@@ -298,7 +298,7 @@ test('an active tab session restores its existing board without creating a repla
   service.dispose()
 })
 
-test('adopting the current canvas creates a scratch board owned by this tab', async () => {
+test('adopting the current canvas creates a retained board owned by this tab', async () => {
   const sessionStorage = new MapStorage()
   const records = new Map()
   const repository = makeRepository(records)
@@ -311,8 +311,8 @@ test('adopting the current canvas creates a scratch board owned by this tab', as
 
   const record = await service.adoptCurrentCanvasAsNewBoard()
 
-  assert.equal(record.kind, 'scratch')
-  assert.equal(records.get(record.id).kind, 'scratch')
+  assert.equal(record.kind, 'saved')
+  assert.equal(records.get(record.id).kind, 'saved')
   assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), record.id)
   assert.equal(service.boardId, record.id)
   service.dispose()
