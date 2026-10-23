@@ -27,6 +27,8 @@ export function renderLayout(page) {
   const title = escapeHtml(page.title)
   const description = escapeHtml(page.description)
   const h1 = escapeHtml(page.h1)
+  // Only pages that render an in-body heading opt out of the shared h1 slot.
+  const heading = page.h1InBody ? '' : `<h1>${h1}</h1>`
   const breadcrumbs = renderBreadcrumbs(page.breadcrumbs)
   const katexCss = page.needsKatex
     ? '<link rel="stylesheet" href="/seo/katex/katex.min.css">'
@@ -56,7 +58,7 @@ export function renderLayout(page) {
 
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/seo/seo.css">
+  <link rel="stylesheet" href="/seo/site.css">
   ${katexCss}
 
   ${renderStructuredData(page)}
@@ -68,7 +70,7 @@ export function renderLayout(page) {
 
   <main id="main">
     ${breadcrumbs}
-    <h1>${h1}</h1>
+    ${heading}
     ${page.body}
   </main>
 
@@ -90,7 +92,7 @@ export function render404() {
   <meta name="robots" content="noindex">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/seo/seo.css">
+  <link rel="stylesheet" href="/seo/site.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>

@@ -97,3 +97,22 @@ test('privacy page navigation stays in sync with static SEO navigation', () => {
     assert.deepEqual(navLinks(privacy, label), navLinks(renderer(), label))
   }
 })
+
+
+test('editorial download hero keeps a single h1, anchor navigation and browser alternative', () => {
+  const hub = renderLayout(download)
+  assert.ok(hub.includes('class="download-page download-page--editorial"'))
+  assert.equal(hub.split('<h1>').length - 1, 1)
+  assert.ok(hub.includes('<h1>MathBoard for desktop</h1>'))
+  assert.ok(hub.includes('href="#download-options"'))
+  assert.ok(hub.includes('id="download-options"'))
+  assert.ok(hub.includes('data-placement="download-hero-browser-alternative"'))
+  assert.ok(hub.includes('Illustration of the MathBoard logo'))
+  assert.ok(hub.indexOf('Unsigned public beta:</strong>') < hub.indexOf('data-download-asset="macosArm64"'))
+  const css = readFileSync(new URL('../public/seo/site.css', import.meta.url), 'utf8')
+  assert.ok(css.includes('.download-page--editorial .download-hero'))
+  assert.ok(css.includes('background-color: #292a28'))
+  assert.ok(css.includes('font-family: Georgia, "Times New Roman", serif'))
+  assert.ok(hub.includes('class="download-section-eyebrow"'))
+  assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'))
+})

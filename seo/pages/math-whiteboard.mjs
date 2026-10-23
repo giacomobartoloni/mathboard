@@ -23,12 +23,13 @@ import {
 } from '../lib/render-components.mjs'
 
 export default {
-  lastmod: '2026-10-22',
+  lastmod: '2026-10-23',
   path: '/math-whiteboard/',
   title: 'MathBoard — Free Online Whiteboard for Math',
   description:
     'A browser-based whiteboard for math: draw freehand, write text, add LaTeX formulas, use shapes, and switch between light, dark, and chalkboard themes.',
   h1: 'A whiteboard built for math',
+  h1InBody: true,
   ogImage: '/og-image.png',
   structuredData: 'software-application',
   breadcrumbs: [
@@ -39,6 +40,8 @@ export default {
   body: `
     <div class="site-hero site-hero--with-art">
       <div>
+        <p class="editorial-eyebrow">MathBoard / The whiteboard</p>
+        <h1>A whiteboard built for math</h1>
         <p class="lede">
           MathBoard combines freehand drawing, text, shapes, and LaTeX formulas on one canvas. It runs in the browser and is free and open source.
         </p>
@@ -47,9 +50,9 @@ export default {
       </div>
       ${renderScreenshot({
         src: '/og-image.png',
-        alt: 'MathBoard canvas with handwritten notes and a rendered math formula',
+        alt: 'Illustration of the MathBoard logo over graph paper with mathematical drawings and formulas',
         eager: true,
-        caption: 'MathBoard in the browser — draw, type, and place formulas on one board.',
+        caption: 'Illustration of MathBoard’s math-first canvas.',
       })}
     </div>
     <section>

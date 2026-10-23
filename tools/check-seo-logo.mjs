@@ -112,7 +112,7 @@ async function startServer() {
         return
       }
       if (req.url === '/seo-logo.html') {
-        const css = await fs.readFile(path.join(ROOT, 'public/seo/seo.css'), 'utf8')
+        const css = await fs.readFile(path.join(ROOT, 'public/seo/site.css'), 'utf8')
         const html = `<!doctype html>
 <html lang="en">
 <head>
