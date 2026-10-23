@@ -70,14 +70,14 @@ Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the reque
 | `measure` | `id` (read-only scene bounds) |
 | `layout` | `ids`, optional `direction`, `gap`, `margin`, `left`, `top` |
 | `screenshot` | `target`, optional `scale`, `format` (PNG only) |
-| `boards.list` | No required parameters |
-| `boards.create` | Optional `title` |
-| `boards.open` | `boardId` |
+| `boards.list` | No required parameters; local retained board metadata |
+| `boards.create` | Optional `title`; autosaved board |
+| `boards.open` | `boardId` (not archived) |
 | `boards.rename` | `boardId`, `title` |
-| `boards.save` | No required parameters; promotes active scratch board to saved |
-| `boards.listTrash` | No required parameters; lists metadata of recoverable trashed boards |
-| `boards.trash` | `boardId`; moves a board to trash and creates a blank replacement if active |
-| `boards.restore` | `boardId`; returns the board to the library |
+| `boards.listArchived` | No required parameters |
+| `boards.archive` | `boardId`; reversible visibility change |
+| `boards.unarchive` | `boardId`; restores listing |
+| `boards.delete` | `boardId`, `confirm: true`; irreversible deletion |
 
 See [Local Agent Visual Capture](local-agent-visual-capture.md) for the read-only screenshot contract, limits, local PNG review and F033 integration gate. Screenshot uses a development-only capture adapter; semantic mutations delegate to the corresponding `BoardController` methods and returns their semantic JSON results. It does not expose Fabric, history internals or arbitrary method execution. Board library methods delegate to the shared persistence-backed workspace, never direct filesystem access.
 
@@ -167,7 +167,7 @@ Re-observe after each change to confirm the board's current state. Formula updat
 
 ## Local board library workflow
 
-The UI **Boards** dialog and the local agent call the same `BoardWorkspaceService` backed by `BoardPersistenceService` and IndexedDB. Use `boards.list` to obtain `{id,title,kind,createdAt,updatedAt,isActive}` metadata (not document contents); `boards.create` creates and activates a scratch board; `boards.open` safely flushes the active board, atomically restores the selected document and resets in-memory Undo/Redo; `boards.rename` persists the name in both record and BoardDocument; `boards.save` deliberately promotes the active scratch board to a saved library record, distinct from autosave. Titles are trimmed and limited to 120 printable characters. Drafts are auto-saved and can be cleaned after 30 days; Saved boards are explicitly retained. The UI Delete action is a confirmed move to recoverable Trash, not permanent erasure; Restore preserves BoardDocument and object identity. Trashed boards remain locally until app storage is cleared.
+The UI **Boards** dialog and local agent share `BoardWorkspaceService` backed by IndexedDB. Every committed board remains locally stored without an explicit Save command or draft expiration. `boards.list` returns metadata only; `boards.create` persists and activates a new board; `boards.open` atomically restores a board and resets in-memory history. `boards.archive` hides a board from the main list and `boards.unarchive` restores it without changing its object IDs. `boards.listArchived` retrieves archived metadata. `boards.delete` physically removes a record and is irreversible; its explicit `confirm: true` parameter is mandatory. If the active board is archived or deleted, MathBoard first creates and persists a new blank board. Old `kind: scratch` records are retained and historical trash entries are treated as archived. This device-local storage is not a backup, and cross-tab conflict fencing remains a follow-up.
 
 ```bash
 curl -s -X POST http://127.0.0.1:5173/__mathboard_agent/command \
@@ -212,6 +212,6 @@ BoardController errors return a concise `code` and `message`. A transport error 
 
 ## Scope
 
-The bridge exposes the eleven canvas operations plus `boards.list`, `boards.create`, `boards.open`, `boards.rename`, `boards.save`, `boards.listTrash`, `boards.trash` and `boards.restore`. Grouping requires two or more existing top-level groupable objects; nested grouping and nested editing are not supported. It has no programmatic undo, redo, ungroup, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
+The bridge exposes the eleven canvas operations plus `boards.list`, `boards.create`, `boards.open`, `boards.rename`, `boards.listArchived`, `boards.archive`, `boards.unarchive` and `boards.delete`. Grouping requires two or more existing top-level groupable objects; nested grouping and nested editing are not supported. It has no programmatic undo, redo, ungroup, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
 
 After using the bridge in real development, record repeated friction before proposing more commands. In particular, check whether coordinates, observation detail, board dimensions, or a missing operation repeatedly block useful work.
