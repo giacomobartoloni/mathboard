@@ -33,6 +33,8 @@ export const BOARD_PERSISTENCE_ERROR_CODES = Object.freeze({
   BOARD_RESTORE_FAILED: 'board_restore_failed',
   EDIT_IN_PROGRESS: 'edit_in_progress',
   INVALID_TITLE: 'invalid_board_title',
+  BOARD_TRASHED: 'board_trashed',
+  BOARD_NOT_TRASHED: 'board_not_trashed',
 })
 
 export class BoardPersistenceError extends Error {
@@ -302,11 +304,54 @@ export class BoardPersistenceService {
 
   async listBoards() {
     const records = await this._repository.list()
-    return records.map(({ id, title, kind, createdAt, updatedAt }) => ({
+    return records.filter(record => !record.trashedAt).map(({ id, title, kind, createdAt, updatedAt }) => ({
       id, title: title || 'Untitled board', kind: kind || BOARD_RECORD_KINDS.SCRATCH,
       createdAt: createdAt || null, updatedAt: updatedAt || null,
       isActive: id === this.boardId,
     }))
+  }
+
+  async listTrashedBoards() {
+    const records = await this._repository.list()
+    return records.filter(record => !!record.trashedAt).map(({ id, title, kind, createdAt, updatedAt, trashedAt }) => ({
+      id, title: title || 'Untitled board', kind: kind || BOARD_RECORD_KINDS.SCRATCH,
+      createdAt: createdAt || null, updatedAt: updatedAt || null,
+      trashedAt, isActive: false,
+    }))
+  }
+
+  async trashBoard(boardId) {
+    let record = await this._repository.get(boardId)
+    if (!record?.document) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
+    }
+    if (record.trashedAt) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Board is already in the trash.')
+    }
+    if (boardId === this.boardId) {
+      // Flush first; keep the old board intact if creating the replacement fails.
+      await this._flushBeforeTransition()
+      await this.createNewBoard('Untitled board')
+      record = await this._repository.get(boardId)
+    }
+    const trashedAt = this._now()
+    const trashed = { ...record, trashedAt, updatedAt: trashedAt }
+    await this._repository.put(trashed)
+    return trashed
+  }
+
+  async restoreBoard(boardId) {
+    const record = await this._repository.get(boardId)
+    if (!record?.document) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
+    }
+    if (!record.trashedAt) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_TRASHED, 'Board is not in the trash.')
+    }
+    const restored = { ...record, updatedAt: this._now() }
+    delete restored.trashedAt
+    await this._repository.put(restored)
+    return restored
   }
 
   async saveCurrentBoard() {
@@ -314,6 +359,9 @@ export class BoardPersistenceService {
     const record = await this._repository.get(this.boardId)
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, 'Active board is unavailable.')
+    }
+    if (record.trashedAt) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Cannot save a trashed board.')
     }
     if (record.kind === BOARD_RECORD_KINDS.SAVED) return record
     const updatedAt = this._now()
@@ -329,6 +377,9 @@ export class BoardPersistenceService {
     const record = await this._repository.get(boardId)
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
+    }
+    if (record.trashedAt) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board before renaming it.')
     }
     if (record.title === title && record.document.title === title) return record
     const updatedAt = this._now()
@@ -349,6 +400,10 @@ export class BoardPersistenceService {
         BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND,
         `Board not found: ${boardId}`,
       )
+    }
+
+    if (record.trashedAt) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board before opening it.')
     }
 
     await replaceBoardFromDocument({
@@ -460,7 +515,7 @@ export class BoardPersistenceService {
       const cutoff = nowMs - SCRATCH_BOARD_RETENTION_MS
 
       for (const record of records) {
-        if (record?.kind !== BOARD_RECORD_KINDS.SCRATCH) continue
+        if (record?.kind !== BOARD_RECORD_KINDS.SCRATCH || record.trashedAt) continue
         if (record.id === this.boardId) continue
         if (record.id === recoveryBoardId) continue
 
