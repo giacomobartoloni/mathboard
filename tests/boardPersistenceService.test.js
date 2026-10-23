@@ -318,7 +318,7 @@ test('adopting the current canvas creates a scratch board owned by this tab', as
   service.dispose()
 })
 
-test('flush preserves explicit record kinds and upgrades legacy records to scratch', async () => {
+test('flush marks all persisted legacy records saved after writing', async () => {
   const sessionStorage = new MapStorage()
   const saved = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(saved, 'mbobj_rect')
@@ -357,16 +357,16 @@ test('flush preserves explicit record kinds and upgrades legacy records to scrat
   service.boardId = 'mb_unknown'
   service.notifyDocumentChanged()
   await service.flush()
-  assert.equal(repository.puts.at(-1).kind, 'future-kind')
+  assert.equal(repository.puts.at(-1).kind, 'saved')
 
   service.boardId = 'mb_legacy'
   service.notifyDocumentChanged()
   await service.flush()
-  assert.equal(repository.puts.at(-1).kind, 'scratch')
+  assert.equal(repository.puts.at(-1).kind, 'saved')
   service.dispose()
 })
 
-test('scratch garbage collection only deletes expired unprotected scratch records', async () => {
+test('bootstrap retains all historical scratch boards without age-based pruning', async () => {
   const nowMs = Date.parse('2026-10-14T00:00:00.000Z')
   const daysAgo = (days) => new Date(nowMs - days * 24 * 60 * 60 * 1000).toISOString()
   const sessionStorage = new MapStorage()
@@ -396,6 +396,7 @@ test('scratch garbage collection only deletes expired unprotected scratch record
 
   assert.deepEqual([...records.keys()].sort(), [
     'mb_active',
+    'mb_expired',
     'mb_invalid',
     'mb_legacy',
     'mb_recent',
@@ -404,12 +405,12 @@ test('scratch garbage collection only deletes expired unprotected scratch record
     'mb_trashed',
     'mb_unknown',
   ])
-  assert.deepEqual(repository.deletes, ['mb_expired'])
+  assert.deepEqual(repository.deletes, [])
   assert.equal(service.boardId, 'mb_active')
   service.dispose()
 })
 
-test('a scratch cleanup failure does not block bootstrap', async () => {
+test('bootstrap does not require listing local boards for cleanup', async () => {
   const sessionStorage = new MapStorage()
   const repository = makeRepository()
   repository.list = async () => {
@@ -435,7 +436,7 @@ test('a change during an in-flight save stays dirty until the next flush', async
   ensureMathBoardObjectId(rect, 'mbobj_rect')
   let releaseFirstPut
   let puts = 0
-  const repository = makeRepository()
+  const repository = makeRepository(new Map([['mb_current', { id: 'mb_current', kind: 'saved', title: 'Board', document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }]]))
   repository.put = async (record) => {
     puts += 1
     if (puts === 1) await new Promise((resolve) => { releaseFirstPut = resolve })
