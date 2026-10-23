@@ -35,6 +35,7 @@ export const BOARD_PERSISTENCE_ERROR_CODES = Object.freeze({
   INVALID_TITLE: 'invalid_board_title',
   BOARD_ARCHIVED: 'board_archived',
   BOARD_NOT_ARCHIVED: 'board_not_archived',
+  CONFIRMATION_REQUIRED: 'confirmation_required',
 })
 
 export class BoardPersistenceError extends Error {
@@ -370,7 +371,11 @@ export class BoardPersistenceService {
     return restored
   }
 
-  async deleteBoard(boardId) {
+  async deleteBoard(boardId, { confirm = false } = {}) {
+    if (confirm !== true) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED,
+        'Permanent deletion requires explicit confirmation.')
+    }
     const record = await this._repository.get(boardId)
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
