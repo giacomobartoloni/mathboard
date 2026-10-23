@@ -51,7 +51,7 @@ test('local agent and user library share saved editable boards', async ({ page, 
   const dialog = page.getByRole('dialog', { name: 'Board library' })
   await expect(dialog).toBeVisible()
   await expect(dialog.getByText('Algebra B')).toBeVisible()
-  await expect(dialog.getByText('Saved', { exact: false })).toBeVisible()
+  await expect(dialog.locator('.board-library-kind').filter({ hasText: 'Saved' })).toBeVisible()
   await dialog.getByRole('button', { name: 'Close board library' }).click()
 
   await send(request, 'boards.open', { boardId: initial.id })
