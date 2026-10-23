@@ -34,7 +34,7 @@ test('discovery is detached, deterministic and exposes only executable baseline 
   assert.deepEqual(help.objectTypes, [...BOARD_OBJECT_TYPES])
   assert.deepEqual(help.commandEndpoint, { method: 'POST', path: '/__mathboard_agent/command' })
   assert.deepEqual(JSON.parse(JSON.stringify(help)), help)
-  assert.ok(JSON.stringify(help).length < 60000)
+  assert.ok(JSON.stringify(help).length < 60000, `Help is ${JSON.stringify(help).length} chars`)
   assert.equal(help.safety.localDevelopmentOnly, true)
   assert.equal(help.safety.requireStableBeforeMutation, true)
   assert.ok(help.workflow.join(' ').includes('stable'))
