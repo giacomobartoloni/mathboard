@@ -260,7 +260,7 @@ export default {
         else if (action === 'rename') await workspace.rename({ boardId, title })
         else if (action === 'archive') await workspace.archive({ boardId })
         else if (action === 'unarchive') await workspace.unarchive({ boardId })
-        else if (action === 'delete') await workspace.delete({ boardId })
+        else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
         else throw new Error('Unsupported board library action.')
         await refreshBoardLibrary()
         if ((action === 'archive' || action === 'delete') && !boardList.value.some(board => board.isActive)) selectedTool.value = 'select'
