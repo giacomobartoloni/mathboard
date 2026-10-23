@@ -289,6 +289,18 @@ export default {
       this.$emit('insert-formula', formulaData)
       this.resetState()
     },
+    prepareVisibleState() {
+      // Async modal components first mount with isVisible=true; a watcher alone
+      // would not initialize the edit preview or focus the LaTeX input.
+      this.$nextTick(() => {
+        this.latexInput = this.initialLatex || ''
+        this.activePaletteGroup = 'symbols'
+        this.updatePreview()
+
+        const input = this.$refs.latexInput
+        input?.focus()
+      })
+    },
     resetState() {
       this.latexInput = ''
       this.renderError = null
@@ -301,18 +313,12 @@ export default {
       this.$emit('close', reason)
     }
   },
+  mounted() {
+    if (this.isVisible) this.prepareVisibleState()
+  },
   watch: {
     isVisible(newVal) {
-      if (newVal) {
-        this.$nextTick(() => {
-          this.latexInput = this.initialLatex || ''
-          this.activePaletteGroup = 'symbols'
-          this.updatePreview()
-
-          const input = this.$refs.latexInput
-          input?.focus()
-        })
-      }
+      if (newVal) this.prepareVisibleState()
     },
     initialLatex(newVal) {
       if (this.isVisible) {
