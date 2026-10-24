@@ -107,7 +107,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
             <div v-if="moreMenuId === board.id" :id="'more-menu-' + board.id"
               class="board-library-more-menu" role="menu" :aria-label="'More actions for ' + board.title"
               @keydown.esc.stop.prevent="closeMoreMenu(board.id)"
-              @keydown.down.prevent="focusDelete(board.id)" @keydown.up.prevent="focusDelete(board.id)">
+              @keydown.down.prevent="focusDelete(board.id)" @keydown.up.prevent="focusDelete(board.id)"
+              @focusout="onMoreMenuFocusOut">
               <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
                 role="menuitem" :disabled="busy" :aria-label="'Delete ' + board.title"
                 @click="beginDelete(board)">
@@ -253,6 +254,9 @@ export default {
         moreMenuId.value = null
       }
     }
+    const onMoreMenuFocusOut = (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) moreMenuId.value = null
+    }
     const createBoard = () => {
       emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
     }
@@ -309,7 +313,7 @@ export default {
     return { boardQuery, renameId, renameTitle, confirmDeleteId, moreMenuId, showArchived, closeButton, dialogPanel,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
       submitRename, beginRename, beginDelete, cancelInline, submitDelete, trapTab,
-      toggleMoreMenu, closeMoreMenu, focusDelete, onPanelClick }
+      toggleMoreMenu, closeMoreMenu, focusDelete, onPanelClick, onMoreMenuFocusOut }
   },
 }
 </script>
