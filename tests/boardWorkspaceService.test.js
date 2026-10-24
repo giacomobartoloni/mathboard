@@ -80,7 +80,8 @@ test('active board identity is reported after committed transitions', async () =
   ])
   assert.equal(changes.length, 5)
   assert.notEqual(changes[4].id, algebra.id)
-  assert.equal(changes[4].title, 'Untitled board')
+  assert.equal(changes[4].id, geometry.id)
+  assert.equal(changes[4].title, 'Geometry')
   service.dispose()
 })
 
@@ -142,7 +143,7 @@ test('archive hides a board and unarchive preserves its document and identity', 
   service.dispose()
 })
 
-test('archiving active board switches to an independently stored empty board', async () => {
+test('archiving the only active board creates a retained empty replacement', async () => {
   const { workspace, service, records, session } = fixture()
   const current = await workspace.create({ title: 'In progress' })
   const archived = await workspace.archive({ boardId: current.id })
@@ -154,6 +155,95 @@ test('archiving active board switches to an independently stored empty board', a
   await workspace.unarchive({ boardId: current.id })
   await workspace.open({ boardId: current.id })
   assert.equal(service.title, 'In progress')
+  service.dispose()
+})
+
+test('archiving the active board selects the latest modified remaining board', async () => {
+  const { workspace, service, records, session } = fixture()
+  const current = await workspace.create({ title: 'To archive' })
+  const oldest = await workspace.create({ title: 'Older' })
+  const newest = await workspace.create({ title: 'Latest' })
+  const archivedCandidate = await workspace.create({ title: 'Already archived' })
+  await workspace.archive({ boardId: archivedCandidate.id })
+
+  // Use explicit timestamps to ensure the selection is based on edits, not IDs.
+  records.set(oldest.id, { ...records.get(oldest.id), updatedAt: '2026-10-20T11:00:00Z' })
+  records.set(newest.id, { ...records.get(newest.id), updatedAt: '2026-10-22T11:00:00Z' })
+  records.set(current.id, { ...records.get(current.id), updatedAt: '2026-10-23T11:00:00Z' })
+  await workspace.open({ boardId: current.id })
+  const sizeBefore = records.size
+  const archived = await workspace.archive({ boardId: current.id })
+
+  assert.equal(archived.id, current.id)
+  assert.equal(service.boardId, newest.id)
+  assert.equal(service.title, 'Latest')
+  assert.equal(session.get('mathboard.activeBoardId'), newest.id)
+  assert.equal(records.size, sizeBefore)
+  assert.ok((await workspace.list()).every(board => board.id !== current.id))
+  service.dispose()
+})
+
+test('deleting active board opens most recently modified unarchived record without creating one', async () => {
+  const { workspace, service, records } = fixture()
+  const first = await workspace.create({ title: 'First' })
+  const latest = await workspace.create({ title: 'Latest' })
+  const target = await workspace.create({ title: 'Current' })
+  records.set(first.id, { ...records.get(first.id), updatedAt: '2026-10-20T11:00:00Z' })
+  records.set(latest.id, { ...records.get(latest.id), updatedAt: '2026-10-22T11:00:00Z' })
+  await workspace.open({ boardId: target.id })
+  const oldSize = records.size
+  await workspace.delete({ boardId: target.id, confirm: true })
+  assert.equal(service.boardId, latest.id)
+  assert.equal(records.size, oldSize - 1)
+  assert.equal(records.has(target.id), false)
+  service.dispose()
+})
+
+test('inactive archive and delete preserve the active board and canvas', async () => {
+  const { workspace, service, records } = fixture()
+  const previous = await workspace.create({ title: 'Previous' })
+  const current = await workspace.create({ title: 'Current' })
+  await workspace.archive({ boardId: previous.id })
+  assert.equal(service.boardId, current.id)
+  await workspace.delete({ boardId: previous.id, confirm: true })
+  assert.equal(service.boardId, current.id)
+  assert.equal(records.size, 1)
+  service.dispose()
+})
+
+test('an unloadable newest candidate prevents archiving or deleting the active board', async () => {
+  const { workspace, service, records } = fixture()
+  const active = await workspace.create({ title: 'Keep this board' })
+  const candidate = await workspace.create({ title: 'Cannot open' })
+  records.set(candidate.id, {
+    ...records.get(candidate.id),
+    updatedAt: '2099-01-01T00:00:00Z',
+    document: { format: 'invalid', version: 1, title: 'Cannot open', objects: [] },
+  })
+  await workspace.open({ boardId: active.id })
+  await assert.rejects(() => workspace.archive({ boardId: active.id }))
+  assert.equal(service.boardId, active.id)
+  assert.equal(records.get(active.id).archivedAt, undefined)
+  await assert.rejects(() => workspace.delete({ boardId: active.id, confirm: true }))
+  assert.equal(records.has(active.id), true)
+  assert.equal(service.boardId, active.id)
+  assert.equal(records.size, 2)
+  service.dispose()
+})
+
+test('storage errors after choosing a fallback restore the previous active board', async () => {
+  const { workspace, service, repository, records } = fixture()
+  const target = await workspace.create({ title: 'Current' })
+  const next = await workspace.create({ title: 'Next' })
+  await workspace.open({ boardId: target.id })
+  repository.fail = true
+  await assert.rejects(() => workspace.archive({ boardId: target.id }), /storage unavailable/)
+  assert.equal(service.boardId, target.id)
+  assert.equal(records.get(target.id).archivedAt, undefined)
+  await assert.rejects(() => workspace.delete({ boardId: target.id, confirm: true }), /storage unavailable/)
+  assert.equal(service.boardId, target.id)
+  assert.equal(records.has(target.id), true)
+  assert.ok(records.has(next.id))
   service.dispose()
 })
 
