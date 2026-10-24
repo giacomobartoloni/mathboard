@@ -344,7 +344,7 @@ export default {
 }
 .board-library-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 14px;
   padding: 14px 20px 10px;
 }
