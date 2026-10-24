@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div class="support-panel">
+  <div class="support-panel" :class="{ 'about-open': showAbout }">
     <button
       type="button"
       class="about-button"
@@ -199,6 +199,8 @@ export default {
   align-items: center;
   min-height: 40px;
 }
+
+.support-panel.about-open { z-index: 10000; }
 
 .about-button {
   background: none;
