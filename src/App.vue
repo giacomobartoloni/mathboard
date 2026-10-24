@@ -28,10 +28,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
       <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
-        :aria-label="`Boards: ${currentBoardTitle}`" :title="currentBoardTitle"
+        aria-label="Open Board library" title="Open Board library"
         :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
         <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
-        <span class="board-library-current-title">{{ currentBoardTitle }}</span>
+        <span class="board-library-trigger-label">
+          <span class="board-library-trigger-label-long">Board library</span>
+          <span class="board-library-trigger-label-short" aria-hidden="true">Boards</span>
+        </span>
         <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
       </button>
     </div>
@@ -52,7 +55,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @text-editing-completed="onTextEditingCompleted"
         @shape-drawing-completed="onShapeDrawingCompleted"
         @selection-color="onSelectionColor"
-        @active-board-changed="onActiveBoardChanged"
       />
       <ToolsPanel
         :selectedTool="selectedTool"
@@ -196,8 +198,6 @@ export default {
   setup() {
     const desktopRuntime = isDesktopRuntime()
     const boardSessionReady = ref(false)
-    const currentBoardTitle = ref('Untitled board')
-    const onActiveBoardChanged = ({ title }) => { currentBoardTitle.value = title || 'Untitled board' }
     // Persisted presentation preferences. DrawBoard adapts objects authored with
     // the automatic board ink when boardTheme changes; explicit ink stays put.
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
@@ -770,8 +770,6 @@ export default {
     return {
       desktopRuntime,
       boardSessionReady,
-      currentBoardTitle,
-      onActiveBoardChanged,
       selectedTool,
       selectedShape,
       drawBoardRef,
@@ -952,7 +950,8 @@ body {
 }
 .board-library-trigger:hover:not(:disabled) { box-shadow: var(--panel-shadow), inset 0 0 0 1px var(--border-color); }
 .board-library-trigger:focus-visible { outline: 2px solid var(--selected-bg); outline-offset: 2px; }
-.board-library-current-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.board-library-trigger-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.board-library-trigger-label-short { display: none; }
 .board-library-trigger > svg:last-child { color: var(--text-muted); font-size: 12px; }
 .board-library-trigger:disabled { opacity: .6; cursor: default; }
 
@@ -1043,6 +1042,12 @@ body {
     padding: 9px 10px;
   }
   .copyright { display: none; }
+}
+
+/* Keep the selector legible beside the logo on very narrow phones. */
+@media (max-width: 360px) {
+  .board-library-trigger-label-long { display: none; }
+  .board-library-trigger-label-short { display: inline; }
 }
 
 .board-session-loading {
