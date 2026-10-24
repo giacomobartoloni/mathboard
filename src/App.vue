@@ -25,7 +25,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
   >
-    <span class="logo">MathBoard</span>
+    <div class="board-topbar">
+      <span class="logo">MathBoard</span>
+    <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
+      :aria-label="`Boards: ${currentBoardTitle}`" :title="currentBoardTitle"
+      :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
+      <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
+      <span class="board-library-current-title">{{ currentBoardTitle }}</span>
+      <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
+    </button>
+    </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
     <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || showBoardLibrary">
@@ -59,14 +68,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       />
 
     </div>
-    <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
-      :aria-label="`Boards: ${currentBoardTitle}`" :title="currentBoardTitle"
-      :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
-      <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
-      <span class="board-library-current-title">{{ currentBoardTitle }}</span>
-      <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
-    </button>
-
     <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
       :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError"
       @close="closeBoardLibrary" @action="onBoardLibraryAction" />
@@ -899,6 +900,9 @@ body {
   display: none !important;
 }
 
+/* On desktop, keep the existing independent logo and centered board selector. */
+.board-topbar { display: contents; }
+
 .logo {
   font-family: 'Satisfy', cursive;
   font-size: normal;
@@ -1008,9 +1012,35 @@ body {
 }
 
 @media (max-width: 600px) {
+  /* Fit the board selector beside the logo instead of dedicating another row. */
+  .board-topbar {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .board-topbar .logo {
+    position: static;
+    flex: 0 0 auto;
+    transform: none;
+    font-size: 24px;
+    padding: 8px 15px;
+    border-width: 4px;
+    white-space: nowrap;
+  }
   .board-library-trigger {
-    top: 78px;
-    width: calc(100vw - 24px);
+    position: static;
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    transform: none;
+    gap: 8px;
+    padding: 9px 10px;
   }
   .copyright { display: none; }
 }
