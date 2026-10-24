@@ -296,7 +296,7 @@ export default {
         else throw new Error('Unsupported board library action.')
         await refreshBoardLibrary()
         if (switchedAwayFromActive) selectedTool.value = 'select'
-        if (action === 'create' || action === 'open' || action === 'unarchive-open') {
+        if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
           selectedTool.value = 'select'
           showBoardLibrary.value = false
           await nextTick()
