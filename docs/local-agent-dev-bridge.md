@@ -71,7 +71,7 @@ Send JSON to `POST /__mathboard_agent/command`. The Vite relay creates the reque
 | `layout` | `ids`, optional `direction`, `gap`, `margin`, `left`, `top` |
 | `screenshot` | `target`, optional `scale`, `format` (PNG only) |
 | `boards.list` | No required parameters; local retained board metadata |
-| `boards.create` | Optional `title`; autosaved board |
+| `boards.create` | Optional `title`; omitted title generates a lowercase math-inspired two-word name; autosaved board |
 | `boards.open` | `boardId` (not archived) |
 | `boards.rename` | `boardId`, `title` |
 | `boards.listArchived` | No required parameters |
@@ -167,7 +167,7 @@ Re-observe after each change to confirm the board's current state. Formula updat
 
 ## Local board library workflow
 
-The UI **Boards** dialog and local agent share `BoardWorkspaceService` backed by IndexedDB. Every committed board remains locally stored without an explicit Save command or draft expiration. `boards.list` returns metadata only; `boards.create` persists and activates a new board; `boards.open` atomically restores a board and resets in-memory history. `boards.archive` hides a board from the main list and `boards.unarchive` restores it without changing its object IDs. `boards.listArchived` retrieves archived metadata. `boards.delete` physically removes a record and is irreversible; its explicit `confirm: true` parameter is mandatory. If the active board is archived or deleted, MathBoard first creates and persists a new blank board. Old `kind: scratch` records are retained and historical trash entries are treated as archived. This device-local storage is not a backup, and cross-tab conflict fencing remains a follow-up.
+The UI **Boards** dialog and local agent share `BoardWorkspaceService` backed by IndexedDB. Every committed board remains locally stored without an explicit Save command or draft expiration. `boards.list` returns metadata only; `boards.create` persists and activates a new board; `boards.open` atomically restores a board and resets in-memory history. `boards.archive` hides a board from the main list and `boards.unarchive` restores it without changing its object IDs. `boards.listArchived` retrieves archived metadata. `boards.delete` physically removes a record and is irreversible; its explicit `confirm: true` parameter is mandatory. If the active board is archived or deleted, MathBoard opens the most recently updated remaining unarchived board (ADR 0007). Only when none remains does it create a blank board with a generated name. Fresh sessions and Stamp-derived boards also receive generated names; explicit names and existing titles remain unchanged. Old `kind: scratch` records are retained and historical trash entries are treated as archived. This device-local storage is not a backup, and cross-tab conflict fencing remains a follow-up.
 
 ```bash
 curl -s -X POST http://127.0.0.1:5173/__mathboard_agent/command \
