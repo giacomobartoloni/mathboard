@@ -342,6 +342,30 @@ export class BoardPersistenceService {
     return records.filter(record => this._isArchived(record)).map(record => this._boardSummary(record))
   }
 
+  /**
+   * Transition away from an active board before a destructive/archival action.
+   * Ordinary library ordering comes from IndexedDbBoardRepository.list()
+   * (updatedAt descending). Validate and open the preferred candidate first;
+   * create a blank board only when no other unarchived board exists.
+   */
+  async _selectReplacementForActiveBoard(boardId) {
+    if (boardId !== this.boardId) return false
+    await this._flushBeforeTransition()
+    const remaining = (await this.listBoards()).find(board => board.id !== boardId)
+    if (remaining) await this.openBoard(remaining.id)
+    else await this.createNewBoard('Untitled board')
+    return true
+  }
+
+  async _restorePreviousBoardOnFailure(boardId) {
+    try {
+      await this.openBoard(boardId)
+    } catch (error) {
+      // Do not hide the original storage failure behind a failed rollback.
+      console.error('Could not restore the previous active board:', error)
+    }
+  }
+
   async archiveBoard(boardId) {
     let record = await this._repository.get(boardId)
     if (!record?.document) {
@@ -350,17 +374,21 @@ export class BoardPersistenceService {
     if (this._isArchived(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Board is already archived.')
     }
-    if (boardId === this.boardId) {
-      await this.createNewBoard('Untitled board')
-      record = await this._repository.get(boardId)
+    const switched = await this._selectReplacementForActiveBoard(boardId)
+    try {
+      // The flush may have updated the board document before switching away.
+      if (switched) record = await this._repository.get(boardId)
       if (!record?.document) {
         throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
       }
+      const archived = { ...record, archivedAt: this._now() }
+      delete archived.trashedAt
+      await this._repository.put(archived)
+      return archived
+    } catch (error) {
+      if (switched) await this._restorePreviousBoardOnFailure(boardId)
+      throw error
     }
-    const archived = { ...record, archivedAt: this._now() }
-    delete archived.trashedAt
-    await this._repository.put(archived)
-    return archived
   }
 
   async unarchiveBoard(boardId) {
@@ -387,11 +415,13 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (boardId === this.boardId) {
-      // Persist a blank replacement before irreversibly deleting the active board.
-      await this.createNewBoard('Untitled board')
+    const switched = await this._selectReplacementForActiveBoard(boardId)
+    try {
+      await this._repository.delete(boardId)
+    } catch (error) {
+      if (switched) await this._restorePreviousBoardOnFailure(boardId)
+      throw error
     }
-    await this._repository.delete(boardId)
     if (this._readRecoveryBoardId() === boardId) this._writeRecoveryBoardId(null)
     return { id: boardId, deleted: true }
   }
