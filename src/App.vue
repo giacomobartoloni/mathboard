@@ -27,13 +27,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
-    <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
-      :aria-label="`Boards: ${currentBoardTitle}`" :title="currentBoardTitle"
-      :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
-      <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
-      <span class="board-library-current-title">{{ currentBoardTitle }}</span>
-      <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
-    </button>
+      <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
+        :aria-label="`Boards: ${currentBoardTitle}`" :title="currentBoardTitle"
+        :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
+        <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
+        <span class="board-library-current-title">{{ currentBoardTitle }}</span>
+        <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
+      </button>
     </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
