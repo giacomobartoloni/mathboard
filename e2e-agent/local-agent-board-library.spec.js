@@ -37,13 +37,13 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   const object = await send(request, 'create', { spec: { type: 'text', text: 'Original', left: 200, top: 140 } })
   const created = await send(request, 'boards.create', { title: 'Algebra A' })
   expect(created.isActive).toBe(true)
-  await expect(page.getByRole('button', { name: 'Boards: Algebra A' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   expect((await send(request, 'observe')).objects).toEqual([])
   const formula = await send(request, 'create', { spec: { type: 'formula', latex: 'x^2=4', left: 200, top: 150 } })
   await send(request, 'boards.rename', { boardId: created.id, title: 'Algebra B' })
-  await expect(page.getByRole('button', { name: 'Boards: Algebra B' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Boards: Algebra B' }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   const dialog = page.getByRole('dialog', { name: 'Board library' })
   await expect(dialog.getByText('Algebra B')).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Save current board to library' })).toHaveCount(0)
@@ -60,10 +60,10 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await item.getByRole('button', { name: 'Archive Algebra B' }).click()
   await expect.poll(async () => (await send(request, 'boards.list')).some(board => board.id === created.id)).toBe(false)
   await expect(dialog).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Boards: Untitled board' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   expect((await send(request, 'boards.listArchived')).some(board => board.id === created.id)).toBe(true)
   expect((await send(request, 'observe')).boardId).toBe(initial.id)
-  await page.getByRole('button', { name: 'Boards: Untitled board' }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   await dialog.getByRole('button', { name: 'Archived (1)' }).click()
   const archivedItem = dialog.locator('.board-library-trash li').filter({ hasText: 'Algebra B' })
   await expect(archivedItem.getByRole('button', { name: 'Rename Algebra B (unarchive first)' })).toBeDisabled()
@@ -78,10 +78,10 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await dialog.getByRole('button', { name: 'Close board library' }).click()
 
   await send(request, 'boards.open', { boardId: initial.id })
-  await expect(page.getByRole('button', { name: 'Boards: Untitled board' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   expect((await send(request, 'observe')).objects.some(obj => obj.id === object.id)).toBe(true)
   await send(request, 'boards.open', { boardId: created.id })
-  await expect(page.getByRole('button', { name: 'Boards: Algebra B' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   expect((await send(request, 'observe')).objects.some(obj => obj.id === formula.id && obj.latex === 'x^2=4')).toBe(true)
 
   await send(request, 'boards.archive', { boardId: initial.id })
@@ -99,7 +99,7 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   expect(missing.status()).toBe(409)
   expect((await missing.json()).error.code).toBe('board_not_found')
 
-  await page.getByRole('button', { name: 'Boards: Algebra B' }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   const current = page.getByRole('dialog', { name: 'Board library' })
   const currentRow = current.locator('.board-library-list li').filter({ hasText: 'Algebra B' }).first()
   await currentRow.getByRole('button', { name: 'More actions for Algebra B' }).click()
@@ -108,7 +108,7 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await currentRow.getByRole('button', { name: 'Permanently delete' }).click()
   await expect.poll(async () => (await send(request, 'observe')).boardId).not.toBe(created.id)
   await expect(current).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Boards: Untitled board' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   expect((await send(request, 'boards.listArchived')).some(board => board.id === created.id)).toBe(false)
   expect((await send(request, 'boards.list')).some(board => board.id === created.id)).toBe(false)
 })
@@ -127,12 +127,12 @@ test('active board archival/deletion selects the latest remaining board without 
   expect(archived.id).toBe(older.id)
   expect((await send(request, 'observe')).boardId).toBe(latest.id)
   expect((await send(request, 'boards.list')).length).toBe(count - 1)
-  await expect(page.getByRole('button', { name: 'Boards: Latest' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
 
   await send(request, 'boards.delete', { boardId: latest.id, confirm: true })
   expect((await send(request, 'observe')).boardId).toBe(original.id)
   expect((await send(request, 'boards.list')).length).toBe(1)
-  await expect(page.getByRole('button', { name: 'Boards: Untitled board' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
 
   // No unarchived alternative: create exactly one fresh empty board.
   await send(request, 'boards.delete', { boardId: original.id, confirm: true })
@@ -151,7 +151,7 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
   const geometry = await send(request, 'boards.create', { title: 'Geometry' })
   await send(request, 'boards.open', { boardId: initial.id })
 
-  const switcher = page.getByRole('button', { name: 'Boards: Untitled board' })
+  const switcher = page.getByRole('button', { name: 'Open Board library' })
   const switcherBox = await switcher.boundingBox()
   await expect(page.locator('.cookie-banner')).toBeVisible()
   await switcher.click()
@@ -168,31 +168,31 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
   expect(panelBox.y - (switcherBox.y + switcherBox.height)).toBeLessThanOrEqual(16)
   expect(glyphBox.y - (switcherBox.y + switcherBox.height)).toBeLessThan(210)
   await geometryGlyph.click()
-  await expect(page.getByRole('button', { name: 'Boards: Geometry' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   await expect(dialog).toHaveCount(0)
   await expect(page.locator('.cookie-banner')).toBeVisible()
 
-  await page.getByRole('button', { name: 'Boards: Geometry' }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   dialog = page.getByRole('dialog', { name: 'Board library' })
   await dialog.getByRole('button', { name: 'Continue with Geometry' }).click()
   await expect(dialog).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'Boards: Geometry' }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   await page.mouse.click(1100, 150)
   await expect(page.getByRole('dialog', { name: 'Board library' })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Boards: Geometry' })).toBeFocused()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeFocused()
 
   await send(request, 'boards.archive', { boardId: geometry.id })
-  await page.getByRole('button', { name: /^Boards:/ }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   dialog = page.getByRole('dialog', { name: 'Board library' })
   await dialog.getByRole('button', { name: 'Archived (1)' }).click()
   await dialog.getByRole('button', { name: 'Unarchive and open Geometry' }).click()
-  await expect(page.getByRole('button', { name: 'Boards: Geometry' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   await expect(dialog).toHaveCount(0)
   expect((await send(request, 'boards.listArchived')).some(board => board.id === geometry.id)).toBe(false)
 
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole('button', { name: 'Boards: Geometry' }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   dialog = page.getByRole('dialog', { name: 'Board library' })
   const mobilePanel = await dialog.boundingBox()
   expect(mobilePanel.x).toBe(0)
@@ -202,7 +202,7 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
   await dialog.getByRole('textbox', { name: 'Find or create a board' }).fill('Vectors')
   await expect(dialog.getByText('No matching boards')).toBeVisible()
   await dialog.getByRole('button', { name: 'Create “Vectors”' }).click()
-  await expect(page.getByRole('button', { name: 'Boards: Vectors' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
 })
 
 test('a long board list scrolls while creation stays reachable', async ({ page, request }) => {
@@ -211,7 +211,7 @@ test('a long board list scrolls while creation stays reachable', async ({ page, 
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
   for (let index = 1; index <= 12; index++) await send(request, 'boards.create', { title: `Lesson ${index}` })
-  await page.getByRole('button', { name: 'Boards: Lesson 12' }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   const dialog = page.getByRole('dialog', { name: 'Board library' })
   await expect(dialog.getByRole('button', { name: 'Recent (13)' })).toBeVisible()
   const content = dialog.locator('.board-library-content')
@@ -231,7 +231,7 @@ test('a failed board selection reports the error and keeps focus in the library'
   await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
   const stale = await send(request, 'boards.create', { title: 'Stale board' })
   await send(request, 'boards.archive', { boardId: stale.id })
-  await page.getByRole('button', { name: /^Boards:/ }).click()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
   const dialog = page.getByRole('dialog', { name: 'Board library' })
   await dialog.getByRole('button', { name: 'Archived (1)' }).click()
   const glyph = dialog.getByRole('button', { name: 'Unarchive and open Stale board' })
@@ -245,7 +245,7 @@ test('a failed board selection reports the error and keeps focus in the library'
 test('board library isolates drawing shortcuts and returns focus on Escape', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
-  const switcher = page.getByRole('button', { name: 'Boards: Untitled board' })
+  const switcher = page.getByRole('button', { name: 'Open Board library' })
   await switcher.click()
   const dialog = page.getByRole('dialog', { name: 'Board library' })
   await expect(dialog).toBeVisible()
@@ -296,7 +296,8 @@ test('mobile board selector stays beside the logo in the top row', async ({ page
   await page.evaluate(() => document.fonts.ready)
 
   const logo = page.locator('.logo')
-  const switcher = page.getByRole('button', { name: /^Boards:/ })
+  const switcher = page.getByRole('button', { name: 'Open Board library' })
+  await expect(switcher).toHaveAttribute('title', 'Open Board library')
 
   for (const width of [320, 390, 600]) {
     await page.setViewportSize({ width, height: 800 })
@@ -311,5 +312,28 @@ test('mobile board selector stays beside the logo in the top row', async ({ page
       (logoBox.y + logoBox.height / 2) - (selectorBox.y + selectorBox.height / 2),
     )).toBeLessThanOrEqual(8)
     await expect(switcher).toBeInViewport()
+    await expect(switcher.locator('.board-library-trigger-label-' + (width <= 360 ? 'short' : 'long'))).toBeVisible()
+    await expect(switcher.locator('.board-library-trigger-label-' + (width <= 360 ? 'long' : 'short'))).toBeHidden()
+  }
+})
+
+test('Board library heading is vertically centered with its icon at mobile and desktop widths', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  const selector = page.getByRole('button', { name: 'Open Board library' })
+
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 844 })
+    await selector.click()
+    const dialog = page.getByRole('dialog', { name: 'Board library' })
+    const heading = await dialog.getByRole('heading', { name: 'Board library' }).boundingBox()
+    const icon = await dialog.locator('.board-library-heading-icon').boundingBox()
+
+    expect(heading).not.toBeNull()
+    expect(icon).not.toBeNull()
+    const headingCenter = heading.y + heading.height / 2
+    const iconCenter = icon.y + icon.height / 2
+    expect(Math.abs(headingCenter - iconCenter)).toBeLessThanOrEqual(2)
+    await dialog.getByRole('button', { name: 'Close board library' }).click()
   }
 })
