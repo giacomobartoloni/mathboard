@@ -177,7 +177,7 @@ const descriptors = [
     resultSchema: { type: 'array', items: { type: 'object', required: ['id', 'title', 'isActive'] } },
     example: { method: 'boards.list', params: {} },
     execute: (_controller, _p, _capture, workspace) => workspace.list() },
-  { method: 'boards.create', summary: 'Create and activate a local board, saved automatically.', mutatesBoard: true,
+  { method: 'boards.create', summary: 'Create and activate a local board, saved automatically; omitted title gets a math-inspired random name.', mutatesBoard: true,
     errors: libraryErrors, paramsSchema: params({ title: { type: 'string', minLength: 1, maxLength: 120 } }),
     resultSchema: { type: 'object', required: ['id', 'title', 'isActive'] },
     example: { method: 'boards.create', params: { title: 'Algebra' } },
