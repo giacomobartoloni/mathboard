@@ -59,9 +59,11 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await expect(item.getByRole('button', { name: 'Rename Algebra B' })).toBeFocused()
   await item.getByRole('button', { name: 'Archive Algebra B' }).click()
   await expect.poll(async () => (await send(request, 'boards.list')).some(board => board.id === created.id)).toBe(false)
-  await expect(dialog.getByRole('button', { name: 'Close board library' })).toBeFocused()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Boards: Untitled board' })).toBeVisible()
   expect((await send(request, 'boards.listArchived')).some(board => board.id === created.id)).toBe(true)
-  expect((await send(request, 'observe')).boardId).not.toBe(created.id)
+  expect((await send(request, 'observe')).boardId).toBe(initial.id)
+  await page.getByRole('button', { name: 'Boards: Untitled board' }).click()
   await dialog.getByRole('button', { name: 'Archived (1)' }).click()
   const archivedItem = dialog.locator('.board-library-trash li').filter({ hasText: 'Algebra B' })
   await expect(archivedItem.getByRole('button', { name: 'Rename Algebra B (unarchive first)' })).toBeDisabled()
@@ -105,10 +107,39 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await expect(currentRow.getByText(/Permanently delete.*Algebra B/)).toBeVisible()
   await currentRow.getByRole('button', { name: 'Permanently delete' }).click()
   await expect.poll(async () => (await send(request, 'observe')).boardId).not.toBe(created.id)
-  await expect(current.getByRole('button', { name: 'Close board library' })).toBeFocused()
+  await expect(current).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Boards: Untitled board' })).toBeVisible()
   expect((await send(request, 'boards.listArchived')).some(board => board.id === created.id)).toBe(false)
   expect((await send(request, 'boards.list')).some(board => board.id === created.id)).toBe(false)
+})
+
+test('active board archival/deletion selects the latest remaining board without creating extras', async ({ page, request }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
+
+  const original = (await send(request, 'boards.list')).find(board => board.isActive)
+  const older = await send(request, 'boards.create', { title: 'Older' })
+  const latest = await send(request, 'boards.create', { title: 'Latest' })
+  await send(request, 'boards.open', { boardId: older.id })
+  const count = (await send(request, 'boards.list')).length
+  const archived = await send(request, 'boards.archive', { boardId: older.id })
+  expect(archived.id).toBe(older.id)
+  expect((await send(request, 'observe')).boardId).toBe(latest.id)
+  expect((await send(request, 'boards.list')).length).toBe(count - 1)
+  await expect(page.getByRole('button', { name: 'Boards: Latest' })).toBeVisible()
+
+  await send(request, 'boards.delete', { boardId: latest.id, confirm: true })
+  expect((await send(request, 'observe')).boardId).toBe(original.id)
+  expect((await send(request, 'boards.list')).length).toBe(1)
+  await expect(page.getByRole('button', { name: 'Boards: Untitled board' })).toBeVisible()
+
+  // No unarchived alternative: create exactly one fresh empty board.
+  await send(request, 'boards.delete', { boardId: original.id, confirm: true })
+  const surviving = await send(request, 'boards.list')
+  expect(surviving).toHaveLength(1)
+  expect(surviving[0].isActive).toBe(true)
+  expect(surviving[0].title).toBe('Untitled board')
 })
 
 test('board glyphs select boards from the anchored library', async ({ page, request }) => {
