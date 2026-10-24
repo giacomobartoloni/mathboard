@@ -240,3 +240,27 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await expect(page.getByRole('dialog', { name: 'Board library' })).toHaveCount(0)
   await expect(switcher).toBeFocused()
 })
+
+test('mobile board selector stays beside the logo in the top row', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await page.evaluate(() => document.fonts.ready)
+
+  const logo = page.locator('.logo')
+  const switcher = page.getByRole('button', { name: /^Boards:/ })
+
+  for (const width of [320, 390, 600]) {
+    await page.setViewportSize({ width, height: 800 })
+    const logoBox = await logo.boundingBox()
+    const selectorBox = await switcher.boundingBox()
+
+    expect(logoBox).not.toBeNull()
+    expect(selectorBox).not.toBeNull()
+    expect(selectorBox.x).toBeGreaterThanOrEqual(logoBox.x + logoBox.width + 6)
+    expect(selectorBox.x + selectorBox.width).toBeLessThanOrEqual(width - 6)
+    expect(Math.abs(
+      (logoBox.y + logoBox.height / 2) - (selectorBox.y + selectorBox.height / 2),
+    )).toBeLessThanOrEqual(8)
+    await expect(switcher).toBeInViewport()
+  }
+})
