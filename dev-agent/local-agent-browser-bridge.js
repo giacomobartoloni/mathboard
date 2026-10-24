@@ -33,7 +33,8 @@ export function installLocalAgentBrowserBridge(getBoard, capture) {
   const events = new EventSource('/__mathboard_agent/events')
   let reportedPostFailure = false
 
-  const onCommand = async (event) => {
+  let commandQueue = Promise.resolve()
+  const dispatchCommand = async (event) => {
     const command = JSON.parse(event.data)
     let payload
 
@@ -42,7 +43,7 @@ export function installLocalAgentBrowserBridge(getBoard, capture) {
       if (!board) throw new Error('DrawBoard is not available.')
       const finish = localAgentMethodMutatesBoard(command.method) ? capture.beginMutation() : () => {}
       let result
-      try {result=await executeLocalAgentCommand(board.getBoardController(), command, capture)} finally {finish()}
+      try {result=await executeLocalAgentCommand(board.getBoardController(), command, capture, board.getBoardWorkspace())} finally {finish()}
       payload = { id: command.id, ok: true, result }
     } catch (error) {
       payload = { id: command.id, ok: false, error: errorPayload(error) }
@@ -61,6 +62,14 @@ export function installLocalAgentBrowserBridge(getBoard, capture) {
         reportedPostFailure = true
       }
     }
+  }
+
+  // SSE callbacks are asynchronous; process them in order so a board transition
+  // cannot overtake a create/update request already received by the browser.
+  const onCommand = (event) => {
+    commandQueue = commandQueue.then(() => dispatchCommand(event)).catch(error => {
+      console.error('Local agent command dispatch failed:', error)
+    })
   }
 
   const onReplaced = () => events.close()

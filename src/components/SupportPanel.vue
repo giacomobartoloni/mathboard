@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div class="support-panel">
+  <div class="support-panel" :class="{ 'about-open': showAbout }">
     <button
       type="button"
       class="about-button"
@@ -200,6 +200,8 @@ export default {
   min-height: 40px;
 }
 
+.support-panel.about-open { z-index: 10000; }
+
 .about-button {
   background: none;
   border: none;
@@ -227,8 +229,8 @@ export default {
 
 @media (max-width: 768px) {
   .support-panel {
-    top: 12px;
-    bottom: auto;
+    top: auto;
+    bottom: max(80px, calc(env(safe-area-inset-bottom) + 68px));
   }
 
   .about-label {

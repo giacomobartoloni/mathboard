@@ -50,7 +50,7 @@ test('help does not change transport state or advertise unrelated pending featur
   expect(response.status()).toBe(200)
   expect(response.headers()['content-type']).toContain('application/json')
   const help = await response.json()
-  expect(help.methods.map(m => m.method)).toEqual(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot'])
+  expect(help.methods.map(m => m.method)).toEqual(['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot', 'boards.list', 'boards.create', 'boards.open', 'boards.rename', 'boards.listArchived', 'boards.archive', 'boards.unarchive', 'boards.delete'])
   expect(help.objectTypes).toEqual(['rect', 'circle', 'ellipse', 'polygon', 'arrow', 'line', 'path', 'text', 'formula', 'group'])
   const polygonSchema = help.methods.find((method) => method.method === 'create')
     .paramsSchema.$defs.createSpec.oneOf.find((shape) => shape.properties.type.const === 'polygon')
@@ -81,6 +81,9 @@ test('help does not change transport state or advertise unrelated pending featur
   expect(grouping.requiresStable).toBe(true)
   expect(grouping.paramsSchema.properties.ids.minItems).toBe(2)
   expect(grouping.paramsSchema.properties.ids.uniqueItems).toBe(true)
+  expect(help.methods.find(m => m.method === 'boards.list').mutatesBoard).toBe(false)
+  expect(help.methods.find(m => m.method === 'boards.open').requiresStable).toBe(true)
+  expect(help.methods.find(m => m.method === 'boards.rename').paramsSchema.required).toEqual(['boardId', 'title'])
 })
 
 test('local adapter discovers tools, guards mutation and preserves live scene selection and Redo during help', async ({ page, request }) => {
