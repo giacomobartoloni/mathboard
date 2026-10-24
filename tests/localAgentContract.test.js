@@ -25,7 +25,7 @@ import { acceptsSchema } from './helpers/check-discovery-schema.js'
 import { validateCreateSpec, validateObjectPatch } from '../src/board/objects/validateCreateSpec.js'
 import { normalizeCreateOrigins } from '../src/board/objects/normalizeCreateOrigins.js'
 
-const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot']
+const methods = ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot', 'boards.list', 'boards.create', 'boards.open', 'boards.rename', 'boards.listArchived', 'boards.archive', 'boards.unarchive', 'boards.delete']
 
 test('discovery is detached, deterministic and exposes only executable baseline methods', () => {
   const help = getLocalAgentHelp()
@@ -34,7 +34,7 @@ test('discovery is detached, deterministic and exposes only executable baseline 
   assert.deepEqual(help.objectTypes, [...BOARD_OBJECT_TYPES])
   assert.deepEqual(help.commandEndpoint, { method: 'POST', path: '/__mathboard_agent/command' })
   assert.deepEqual(JSON.parse(JSON.stringify(help)), help)
-  assert.ok(JSON.stringify(help).length < 60000)
+  assert.ok(JSON.stringify(help).length < 60000, `Help is ${JSON.stringify(help).length} chars`)
   assert.equal(help.safety.localDevelopmentOnly, true)
   assert.equal(help.safety.requireStableBeforeMutation, true)
   assert.ok(help.workflow.join(' ').includes('stable'))
@@ -52,7 +52,7 @@ test('discovery is detached, deterministic and exposes only executable baseline 
 test('each advertised method has actionable metadata for a local tool adapter', () => {
   for (const descriptor of getLocalAgentHelp().methods) {
     assert.equal(hasLocalAgentMethod(descriptor.method), true)
-    assert.equal(descriptor.mutatesBoard, !['observe', 'measure', 'screenshot'].includes(descriptor.method))
+    assert.equal(descriptor.mutatesBoard, !['observe', 'measure', 'screenshot', 'boards.list', 'boards.listArchived'].includes(descriptor.method))
     assert.equal(descriptor.requiresStable, descriptor.mutatesBoard || descriptor.method === 'screenshot')
     assert.ok(descriptor.summary.length > 10)
     assert.equal(descriptor.paramsSchema.type, 'object')

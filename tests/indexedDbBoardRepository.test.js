@@ -25,10 +25,10 @@ import {
   IndexedDbBoardRepository,
 } from '../src/storage/local/IndexedDbBoardRepository.js'
 
-test('createBoardRecord defaults to a scratch record', () => {
+test('createBoardRecord defaults to a retained saved record', () => {
   const record = createBoardRecord({ id: 'mb_default' })
-  assert.equal(record.kind, BOARD_RECORD_KINDS.SCRATCH)
-  assert.equal(createBoardRecord({ kind: BOARD_RECORD_KINDS.SAVED }).kind, BOARD_RECORD_KINDS.SAVED)
+  assert.equal(record.kind, BOARD_RECORD_KINDS.SAVED)
+  assert.equal(createBoardRecord({ kind: BOARD_RECORD_KINDS.SCRATCH }).kind, BOARD_RECORD_KINDS.SCRATCH)
 })
 
 test('write consumes request and transaction failures together', async () => {
