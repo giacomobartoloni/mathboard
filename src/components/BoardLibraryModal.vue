@@ -27,7 +27,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         </span>
         <div class="board-library-heading-copy">
           <h2 id="board-library-heading">Board library</h2>
-          <p>Boards save after edits in this browser. Local storage is not a backup.</p>
         </div>
         <button ref="closeButton" class="board-library-icon-button" type="button" :disabled="busy"
           aria-label="Close board library" @click="$emit('close')">
@@ -35,17 +34,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         </button>
       </header>
 
-      <form class="board-library-create" @submit.prevent="createBoard">
-        <label for="new-board-title">Create a board</label>
-        <div class="board-library-create-fields">
-          <input id="new-board-title" v-model="newTitle" maxlength="120" autocomplete="off"
-            placeholder="Name (optional)" :disabled="busy || loading">
-          <button class="board-library-primary-button" type="submit" :disabled="busy || loading">
-            <font-awesome-icon :icon="['fas', 'plus']" aria-hidden="true" />
-            New board
-          </button>
+      <div class="board-library-search">
+        <label for="board-library-search-input">Find or create a board</label>
+        <div class="board-library-search-field">
+          <input id="board-library-search-input" v-model="boardQuery" type="text" inputmode="search"
+            maxlength="120" autocomplete="off" placeholder="Find or create a board" :disabled="busy || loading">
+          <font-awesome-icon :icon="['fas', 'search']" aria-hidden="true" />
         </div>
-      </form>
+      </div>
+      <p v-if="error" class="board-library-error" role="alert">{{ error }}</p>
 
       <div class="board-library-tabs" role="group" aria-label="Board views">
         <button type="button" :class="{ active: !showArchived }" :aria-pressed="!showArchived"
@@ -64,13 +61,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <ul v-else-if="visibleBoards.length" class="board-library-list">
           <li v-for="board in visibleBoards" :key="board.id" :class="{ 'is-active': board.isActive }">
             <div class="board-library-row">
-              <span class="board-library-glyph" aria-hidden="true">
-                <font-awesome-icon :icon="['fas', 'chalkboard']" />
-              </span>
+              <button class="board-library-glyph" type="button" :disabled="busy"
+                :aria-label="boardSelectionLabel(board)" :title="boardSelectionLabel(board)"
+                @click="selectBoard(board)">
+                <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
+              </button>
               <div class="board-library-details">
                 <span v-if="board.isActive" class="board-library-current-name" :title="board.title">{{ board.title }}</span>
                 <button v-else-if="!showArchived" type="button" class="board-library-open" :title="board.title"
-                  :disabled="busy" @click="$emit('action', { action: 'open', boardId: board.id })">{{ board.title }}</button>
+                  :disabled="busy" @click="selectBoard(board)">{{ board.title }}</button>
                 <span v-else class="board-library-current-name" :title="board.title">{{ board.title }}</span>
                 <span class="board-library-meta">
                   <span v-if="board.isActive" class="board-library-kind">Current board</span>
@@ -127,9 +126,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         </ul>
         <div v-else class="board-library-empty" role="status">
           <font-awesome-icon :icon="['fas', showArchived ? 'box-archive' : 'chalkboard']" aria-hidden="true" />
-          <strong>{{ showArchived ? 'No archived boards' : 'No saved boards yet' }}</strong>
-          <p>{{ showArchived ? 'Boards you archive will appear here.' : 'Your current board will appear after its first edit.' }}</p>
+          <strong>{{ boardQuery.trim() ? 'No matching boards' : showArchived ? 'No archived boards' : 'No saved boards yet' }}</strong>
+          <p>{{ boardQuery.trim() ? 'Try another name or create a board below.' : showArchived ? 'Boards you archive will appear here.' : 'Your current board will appear after its first edit.' }}</p>
         </div>
+      </div>
+      <div class="board-library-create">
+        <button class="board-library-create-button" type="button" :disabled="busy || loading"
+          :title="createLabel" @click="createBoard">
+          <font-awesome-icon :icon="['fas', 'plus']" aria-hidden="true" />
+          <span>{{ createLabel }}</span>
+        </button>
+        <p>Boards save after edits in this browser. Local storage is not a backup.</p>
       </div>
     </section>
   </div>
@@ -145,10 +152,11 @@ export default {
     archivedBoards: { type: Array, default: () => [] },
     busy: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
+    error: { type: String, default: null },
   },
   emits: ['close', 'action'],
   setup(props, { emit }) {
-    const newTitle = ref('')
+    const boardQuery = ref('')
     const renameId = ref(null)
     const renameTitle = ref('')
     const confirmDeleteId = ref(null)
@@ -156,7 +164,12 @@ export default {
     const closeButton = ref(null)
     const dialogPanel = ref(null)
     const pendingFocus = ref(null)
-    const visibleBoards = computed(() => showArchived.value ? props.archivedBoards : props.boards)
+    const visibleBoards = computed(() => {
+      const boards = showArchived.value ? props.archivedBoards : props.boards
+      const query = boardQuery.value.trim().toLocaleLowerCase()
+      return query ? boards.filter(board => board.title.toLocaleLowerCase().includes(query)) : boards
+    })
+    const createLabel = computed(() => boardQuery.value.trim() ? `Create “${boardQuery.value.trim()}”` : 'New board')
     const dateFormatter = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 
     onMounted(() => closeButton.value?.focus())
@@ -204,8 +217,18 @@ export default {
       confirmDeleteId.value = null
     }
     const createBoard = () => {
-      emit('action', { action: 'create', title: newTitle.value.trim() || undefined })
-      newTitle.value = ''
+      emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
+    }
+    const boardSelectionLabel = (board) => {
+      const action = board.isActive ? 'Continue with' : showArchived.value ? 'Unarchive and open' : 'Open'
+      return `${action} ${board.title}`
+    }
+    const selectBoard = (board) => {
+      if (board.isActive) emit('close')
+      else {
+        awaitActionFocus('close')
+        emit('action', { action: showArchived.value ? 'unarchive-open' : 'open', boardId: board.id })
+      }
     }
     const submitAction = (action, boardId) => {
       awaitActionFocus('close')
@@ -242,8 +265,8 @@ export default {
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { newTitle, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, dialogPanel,
-      visibleBoards, formatBoardDate, selectView, createBoard, submitAction,
+    return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, dialogPanel,
+      visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
       submitRename, beginRename, beginDelete, cancelInline, submitDelete, trapTab }
   },
 }
@@ -255,15 +278,15 @@ export default {
   inset: 0;
   z-index: 1800;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, .46);
+  padding: 68px 16px 16px;
+  background: rgba(0, 0, 0, .22);
 }
 .board-library-panel {
   box-sizing: border-box;
-  width: min(640px, 100%);
-  max-height: min(82vh, 760px);
+  width: min(560px, 100%);
+  max-height: calc(100dvh - 84px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -277,7 +300,7 @@ export default {
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 22px 24px 16px;
+  padding: 14px 20px 10px;
 }
 .board-library-heading-icon, .board-library-glyph {
   display: inline-flex;
@@ -288,10 +311,9 @@ export default {
   background: var(--surface-tertiary);
   color: var(--text-primary);
 }
-.board-library-heading-icon { width: 44px; height: 44px; font-size: 20px; }
+.board-library-heading-icon { width: 40px; height: 40px; font-size: 18px; }
 .board-library-heading-copy { flex: 1; min-width: 0; }
-.board-library-heading-copy h2 { margin: 0; font-size: 21px; line-height: 1.3; }
-.board-library-heading-copy p { max-width: 55ch; margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.board-library-heading-copy h2 { margin: 0; font-size: 19px; line-height: 1.3; }
 .board-library-icon-button {
   display: inline-flex;
   align-items: center;
@@ -306,15 +328,33 @@ export default {
   cursor: pointer;
 }
 .board-library-icon-button:hover:enabled { background: var(--hover-bg); }
-.board-library-create { padding: 0 24px 18px; }
-.board-library-create label, .board-library-rename label {
+.board-library-search { padding: 0 20px 12px; }
+.board-library-search label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.board-library-rename label {
   display: block;
   margin-bottom: 6px;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
 }
-.board-library-create-fields, .board-library-rename > div { display: flex; gap: 8px; }
+.board-library-search-field { position: relative; }
+.board-library-search-field > svg {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.board-library-rename > div { display: flex; gap: 8px; }
 .board-library-panel input {
   box-sizing: border-box;
   min-width: 0;
@@ -327,9 +367,19 @@ export default {
   color: var(--text-primary);
   font: inherit;
 }
+.board-library-search-field input { width: 100%; padding-right: 42px; }
+.board-library-error {
+  margin: 0 20px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-tertiary);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.4;
+}
 .board-library-panel input::placeholder { color: var(--text-placeholder); }
 .board-library-panel button { font: inherit; }
-.board-library-create-fields button, .board-library-rename button,
+.board-library-rename button,
 .board-library-delete-confirm button {
   min-height: 40px;
   padding: 8px 12px;
@@ -339,25 +389,33 @@ export default {
   color: var(--text-primary);
   cursor: pointer;
 }
-.board-library-create-fields button:hover:enabled, .board-library-rename button:hover:enabled,
+.board-library-rename button:hover:enabled,
 .board-library-delete-confirm button:hover:enabled {
   box-shadow: inset 0 0 0 1px var(--border-color);
 }
-.board-library-create-fields .board-library-primary-button {
+.board-library-create { flex: none; padding: 10px 20px 14px; border-top: 1px solid var(--border-color); }
+.board-library-create p { margin: 4px 12px 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
+.board-library-create-button {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 9px;
-  padding: 8px 16px;
-  background: var(--selected-bg);
-  color: var(--selected-text);
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-primary);
   font-weight: 600;
-  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
 }
+.board-library-create-button:hover:enabled { background: var(--hover-bg); }
+.board-library-create-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .board-library-tabs {
   display: flex;
   gap: 18px;
-  padding: 0 24px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--border-color);
 }
 .board-library-tabs button {
@@ -371,9 +429,10 @@ export default {
 }
 .board-library-tabs button.active { border-bottom-color: var(--selected-bg); color: var(--text-primary); font-weight: 600; }
 .board-library-content {
-  min-height: 160px;
+  min-height: 100px;
+  flex: 1 1 auto;
   overflow-y: auto;
-  padding: 4px 24px 24px;
+  padding: 4px 20px 12px;
   scrollbar-color: var(--border-color) transparent;
 }
 .board-library-loading-row {
@@ -389,7 +448,8 @@ export default {
 .board-library-list li { padding: 6px 0; border-bottom: 1px solid var(--border-color); }
 .board-library-list li:last-child { border-bottom: 0; }
 .board-library-row { display: flex; align-items: center; gap: 12px; min-height: 62px; }
-.board-library-glyph { width: 42px; height: 42px; font-size: 17px; }
+.board-library-glyph { width: 42px; height: 42px; border: 0; font-size: 17px; cursor: pointer; }
+.board-library-glyph:hover:enabled { box-shadow: inset 0 0 0 1px var(--border-color); }
 .is-active .board-library-glyph { background: var(--selected-bg); color: var(--selected-text); }
 .board-library-details { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .board-library-current-name, .board-library-open {
@@ -460,15 +520,23 @@ export default {
   .board-library-overlay { padding: 0; }
   .board-library-panel { width: 100%; max-height: none; height: 100vh; height: 100dvh; border-radius: 0; }
   .board-library-header { padding: max(20px, env(safe-area-inset-top)) 16px 16px; }
-  .board-library-create { padding: 0 16px 18px; }
+  .board-library-icon-button, .board-library-glyph, .board-library-row-actions button { width: 44px; height: 44px; }
+  .board-library-search { padding: 0 16px 12px; }
+  .board-library-error { margin: 0 16px 12px; }
+  .board-library-create { padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
   .board-library-tabs { padding: 0 16px; }
-  .board-library-content { flex: 1; padding: 4px 16px max(24px, env(safe-area-inset-bottom)); }
+  .board-library-content { min-height: 0; padding: 4px 16px 12px; }
   .board-library-delete-confirm, .board-library-rename { margin-left: 0; }
+}
+@media (max-height: 560px) and (min-width: 601px) {
+  .board-library-overlay { padding: 0; }
+  .board-library-panel { height: 100dvh; max-height: none; border-radius: 0; }
+  .board-library-content { min-height: 0; }
 }
 @media (max-width: 420px) {
   .board-library-row {
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
     gap: 4px 12px;
     padding: 6px 0;
   }

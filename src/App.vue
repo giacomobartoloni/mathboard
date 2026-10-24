@@ -68,7 +68,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </button>
 
     <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
-      :busy="boardLibraryBusy" :loading="boardLibraryLoading"
+      :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError"
       @close="closeBoardLibrary" @action="onBoardLibraryAction" />
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
@@ -114,7 +114,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     
     <SupportPanel class="secondary-chrome" :inert="showBoardLibrary" />
     
-    <CookieBanner v-if="!desktopRuntime" v-show="!isFullscreen" :inert="showBoardLibrary" />
+    <CookieBanner v-if="!desktopRuntime" v-show="!isFullscreen && !showBoardLibrary" :inert="showBoardLibrary" />
     
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
@@ -247,6 +247,7 @@ export default {
     const archivedList = ref([])
     const boardLibraryBusy = ref(false)
     const boardLibraryLoading = ref(false)
+    const boardLibraryError = ref(null)
     const closeBoardLibrary = async () => {
       if (boardLibraryBusy.value) return
       showBoardLibrary.value = false
@@ -263,23 +264,30 @@ export default {
     }
     const openBoardLibrary = async () => {
       if (!boardSessionReady.value) return
+      boardLibraryError.value = null
       boardList.value = []
       archivedList.value = []
       boardLibraryLoading.value = true
       showBoardLibrary.value = true
-      try { await refreshBoardLibrary() } catch (error) { boardError.value = error.message }
+      try { await refreshBoardLibrary() } catch (error) { boardLibraryError.value = error.message }
       finally { boardLibraryLoading.value = false }
     }
     const onBoardLibraryAction = async ({ action, boardId, title }) => {
       if (boardLibraryBusy.value) return
       const switchedAwayFromActive = (action === 'archive' || action === 'delete')
         && boardList.value.some(board => board.id === boardId && board.isActive)
+      boardLibraryError.value = null
       boardLibraryBusy.value = true
       try {
         const workspace = boardWorkspace()
         if (!workspace) throw new Error('Board workspace is not ready.')
         if (action === 'create') await workspace.create({ title })
         else if (action === 'open') await workspace.open({ boardId })
+        else if (action === 'unarchive-open') {
+          await workspace.unarchive({ boardId })
+          try { await workspace.open({ boardId }) }
+          catch (error) { throw new Error(`Board restored but could not be opened. ${error?.message || ''}`.trim()) }
+        }
         else if (action === 'rename') await workspace.rename({ boardId, title })
         else if (action === 'archive') await workspace.archive({ boardId })
         else if (action === 'unarchive') await workspace.unarchive({ boardId })
@@ -287,14 +295,14 @@ export default {
         else throw new Error('Unsupported board library action.')
         await refreshBoardLibrary()
         if (switchedAwayFromActive) selectedTool.value = 'select'
-        if (action === 'create' || action === 'open') {
+        if (action === 'create' || action === 'open' || action === 'unarchive-open') {
           selectedTool.value = 'select'
           showBoardLibrary.value = false
           await nextTick()
           boardLibraryTriggerRef.value?.focus()
         }
       } catch (error) {
-        boardError.value = error?.message || 'Board library operation failed.'
+        boardLibraryError.value = error?.message || 'Board library operation failed.'
         // A failed post-transition metadata write may still leave a new active board.
         try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
       } finally {
@@ -791,6 +799,7 @@ export default {
       archivedList,
       boardLibraryBusy,
       boardLibraryLoading,
+      boardLibraryError,
       openBoardLibrary,
       closeBoardLibrary,
       onBoardLibraryAction,

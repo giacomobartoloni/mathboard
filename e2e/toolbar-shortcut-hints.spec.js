@@ -84,8 +84,12 @@ for (const [boardTheme, idleGray, selectedGray] of [
     if (boardTheme !== 'light') await assertDarkerThanIcon()
 
     await pen.click()
-    const selectedForeground = await pen.evaluate((button) => getComputedStyle(button).color)
-    await expect(hint).toHaveCSS('color', selectedGray ?? selectedForeground)
+    if (selectedGray) await expect(hint).toHaveCSS('color', selectedGray)
+    else {
+      await expect.poll(() => pen.evaluate((button) =>
+        getComputedStyle(button.querySelector('.tool-shortcut-hint')).color === getComputedStyle(button).color,
+      )).toBe(true)
+    }
     await expect(hint).toHaveCSS('font-weight', '300')
     if (boardTheme !== 'light') await assertDarkerThanIcon()
   })
