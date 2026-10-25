@@ -1,4 +1,4 @@
-# MathBoard web analytics
+# MathBoard product analytics
 
 Thin adapter over [Simple Analytics](https://www.simpleanalytics.com/) for product events. Call sites must use this module only — never `window.sa_event` directly.
 
@@ -22,7 +22,7 @@ Analytics runs only when **all** of these are true:
 - `window` is defined
 - `window.location.hostname` is `mathboard.app`
 
-Local/dev and non-production hosts never load the script and never send events.
+Local/dev and non-production web hosts never load the script or send events. Packaged Tauri builds use the native command with no browser script; Tauri development builds send nothing.
 
 ## Event naming
 
