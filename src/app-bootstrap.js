@@ -38,10 +38,15 @@ import { faCodeBranch } from '@fortawesome/free-solid-svg-icons'
 import { faMoon } from '@fortawesome/free-solid-svg-icons'
 import { faSun } from '@fortawesome/free-solid-svg-icons'
 import { faChalkboard } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown } from '@fortawesome/free-solid-svg-icons'
+import { faPlus } from '@fortawesome/free-solid-svg-icons'
+import { faBoxArchive } from '@fortawesome/free-solid-svg-icons'
+import { faXmark } from '@fortawesome/free-solid-svg-icons'
 import { faExpand } from '@fortawesome/free-solid-svg-icons'
 import { faCompress } from '@fortawesome/free-solid-svg-icons'
 import { faCopy } from '@fortawesome/free-solid-svg-icons'
 import { faTrash } from '@fortawesome/free-solid-svg-icons'
+import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
 import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 import { faObjectGroup } from '@fortawesome/free-solid-svg-icons'
 import { faObjectUngroup } from '@fortawesome/free-solid-svg-icons'
@@ -71,10 +76,15 @@ library.add(faCodeBranch)
 library.add(faMoon)
 library.add(faSun)
 library.add(faChalkboard)
+library.add(faChevronDown)
+library.add(faPlus)
+library.add(faBoxArchive)
+library.add(faXmark)
 library.add(faExpand)
 library.add(faCompress)
 library.add(faCopy)
 library.add(faTrash)
+library.add(faEllipsis)
 library.add(faPenToSquare)
 library.add(faObjectGroup)
 library.add(faObjectUngroup)

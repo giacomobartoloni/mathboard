@@ -42,10 +42,10 @@ const styleProperties = Object.fromEntries(STYLE_KEYS.map(key => [key,
     : key === 'strokeDashArray' ? { type: ['array', 'null'], items: number } : nullablePaint,
 ]))
 const objectSchema = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false })
-const common = { type: string, id: { description: 'Ignored on create; a new ID is assigned.' },
+const common = { type: string, id: { description: 'New ID is assigned.' },
   ...transformProperties,
-  originX: { ...transformProperties.originX, default: 'left', description: 'Create defaults left, including group children. Explicit origins win.' },
-  originY: { ...transformProperties.originY, default: 'top', description: 'Create defaults top, including group children. Explicit origins win.' },
+  originX: { ...transformProperties.originX, default: 'left', description: 'Defaults left; explicit wins.' },
+  originY: { ...transformProperties.originY, default: 'top', description: 'Defaults top; explicit wins.' },
   ...styleProperties, mathboardInkMode: { enum: ['auto', 'fixed'] } }
 const typeFields = {
   rect: { width: number, height: number, rx: number, ry: number },
@@ -57,7 +57,7 @@ const typeFields = {
     headLength: { type: 'number', exclusiveMinimum: 0, default: 16 },
     headWidth: { type: 'number', exclusiveMinimum: 0, default: 12 } },
   line: { x1: number, y1: number, x2: number, y2: number },
-  path: { path: { type: 'array', description: 'Permissive Fabric path-command data; rendering can still reject invalid contents.', items: {} } },
+  path: { path: { type: 'array', description: 'Path-command data; runtime validates.', items: {} } },
   text: { text: string, ...textProperties },
   formula: { latex },
   group: { objects: { type: 'array', items: { $ref: '#/$defs/createSpec' } } },
@@ -87,19 +87,24 @@ const patchSchemas = {
   group: objectSchema({ ...transformProperties, opacity: stylePatchProperties.opacity }),
 }
 const options = { type: 'object', properties: { select: boolean }, additionalProperties: true,
-  description: 'Optional selection request; use select:true/false. Other options are ignored. Selection on update applies to formula replacement only.' }
+  description: 'Optional boolean selection.' }
 const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty, type: { enum: [...BOARD_OBJECT_TYPES] } },
-  additionalProperties: true, description: 'Detached semantic node, with type-specific geometry, transforms and ink metadata. Formula retains LaTeX, not internal vector paths.' }
+  additionalProperties: true, description: 'Detached semantic node; formula retains LaTeX.' }
 const errors = [
-  { status: 400, codes: ['invalid_command'], description: 'Malformed envelope/JSON or unsupported method.' },
+  { status: 400, codes: ['invalid_command'], description: 'Invalid method or JSON.' },
   { status: 409, codes: ['board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
     'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed', 'local_agent_bridge_error'],
-  description: 'Board/domain rejection; inspect the returned code and re-observe before retrying.' },
-  { status: 503, codes: ['board_unavailable', 'board_disconnected'], description: 'No connected browser, or browser disconnected. Re-observe after reconnecting.' },
-  { status: 504, codes: ['command_timeout'], description: 'Delivery outcome may be uncertain; re-observe before any mutation retry.' },
+  description: 'Board/domain rejected; re-observe.' },
+  { status: 503, codes: ['board_unavailable', 'board_disconnected'], description: 'Browser unavailable; reconnect.' },
+  { status: 504, codes: ['command_timeout'], description: 'Timeout; observe before retry.' },
+]
+const libraryErrors = [
+  { status: 400, codes: ['invalid_command'] },
+  { status: 409, codes: ['board_not_found', 'board_archived', 'board_not_archived', 'confirmation_required', 'invalid_board_title', 'edit_in_progress'] },
+  { status: 503, codes: ['board_unavailable', 'board_disconnected'] },
+  { status: 504, codes: ['command_timeout'] },
 ]
 const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: true,
-  description: 'Command params object; unrecognized envelope parameters are ignored by the existing adapter.',
   ...(defs ? { $defs: defs } : {}) })
 const descriptors = [
   { method: 'observe', summary: 'Read semantic objects, selection, viewport and interaction stability.', mutatesBoard: false,
@@ -167,6 +172,46 @@ const descriptors = [
     example: { method: 'layout', params: { ids: ['mbobj_example_a', 'mbobj_example_b'], direction: 'stack', gap: 24, margin: 16 } },
     execute: (controller, p) => controller.layout(p) },
   { ...getScreenshotDescriptor(), execute: (_controller, p, capture) => capture.screenshot(p) },
+  { method: 'boards.list', summary: 'List local board metadata. IndexedDB writes are automatic and retained.', mutatesBoard: false,
+    errors: libraryErrors, paramsSchema: params({}),
+    resultSchema: { type: 'array', items: { type: 'object', required: ['id', 'title', 'isActive'] } },
+    example: { method: 'boards.list', params: {} },
+    execute: (_controller, _p, _capture, workspace) => workspace.list() },
+  { method: 'boards.create', summary: 'Create and activate a local board, saved automatically.', mutatesBoard: true,
+    errors: libraryErrors, paramsSchema: params({ title: { type: 'string', minLength: 1, maxLength: 120 } }),
+    resultSchema: { type: 'object', required: ['id', 'title', 'isActive'] },
+    example: { method: 'boards.create', params: { title: 'Algebra' } },
+    execute: (_controller, p, _capture, workspace) => workspace.create(p) },
+  { method: 'boards.open', summary: 'Open an unarchived local board; resets in-memory history.', mutatesBoard: true,
+    errors: libraryErrors, paramsSchema: params({ boardId: nonempty }, ['boardId']),
+    resultSchema: { type: 'object', required: ['id', 'title', 'isActive'] },
+    example: { method: 'boards.open', params: { boardId: 'mb_example' } },
+    execute: (_controller, p, _capture, workspace) => workspace.open(p) },
+  { method: 'boards.rename', summary: 'Rename a local board and its semantic document.', mutatesBoard: true,
+    errors: libraryErrors, paramsSchema: params({ boardId: nonempty, title: { type: 'string', minLength: 1, maxLength: 120 } }, ['boardId', 'title']),
+    resultSchema: { type: 'object', required: ['id', 'title'] },
+    example: { method: 'boards.rename', params: { boardId: 'mb_example', title: 'Geometry' } },
+    execute: (_controller, p, _capture, workspace) => workspace.rename(p) },
+  { method: 'boards.listArchived', summary: 'List archived board metadata without documents.', mutatesBoard: false,
+    errors: libraryErrors, paramsSchema: params({}),
+    resultSchema: { type: 'array', items: { type: 'object', required: ['id', 'title', 'archivedAt'] } },
+    example: { method: 'boards.listArchived', params: {} },
+    execute: (_controller, _p, _capture, workspace) => workspace.listArchived() },
+  { method: 'boards.archive', summary: 'Hide a board without deleting data; new active board if needed.', mutatesBoard: true,
+    errors: libraryErrors, paramsSchema: params({ boardId: nonempty }, ['boardId']),
+    resultSchema: { type: 'object', required: ['id', 'archivedAt'] },
+    example: { method: 'boards.archive', params: { boardId: 'mb_example' } },
+    execute: (_controller, p, _capture, workspace) => workspace.archive(p) },
+  { method: 'boards.unarchive', summary: 'Return a preserved archived board to the library.', mutatesBoard: true,
+    errors: libraryErrors, paramsSchema: params({ boardId: nonempty }, ['boardId']),
+    resultSchema: { type: 'object', required: ['id', 'title'] },
+    example: { method: 'boards.unarchive', params: { boardId: 'mb_example' } },
+    execute: (_controller, p, _capture, workspace) => workspace.unarchive(p) },
+  { method: 'boards.delete', summary: 'Permanently delete one board locally. Irreversible; explicit confirm:true required.', mutatesBoard: true,
+    errors: libraryErrors, paramsSchema: params({ boardId: nonempty, confirm: { type: 'boolean', const: true } }, ['boardId', 'confirm']),
+    resultSchema: { type: 'object', required: ['id', 'deleted'] },
+    example: { method: 'boards.delete', params: { boardId: 'mb_example', confirm: true } },
+    execute: (_controller, p, _capture, workspace) => workspace.delete(p) },
 ]
 
 export function hasLocalAgentMethod(method) {
@@ -178,10 +223,10 @@ export function localAgentMethodMutatesBoard(method) {
   return descriptors.find(entry => entry.method === method)?.mutatesBoard ?? false
 }
 
-export function executeLocalAgentCommand(controller, command, capture) {
+export function executeLocalAgentCommand(controller, command, capture, workspace) {
   const entry = descriptors.find(candidate => candidate.method === command?.method)
   if (!entry) throw new Error(`Unsupported local agent method: ${command?.method}`)
-  return entry.execute(controller, command.params || {}, capture)
+  return entry.execute(controller, command.params || {}, capture, workspace)
 }
 
 /** Detached metadata only: this function never observes or accesses a board. */
@@ -211,30 +256,26 @@ export function getLocalAgentHelp() {
       group: { type: 'group', objects: [{ type: 'rect', width: 40, height: 40 }] },
     },
     workflow: [
-      'Check health.browserConnected (transport only); open one local browser tab if disconnected.',
-      'Call observe and wait for result.stable === true before mutation.',
-      'Obtain human authorization appropriate to the mutation; discovering a method does not authorize it.',
-      'Send method and params to commandEndpoint, then observe to verify the result.',
-      'deleteMany and clear are all-or-nothing history mutations; the human Undo/Redo UI reverses each nonempty call in one step.',
-      'group joins at least two already-created top-level groupable IDs; it preserves child IDs and creates a new retained group ID with one Undo.',
-      'measure reports a top-level object scene AABB; layout stacks/rows ordered top-level IDs with one Undo for effective changes.',
-      'Use the read-only screenshot method to inspect canvas pixels; decode its base64 PNG as an image in a multimodal host.',
-      'On timeout/disconnect, re-observe after reconnecting before deciding whether to retry a mutation.',
+      'Connect one browser tab and check health; require observe.stable before mutation.',
+      'Approve mutations explicitly; discovery grants no permissions.',
+      'Use commandEndpoint and re-observe after changes or board switches.',
+      'Decode read-only screenshot PNGs for visual inspection.',
+      'On disconnect or timeout, re-observe before retrying a possibly committed command.',
     ],
     safety: { localDevelopmentOnly: true, loopbackHost: '127.0.0.1', requireStableBeforeMutation: true,
       discoveryGrantsAuthorization: false, containsBoardData: false },
     limitations: [
       'Only commands in methods are executable in this build; planned operations are absent.',
-      'Mutations address top-level IDs only; nested group children cannot be mutated directly. deleteMany rejects duplicate, unknown or nested IDs atomically; [] and empty-board clear are history-preserving no-ops.',
-      'group requires at least two unique existing top-level groupable IDs, refuses existing Board Groups and nested IDs, preserves child geometry, and places the new group in front. Ungroup and Undo/Redo remain UI actions.',
-      'measure is read-only. layout uses scene units for gap/left/top and CSS pixels for margin, rejects nested IDs/overflow without mutation, preserves no-op Redo and history.',
-      'Coordinates are scene units, independent of viewport pan/zoom. New programmable create/createMany default omitted origins to left/top recursively; explicit named/numeric origins are preserved. Existing documents, Stamps and UI creation are unchanged.',
+      'Only top-level IDs are mutable; nested edits reject. deleteMany and empty-board clear are no-ops on empty input; bulk removal is atomic.',
+      'group requires two top-level IDs; Board Groups and nested IDs reject. Ungroup and history remain UI actions.',
+      'measure is read-only; layout is atomic, scene-based, with a CSS-pixel margin.',
+      'Scene coordinates ignore pan/zoom; create/createMany default omitted origins to left/top recursively. Stamps and UI creation are unchanged.',
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
-      'Update schemas depend on kind. Shape/path/text accept bounded style and ink; Board Group allows opacity; Formula accepts canonical paint, ink mode and opacity with retained replacement. Unsupported geometry patches reject.',
-      'Path items are intentionally permissive schema data; materialization may reject malformed path commands.',
-      'Examples are synthetic templates. Replace mbobj_example with an observed existing ID. Discovery performs no permission enforcement.',
+      'Update schemas vary by kind: bounded style for shapes/text, opacity for groups, paint/ink for formulas. Geometry patches reject.',
+      'Path commands undergo runtime validation.',
+      'Examples are synthetic; replace example IDs. Discovery does not authorize changes.',
       'Undo/Redo are UI actions, not bridge methods. Normal dev/production builds do not expose this bridge.',
-      'Screenshot exports only canvas pixels, not toolbars or DOM overlays; follow its own limits, stable-board requirement and safety guidance.',
+      'Screenshot exports bounded canvas pixels only, not DOM overlays.',
     ],
   })
 }
