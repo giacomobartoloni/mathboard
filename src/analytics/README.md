@@ -1,6 +1,6 @@
-# MathBoard web analytics
+# MathBoard web and desktop analytics
 
-Thin adapter over [Simple Analytics](https://www.simpleanalytics.com/) for product events. Call sites must use this module only — never `window.sa_event` directly.
+Thin adapter over [Simple Analytics](https://www.simpleanalytics.com/) for product events. Web uses the browser script; packaged Tauri builds send native HTTPS events via a narrowly scoped Rust command (no third-party JS loaded in the WebView). Call sites must use this module only — never `window.sa_event` directly.
 
 ## Public API
 
@@ -16,13 +16,7 @@ Event name and payload constants live in `events.js` (`ANALYTICS_EVENTS`, `ANALY
 
 ## Enablement gate
 
-Analytics runs only when **all** of these are true:
-
-- `import.meta.env.PROD`
-- `window` is defined
-- `window.location.hostname` is `mathboard.app`
-
-Local/dev and non-production hosts never load the script and never send events.
+Analytics runs when `import.meta.env.PROD` and `window` is defined, and either the runtime is Tauri (`runtime=desktop`) or the hostname is exactly `mathboard.app` (`runtime=web`). Local/dev and non-production web hosts never send events. The desktop transport sends only semantic events, not pageviews. Offline failures are ignored; there is no retry queue or persistent tracking identifier. Desktop events use the same `mathboard.app` Simple Analytics property with metadata `runtime=desktop` and `app_version`. The native handler uses a fixed HTTPS endpoint; Tauri's WebView CSP still blocks third-party script and network connections.
 
 ## Event naming
 
