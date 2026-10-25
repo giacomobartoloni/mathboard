@@ -41,7 +41,7 @@ export function isAnalyticsEnabled() {
   return (
     import.meta.env.PROD &&
     typeof window !== 'undefined' &&
-    PRODUCTION_HOSTS.has(window.location.hostname)
+    (isDesktopRuntime() || PRODUCTION_HOSTS.has(window.location.hostname))
   )
 }
 
@@ -82,6 +82,10 @@ export function initializeAnalytics() {
 
     if (!isAnalyticsEnabled()) {
       return
+    }
+
+    if (isDesktopRuntime()) {
+      return // The desktop uses a native command; never load the browser script.
     }
 
     window.sa_metadata = {
