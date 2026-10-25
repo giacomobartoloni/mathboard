@@ -71,7 +71,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     </div>
     <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
-      :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError"
+      :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
       @close="closeBoardLibrary" @action="onBoardLibraryAction" />
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
