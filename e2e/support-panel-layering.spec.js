@@ -24,7 +24,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
   test(`About covers the board switcher at ${viewport.width}px`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await gotoBoard(page)
-    const switcher = page.getByRole('button', { name: /^Boards:/ })
+    const switcher = page.getByRole('button', { name: 'Open Board library' })
     await expect(switcher).toBeVisible()
     await page.getByRole('button', { name: 'About' }).click()
     const overlay = page.locator('.support-panel .modal-overlay')
