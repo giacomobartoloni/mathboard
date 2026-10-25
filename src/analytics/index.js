@@ -19,11 +19,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import packageInfo from '../../package.json'
 import { ANALYTICS_EVENTS, ANALYTICS_MILESTONES } from './events.js'
+import { isDesktopRuntime } from '../platform/runtime.js'
 
 const PRODUCTION_HOSTS = new Set(['mathboard.app'])
 const SCRIPT_ID = 'simple-analytics-script'
 const SCRIPT_SRC = 'https://scripts.simpleanalyticscdn.com/latest.js'
 const APP_VERSION = packageInfo.version
+const DESKTOP_EVENT_COMMAND = 'track_desktop_analytics_event'
 
 let initialized = false
 let boardEngaged = false
@@ -34,7 +36,7 @@ export function isAnalyticsEnabled() {
   return (
     import.meta.env.PROD &&
     typeof window !== 'undefined' &&
-    PRODUCTION_HOSTS.has(window.location.hostname)
+    (isDesktopRuntime() || PRODUCTION_HOSTS.has(window.location.hostname))
   )
 }
 
@@ -74,6 +76,10 @@ export function initializeAnalytics() {
     initialized = true
 
     if (!isAnalyticsEnabled()) {
+      return
+    }
+
+    if (isDesktopRuntime()) {
       return
     }
 
@@ -121,8 +127,19 @@ export function trackEvent(name, metadata = {}) {
     return
   }
   try {
+    const cleanMetadata = normalizeMetadata(metadata)
+    if (isDesktopRuntime()) {
+      // Run the native network request outside the WebView and ignore offline failures.
+      void import('@tauri-apps/api/core')
+        .then(({ invoke }) => invoke(DESKTOP_EVENT_COMMAND, {
+          event: name,
+          metadata: { ...cleanMetadata, runtime: 'desktop', app_version: APP_VERSION },
+        }))
+        .catch(() => {})
+      return
+    }
     ensureEventQueue()
-    window.sa_event(name, normalizeMetadata(metadata))
+    window.sa_event(name, cleanMetadata)
   } catch {
     // Analytics must never break the app.
   }
