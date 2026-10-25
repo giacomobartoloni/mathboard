@@ -19,6 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { readFileSync } from 'node:fs'
+import { ANALYTICS_EVENTS } from '../src/analytics/events.js'
 import { createDesktopEventSender } from '../src/analytics/desktopTransport.js'
 
 const nextTick = () => new Promise((resolve) => setImmediate(resolve))
