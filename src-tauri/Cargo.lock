@@ -1995,6 +1995,7 @@ dependencies = [
 name = "mathboard"
 version = "1.8.0"
 dependencies = [
+ "reqwest",
  "serde",
  "serde_json",
  "tauri",
