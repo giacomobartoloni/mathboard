@@ -250,7 +250,7 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   const dialog = page.getByRole('dialog', { name: 'Board library' })
   await expect(dialog).toBeVisible()
   const closeButton = dialog.getByRole('button', { name: 'Close board library' })
-  const lastControl = dialog.getByRole('button', { name: 'New board' })
+  const lastControl = dialog.getByRole('button', { name: 'About board storage and sync' })
   const lastAction = dialog.getByRole('button', { name: /^More actions for / }).last()
   await expect(closeButton).toBeFocused()
   await expect(lastAction).toBeVisible()
@@ -334,6 +334,31 @@ test('Board library heading is vertically centered with its icon at mobile and d
     const headingCenter = heading.y + heading.height / 2
     const iconCenter = icon.y + icon.height / 2
     expect(Math.abs(headingCenter - iconCenter)).toBeLessThanOrEqual(2)
+    await dialog.getByRole('button', { name: 'Close board library' }).click()
+  }
+})
+
+test('storage notice explains local-only retention and expands on mobile', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.getByRole('button', { name: 'Open Board library' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Board library' })
+    const notice = dialog.getByRole('region', { name: 'Board storage and sync' })
+    await expect(notice.getByText('Saved on this device')).toBeVisible()
+    await expect(notice.getByText(/No cloud sync/)).toBeVisible()
+    const info = notice.getByRole('button', { name: 'About board storage and sync' })
+    await expect(info).toHaveAttribute('aria-expanded', 'false')
+    await info.click()
+    await expect(info).toHaveAttribute('aria-expanded', 'true')
+    const details = notice.getByRole('region', { name: 'Board storage details' })
+    await expect(details).toContainText('in this browser')
+    await expect(details).toContainText('not upload your board documents')
+    await expect(details).toContainText('not appear automatically on other devices')
+    await expect(details).toContainText('Local storage is not a backup')
+    await info.click()
+    await expect(info).toHaveAttribute('aria-expanded', 'false')
     await dialog.getByRole('button', { name: 'Close board library' }).click()
   }
 })
