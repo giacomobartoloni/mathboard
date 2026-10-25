@@ -132,8 +132,16 @@ export function trackEvent(name, metadata = {}) {
     return
   }
   try {
+    const safeMetadata = normalizeMetadata(metadata)
+    if (isDesktopRuntime()) {
+      if (navigator.doNotTrack === '1' || window.doNotTrack === '1') {
+        return
+      }
+      sendDesktopEvent(name, safeMetadata)
+      return
+    }
     ensureEventQueue()
-    window.sa_event(name, normalizeMetadata(metadata))
+    window.sa_event(name, safeMetadata)
   } catch {
     // Analytics must never break the app.
   }
