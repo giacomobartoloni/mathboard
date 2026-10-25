@@ -41,3 +41,5 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm run desktop:build -- --no-bundle
+      - name: Native analytics unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
