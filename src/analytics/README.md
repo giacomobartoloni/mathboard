@@ -291,6 +291,31 @@ Mixed example:
 
 Undo/redo continue as `undo_used` / `redo_used` only — they must not re-emit `object_deleted`. Board clear during Stamp bootstrap must not emit `object_deleted`.
 
+## Packaged desktop runtime
+
+The packaged Tauri app uses the native `track_desktop_analytics` command and does
+not load `latest.js`, loosen WebView CSP, or emit synthetic pageviews.
+
+- Analytics is disabled under `npm run desktop:dev` and all web previews.
+- Desktop payloads carry `runtime=desktop` and `app_version`; web events retain
+  `runtime=web`. Both share `hostname=mathboard.app` in Simple Analytics.
+- No user, board, content, URL or device identifiers are included. Rust allows only
+  the known event taxonomy and limited category/count fields, then adds the global
+  metadata itself. Additions to `events.js` or metadata keys must be deliberately
+  reviewed against `src-tauri/src/analytics.rs`.
+- Desktop honors Do Not Track, drops events while offline, keeps at most four active
+  requests and 100 pending events, and drops buffered events after transport errors.
+  Nothing is persisted or retried, and board actions never await analytics.
+- The Rust endpoint is `https://queue.simpleanalyticscdn.com/events`, with
+  HTTPS, a short timeout and no redirects. This is a native request, not WebView
+  `fetch`. See ADR 0008 for the rationale and release verification gate.
+
+To validate after packaging, create an event (such as `object_created`) and inspect
+Simple Analytics Events Explorer with a `runtime=desktop` metadata filter.
+Compare event counts by runtime; the browser's device=desktop grouping does not
+identify Tauri users. A separate production/provider smoke test is required before
+declaring event delivery verified.
+
 ## Ownership
 
 All Simple Analytics interaction goes through this module. Do not call `window.sa_event` or inject the CDN script elsewhere in the app.
