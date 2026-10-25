@@ -150,7 +150,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           <font-awesome-icon :icon="['fas', 'plus']" aria-hidden="true" />
           <span>{{ createLabel }}</span>
         </button>
-        <p>Boards save after edits in this browser. Local storage is not a backup.</p>
+        <BoardStorageNotice :is-desktop="isDesktop" />
       </div>
     </section>
   </div>
@@ -158,10 +158,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import BoardStorageNotice from './BoardStorageNotice.vue'
 
 export default {
   name: 'BoardLibraryModal',
+  components: { BoardStorageNotice },
   props: {
+    isDesktop: { type: Boolean, default: false },
     boards: { type: Array, default: () => [] },
     archivedBoards: { type: Array, default: () => [] },
     busy: { type: Boolean, default: false },
