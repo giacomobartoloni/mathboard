@@ -349,20 +349,32 @@ export class BoardPersistenceService {
    * create a blank board only when no other unarchived board exists.
    */
   async _selectReplacementForActiveBoard(boardId) {
-    if (boardId !== this.boardId) return false
+    if (boardId !== this.boardId) return null
     await this._flushBeforeTransition()
     const remaining = (await this.listBoards()).find(board => board.id !== boardId)
-    if (remaining) await this.openBoard(remaining.id)
-    else await this.createNewBoard('Untitled board')
-    return true
+    if (remaining) {
+      await this.openBoard(remaining.id)
+      return { createdReplacementId: null }
+    }
+    const replacement = await this.createNewBoard('Untitled board')
+    return { createdReplacementId: replacement.id }
   }
 
-  async _restorePreviousBoardOnFailure(boardId) {
+  async _restorePreviousBoardOnFailure(boardId, transition) {
     try {
       await this.openBoard(boardId)
     } catch (error) {
-      // Do not hide the original storage failure behind a failed rollback.
+      // Keep the fallback if restoring the former active board fails.
       console.error('Could not restore the previous active board:', error)
+      return
+    }
+    if (!transition?.createdReplacementId) return
+    try {
+      // Undo the extra blank record created before the failed mutation.
+      await this._repository.delete(transition.createdReplacementId)
+    } catch (error) {
+      // Best effort: preserve the original archive/delete failure.
+      console.error('Could not remove the temporary replacement board:', error)
     }
   }
 
@@ -374,10 +386,10 @@ export class BoardPersistenceService {
     if (this._isArchived(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Board is already archived.')
     }
-    const switched = await this._selectReplacementForActiveBoard(boardId)
+    const transition = await this._selectReplacementForActiveBoard(boardId)
     try {
       // The flush may have updated the board document before switching away.
-      if (switched) record = await this._repository.get(boardId)
+      if (transition) record = await this._repository.get(boardId)
       if (!record?.document) {
         throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
       }
@@ -386,7 +398,7 @@ export class BoardPersistenceService {
       await this._repository.put(archived)
       return archived
     } catch (error) {
-      if (switched) await this._restorePreviousBoardOnFailure(boardId)
+      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition)
       throw error
     }
   }
@@ -415,11 +427,11 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    const switched = await this._selectReplacementForActiveBoard(boardId)
+    const transition = await this._selectReplacementForActiveBoard(boardId)
     try {
       await this._repository.delete(boardId)
     } catch (error) {
-      if (switched) await this._restorePreviousBoardOnFailure(boardId)
+      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition)
       throw error
     }
     if (this._readRecoveryBoardId() === boardId) this._writeRecoveryBoardId(null)

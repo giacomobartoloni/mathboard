@@ -247,6 +247,45 @@ test('storage errors after choosing a fallback restore the previous active board
   service.dispose()
 })
 
+test('late archive failure compensates the persisted last-board replacement', async () => {
+  const { workspace, service, repository, records, session } = fixture()
+  const active = await workspace.create({ title: 'Only board' })
+  const originalPut = repository.put.bind(repository)
+  repository.put = async record => {
+    if (record.id === active.id && record.archivedAt) throw new Error('late archive failure')
+    return originalPut(record)
+  }
+
+  await assert.rejects(() => workspace.archive({ boardId: active.id }), /late archive failure/)
+  assert.deepEqual([...records.keys()], [active.id])
+  assert.equal(records.get(active.id).archivedAt, undefined)
+  assert.equal(service.boardId, active.id)
+  assert.equal(service.title, 'Only board')
+  assert.equal(session.get('mathboard.activeBoardId'), active.id)
+  service.dispose()
+})
+
+test('late delete failure compensates the persisted last-board replacement', async () => {
+  const { workspace, service, repository, records, session } = fixture()
+  const active = await workspace.create({ title: 'Only board' })
+  const originalDelete = repository.delete.bind(repository)
+  const removed = []
+  repository.delete = async boardId => {
+    if (boardId === active.id) throw new Error('late delete failure')
+    removed.push(boardId)
+    return originalDelete(boardId)
+  }
+
+  await assert.rejects(() => workspace.delete({ boardId: active.id, confirm: true }), /late delete failure/)
+  assert.deepEqual([...records.keys()], [active.id])
+  assert.equal(removed.length, 1)
+  assert.notEqual(removed[0], active.id)
+  assert.equal(service.boardId, active.id)
+  assert.equal(service.title, 'Only board')
+  assert.equal(session.get('mathboard.activeBoardId'), active.id)
+  service.dispose()
+})
+
 test('legacy scratch and trashed metadata remain recoverable without migration loss', async () => {
   const { workspace, service, records } = fixture()
   const scratch = await workspace.create({ title: 'Old draft' })
