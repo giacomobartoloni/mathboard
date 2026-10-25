@@ -89,8 +89,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <p>
                 On the production website (<code>mathboard.app</code>) and in packaged desktop releases, MathBoard uses 
                 <a href="https://www.simpleanalytics.com/" target="_blank" rel="noopener">Simple Analytics</a> 
-                to collect page views and counts of semantic product events (for example, which tools are used). 
-                Custom metadata may include functional categories and globals such as <code>runtime</code> and 
+                to collect website page views and counts of semantic product events (for example, tool usage) on both the website and packaged desktop app. Desktop releases send events directly over HTTPS when online, without collecting desktop page views or storing an offline analytics backlog. Development builds do not send desktop analytics, and the desktop transport honors Do Not Track signals. 
+                Event metadata distinguishes <code>runtime</code> (<code>web</code> or <code>desktop</code>) and 
                 <code>app_version</code>. MathBoard does not introduce its own persistent user identifiers for these events.
             </p>
             <p>
