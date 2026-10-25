@@ -91,7 +91,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 <a href="https://www.simpleanalytics.com/" target="_blank" rel="noopener">Simple Analytics</a> 
                 to collect website page views and counts of semantic product events (for example, tool usage) on both the website and packaged desktop app. Desktop releases send events directly over HTTPS when online, without collecting desktop page views or storing an offline analytics backlog. Development builds do not send desktop analytics, and the desktop transport honors Do Not Track signals. 
                 Event metadata distinguishes <code>runtime</code> (<code>web</code> or <code>desktop</code>) and 
-                <code>app_version</code>. MathBoard does not introduce its own persistent user identifiers for these events.
+                <code>app_version</code>, alongside functional categories and bounded counts. MathBoard does not introduce its own persistent user identifiers for these events. Simple Analytics may process technical connection data as described in its privacy policy.
             </p>
             <p>
                 For how Simple Analytics handles data, see their 
@@ -139,7 +139,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 <li>Provide the core functionality of MathBoard</li>
                 <li>Remember your preferences and settings (stored locally)</li>
                 <li>Save your work between sessions (stored locally)</li>
-                <li>Understand aggregate product usage on the production website via privacy-conscious analytics</li>
+                <li>Understand aggregate product usage on the production website and in packaged desktop releases via privacy-conscious analytics</li>
             </ul>
         </section>
 
@@ -173,7 +173,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         <section>
             <h2>7. Third-Party Services</h2>
             <p>
-                On the production website, MathBoard uses Simple Analytics for cookieless product analytics 
+                On the production website and in packaged desktop releases, MathBoard uses Simple Analytics for cookieless product analytics 
                 (see section 2.2 and 
                 <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">Simple Analytics privacy</a>).
             </p>
@@ -205,7 +205,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <h2>10. GDPR Compliance</h2>
             <p>
                 For users in the European Union, MathBoard aims to align with GDPR principles. Board content and 
-                preferences are stored locally on your device. Product analytics on the production website is limited 
+                preferences are stored locally on your device. Product analytics on the production website and in packaged desktop releases is limited 
                 to privacy-conscious page views and semantic event counts via Simple Analytics, without MathBoard-introduced 
                 persistent user identifiers. Depending on how analytics data is processed, certain GDPR obligations 
                 may apply to that processing. In any case:
@@ -222,7 +222,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <h2>11. California Privacy Rights</h2>
             <p>
                 For California residents, under the CCPA: We do not sell your personal information. 
-                Board content and preferences remain on your device. Product analytics on the production website 
+                Board content and preferences remain on your device. Product analytics on the production website and in packaged desktop releases 
                 is limited as described in section 2.2.
             </p>
         </section>
