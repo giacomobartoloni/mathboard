@@ -24,6 +24,7 @@ const PRODUCTION_HOSTS = new Set(['mathboard.app'])
 const SCRIPT_ID = 'simple-analytics-script'
 const SCRIPT_SRC = 'https://scripts.simpleanalyticscdn.com/latest.js'
 const APP_VERSION = packageInfo.version
+// Desktop transport remains isolated from the web tracker.
 
 let initialized = false
 let boardEngaged = false
