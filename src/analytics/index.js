@@ -19,11 +19,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import packageInfo from '../../package.json'
 import { ANALYTICS_EVENTS, ANALYTICS_MILESTONES } from './events.js'
+import { isDesktopRuntime } from '../platform/runtime.js'
+import { invoke } from '@tauri-apps/api/core'
+import { createDesktopEventSender } from './desktopTransport.js'
 
 const PRODUCTION_HOSTS = new Set(['mathboard.app'])
 const SCRIPT_ID = 'simple-analytics-script'
 const SCRIPT_SRC = 'https://scripts.simpleanalyticscdn.com/latest.js'
 const APP_VERSION = packageInfo.version
+const sendDesktopEvent = createDesktopEventSender((event, metadata) =>
+  invoke('track_desktop_analytics', { event, metadata })
+)
 // Desktop transport remains isolated from the web tracker.
 
 let initialized = false
