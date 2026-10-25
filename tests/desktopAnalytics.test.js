@@ -83,3 +83,10 @@ test('desktop analytics swallows transport failures and discards stale queued ev
   await nextTick()
   assert.equal(calls, 4)
 })
+
+test('native event allowlist covers the shared event taxonomy', () => {
+  const source = readFileSync(new URL('../src-tauri/src/analytics.rs', import.meta.url), 'utf8')
+  for (const event of Object.values(ANALYTICS_EVENTS)) {
+    assert.ok(source.includes(JSON.stringify(event)), `Missing native event: ${event}`)
+  }
+})
