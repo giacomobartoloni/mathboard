@@ -89,7 +89,7 @@ test('mobile layout clears the current board switcher', async ({ page, request }
   await page.setViewportSize({ width: 390, height: 844 })
   await ready(page, request)
   const node = await send(request, 'create', { spec: { type: 'rect', width: 80, height: 60, left: 200, top: 300 } })
-  const switcher = await page.getByRole('button', { name: 'Boards: Untitled board' }).boundingBox()
+  const switcher = await page.getByRole('button', { name: 'Open Board library' }).boundingBox()
   const result = await send(request, 'layout', { ids: [node.id], margin: 16 })
   expect(result.safeArea.top).toBeGreaterThanOrEqual(switcher.y + switcher.height + 15)
   expect(result.bounds.top).toBeGreaterThanOrEqual(result.safeArea.top - 1e-7)
