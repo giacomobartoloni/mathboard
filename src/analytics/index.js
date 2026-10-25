@@ -29,7 +29,7 @@ const APP_VERSION = packageInfo.version
 const selectedTransport = typeof window === 'undefined'
   ? null
   : selectAnalyticsTransport({
-    production: import.meta.env.PROD,
+    production: Boolean(import.meta.env?.PROD),
     desktop: isDesktopRuntime(),
     hostname: window.location.hostname,
     webTransport: webAnalyticsTransport,
