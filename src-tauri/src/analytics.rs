@@ -42,12 +42,11 @@ fn is_valid_event(event: &str, metadata: &Map<String, Value>) -> bool {
         && metadata.get("runtime").and_then(Value::as_str) == Some("desktop")
 }
 
-// A fixed destination and bounded flat primitives prevent arbitrary remote requests.
-// Only allow bounded semantic analytics payloads; never accept URLs or endpoints from JS.
+// The native boundary accepts only bounded semantic event data and uses a fixed endpoint.
 #[tauri::command]
 pub(crate) async fn track_desktop_analytics_event(
     event: String,
-    metadata: serde_json::Map<String, serde_json::Value>,
+    metadata: Map<String, Value>,
 ) -> Result<(), String> {
     if !is_valid_event(&event, &metadata) {
         return Err("Invalid analytics event".into());
@@ -65,6 +64,7 @@ pub(crate) async fn track_desktop_analytics_event(
         "ua": "MathBoardDesktop/1.0 (+https://mathboard.app/)",
         "metadata": metadata,
     });
+
     client
         .post(SIMPLE_ANALYTICS_ENDPOINT)
         .json(&payload)
@@ -75,7 +75,6 @@ pub(crate) async fn track_desktop_analytics_event(
         .map_err(|_| "Analytics unavailable".to_string())?;
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
