@@ -170,7 +170,11 @@
             <p>
                 On the production website (<code>mathboard.app</code>), MathBoard uses 
                 <a href="https://www.simpleanalytics.com/" target="_blank" rel="noopener">Simple Analytics</a> 
-                to collect page views and counts of semantic product events (for example, which tools are used). 
+                to collect page views and counts of semantic product events (for example, which tools are used).
+                The installed desktop app sends semantic product events to Simple Analytics over HTTPS when online,
+                but does not send page views. Events from the desktop app have <code>runtime=desktop</code>;
+                website events have <code>runtime=web</code>. Desktop events may include limited technical
+                request information processed by the provider. 
                 Custom metadata may include functional categories and globals such as <code>runtime</code> and 
                 <code>app_version</code>. MathBoard does not introduce its own persistent user identifiers for these events.
             </p>
@@ -254,7 +258,7 @@
         <section>
             <h2>7. Third-Party Services</h2>
             <p>
-                On the production website, MathBoard uses Simple Analytics for cookieless product analytics 
+                On the production website and in the installed desktop app, MathBoard uses Simple Analytics for cookieless product analytics 
                 (see section 2.2 and 
                 <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">Simple Analytics privacy</a>).
             </p>
@@ -287,7 +291,7 @@
             <p>
                 For users in the European Union, MathBoard aims to align with GDPR principles. Board content and 
                 preferences are stored locally on your device. Product analytics on the production website and in the installed desktop app is limited 
-                to privacy-conscious page views and semantic event counts via Simple Analytics, without MathBoard-introduced 
+                to privacy-conscious web page views and semantic event counts via Simple Analytics, without MathBoard-introduced 
                 persistent user identifiers. Depending on how analytics data is processed, certain GDPR obligations 
                 may apply to that processing. In any case:
             </p>
