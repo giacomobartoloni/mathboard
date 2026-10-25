@@ -20,12 +20,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import packageInfo from '../../package.json'
 import { ANALYTICS_EVENTS, ANALYTICS_MILESTONES } from './events.js'
 import { isDesktopRuntime } from '../platform/runtime.js'
+import { selectAnalyticsTransport } from './selectTransport.js'
+import { webAnalyticsTransport } from './transports/web.js'
+import { desktopAnalyticsTransport } from './transports/desktop.js'
 
-const PRODUCTION_HOSTS = new Set(['mathboard.app'])
-const SCRIPT_ID = 'simple-analytics-script'
-const SCRIPT_SRC = 'https://scripts.simpleanalyticscdn.com/latest.js'
 const APP_VERSION = packageInfo.version
-const DESKTOP_EVENT_COMMAND = 'track_desktop_analytics_event'
+
+const selectedTransport = typeof window === 'undefined'
+  ? null
+  : selectAnalyticsTransport({
+    production: import.meta.env.PROD,
+    desktop: isDesktopRuntime(),
+    hostname: window.location.hostname,
+    webTransport: webAnalyticsTransport,
+    desktopTransport: desktopAnalyticsTransport,
+  })
 
 let initialized = false
 let boardEngaged = false
@@ -33,63 +42,17 @@ let productActionCount = 0
 const firedMilestones = new Set()
 
 export function isAnalyticsEnabled() {
-  return (
-    import.meta.env.PROD &&
-    typeof window !== 'undefined' &&
-    (isDesktopRuntime() || PRODUCTION_HOSTS.has(window.location.hostname))
-  )
+  return selectedTransport !== null
 }
 
-function ensureEventQueue() {
-  if (typeof window.sa_event === 'function') {
-    return
-  }
-  window.sa_event = function saEventPlaceholder() {
-    const args = Array.prototype.slice.call(arguments)
-    if (window.sa_event.q) {
-      window.sa_event.q.push(args)
-    } else {
-      window.sa_event.q = [args]
-    }
-  }
-}
-
-function loadScript() {
-  if (document.getElementById(SCRIPT_ID)) {
-    return
-  }
-  const script = document.createElement('script')
-  script.id = SCRIPT_ID
-  script.async = true
-  script.src = SCRIPT_SRC
-  document.head.appendChild(script)
-}
-
-/**
- * Idempotent. Never throws. Loads Simple Analytics only when enabled.
- */
+/** Idempotent initialization; the selected transport owns its bootstrap details. */
 export function initializeAnalytics() {
+  if (initialized) {
+    return
+  }
+  initialized = true
   try {
-    if (initialized) {
-      return
-    }
-    initialized = true
-
-    if (!isAnalyticsEnabled()) {
-      return
-    }
-
-    if (isDesktopRuntime()) {
-      return
-    }
-
-    window.sa_metadata = {
-      runtime: 'web',
-      app_version: APP_VERSION,
-    }
-
-    ensureEventQueue()
-    loadScript()
+    selectedTransport?.initialize?.(APP_VERSION)
   } catch {
     // Analytics must never break the app.
   }
@@ -123,23 +86,8 @@ function normalizeMetadata(metadata) {
  * Metadata must be flat primitives only.
  */
 export function trackEvent(name, metadata = {}) {
-  if (!isAnalyticsEnabled()) {
-    return
-  }
   try {
-    const cleanMetadata = normalizeMetadata(metadata)
-    if (isDesktopRuntime()) {
-      // Run the native network request outside the WebView and ignore offline failures.
-      void import('@tauri-apps/api/core')
-        .then(({ invoke }) => invoke(DESKTOP_EVENT_COMMAND, {
-          event: name,
-          metadata: { ...cleanMetadata, runtime: 'desktop', app_version: APP_VERSION },
-        }))
-        .catch(() => {})
-      return
-    }
-    ensureEventQueue()
-    window.sa_event(name, cleanMetadata)
+    selectedTransport?.track(name, normalizeMetadata(metadata), APP_VERSION)
   } catch {
     // Analytics must never break the app.
   }
