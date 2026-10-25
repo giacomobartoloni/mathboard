@@ -1,22 +1,33 @@
 # MathBoard web and desktop analytics
 
-Thin adapter over [Simple Analytics](https://www.simpleanalytics.com/) for product events. Web uses the browser script; packaged Tauri builds send native HTTPS events via a narrowly scoped Rust command (no third-party JS loaded in the WebView). Call sites must use this module only — never `window.sa_event` directly.
+A single semantic analytics adapter over [Simple Analytics](https://www.simpleanalytics.com/) for product events. Call sites depend only on `src/analytics/index.js`, never the vendor SDK or the Tauri command. Browser and desktop transports are isolated behind the same interface.
 
 ## Public API
 
 | Function | Purpose |
 | --- | --- |
-| `initializeAnalytics()` | Idempotent bootstrap: gate, `sa_metadata`, event queue, script load. Never throws. |
+| `initializeAnalytics()` | Idempotently initialize the selected transport (the web transport loads the script; desktop has no script bootstrap). Never throws. |
 | `trackEvent(name, metadata?)` | Fire a custom event with flat primitive metadata. |
 | `trackBoardEngaged()` | Once per page load (`board_engaged`). |
 | `recordProductAction()` | In-memory action counter; emits `usage_milestone` at 5 / 20 / 50. |
-| `isAnalyticsEnabled()` | Production host gate (exported for clarity). |
+| `isAnalyticsEnabled()` | Whether a transport was selected for the current production runtime. |
 
 Event name and payload constants live in `events.js` (`ANALYTICS_EVENTS`, `ANALYTICS_OBJECT_TYPES`, `ANALYTICS_SHAPES`, `ANALYTICS_FORMULA_MODES`, `ANALYTICS_FORMULA_CLOSE_REASONS`, `ANALYTICS_FORMULA_ASSIST_SOURCES`, `ANALYTICS_FORMULA_PALETTE_GROUPS`, `ANALYTICS_STAMP_SHARE_FAILURE_STAGES`, `ANALYTICS_MILESTONES`).
 
 ## Enablement gate
 
-Analytics runs when `import.meta.env.PROD` and `window` is defined, and either the runtime is Tauri (`runtime=desktop`) or the hostname is exactly `mathboard.app` (`runtime=web`). Local/dev and non-production web hosts never send events. The desktop transport sends only semantic events, not pageviews. Offline failures are ignored; there is no retry queue or persistent tracking identifier. Desktop events use the same `mathboard.app` Simple Analytics property with metadata `runtime=desktop` and `app_version`. The native handler uses a fixed HTTPS endpoint; Tauri's WebView CSP still blocks third-party script and network connections.
+Selection occurs once at module startup when `import.meta.env.PROD` and `window` is defined. Packaged Tauri chooses the desktop transport (`runtime=desktop`); the canonical `mathboard.app` hostname chooses the web transport (`runtime=web`). Local/dev and non-production web hosts select no transport. The desktop transport sends semantic events only, not pageviews. Offline failures are ignored; there is no retry queue or persistent tracking identifier. Both transports use the same `mathboard.app` Simple Analytics property with `app_version`. Tauri's WebView CSP still blocks third-party scripts and connections.
+
+## Transport boundaries
+
+- `index.js`: public API, event normalization, engagement/milestone counters. No vendor or native calls.
+- `selectTransport.js`: one-time, pure transport selection. No vendor calls.
+- `transports/web.js`: Simple Analytics queue and script bootstrap for the production website.
+- `transports/desktop.js`: fire-and-forget invocation of the Tauri analytics command.
+- `src-tauri/src/analytics.rs`: fixed HTTPS destination, bounded flat payload validation and a shared three-second-timeout HTTP client.
+- `src-tauri/src/lib.rs`: native command registration only.
+
+The transport may fail without interrupting an editor gesture. Desktop analytics does not cache or retransmit events while offline. See `tests/analytics-transports.test.js` and the native tests in `analytics.rs`.
 
 ## Event naming
 
