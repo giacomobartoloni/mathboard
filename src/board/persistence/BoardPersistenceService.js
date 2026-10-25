@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { serializeBoardDocument } from './serializeBoardDocument.js'
 import { replaceBoardFromDocument } from './replaceBoardFromDocument.js'
 import { createEmptyBoardDocument } from './schema.js'
+import { generateBoardName } from '../names/generateBoardName.js'
 import {
   BOARD_RECORD_KINDS,
   createBoardId,
@@ -280,8 +281,8 @@ export class BoardPersistenceService {
     }
   }
 
-  async createNewBoard(title = this._getTitle()) {
-    title = normalizeBoardTitle(title)
+  async createNewBoard(title) {
+    title = normalizeBoardTitle(title === undefined ? generateBoardName() : title)
     await this._flushBeforeTransition()
     const canvas = this._getCanvas()
     const document = createEmptyBoardDocument(title)
@@ -356,7 +357,7 @@ export class BoardPersistenceService {
       await this.openBoard(remaining.id)
       return { createdReplacementId: null }
     }
-    const replacement = await this.createNewBoard('Untitled board')
+    const replacement = await this.createNewBoard()
     return { createdReplacementId: replacement.id }
   }
 
@@ -511,6 +512,7 @@ export class BoardPersistenceService {
       )
     }
     const document = this.serializeCurrent()
+    document.title = generateBoardName()
     const record = createBoardRecord({
       id: createBoardId(),
       kind: BOARD_RECORD_KINDS.SAVED,

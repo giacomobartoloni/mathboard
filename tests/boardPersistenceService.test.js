@@ -457,3 +457,15 @@ test('a change during an in-flight save stays dirty until the next flush', async
   assert.equal(service.status.state, SAVE_STATES.CLEAN)
   service.dispose()
 })
+
+test('implicit board creation and Stamp adoption use generated titles', async () => {
+  const service = makeService()
+  const blank = await service.createNewBoard()
+  assert.match(blank.title, /^[a-z]+-[a-z]+$/)
+  assert.equal(blank.document.title, blank.title)
+  const adopted = await service.adoptCurrentCanvasAsNewBoard()
+  assert.match(adopted.title, /^[a-z]+-[a-z]+$/)
+  assert.equal(adopted.document.title, adopted.title)
+  assert.equal(service.title, adopted.title)
+  service.dispose()
+})

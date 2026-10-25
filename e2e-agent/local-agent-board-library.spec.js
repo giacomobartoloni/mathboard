@@ -34,6 +34,7 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
 
   const initial = (await send(request, 'boards.list')).find(board => board.isActive)
   expect(initial).toBeTruthy()
+  expect(initial.title).toMatch(/^[a-z]+-[a-z]+$/)
   const object = await send(request, 'create', { spec: { type: 'text', text: 'Original', left: 200, top: 140 } })
   const created = await send(request, 'boards.create', { title: 'Algebra A' })
   expect(created.isActive).toBe(true)
@@ -139,7 +140,7 @@ test('active board archival/deletion selects the latest remaining board without 
   const surviving = await send(request, 'boards.list')
   expect(surviving).toHaveLength(1)
   expect(surviving[0].isActive).toBe(true)
-  expect(surviving[0].title).toBe('Untitled board')
+  expect(surviving[0].title).toMatch(/^[a-z]+-[a-z]+$/)
 })
 
 test('board glyphs select boards from the anchored library', async ({ page, request }) => {
@@ -162,7 +163,7 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
   await search.fill('Geom')
   const geometryGlyph = dialog.getByRole('button', { name: 'Open Geometry' })
   await expect(geometryGlyph).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'Continue with Untitled board' })).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: `Continue with ${initial.title}` })).toHaveCount(0)
   const glyphBox = await geometryGlyph.boundingBox()
   expect(panelBox.y - (switcherBox.y + switcherBox.height)).toBeGreaterThanOrEqual(0)
   expect(panelBox.y - (switcherBox.y + switcherBox.height)).toBeLessThanOrEqual(16)
@@ -210,6 +211,7 @@ test('a long board list scrolls while creation stays reachable', async ({ page, 
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
+  const initial = (await send(request, 'boards.list')).find(board => board.isActive)
   for (let index = 1; index <= 12; index++) await send(request, 'boards.create', { title: `Lesson ${index}` })
   await page.getByRole('button', { name: 'Open Board library' }).click()
   const dialog = page.getByRole('dialog', { name: 'Board library' })
@@ -217,8 +219,8 @@ test('a long board list scrolls while creation stays reachable', async ({ page, 
   const content = dialog.locator('.board-library-content')
   const dimensions = await content.evaluate(element => ({ visible: element.clientHeight, total: element.scrollHeight }))
   expect(dimensions.total).toBeGreaterThan(dimensions.visible)
-  await dialog.getByRole('button', { name: 'Open Untitled board' }).scrollIntoViewIfNeeded()
-  await expect(dialog.getByRole('button', { name: 'Open Untitled board' })).toBeInViewport()
+  await dialog.getByRole('button', { name: `Open ${initial.title}` }).scrollIntoViewIfNeeded()
+  await expect(dialog.getByRole('button', { name: `Open ${initial.title}` })).toBeInViewport()
   const panelBox = await dialog.boundingBox()
   const createBox = await dialog.getByRole('button', { name: 'New board' }).boundingBox()
   expect(createBox.y + createBox.height).toBeLessThanOrEqual(panelBox.y + panelBox.height)
@@ -262,13 +264,13 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await expect(dialog.getByRole('textbox', { name: 'Find or create a board' })).toBeFocused()
   await page.keyboard.press('Shift+Tab')
   await expect(closeButton).toBeFocused()
-  const renameAction = dialog.getByRole('button', { name: 'Rename Untitled board' })
+  const renameAction = dialog.getByRole('button', { name: /^Rename / })
   await renameAction.click()
   await expect(dialog.getByRole('textbox', { name: 'Rename board' })).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(renameAction).toBeFocused()
   await lastAction.click()
-  const menuDelete = dialog.getByRole('menuitem', { name: 'Delete Untitled board' })
+  const menuDelete = dialog.getByRole('menuitem', { name: /^Delete / })
   await expect(menuDelete).toBeFocused()
   await page.keyboard.press('ArrowDown')
   await expect(menuDelete).toBeFocused()
@@ -361,4 +363,31 @@ test('storage notice explains local-only retention and expands on mobile', async
     await expect(info).toHaveAttribute('aria-expanded', 'false')
     await dialog.getByRole('button', { name: 'Close board library' }).click()
   }
+})
+
+test('omitted titles from agent and UI generate math-inspired names', async ({ page, request }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
+
+  const initial = (await send(request, 'boards.list')).find(board => board.isActive)
+  expect(initial.title).toMatch(/^[a-z]+-[a-z]+$/)
+
+  const agentBoard = await send(request, 'boards.create')
+  expect(agentBoard.title).toMatch(/^[a-z]+-[a-z]+$/)
+  const switcher = page.getByRole('button', { name: 'Open Board library' })
+  await expect(switcher).toBeVisible()
+  await switcher.click()
+
+  const dialog = page.getByRole('dialog', { name: 'Board library' })
+  await expect(dialog.getByRole('button', { name: `Continue with ${agentBoard.title}` })).toBeVisible()
+  await dialog.getByRole('button', { name: 'New board' }).click()
+  await expect.poll(async () => (await send(request, 'boards.list')).find(board => board.isActive)?.id).not.toBe(agentBoard.id)
+
+  const current = (await send(request, 'boards.list')).find(board => board.isActive)
+  expect(current.title).toMatch(/^[a-z]+-[a-z]+$/)
+  await expect(dialog).toHaveCount(0)
+
+  await send(request, 'boards.rename', { boardId: current.id, title: 'My lesson' })
+  await expect.poll(async () => (await send(request, 'boards.list')).find(board => board.isActive)?.title).toBe('My lesson')
 })
