@@ -22,7 +22,10 @@ import { ANALYTICS_EVENTS, ANALYTICS_MILESTONES } from './events.js'
 
 const PRODUCTION_HOSTS = new Set(['mathboard.app'])
 const SCRIPT_ID = 'simple-analytics-script'
-const SCRIPT_SRC = 'https://scripts.simpleanalyticscdn.com/latest.js'
+// Pin the vendor's immutable SRI build; latest.js cannot be integrity-pinned.
+// https://docs.simpleanalytics.com/sri
+const SCRIPT_SRC = 'https://scripts.simpleanalyticscdn.com/sri/v11.js'
+const SCRIPT_INTEGRITY = 'sha384-rfv15RJy1bBYZ1Mf4xizO26jorXb2myipCvHXy4rkG0SuEET96S+m0sTzu5vfbSI'
 const APP_VERSION = packageInfo.version
 
 let initialized = false
@@ -59,6 +62,8 @@ function loadScript() {
   const script = document.createElement('script')
   script.id = SCRIPT_ID
   script.async = true
+  script.crossOrigin = 'anonymous'
+  script.integrity = SCRIPT_INTEGRITY
   script.src = SCRIPT_SRC
   document.head.appendChild(script)
 }
