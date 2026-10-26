@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { renderKatex } from '../lib/katex-render.mjs'
 import { renderOpenBoardCTA, renderScreenshot } from '../lib/render-components.mjs'
+import { linearFunctionStampPayload } from '../data/linear-function-stamp.mjs'
 
 export default {
   lastmod: '2026-10-26',
@@ -111,6 +112,15 @@ export default {
     caption: 'Created in MathBoard with the Cartesian plane stamp, Line, Circle and Text annotation, and an editable Formula object. MathBoard does not plot the equation automatically.',
   })}
   <p><a href="/seo/examples/linear-function-board.png">Open the full-size MathBoard capture</a> if the labels are too small on your screen.</p>
+  <p class="cta-row">
+    <a
+      class="button"
+      href="/#s=${linearFunctionStampPayload}"
+      data-seo-cta="open-stamp"
+      data-placement="linear-function-stamp"
+    >Open this finished graph in MathBoard</a>
+  </p>
+  <p class="muted">The link loads the example as a stamp. It replaces the board currently saved in this browser, and the graph arrives as one group you can ungroup and edit.</p>
   <p>
     For help with notation, see the <a href="/latex-whiteboard/">LaTeX whiteboard guide</a>.
     The same workflow works during a video call using your normal screen-sharing software.

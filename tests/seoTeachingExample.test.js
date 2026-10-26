@@ -67,6 +67,22 @@ test('E003 illustrative SVG uses one equal unit on both axes', () => {
   assert.deepEqual(new Set(steps(horizontal)), new Set([88]))
 })
 
+test('E003 page links to a complete, decodable stamp of the finished board', () => {
+  const html = renderLayout(graphLinearFunction)
+  assert.match(html, /Open this finished graph in MathBoard/)
+  assert.match(html, /It replaces the board currently saved in this browser/)
+  const link = html.match(/href="\/#s=([A-Za-z0-9_-]+)"/)
+  assert.ok(link, 'stamp share link')
+  const stamp = JSON.parse(Buffer.from(link[1], 'base64url').toString('utf8'))
+  assert.equal(stamp.version, 1)
+  assert.equal(stamp.objects.length, 44)
+  const counts = stamp.objects.reduce((acc, object) => {
+    acc[object.type] = (acc[object.type] || 0) + 1
+    return acc
+  }, {})
+  assert.deepEqual(counts, { group: 1, line: 23, text: 16, circle: 3, formula: 1 })
+})
+
 test('E003 board capture documents the real MathBoard workflow', () => {
   const html = renderLayout(graphLinearFunction)
   assert.match(
