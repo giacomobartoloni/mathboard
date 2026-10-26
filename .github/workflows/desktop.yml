@@ -111,8 +111,7 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 
-      - name: Test native Rust code (Linux)
-        if: runner.os == 'Linux'
+      - name: Test native Rust code
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
 
       # Tauri runs npm run build via beforeBuildCommand. Do not run it twice.

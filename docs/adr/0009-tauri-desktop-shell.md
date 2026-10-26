@@ -1,4 +1,4 @@
-# 0006. Use Tauri 2 as a thin desktop shell
+# 0009. Use Tauri 2 as a thin desktop shell
 
 - Status: Accepted
 - Date: 2026-10-01
@@ -20,10 +20,10 @@ Use Tauri 2 as a thin desktop host around the same Vue application and Vite buil
 for the web deployment. `src-tauri/tauri.conf.json` runs the existing npm development
 and build commands and packages `../dist`.
 
-The desktop application identifier is `app.mathboard.desktop`. The main window is the
-only capability target. It receives Tauri's core defaults plus narrowly scoped opener
-access for HTTPS and `mailto:` URLs. Application features and business rules remain in
-JavaScript; Rust contains only the Tauri bootstrap and plugin registration.
+The desktop application identifier is `app.mathboard.desktop`. The main window receives
+Tauri's core defaults plus narrowly scoped opener access for HTTPS and `mailto:` URLs.
+Application features and business rules remain in JavaScript; Rust owns native platform
+boundaries. ADR 0010 defines the additional main-WebView-only analytics command.
 
 Desktop and web builds share source, assets, and behavior. Platform-specific CI compiles
 the host without producing signed installers.
@@ -45,8 +45,8 @@ the host without producing signed installers.
 ## Non-decisions
 
 This decision does not add SQLite or any new native storage layer, persisted
-history, a Rust business layer, an updater, mobile targets, or desktop-specific analytics.
-Those require separate decisions.
+history, a Rust business layer, an updater, or mobile targets. Desktop analytics is
+decided separately in ADR 0010.
 
 ## Alternatives considered
 

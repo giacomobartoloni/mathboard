@@ -79,8 +79,8 @@ the main [web CI workflow](../../.github/workflows/main.yml):
   A release tag (`desktop-v*`) is handled by
   [Desktop Release Candidate](../../.github/workflows/release-desktop.yml),
   which builds installers independently of the no-bundle CI.
-- Rust compilation dependencies are cached per runner OS. The Linux job also
-  checks Rust formatting and runs locked native unit tests.
+- Rust compilation dependencies are cached per runner OS. The Linux job checks Rust formatting and all three platforms run locked
+  native Rust unit tests.
 - Tauri invokes `npm run build` through `beforeBuildCommand`; the desktop
   workflow does not repeat a separate web build or lint step.
 
