@@ -243,6 +243,32 @@ test('a failed board selection reports the error and keeps focus in the library'
   await expect(dialog.getByRole('button', { name: 'Close board library' })).toBeFocused()
 })
 
+test('WebKit focusout with no related target preserves pointer Delete confirmation', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Board library' })
+  const moreActions = dialog.getByRole('button', { name: /^More actions for / }).first()
+  await expect(moreActions).toBeVisible()
+  await moreActions.click()
+
+  const deleteAction = dialog.getByRole('menuitem', { name: /^Delete / })
+  await expect(deleteAction).toBeFocused()
+
+  // macOS WebKit can move focus to no element on mousedown before click.
+  await deleteAction.evaluate(element => {
+    element.dispatchEvent(new FocusEvent('focusout', {
+      bubbles: true,
+      relatedTarget: null,
+    }))
+  })
+
+  await expect(deleteAction).toBeVisible()
+  await deleteAction.click()
+  await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeFocused()
+})
+
 test('board library isolates drawing shortcuts and returns focus on Escape', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
