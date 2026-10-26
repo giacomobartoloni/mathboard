@@ -258,7 +258,8 @@ export default {
       }
     }
     const onMoreMenuFocusOut = (event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) moreMenuId.value = null
+      // A null focus destination must not dismiss Delete before its pointer click.
+      if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) moreMenuId.value = null
     }
     const createBoard = () => {
       emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
