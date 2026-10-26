@@ -16,5 +16,9 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 fn main() {
-    tauri_build::build()
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(tauri_build::AppManifest::new().commands(&["track_desktop_analytics"])),
+    )
+    .expect("Tauri build configuration failed");
 }

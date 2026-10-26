@@ -24,7 +24,8 @@
     ],
     "security": {
       "capabilities": [
-        "main"
+        "main",
+        "desktop-analytics"
       ],
       "csp": {
         "default-src": "'self'",

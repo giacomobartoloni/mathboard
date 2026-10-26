@@ -58,7 +58,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         </nav>
         <div class="reading-intro privacy-heading">
             <h1>Privacy Policy</h1>
-            <p class="last-updated">Last updated: October 1, 2026</p>
+            <p class="last-updated">Last updated: October 26, 2026</p>
         </div>
 
         <section>
@@ -75,7 +75,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             
             <h3>2.1 Information Stored Locally</h3>
             <ul>
-                <li><strong>Drawing Board State:</strong> Your drawings and formulas are stored locally in your browser's storage</li>
+                <li><strong>Drawing Board State:</strong> Your drawings and formulas are stored locally on your device in the browser or desktop app's WebView storage</li>
                 <li><strong>User Preferences:</strong> Settings like zoom level, tool selection, and UI preferences</li>
                 <li><strong>Cookie Consent:</strong> Your cookie policy preferences</li>
             </ul>
@@ -98,15 +98,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">privacy policy</a>.
             </p>
 
-            <h3>2.3 Information We Do NOT Collect</h3>
+            <h3>2.3 Product Analytics (Installed Desktop App)</h3>
+            <p>
+                Production desktop builds send counts of the same approved semantic product events
+                to Simple Analytics through the native app. The desktop app does not send page views.
+                Event metadata contains controlled functional categories, <code>runtime=desktop</code>,
+                and the app version. MathBoard does not attach board content, entered text, LaTeX,
+                user IDs, or device IDs to these events. The provider receives technical connection
+                data when a request is sent; see its privacy policy linked above.
+            </p>
+            <p>
+                The app drops desktop events while offline and when its WebView exposes a Do Not Track
+                value of <code>1</code> or <code>yes</code>. A WebView may not expose an operating-system
+                Do Not Track setting. Events are not stored persistently or retried.
+                Desktop development builds do not send product analytics.
+            </p>
+
+            <h3>2.4 Information We Do NOT Collect</h3>
             <ul>
                 <li>Personal identification information that you enter into MathBoard (name, email, address)</li>
                 <li>Your mathematical content, drawings, typed text, or LaTeX as analytics metadata</li>
                 <li>Advertising profiles or cross-site tracking cookies set by MathBoard</li>
             </ul>
             <p>
-                Simple Analytics may process technical data typical of privacy-focused web analytics 
-                (such as request metadata). MathBoard itself does not attach board content or MathBoard-created 
+                Simple Analytics may process technical connection data from website and desktop requests.
+                MathBoard itself does not attach board content or MathBoard-created
                 persistent user IDs to analytics events.
             </p>
         </section>
@@ -125,9 +141,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <ul>
                 <li>MathBoard does not use advertising cookies or social media tracking cookies</li>
                 <li>
-                    Product analytics on the live site uses Simple Analytics, which is designed as 
+                    Product analytics on the live site and in production desktop builds uses Simple Analytics, which is designed as
                     cookieless analytics (distinct from advertising or third-party tracking cookies). 
-                    Details are in section 2.2 and Simple Analytics' privacy policy.
+                    Details are in sections 2.2 and 2.3 and Simple Analytics' privacy policy.
                 </li>
             </ul>
         </section>
@@ -139,7 +155,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 <li>Provide the core functionality of MathBoard</li>
                 <li>Remember your preferences and settings (stored locally)</li>
                 <li>Save your work between sessions (stored locally)</li>
-                <li>Understand aggregate product usage on the production website via privacy-conscious analytics</li>
+                <li>Understand aggregate product usage on the production website and in installed desktop builds through semantic event analytics</li>
             </ul>
         </section>
 
@@ -173,8 +189,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         <section>
             <h2>7. Third-Party Services</h2>
             <p>
-                On the production website, MathBoard uses Simple Analytics for cookieless product analytics 
-                (see section 2.2 and 
+                On the production website and in installed desktop builds, MathBoard uses Simple Analytics for product analytics
+                (see sections 2.2 and 2.3 and
                 <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">Simple Analytics privacy</a>).
             </p>
             <p>
@@ -187,9 +203,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <h2>8. Children's Privacy</h2>
             <p>
                 MathBoard is suitable for all ages. We do not knowingly collect personal identification information 
-                from children through the application itself. Board content stays local. On the production website, 
-                privacy-conscious product analytics may still record page views and semantic event counts as described 
-                in section 2.2; those events are not intended to identify individual children.
+                from children through the application itself. Board content stays local. On the production website and in installed desktop builds,
+                product analytics may still record website page views and semantic event counts as described
+                in sections 2.2 and 2.3; those events are not intended to identify individual children.
             </p>
         </section>
 
@@ -205,8 +221,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <h2>10. GDPR Compliance</h2>
             <p>
                 For users in the European Union, MathBoard aims to align with GDPR principles. Board content and 
-                preferences are stored locally on your device. Product analytics on the production website is limited 
-                to privacy-conscious page views and semantic event counts via Simple Analytics, without MathBoard-introduced 
+                preferences are stored locally on your device. Product analytics on the production website and in installed desktop builds is limited
+                to website page views and semantic event counts via Simple Analytics, without MathBoard-introduced
                 persistent user identifiers. Depending on how analytics data is processed, certain GDPR obligations 
                 may apply to that processing. In any case:
             </p>
@@ -222,8 +238,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <h2>11. California Privacy Rights</h2>
             <p>
                 For California residents, under the CCPA: We do not sell your personal information. 
-                Board content and preferences remain on your device. Product analytics on the production website 
-                is limited as described in section 2.2.
+                Board content and preferences remain on your device. Product analytics on the production website
+                and in installed desktop builds is limited as described in sections 2.2 and 2.3.
             </p>
         </section>
 

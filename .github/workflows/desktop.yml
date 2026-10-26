@@ -40,4 +40,5 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - run: npm run desktop:build -- --no-bundle
