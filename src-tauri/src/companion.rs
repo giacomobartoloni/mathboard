@@ -28,18 +28,16 @@ pub fn run_from_args() -> Option<i32> {
             Some(0)
         }
         #[cfg(feature = "phase-c-verification")]
-        "--mathboard-companion-ping" if args.next().is_none() => {
-            match crate::ipc_probe::ping() {
-                Ok(()) => {
-                    println!("mathboard-companion pong");
-                    Some(0)
-                }
-                Err(error) => {
-                    eprintln!("Companion IPC probe unavailable: {error}");
-                    Some(1)
-                }
+        "--mathboard-companion-ping" if args.next().is_none() => match crate::ipc_probe::ping() {
+            Ok(()) => {
+                println!("mathboard-companion pong");
+                Some(0)
             }
-        }
+            Err(error) => {
+                eprintln!("Companion IPC probe unavailable: {error}");
+                Some(1)
+            }
+        },
         flag if flag.starts_with("--mathboard-companion-") => {
             eprintln!("Invalid MathBoard companion mode or arguments.");
             Some(2)
