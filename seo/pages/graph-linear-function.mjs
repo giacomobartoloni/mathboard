@@ -59,7 +59,7 @@ export default {
     Repeat to reach <strong>(2, 5)</strong>. Connect the points with a straight line
     and extend it in both directions.
   </p>
-  ${renderScreenshot({ src: '/seo/examples/linear-function.svg', width: 860, height: 540, alt: 'Coordinate graph of y = 2x + 1 through (0, 1), (1, 3), and (2, 5), with rise two and run one annotated.', caption: 'An original teaching diagram with a consistent unit scale. Recreate it manually on MathBoard using the steps below.' })}
+  ${renderScreenshot({ src: '/seo/examples/linear-function.svg', width: 800, height: 660, alt: 'Coordinate graph of y = 2x + 1 through (0, 1), (1, 3), and (2, 5), with rise two and run one annotated.', caption: 'An original teaching diagram with a consistent unit scale. Recreate it manually on MathBoard using the steps below.' })}
   <p><a href="/seo/examples/linear-function.svg">View the full-size graph illustration</a> if the labels are too small on your screen.</p>
 </section>
 <section>

@@ -48,8 +48,23 @@ test('E003 illustrative SVG has accurate marked points and an accessible explana
   for (const label of ['(0, 1)', '(1, 3)', '(2, 5)', 'rise 2', 'run 1']) {
     assert.ok(svg.includes(label), label)
   }
-  assert.match(svg, /M 200 480 L 410 60/)
-  assert.match(svg, /M 260 360 H 320 V 240/)
+  assert.match(svg, /M 232 640 L 540 24/)
+  assert.match(svg, /M 408 288 H 496 V 112/)
+})
+
+test('E003 illustrative SVG uses one equal unit on both axes', () => {
+  const svg = readFileSync(new URL('../public/seo/examples/linear-function.svg', import.meta.url), 'utf8')
+  const grid = svg.match(/<g class="grid"[^>]*>([\s\S]*?)<\/g>/)
+  assert.ok(grid, 'grid group')
+  const lines = [...grid[1].matchAll(/<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"\/>/g)]
+    .map(([, x1, y1, x2, y2]) => ({ x1: Number(x1), y1: Number(y1), x2: Number(x2), y2: Number(y2) }))
+  const steps = (values) => values.slice(1).map((value, index) => value - values[index])
+  const vertical = lines.filter((line) => line.x1 === line.x2).map((line) => line.x1).sort((a, b) => a - b)
+  const horizontal = lines.filter((line) => line.y1 === line.y2).map((line) => line.y1).sort((a, b) => a - b)
+  assert.equal(vertical.length, 9)
+  assert.equal(horizontal.length, 8)
+  assert.deepEqual(new Set(steps(vertical)), new Set([88]))
+  assert.deepEqual(new Set(steps(horizontal)), new Set([88]))
 })
 
 test('E003 board capture documents the real MathBoard workflow', () => {
