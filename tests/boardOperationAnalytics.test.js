@@ -99,3 +99,37 @@ test('a failing analytics dependency cannot interrupt the editor operation', () 
   })
   assert.doesNotThrow(() => analytics.record({ kind: 'create', objectKinds: ['path'] }, { interactionChannel: 'ui' }))
 })
+
+test('only UI commits advance the injected 5/20/50 human action milestones', () => {
+  const events = []
+  let engaged = false
+  let actions = 0
+  const analytics = createBoardOperationAnalytics({
+    trackEvent: (name, metadata) => events.push({ name, metadata }),
+    trackBoardEngaged: () => {
+      if (!engaged) {
+        engaged = true
+        events.push({ name: 'board_engaged' })
+      }
+    },
+    recordProductAction: () => {
+      actions += 1
+      if ([5, 20, 50].includes(actions)) events.push({ name: 'usage_milestone', metadata: { actions } })
+    },
+  })
+  for (let index = 0; index < 50; index += 1) {
+    analytics.record({ kind: 'create', objectKinds: ['path'] }, { interactionChannel: 'ui' })
+    if (index === 3) {
+      analytics.record({ kind: 'create', objectKinds: ['path'] }, { interactionChannel: 'local_agent' })
+    }
+  }
+  assert.equal(actions, 50)
+  assert.equal(events.filter(({ name }) => name === 'board_engaged').length, 1)
+  assert.equal(events.filter(({ name }) => name === 'object_created').length, 51)
+  assert.deepEqual(events.filter(({ name }) => name === 'usage_milestone').map(({ metadata }) => metadata.actions), [5, 20, 50])
+  assert.deepEqual(events.slice(0, 3), [
+    { name: 'board_engaged' },
+    { name: 'object_created', metadata: { object_type: 'path' } },
+    { name: 'object_created', metadata: { object_type: 'path' } },
+  ])
+})

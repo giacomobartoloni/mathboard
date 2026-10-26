@@ -205,6 +205,7 @@ export default {
       history: this._boardHistory,
       boardObjectPolicy: this._boardObjectPolicy,
       getDefaultInk: () => this.boardThemeConfig.defaultInk,
+      onCommittedOperation: (effect) => this._recordUiOperation(effect),
     });
     this._persistence = null;
     this._boardWorkspace = null;
@@ -275,6 +276,11 @@ export default {
     },
     _recordUiOperation(effect) {
       this._boardAnalytics.record(effect, { interactionChannel: 'ui' });
+    },
+    _presentAfterUiCommit(present) {
+      try { present(); } catch (error) {
+        console.error('Board presentation failed after commit.', error);
+      }
     },
     /** Immutable, read-only interaction flags for the local visual capture bridge. */
     readInteractionState() {
@@ -863,10 +869,12 @@ export default {
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
-      this.canvas.requestRenderAll();
       if (!this._recordAdd(group)) return { ok: false, message: "Stamp could not be committed." };
-      this.refreshSelectionPanel();
       this._recordUiOperation({ kind: 'create', objectKinds: ['stamp'] });
+      this._presentAfterUiCommit(() => {
+        this.canvas.requestRenderAll();
+        this.refreshSelectionPanel();
+      });
       return { ok: true, group };
     },
     _resetHistory() {
@@ -917,10 +925,12 @@ export default {
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
-      this.canvas.requestRenderAll();
       if (!this._recordAdd(group)) return { ok: false, message: "Stamp could not be committed." };
-      this.refreshSelectionPanel();
       this._recordUiOperation({ kind: 'create', objectKinds: ['stamp_template'] });
+      this._presentAfterUiCommit(() => {
+        this.canvas.requestRenderAll();
+        this.refreshSelectionPanel();
+      });
       return { ok: true, group };
     },
     exportSelectionToStamp() {
@@ -939,19 +949,19 @@ export default {
     groupSelection() {
       const changed = this._selectionMutations.group();
       if (changed) {
-        this.refreshSelectionPanel();
-        this._recordUiOperation({ kind: 'group' });
+        this._presentAfterUiCommit(() => this.refreshSelectionPanel());
       }
       return changed;
     },
     ungroupSelection() {
       const changed = this._selectionMutations.ungroup();
       if (changed) {
-        const objects = this.canvas.getActiveObjects();
-        const chrome = selectionObjectChromeForBoard(this.boardTheme);
-        objects.forEach((object) => applySelectionObjectChrome(object, chrome));
-        this.refreshSelectionPanel();
-        this._recordUiOperation({ kind: 'ungroup' });
+        this._presentAfterUiCommit(() => {
+          const objects = this.canvas.getActiveObjects();
+          const chrome = selectionObjectChromeForBoard(this.boardTheme);
+          objects.forEach((object) => applySelectionObjectChrome(object, chrome));
+          this.refreshSelectionPanel();
+        });
       }
       return changed;
     },
@@ -1092,12 +1102,10 @@ export default {
     deleteSelection() {
       const removed = this._selectionMutations.delete();
       if (!removed.length) return;
-      this._recordUiOperation({
-        kind: 'delete',
-        objectKinds: removed.map((object) => this._boardObjectPolicy.kindOf(object)),
+      this._presentAfterUiCommit(() => {
+        this.refreshSelectionPanel();
+        this._focusBoard();
       });
-      this.refreshSelectionPanel();
-      this._focusBoard();
     },
     isTextEditing() {
       const active = this.canvas?.getActiveObject();
@@ -1166,20 +1174,23 @@ export default {
       this._pendingTransform = null;
       this._pendingText = null;
       const command = direction === "undo" ? this._boardHistory.undo() : this._boardHistory.redo();
-      if (command) this.refreshSelectionPanel();
       return command;
     },
     undo() {
       const command = this._runHistory('undo');
       if (!command) return;
-      this._notifyDocumentChanged();
       this._recordUiOperation({ kind: 'undo', commandType: command.type });
+      try { this._notifyDocumentChanged(); } finally {
+        this._presentAfterUiCommit(() => this.refreshSelectionPanel());
+      }
     },
     redo() {
       const command = this._runHistory('redo');
       if (!command) return;
-      this._notifyDocumentChanged();
       this._recordUiOperation({ kind: 'redo', commandType: command.type });
+      try { this._notifyDocumentChanged(); } finally {
+        this._presentAfterUiCommit(() => this.refreshSelectionPanel());
+      }
     },
     onPathCreated({ path }) {
       this._pencilGesture = false;
