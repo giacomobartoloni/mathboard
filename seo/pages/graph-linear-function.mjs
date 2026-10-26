@@ -100,8 +100,17 @@ export default {
       enter <code>y = 2x + 1</code>, check the preview and insert it beside your graph.
       Select the formula later to edit it again.</li>
     <li><strong>Explain the movement.</strong> With the Pen or Line tool, draw a horizontal run of 1
-      and a vertical rise of 2 between (0, 1) and (1, 3); annotate them with Text.</li>
+      and a vertical rise of 2 between two consecutive points; annotate them with Text.</li>
   </ol>
+  ${renderScreenshot({
+    src: '/seo/examples/linear-function-board.png',
+    width: 1048,
+    height: 1048,
+    className: 'screenshot--board-capture',
+    alt: 'MathBoard board with the Cartesian plane stamp, a blue line through (0, 1), (1, 3) and (2, 5), red dashed run one and rise two guides, and y = 2x + 1 as an editable formula.',
+    caption: 'Created in MathBoard with the Cartesian plane stamp, Line, Circle and Text annotation, and an editable Formula object. MathBoard does not plot the equation automatically.',
+  })}
+  <p><a href="/seo/examples/linear-function-board.png">Open the full-size MathBoard capture</a> if the labels are too small on your screen.</p>
   <p>
     For help with notation, see the <a href="/latex-whiteboard/">LaTeX whiteboard guide</a>.
     The same workflow works during a video call using your normal screen-sharing software.

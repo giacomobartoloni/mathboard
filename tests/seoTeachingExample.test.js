@@ -51,3 +51,19 @@ test('E003 illustrative SVG has accurate marked points and an accessible explana
   assert.match(svg, /M 200 480 L 410 60/)
   assert.match(svg, /M 260 360 H 320 V 240/)
 })
+
+test('E003 board capture documents the real MathBoard workflow', () => {
+  const html = renderLayout(graphLinearFunction)
+  assert.match(
+    html,
+    /<img[\s\S]*?src="\/seo\/examples\/linear-function-board\.png"[\s\S]*?width="1048"[\s\S]*?height="1048"[\s\S]*?alt="[^"]*\(0, 1\)[^"]*"/,
+  )
+  assert.match(html, /Created in MathBoard with the Cartesian plane stamp/)
+  assert.match(html, /MathBoard does not plot the equation automatically/)
+  assert.ok(html.includes('href="/seo/examples/linear-function-board.png"'))
+
+  const png = readFileSync(new URL('../public/seo/examples/linear-function-board.png', import.meta.url))
+  assert.deepEqual([...png.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10])
+  assert.equal(png.readUInt32BE(16), 1048)
+  assert.equal(png.readUInt32BE(20), 1048)
+})
