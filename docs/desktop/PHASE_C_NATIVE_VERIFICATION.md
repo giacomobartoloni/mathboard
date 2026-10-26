@@ -37,7 +37,20 @@ The application exits when the driver completes; inspect the JSON report. A repo
 
 ## Run the companion feasibility trial (macOS/Linux)
 
-Launch the same feature-enabled test app with **only** `MATHBOARD_PHASE_C_IPC_PROBE=1`, without a smoke report path. In another terminal, run the same test binary with `--mathboard-companion-ping`; expect `mathboard-companion pong` and exit 0, with no second GUI. Verify no connection when the app is closed, denial from another OS account, stale socket cleanup on restart, and behavior after an upgraded installation.
+Launch the same feature-enabled test app with **only** `MATHBOARD_PHASE_C_IPC_PROBE=1`, without a smoke report path. In another terminal, run the same test binary with `--mathboard-companion-ping`; expect `mathboard-companion pong` and exit 0, with no second GUI. Verify no connection when the app is closed, denial from another OS account, stale socket cleanup on restart, and behavior after an upgraded installation. Tauri's `RunEvent::Exit` explicitly shuts down the probe and unlinks the Unix socket during a normal application exit (managed state `Drop` alone is not sufficient). A forced process kill, crash, or abrupt `desktop:dev` shutdown can bypass the exit event; an owned stale socket is safely recovered on next start, and its prior existence is not proof of a live listener.
+
+After **quitting the application normally from its application menu** (not force-quitting or stopping Vite/Tauri with Ctrl+C), confirm the socket pathname is absent:
+
+```sh
+SOCKET="/tmp/mathboard-c-probe-$(id -u)/companion.sock"
+if [ -S "$SOCKET" ]; then
+  echo "FAIL: stale socket remains"
+else
+  echo "PASS: no socket"
+fi
+```
+
+Run `--mathboard-companion-ping` while the app is open (expect `mathboard-companion pong`) and after closing it (expect failure without a new GUI). If the socket persists after a **normal app quit**, record the exit method and report it as a failure rather than deleting the file or claiming the cleanup gate passed.
 
 **Windows:** the feature explicitly reports the named-pipe probe as unsupported. Its feasibility gate remains open until an OS-user-restricted named-pipe trial or a documented security-reviewed transport fallback is implemented and tested.
 
