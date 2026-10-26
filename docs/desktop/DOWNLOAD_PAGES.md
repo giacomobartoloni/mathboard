@@ -45,7 +45,7 @@ No individual, board content or persistent identifier is sent.
 ## Page content boundaries
 
 - Mac Apple Silicon is the only platform described as manually validated
-  for the initial v1.9.0 release, per its published release notes.
+  for the initial v1.10.0 release, per its published release notes.
 - Windows, Linux and macOS Intel must not be presented as manually validated
   without corresponding release acceptance evidence.
 - macOS is not Apple Developer ID-signed or notarized; Windows is not

@@ -36,7 +36,7 @@ test('download pages have unique paths and valid rendered HTML, structured data 
 
 test('all download links resolve directly to official versioned GitHub assets', () => {
   assert.doesNotThrow(() => validateDesktopRelease())
-  assert.equal(releaseUrl(), 'https://github.com/giacomobartoloni/mathboard/releases/tag/v1.9.0')
+  assert.equal(releaseUrl(), 'https://github.com/giacomobartoloni/mathboard/releases/tag/v1.10.0')
   for (const [key, name] of Object.entries(desktopRelease.assets)) {
     assert.equal(assetName(key), name)
     assert.equal(assetUrl(key),
