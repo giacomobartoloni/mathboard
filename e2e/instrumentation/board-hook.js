@@ -207,6 +207,8 @@ function setFormulaTransform(getBoard, latex, patch) {
 }
 
 export function installBoardE2eHook(getBoard, bootstrapGate) {
+  const analyticsEffects = []
+  let restoreAnalytics = null
   // Canary string must remain in dist-e2e for assert:e2e-hook (void alone is DCE'd).
   window.__MATHBOARD_E2E__ = Object.freeze({
     marker: E2E_MARKER,
@@ -232,9 +234,23 @@ export function installBoardE2eHook(getBoard, bootstrapGate) {
     measureObject: (id) => getBoard().getBoardController().measure(id),
     layoutObjects: (options) => getBoard().getBoardController().layout(options),
     observeBoard: () => getBoard().getBoardController().observe(),
+    startAnalyticsCapture: () => {
+      if (restoreAnalytics) return true
+      const analytics = getBoard()?._boardAnalytics
+      if (!analytics) return false
+      const original = analytics.record
+      analytics.record = (effect, context) => {
+        analyticsEffects.push(structuredClone({ effect, context }))
+        return original(effect, context)
+      }
+      restoreAnalytics = () => { analytics.record = original }
+      return true
+    },
+    takeAnalyticsEffects: () => analyticsEffects.splice(0),
   })
 
   return () => {
+    restoreAnalytics?.()
     delete window.__MATHBOARD_E2E__
   }
 }

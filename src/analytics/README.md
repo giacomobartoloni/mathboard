@@ -14,6 +14,14 @@ Thin adapter over [Simple Analytics](https://www.simpleanalytics.com/) for produ
 
 Event name and payload constants live in `events.js` (`ANALYTICS_EVENTS`, `ANALYTICS_OBJECT_TYPES`, `ANALYTICS_SHAPES`, `ANALYTICS_FORMULA_MODES`, `ANALYTICS_FORMULA_CLOSE_REASONS`, `ANALYTICS_FORMULA_ASSIST_SOURCES`, `ANALYTICS_FORMULA_PALETTE_GROUPS`, `ANALYTICS_STAMP_SHARE_FAILURE_STAGES`, `ANALYTICS_MILESTONES`).
 
+## Board operation ownership
+
+`src/board/analytics/BoardOperationAnalytics.js` is the single translator from committed board effects to the existing product-event taxonomy. It receives only categorical root kinds, an approved shape when relevant, and a trusted invocation channel. It never sees Fabric objects, text, LaTeX, coordinates, IDs, or arbitrary metadata. `BoardController` reports an effect only after its injected history recorder accepts the command. Direct UI gestures report to the same translator after their own history boundary. Provider delivery errors cannot change an editor operation.
+
+The `ui` channel retains `board_engaged` and the 5/20/50 action milestones. `local_agent` and future `mcp` operations do not count as human engagement or human product actions. These channels are internal in this phase and are not sent to Simple Analytics metadata. UI intent and failure funnels remain with their interaction owners.
+
+The deliberate behavior correction is a same-value Formula edit: `formula_submitted` still records the user's submit, but no `formula_edited`, engagement, or product-action increment follows when the controller commits no history command. Ordinary update, layout, and grouping remain without new provider event names; a future taxonomy change requires its own privacy review.
+
 ## Enablement gate
 
 Analytics runs only when **all** of these are true:

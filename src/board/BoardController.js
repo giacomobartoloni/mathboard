@@ -45,6 +45,7 @@ export class BoardController {
   constructor({ getCanvas, boardObjectPolicy, buildFormula, pushHistoryCommand,
     runWithoutHistory = (fn) => fn(), prepareCreatedObject = () => {},
     afterMutation = () => {}, prepareUpdatedObject = () => {}, getBoardId = () => null, isMutationStable,
+    onCommittedOperation = () => {},
     getLayoutSafeArea = (canvas) => ({ left: 0, top: 0, width: canvas.getWidth(), height: canvas.getHeight() }) }) {
     if (typeof isMutationStable !== 'function') throw new TypeError('isMutationStable must be a function.')
     this._getCanvas = getCanvas
@@ -58,6 +59,7 @@ export class BoardController {
     this._getBoardId = getBoardId
     this._isMutationStable = isMutationStable
     this._getLayoutSafeArea = getLayoutSafeArea
+    this._onCommittedOperation = onCommittedOperation
   }
 
   _canvas() {
@@ -132,16 +134,20 @@ export class BoardController {
     if (errors.length) throw new globalThis.AggregateError(errors, 'Board rollback encountered errors.')
   }
 
-  _commit(canvas, change, rollback, command, readResult) {
+  _commit(canvas, change, rollback, command, readResult, effect) {
     this._assertCanMutate()
     const previous = canvas.renderOnAddRemove
     canvas.renderOnAddRemove = false
     let result
+    let committed = false
     try {
       this._runWithoutHistory(change)
       result = readResult()
       const entry = typeof command === 'function' ? command() : command
-      if (entry) this._pushHistoryCommand(entry)
+      if (entry) {
+        if (this._pushHistoryCommand(entry) === false) throw new Error('History command declined.')
+        committed = true
+      }
     } catch (cause) {
       try {
         this._runWithoutHistory(rollback)
@@ -151,10 +157,17 @@ export class BoardController {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Board mutation could not be committed.', { cause })
     } finally {
       canvas.renderOnAddRemove = previous
-      canvas.requestRenderAll()
+      try { canvas.requestRenderAll() } catch (error) {
+        console.error('Board refresh failed.', error)
+      }
     }
     try { this._afterMutation() } catch (error) {
       console.error('Board mutation committed, but post-commit refresh failed.', error)
+    }
+    if (committed && effect) {
+      try { this._onCommittedOperation(effect) } catch (error) {
+        console.error('Board analytics callback failed.', error)
+      }
     }
     return result
   }
@@ -184,7 +197,8 @@ export class BoardController {
     }, () => this._rollback([
       () => { if (objects.some((object) => this._selectionContains(canvas, object))) canvas.discardActiveObject() },
       ...objects.map((object) => () => canvas.remove(object)),
-    ]), command, () => objects.map((object) => this._read(object)))
+    ]), command, () => objects.map((object) => this._read(object)),
+    { kind: 'create', objectKinds: objects.map((object) => this._policy.kindOf(object)) })
   }
 
   async create(spec, options = {}) {
@@ -229,7 +243,7 @@ export class BoardController {
       after = snapshotObject(object)
     }, () => applySnapshot(object, before), () => snapshotsEqual(before, after) ? null : {
       type: 'modify', entries: [{ object, before, after }],
-    }, () => this._read(object))
+    }, () => this._read(object), { kind: 'update' })
   }
 
   async _replaceFormula(canvas, existing, patch, options) {
@@ -264,7 +278,8 @@ export class BoardController {
       () => canvas.remove(next),
       () => { if (!canvas.getObjects().includes(existing)) canvas.insertAt(index, existing) },
       () => { if (selected) canvas.setActiveObject(existing) },
-    ]), { type: 'replace', index, removed: existing, added: next }, () => this._read(next))
+    ]), { type: 'replace', index, removed: existing, added: next }, () => this._read(next),
+    { kind: 'formula_edit' })
   }
 
   async group(ids, options = {}) {
@@ -322,7 +337,8 @@ export class BoardController {
         }
         if (active) canvas.setActiveObject(active)
       },
-    ]), () => ({ type: 'group', group, index, members }), () => this._read(group))
+    ]), () => ({ type: 'group', group, index, members }), () => this._read(group),
+    { kind: 'group' })
   }
 
   async delete(id) {
@@ -337,7 +353,8 @@ export class BoardController {
       if (canvas.getObjects().includes(object)) throw new Error('Object was not removed.')
     }, () => {
       if (!canvas.getObjects().includes(object)) canvas.insertAt(index, object)
-    }, { type: 'delete', entries: [{ object, index }] }, () => node)
+    }, { type: 'delete', entries: [{ object, index }] }, () => node,
+    { kind: 'delete', objectKinds: [this._policy.kindOf(object)] })
   }
 
   async deleteMany(ids) {
@@ -393,7 +410,8 @@ export class BoardController {
         }
         canvas.setActiveObject(active)
       },
-    ]), { type: 'delete', entries }, () => nodes)
+    ]), { type: 'delete', entries }, () => nodes,
+    { kind: 'delete', objectKinds: entries.map(({ object }) => this._policy.kindOf(object)) })
   }
 
   measure(id) {
@@ -467,7 +485,7 @@ export class BoardController {
         }
         canvas.setActiveObject(active)
       },
-    ]), { type: 'modify', entries }, result)
+    ]), { type: 'modify', entries }, result, { kind: 'layout' })
   }
 
   observe() {

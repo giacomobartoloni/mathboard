@@ -83,6 +83,7 @@ import { SelectionMutations } from "../board/interactions/SelectionMutations.js"
 import { ShapeGesture } from "../board/interactions/ShapeGesture.js";
 import { TextInsertionSession } from "../board/interactions/TextInsertionSession.js";
 import { PanGesture } from "../board/interactions/PanGesture.js";
+import { createBoardOperationAnalytics } from "../board/analytics/BoardOperationAnalytics.js";
 import {
   trackEvent,
   trackBoardEngaged,
@@ -90,10 +91,8 @@ import {
 } from "../analytics";
 import {
   ANALYTICS_EVENTS,
-  ANALYTICS_OBJECT_TYPES,
   ANALYTICS_FORMULA_MODES,
 } from "../analytics/events.js";
-import { buildObjectDeletedMetadata } from "../analytics/deletionMetadata.js";
 import {
   StampError,
   STAMP_ERROR_CODES,
@@ -209,7 +208,10 @@ export default {
     });
     this._persistence = null;
     this._boardWorkspace = null;
-    this._boardController = null;
+    this._boardControllers = new Map();
+    this._boardAnalytics = createBoardOperationAnalytics({
+      trackEvent, trackBoardEngaged, recordProductAction,
+    });
     this._persistenceBootstrapped = false;
   },
   methods: {
@@ -241,7 +243,7 @@ export default {
       return this._persistence;
     },
     getBoardController() {
-      return this._ensureBoardController();
+      return this._ensureBoardController('local_agent');
     },
     getBoardWorkspace() {
       if (!this._boardWorkspace) {
@@ -249,9 +251,9 @@ export default {
       }
       return this._boardWorkspace;
     },
-    _ensureBoardController() {
-      if (this._boardController) return this._boardController;
-      this._boardController = new BoardController({
+    _ensureBoardController(interactionChannel = 'local_agent') {
+      if (this._boardControllers.has(interactionChannel)) return this._boardControllers.get(interactionChannel);
+      const controller = new BoardController({
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
@@ -266,8 +268,13 @@ export default {
         isMutationStable: () => this.sessionReady && this._isBoardInteractionStable(),
         getBoardId: () => this.getBoardId(),
         getLayoutSafeArea: () => workspaceSafeArea(this.canvas, this.$el.closest("#app")),
+        onCommittedOperation: (effect) => this._boardAnalytics.record(effect, { interactionChannel }),
       });
-      return this._boardController;
+      this._boardControllers.set(interactionChannel, controller);
+      return controller;
+    },
+    _recordUiOperation(effect) {
+      this._boardAnalytics.record(effect, { interactionChannel: 'ui' });
     },
     /** Immutable, read-only interaction flags for the local visual capture bridge. */
     readInteractionState() {
@@ -857,13 +864,9 @@ export default {
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
       this.canvas.requestRenderAll();
-      this._recordAdd(group);
+      if (!this._recordAdd(group)) return { ok: false, message: "Stamp could not be committed." };
       this.refreshSelectionPanel();
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-        object_type: "stamp",
-      });
+      this._recordUiOperation({ kind: 'create', objectKinds: ['stamp'] });
       return { ok: true, group };
     },
     _resetHistory() {
@@ -915,13 +918,9 @@ export default {
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
       this.canvas.requestRenderAll();
-      this._recordAdd(group);
+      if (!this._recordAdd(group)) return { ok: false, message: "Stamp could not be committed." };
       this.refreshSelectionPanel();
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-        object_type: "stamp_template",
-      });
+      this._recordUiOperation({ kind: 'create', objectKinds: ['stamp_template'] });
       return { ok: true, group };
     },
     exportSelectionToStamp() {
@@ -941,8 +940,7 @@ export default {
       const changed = this._selectionMutations.group();
       if (changed) {
         this.refreshSelectionPanel();
-        trackBoardEngaged();
-        recordProductAction();
+        this._recordUiOperation({ kind: 'group' });
       }
       return changed;
     },
@@ -953,8 +951,7 @@ export default {
         const chrome = selectionObjectChromeForBoard(this.boardTheme);
         objects.forEach((object) => applySelectionObjectChrome(object, chrome));
         this.refreshSelectionPanel();
-        trackBoardEngaged();
-        recordProductAction();
+        this._recordUiOperation({ kind: 'ungroup' });
       }
       return changed;
     },
@@ -1012,7 +1009,7 @@ export default {
     },
     async addFormulaToCanvas(formulaData, position) {
       try {
-        await this._ensureBoardController().create({
+        await this._ensureBoardController('ui').create({
           type: 'formula',
           latex: formulaData.latex,
           left: position.x,
@@ -1026,18 +1023,13 @@ export default {
         }
         return false;
       }
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-        object_type: ANALYTICS_OBJECT_TYPES.FORMULA,
-      });
       return true;
     },
     async replaceFormula(existing, formulaData) {
       existing = toRaw(existing);
       if (!existing || !this.canvas) return false;
       try {
-        await this._ensureBoardController().update(getMathBoardObjectId(existing), {
+        await this._ensureBoardController('ui').update(getMathBoardObjectId(existing), {
           latex: formulaData.latex,
         });
       } catch (error) {
@@ -1048,9 +1040,6 @@ export default {
         }
         return false;
       }
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.FORMULA_EDITED);
       return true;
     },
     enableShapeDrawing() {
@@ -1103,13 +1092,10 @@ export default {
     deleteSelection() {
       const removed = this._selectionMutations.delete();
       if (!removed.length) return;
-      const deletionMetadata = buildObjectDeletedMetadata(
-        removed,
-        (object) => this._boardObjectPolicy.kindOf(object),
-      );
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, deletionMetadata);
+      this._recordUiOperation({
+        kind: 'delete',
+        objectKinds: removed.map((object) => this._boardObjectPolicy.kindOf(object)),
+      });
       this.refreshSelectionPanel();
       this._focusBoard();
     },
@@ -1159,11 +1145,21 @@ export default {
       return this.clearSelection();
     },
     _recordAdd(object) {
-      if (!object || !this.canvas) return;
+      if (!object || !this.canvas) return false;
       this._ensureObjectId(object);
       const index = this.canvas.getObjects().indexOf(object);
-      if (index < 0) return;
-      this._boardHistory.record({ type: 'add', object, index });
+      if (index < 0) return false;
+      let committed = false;
+      try {
+        committed = this._boardHistory.record({ type: 'add', object, index }) === true;
+      } catch (error) {
+        console.error('Board object could not be recorded.', error);
+      }
+      if (committed) return true;
+      if (this.canvas.getActiveObjects().includes(object)) this.canvas.discardActiveObject();
+      this.canvas.remove(object);
+      this.canvas.requestRenderAll();
+      return false;
     },
     _runHistory(direction) {
       if (!this.canvas) return null;
@@ -1177,22 +1173,19 @@ export default {
       const command = this._runHistory('undo');
       if (!command) return;
       this._notifyDocumentChanged();
-      trackEvent(ANALYTICS_EVENTS.UNDO_USED, { command_type: command.type });
+      this._recordUiOperation({ kind: 'undo', commandType: command.type });
     },
     redo() {
       const command = this._runHistory('redo');
       if (!command) return;
       this._notifyDocumentChanged();
-      trackEvent(ANALYTICS_EVENTS.REDO_USED, { command_type: command.type });
+      this._recordUiOperation({ kind: 'redo', commandType: command.type });
     },
     onPathCreated({ path }) {
       this._pencilGesture = false;
-      this._recordAdd(path);
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-        object_type: ANALYTICS_OBJECT_TYPES.PATH,
-      });
+      if (this._recordAdd(path)) {
+        this._recordUiOperation({ kind: 'create', objectKinds: ['path'] });
+      }
     },
     onBeforeTransform({ transform }) {
       if (!this._selectionGesture) {
@@ -1252,11 +1245,10 @@ export default {
         this._pendingText = null;
         const after = snapshotObject(opt.target);
         if (snapshotsEqual(pendingText.before, after)) return;
-        this._boardHistory.record({
+        if (this._boardHistory.record({
           type: 'modify',
           entries: [{ object: opt.target, before: pendingText.before, after }]
-        });
-        trackEvent(ANALYTICS_EVENTS.TEXT_EDITED);
+        })) this._recordUiOperation({ kind: 'text_edit' });
       } finally {
         this.refreshSelectionPanel();
       }
@@ -1353,13 +1345,9 @@ export default {
         getInk: () => this.activeInk,
         getInkMode: () => this.inkMode,
         onCommitted: (shape, shapeType) => {
-          this._recordAdd(shape);
-          trackBoardEngaged();
-          recordProductAction();
-          trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-            object_type: ANALYTICS_OBJECT_TYPES.SHAPE,
-            shape: shapeType,
-          });
+          if (this._recordAdd(shape)) {
+            this._recordUiOperation({ kind: 'create', objectKinds: ['shape'], shape: shapeType });
+          }
         },
         onComplete: () => this.$emit('shape-drawing-completed'),
       });
@@ -1385,12 +1373,9 @@ export default {
           trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_CANCELLED);
         },
         onCommitted: (text) => {
-          this._recordAdd(text);
-          trackBoardEngaged();
-          recordProductAction();
-          trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-            object_type: ANALYTICS_OBJECT_TYPES.TEXT,
-          });
+          if (this._recordAdd(text)) {
+            this._recordUiOperation({ kind: 'create', objectKinds: ['text'] });
+          }
         },
         onComplete: () => this.$emit('text-editing-completed'),
       });
