@@ -19,11 +19,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import packageInfo from '../../package.json'
 import { ANALYTICS_EVENTS, ANALYTICS_MILESTONES } from './events.js'
+import { isDesktopRuntime } from '../platform/runtime.js'
+import { selectAnalyticsTransport } from './selectTransport.js'
+import { webAnalyticsTransport } from './transports/web.js'
 
-const PRODUCTION_HOSTS = new Set(['mathboard.app'])
-const SCRIPT_ID = 'simple-analytics-script'
-const SCRIPT_SRC = 'https://scripts.simpleanalyticscdn.com/latest.js'
 const APP_VERSION = packageInfo.version
+const selectedTransport = typeof window === 'undefined' ? null : selectAnalyticsTransport({
+  production: Boolean(import.meta.env?.PROD),
+  desktop: isDesktopRuntime(),
+  hostname: window.location.hostname,
+  webTransport: webAnalyticsTransport,
+  desktopTransport: null,
+})
 
 let initialized = false
 let boardEngaged = false
@@ -31,40 +38,11 @@ let productActionCount = 0
 const firedMilestones = new Set()
 
 export function isAnalyticsEnabled() {
-  return (
-    import.meta.env.PROD &&
-    typeof window !== 'undefined' &&
-    PRODUCTION_HOSTS.has(window.location.hostname)
-  )
-}
-
-function ensureEventQueue() {
-  if (typeof window.sa_event === 'function') {
-    return
-  }
-  window.sa_event = function saEventPlaceholder() {
-    const args = Array.prototype.slice.call(arguments)
-    if (window.sa_event.q) {
-      window.sa_event.q.push(args)
-    } else {
-      window.sa_event.q = [args]
-    }
-  }
-}
-
-function loadScript() {
-  if (document.getElementById(SCRIPT_ID)) {
-    return
-  }
-  const script = document.createElement('script')
-  script.id = SCRIPT_ID
-  script.async = true
-  script.src = SCRIPT_SRC
-  document.head.appendChild(script)
+  return selectedTransport !== null
 }
 
 /**
- * Idempotent. Never throws. Loads Simple Analytics only when enabled.
+ * Idempotent. Never throws. Initializes only the selected transport.
  */
 export function initializeAnalytics() {
   try {
@@ -73,17 +51,7 @@ export function initializeAnalytics() {
     }
     initialized = true
 
-    if (!isAnalyticsEnabled()) {
-      return
-    }
-
-    window.sa_metadata = {
-      runtime: 'web',
-      app_version: APP_VERSION,
-    }
-
-    ensureEventQueue()
-    loadScript()
+    selectedTransport?.initialize?.(APP_VERSION)
   } catch {
     // Analytics must never break the app.
   }
@@ -117,12 +85,9 @@ function normalizeMetadata(metadata) {
  * Metadata must be flat primitives only.
  */
 export function trackEvent(name, metadata = {}) {
-  if (!isAnalyticsEnabled()) {
-    return
-  }
+  if (!selectedTransport) return
   try {
-    ensureEventQueue()
-    window.sa_event(name, normalizeMetadata(metadata))
+    selectedTransport?.track(name, normalizeMetadata(metadata))
   } catch {
     // Analytics must never break the app.
   }
