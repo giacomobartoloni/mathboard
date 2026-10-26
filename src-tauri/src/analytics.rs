@@ -292,7 +292,7 @@ pub(crate) async fn track_desktop_analytics(
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::io::{Read, Write};
+    use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
     use std::process::Command;
     use std::sync::{Arc, Barrier};
@@ -608,6 +608,63 @@ mod tests {
             handle.join().expect("request thread");
         }
         assert_eq!(active.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn native_http_request_contains_only_approved_event_fields() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("test listener");
+        let endpoint = format!(
+            "http://{}/events",
+            listener.local_addr().expect("test address")
+        );
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("test request");
+            stream
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .expect("request timeout");
+            let mut reader = BufReader::new(stream.try_clone().expect("request reader"));
+            let mut request_line = String::new();
+            reader.read_line(&mut request_line).expect("request line");
+            assert!(request_line.starts_with("POST /events HTTP/1.1"));
+
+            let mut content_length = None;
+            loop {
+                let mut line = String::new();
+                reader.read_line(&mut line).expect("request header");
+                if line == "\r\n" {
+                    break;
+                }
+                if let Some((name, value)) = line.split_once(':') {
+                    if name.eq_ignore_ascii_case("content-length") {
+                        content_length = Some(value.trim().parse::<usize>().expect("body length"));
+                    }
+                }
+            }
+            let mut body = vec![0; content_length.expect("Content-Length header")];
+            reader.read_exact(&mut body).expect("request body");
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                .expect("test response");
+            serde_json::from_slice::<Value>(&body).expect("JSON event body")
+        });
+
+        let event_metadata = metadata(json!({ "object_type": "shape", "shape": "arrow" }));
+        validate_event("object_created", &event_metadata).expect("approved event");
+        let payload = build_payload("object_created", event_metadata, "1.10.0");
+        let client = create_client().expect("native client");
+        tauri::async_runtime::block_on(post_payload_to(&client, &endpoint, &payload))
+            .expect("provider accepted event");
+        assert_eq!(
+            server.join().expect("test server"),
+            json!({
+                "type": "event", "hostname": "mathboard.app", "path": "/",
+                "event": "object_created", "ua": "MathBoardDesktop/1.0 (+https://mathboard.app/)",
+                "metadata": {
+                    "object_type": "shape", "shape": "arrow",
+                    "runtime": "desktop", "app_version": "1.10.0"
+                }
+            })
+        );
     }
 
     #[test]

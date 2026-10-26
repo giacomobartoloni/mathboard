@@ -40,8 +40,13 @@ Before shipping any installer, run every native row above against a bundled rele
 candidate on each target operating system, including CSP, formula insert/edit, HTTPS
 and `mailto:` opener behavior, Privacy Policy, fullscreen, and an offline cold start.
 Record the application version, OS version, package format, and native WebView version.
-For analytics, record the event timestamp and an Events Explorer/export excerpt with
-the approved metadata keys, plus the absence of board content and desktop pageviews.
+For analytics, record an export showing `object_created` with `runtime=desktop`,
+native `app_version`, and approved object/shape categories. When the provider does
+not expose complete per-event metadata, verify the closed Rust validator and the
+native loopback HTTP test that captures the full serialized request body; selected
+CSV dimensions alone cannot prove that other metadata keys were absent. Record
+the absence of desktop pageviews and WebView provider requests during the installed
+smoke test.
 An HTTP success or a green desktop CI build does not prove provider ingestion; allow
 the provider's normal processing delay before treating a missing event as a failure.
 If `mailto:` opens an empty browser window, compare the system result of
