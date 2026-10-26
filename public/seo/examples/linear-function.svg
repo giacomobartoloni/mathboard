@@ -39,8 +39,8 @@
     <text x="245" y="366" text-anchor="end" font-size="15" fill="#4f6267">1</text>
     
     <text x="245" y="486" text-anchor="end" font-size="15" fill="#4f6267">-1</text>
-    <text x="558" y="442" fill="#263e47" font-size="19" font-weight="700">x</text>
-    <text x="242" y="54" fill="#263e47" font-size="19" font-weight="700">y</text>
+    <text x="584" y="416" fill="#263e47" font-size="19" font-weight="700">x</text>
+    <text x="266" y="46" fill="#263e47" font-size="19" font-weight="700">y</text>
     <text x="246" y="438" fill="#263e47" font-size="16" text-anchor="end">0</text>
     <path d="M 200 480 L 410 60" fill="none" stroke="#087b69" stroke-width="4.5" stroke-linecap="round"/>
     <path d="M 260 360 H 320 V 240" fill="none" stroke="#da8244" stroke-width="4" stroke-linecap="round" stroke-dasharray="9 7"/>
