@@ -40,7 +40,9 @@ mod unix {
     }
 
     fn socket_dir() -> PathBuf {
-        std::env::temp_dir().join(format!("mathboard-c-probe-{}", user_id()))
+        // macOS's per-user TMPDIR is often longer than the Unix SUN_LEN limit.
+        // /tmp is system-managed; the checked 0700 child directory is private.
+        PathBuf::from("/tmp").join(format!("mathboard-c-probe-{}", user_id()))
     }
 
     fn checked_directory(path: &Path) -> io::Result<()> {
@@ -177,7 +179,7 @@ mod unix {
     mod tests {
         use super::*;
         fn temp_dir() -> PathBuf {
-            std::env::temp_dir().join(format!("mathboard-c-ipc-test-{}", uuid::Uuid::new_v4()))
+            PathBuf::from("/tmp").join(format!("mathboard-c-ipc-test-{}", uuid::Uuid::new_v4()))
         }
 
         #[test]
