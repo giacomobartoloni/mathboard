@@ -23,6 +23,7 @@ export const ORIGIN = 'https://mathboard.app'
 export const SCHEMA_CONTEXT = 'https://schema.org'
 export const SOFTWARE_ID = `${ORIGIN}/#software`
 export const WEBSITE_ID = `${ORIGIN}/#website`
+export const AUTHOR_ID = `${ORIGIN}/#person`
 
 export function assertSchemaContext(document, label = 'JSON-LD') {
   if (document?.['@context'] !== SCHEMA_CONTEXT) {
@@ -70,7 +71,9 @@ export function buildMathboardSoftwareEntity() {
     },
     author: {
       '@type': 'Person',
+      '@id': AUTHOR_ID,
       name: 'Giacomo Bartoloni',
+      url: 'https://github.com/giacomobartoloni',
     },
     license: 'https://www.gnu.org/licenses/agpl-3.0.html',
     codeRepository: 'https://github.com/giacomobartoloni/mathboard',
@@ -140,7 +143,9 @@ function breadcrumbList(page) {
       '@type': 'ListItem',
       position: index + 1,
       name: crumb.label,
-      ...(crumb.href ? { item: absoluteUrl(crumb.href) } : {}),
+      ...(crumb.href || index === page.breadcrumbs.length - 1
+        ? { item: absoluteUrl(crumb.href || page.path) }
+        : {}),
     })),
   }
 }

@@ -31,12 +31,18 @@ export function workspaceSafeArea(canvas, root) {
     if (!r.width || !r.height) return null
     return { left: r.left-view.left, right: r.right-view.left, top: r.top-view.top, bottom: r.bottom-view.top }
   }
+  const chrome = visibleRect('.left-chrome')
+  const horizontalChrome = chrome && chrome.right - chrome.left > chrome.bottom - chrome.top
   for (const selector of ['.left-chrome', '.left-chrome .shapes-submenu', '.left-chrome .color-popover']) {
     const rail = visibleRect(selector)
-    if (rail && rail.right > 0 && rail.left < width && rail.bottom > 0 && rail.top < height) left = Math.max(left, rail.right)
+    if (!rail || rail.right <= 0 || rail.left >= width || rail.bottom <= 0 || rail.top >= height) continue
+    if (horizontalChrome) top = Math.max(top, rail.bottom)
+    else left = Math.max(left, rail.right)
   }
-  const logo = visibleRect('.logo')
-  if (logo && logo.bottom > 0 && logo.top < height) top = Math.max(top, logo.bottom)
+  for (const selector of ['.logo', '.board-library-trigger']) {
+    const r = visibleRect(selector)
+    if (r && r.bottom > 0 && r.top < height) top = Math.max(top, r.bottom)
+  }
   for (const selector of ['.zoom-panel', '.support-panel', '.copyright', '.cookie-banner']) {
     const r = visibleRect(selector)
     if (!r || r.bottom <= 0 || r.top >= height) continue

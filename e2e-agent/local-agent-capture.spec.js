@@ -83,7 +83,7 @@ async function snapshot(page, remember = false) {
     const board = window.__captureTestBoard, canvas = board.canvas
     if (remember) window.__captureTestRefs = {
       canvas, objects: canvas.getObjects().slice(), active: canvas.getActiveObject(),
-      history: board._history.slice(), viewport: canvas.viewportTransform,
+      history: board._boardHistory._entries.slice(), viewport: canvas.viewportTransform,
     }
     const refs = window.__captureTestRefs
     const databases = []
@@ -107,14 +107,14 @@ async function snapshot(page, remember = false) {
     return {
       boardId: board.getBoardId(), objects: canvas.getObjects().map(object => object.toObject(['mathboardId', 'latex', 'mathboardInkMode'])),
       selection: canvas.getActiveObjects().map(object => object.mathboardId),
-      historyLength: board._history.length, historyStep: board._historyStep,
+      historyLength: board._boardHistory.summary().length, historyStep: board._boardHistory.summary().step,
       viewport: canvas.viewportTransform.slice(), zoom: canvas.getZoom(),
       local: { ...localStorage }, session: { ...sessionStorage }, databases,
       identities: {
         canvas: refs.canvas === canvas,
         objects: canvas.getObjects().every((object, i) => object === refs.objects[i]),
         active: refs.active === canvas.getActiveObject(),
-        history: board._history.every((entry, i) => entry === refs.history[i]),
+        history: board._boardHistory._entries.every((entry, i) => entry === refs.history[i]),
         viewport: refs.viewport === canvas.viewportTransform,
       },
     }
@@ -224,9 +224,9 @@ test('capture errors and readiness deadline preserve the live board', async ({ p
   for (const ids of [['mbobj_missing'], [group.objects[0].id]]) await rejected(request, { target: { kind: 'objectIds', ids } }, 'object_not_found')
   await rejected(request, { target: { kind: 'sceneRect', rect: { x: 0, y: 0, width: 2049, height: 20 } } }, 'capture_too_large')
   await rejected(request, { target: { kind: 'sceneRect', rect: { x: 0, y: 0, width: 2048, height: 2048 } } }, 'capture_too_large')
-  await page.evaluate(() => { window.__captureTestBoard.isPanning = true })
+  await page.evaluate(() => { window.__captureTestBoard._panGesture.dragging = true })
   await rejected(request, { target: { kind: 'viewport' } }, 'board_not_ready')
-  await page.evaluate(() => { window.__captureTestBoard.isPanning = false })
+  await page.evaluate(() => { window.__captureTestBoard._panGesture.dragging = false })
   expect(await snapshot(page)).toEqual(before)
   // A blocked FontFaceSet promise exercises the real ten-second readiness deadline.
   await page.evaluate(() => {

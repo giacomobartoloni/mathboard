@@ -233,26 +233,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </transition>
     </div>
     
-    <div class="history-panel" role="toolbar" aria-label="History">
-      <button
-        type="button"
-        class="history-button"
-        aria-label="Undo"
-        title="Undo (Ctrl+Z)"
-        @click="$emit('undo')"
-      >
-        <font-awesome-icon :icon="['fas', 'undo']" />
-      </button>
-      <button
-        type="button"
-        class="history-button"
-        aria-label="Redo"
-        title="Redo (Ctrl+Shift+Z or Ctrl+Y)"
-        @click="$emit('redo')"
-      >
-        <font-awesome-icon :icon="['fas', 'redo']" />
-      </button>
-    </div>
   </div>
 </template>
 
@@ -293,8 +273,6 @@ export default {
     'tool-selected',
     'shape-selected',
     'color-selected',
-    'undo',
-    'redo',
     'insert-kit',
   ],
   data() {
@@ -389,6 +367,10 @@ export default {
   gap: 12px;
 }
 
+@media (max-width: 600px) {
+  .left-chrome { top: 154px; }
+}
+
 .tools-panel {
   background: var(--surface-primary);
   color: var(--text-primary);
@@ -406,7 +388,6 @@ export default {
 }
 
 .tool-button,
-.history-button,
 .submenu-button {
   appearance: none;
   box-sizing: border-box;
@@ -471,14 +452,12 @@ export default {
 }
 
 .tool-button:hover,
-.history-button:hover,
 .submenu-button:hover {
   background-color: var(--hover-bg);
   transform: translateY(-1px);
 }
 
 .tool-button:focus-visible,
-.history-button:focus-visible,
 .submenu-button:focus-visible {
   outline: 2px solid var(--text-primary);
   outline-offset: 2px;
@@ -488,18 +467,6 @@ export default {
   background-color: var(--selected-bg);
   color: var(--selected-text);
   box-shadow: var(--selected-shadow);
-}
-
-.history-panel {
-  background: var(--surface-primary);
-  color: var(--text-primary);
-  border-radius: 8px;
-  padding: 8px 6px;
-  border: none;
-  box-shadow: var(--panel-shadow);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
 }
 
 .shapes-submenu {
@@ -606,5 +573,40 @@ export default {
 .swatch.selected {
   outline: 2px solid var(--text-primary);
   outline-offset: 2px;
+}
+
+@media (max-height: 600px) {
+  .left-chrome {
+    top: 100px;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: calc(100vw - 24px);
+  }
+
+  .tools-panel {
+    width: max-content;
+    max-width: calc(100vw - 90px);
+    flex-flow: row wrap;
+  }
+
+  .tool-button--shortcut { width: auto; }
+
+  .shapes-submenu {
+    left: 0;
+    top: 100%;
+    margin: 10px 0 0;
+  }
+
+  .color-popover {
+    left: auto;
+    right: 100%;
+    top: 0;
+    margin: 0 10px 0 0;
+  }
+}
+
+@media (max-height: 600px) and (max-width: 600px) {
+  .left-chrome { top: 154px; }
 }
 </style>

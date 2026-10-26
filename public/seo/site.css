@@ -1,0 +1,1659 @@
+/*
+MathBoard
+Copyright (C) 2026 Giacomo Bartoloni
+SPDX-License-Identifier: AGPL-3.0-or-later
+*/
+
+/* Static information-site styles. The interactive Vue whiteboard has its own CSS. */
+
+:root {
+  --bg: #f9f9f9;
+  --surface: #ffffff;
+  --text: #2c3e50;
+  --muted: #5b6572;
+  --border: #e5e7eb;
+  --accent: tan;
+  --brand-dark: rgb(61, 61, 61);
+  --focus: #2c3e50;
+  --warm-surface: #fffaf2;
+  --warm-border: #d9c5a9;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Figtree", Avenir, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 120% 80% at 0% 0%, rgba(210, 180, 140, 0.18), transparent 55%),
+    radial-gradient(ellipse 90% 60% at 100% 0%, rgba(61, 61, 61, 0.06), transparent 50%),
+    var(--bg);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+a {
+  color: var(--brand-dark);
+}
+
+a:hover {
+  color: #000;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--brand-dark);
+  color: #fff;
+  padding: 0.5rem 1rem;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+}
+
+.site-header,
+.site-footer,
+main {
+  width: min(100% - 32px, 960px);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  flex-wrap: wrap;
+}
+
+@font-face {
+  font-family: "Satisfy";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/seo/fonts/satisfy.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("/seo/fonts/figtree-latin-wght-normal.woff2") format("woff2");
+}
+
+.brand {
+  /* Layout slot for the scaled badge (transform does not affect flow). */
+  position: relative;
+  display: block;
+  flex-shrink: 0;
+  width: 168px;
+  height: 48px;
+  text-decoration: none;
+  color: inherit;
+}
+
+/*
+ * Keep synchronized with src/App.vue `.logo`.
+ * Differences that broke visual identity before:
+ * - missing transform: scale(1.5)
+ * - different font-size / line-height
+ * - remote Google Fonts vs app font stack timing
+ */
+.brand .logo {
+  font-family: "Satisfy", cursive;
+  font-size: normal;
+  /* Isolate from SEO body line-height: 1.6 (App.vue logo inherits browser normal). */
+  line-height: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  color: whitesmoke;
+  background-color: rgb(61, 61, 61);
+  border-radius: 5px;
+  padding: 5px 10px;
+  border: tan 3px solid;
+
+  position: absolute;
+  z-index: 10;
+  left: 0;
+  top: 0;
+  display: -ms-flexbox;
+  display: flex;
+  -ms-flex-direction: row;
+  flex-direction: row;
+  z-index: 200;
+  transform: scale(1.5);
+  transform-origin: top left;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
+              0 2px 4px rgba(0, 0, 0, 0.1);
+
+  white-space: nowrap;
+  margin: 0;
+}
+
+.site-header nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.site-header nav a:not(.button) {
+  text-decoration: none;
+  color: var(--muted);
+}
+
+.site-header nav a:not(.button):hover {
+  color: var(--text);
+}
+
+main {
+  padding: 0.5rem 0 3rem;
+}
+
+h1 {
+  max-width: 24ch;
+  font-size: clamp(2.3rem, 4.8vw, 3.25rem);
+  font-weight: 760;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  margin: 0 0 1.25rem;
+  color: var(--brand-dark);
+}
+
+h2 {
+  font-size: clamp(1.4rem, 2.6vw, 1.6rem);
+  font-weight: 720;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+  margin: 2.5rem 0 0.75rem;
+  color: var(--brand-dark);
+}
+
+.lede {
+  font-size: clamp(1.1rem, 1.7vw, 1.25rem);
+  font-weight: 450;
+  line-height: 1.55;
+  max-width: 62ch;
+  margin-top: 0;
+}
+
+main p {
+  text-wrap: pretty;
+}
+
+main > section {
+  margin-top: 2.75rem;
+}
+
+main > section > h2 {
+  margin-top: 0;
+}
+
+main > p:not(.cta-row),
+main > section > p,
+main > section > ul,
+main > section > ol {
+  max-width: 72ch;
+}
+
+main ul:not(.breadcrumbs) li + li,
+main ol:not(.breadcrumbs) li + li {
+  margin-top: 0.35rem;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--brand-dark);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1.25rem 0 1.75rem;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.6rem 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.button:hover {
+  border-color: #d0d5dd;
+}
+
+.button-primary {
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
+  color: #fff;
+}
+
+.button-primary:hover {
+  color: #fff;
+  filter: brightness(1.08);
+}
+
+.button:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.resource-card {
+  display: block;
+  padding: 1.35rem 1.45rem;
+  background: var(--surface);
+  border: 1px solid var(--warm-border);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.resource-card:hover {
+  border-color: #bd9f7d;
+  background: #fffcf7;
+}
+
+.resource-card h2,
+.resource-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.25rem;
+  font-weight: 720;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.resource-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.screenshot {
+  margin: 1.5rem 0;
+}
+
+.screenshot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.screenshot figcaption {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.formula-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+}
+
+.formula-example {
+  background: var(--surface);
+  border: 1px solid var(--warm-border);
+  border-radius: 14px;
+  padding: 1.2rem;
+}
+
+.formula-label {
+  margin: 0 0 0.65rem;
+  color: var(--brand-dark);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.formula-example pre {
+  max-width: none;
+  margin: 0 0 0.85rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  background: #f5f2ed;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.formula-render {
+  overflow-x: auto;
+  padding: 1.1rem 0.5rem;
+  border-radius: 8px;
+  background-color: #fbfaf7;
+  background-image:
+    linear-gradient(rgba(61, 61, 61, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 61, 61, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.copy-latex {
+  margin-top: 0.85rem;
+  min-height: 40px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--warm-border);
+  border-radius: 8px;
+  background: var(--warm-surface);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.copy-latex:hover {
+  background: #f5eddf;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--warm-border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+th {
+  background: #f5f0e8;
+  color: var(--brand-dark);
+  font-weight: 700;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.15em 0.4em;
+  border: 1px solid var(--warm-border);
+  border-radius: 5px;
+  background: var(--warm-surface);
+}
+
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.breadcrumbs li:not(:last-child)::after {
+  content: "/";
+  margin-left: 0.35rem;
+  color: var(--border);
+}
+
+.site-footer {
+  padding: 2rem 0 3rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.site-footer a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--text);
+}
+
+.footer-note {
+  margin: 0;
+}
+
+.not-found .cta-row {
+  margin-top: 1.5rem;
+}
+
+main pre {
+  max-width: 72ch;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  border: 1px solid var(--warm-border);
+  border-radius: 10px;
+  background: var(--warm-surface);
+}
+
+main :not(pre) > code {
+  padding: 0.1em 0.3em;
+  border-radius: 4px;
+  background: #f5f0e8;
+  overflow-wrap: anywhere;
+}
+
+pre code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.site-hero {
+  margin: 0.5rem 0 3.5rem;
+  padding: clamp(1.6rem, 4vw, 3.5rem);
+  border: 1px solid #494540;
+  border-radius: 24px;
+  color: #f8f7f4;
+  background-color: var(--editorial-ink);
+  background-image:
+    radial-gradient(circle at 94% 4%, rgba(210, 180, 140, 0.13), transparent 42%),
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: auto, 30px 30px, 30px 30px;
+}
+
+.site-hero--with-art {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3rem);
+}
+
+.site-hero .lede {
+  max-width: 56ch;
+  margin: 0;
+  color: #e1ded9;
+  font-size: clamp(1.06rem, 1.75vw, 1.22rem);
+  font-weight: 450;
+  line-height: 1.6;
+}
+
+.site-hero .cta-row {
+  margin: 1.5rem 0 0;
+}
+
+.site-hero .button-primary {
+  border-color: #f7f4ee;
+  background: #f7f4ee;
+  color: var(--editorial-ink);
+}
+
+.site-hero .button-primary:hover {
+  color: var(--brand-dark);
+  background: #fff0da;
+  filter: none;
+}
+
+.site-hero .button:not(.button-primary) {
+  border-color: #9a9489;
+  background: rgba(255, 255, 255, 0.055);
+  color: #f7f4ee;
+}
+
+.site-hero .button:not(.button-primary):hover {
+  border-color: #e1d5c6;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.site-hero .screenshot {
+  margin: 0;
+}
+
+.site-hero .screenshot img {
+  border: 5px solid #fff;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.site-hero .screenshot figcaption {
+  color: #eee5d8;
+}
+
+.reading-intro {
+  margin: 0.5rem 0 2.7rem;
+  padding: clamp(1.4rem, 3vw, 2rem);
+  border: 1px solid #e3d9cb;
+  border-radius: 20px;
+  background: var(--editorial-bone);
+}
+
+.reading-intro .lede {
+  margin-bottom: 0;
+}
+
+.reading-intro .cta-row {
+  margin-bottom: 0;
+}
+
+.reading-intro .download-version {
+  margin: 0.9rem 0 0;
+}
+
+.resource-group {
+  margin-top: 2.5rem;
+}
+
+.resource-group > h2 {
+  margin: 0;
+}
+
+.resource-grid--featured {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.resource-grid--featured .resource-card {
+  min-height: 10.5rem;
+  background: var(--warm-surface);
+}
+
+.resource-grid--featured .resource-card:hover {
+  background: #fff8ed;
+}
+
+@media (max-width: 720px) {
+  .site-hero--with-art,
+  .resource-grid--featured {
+    grid-template-columns: 1fr;
+  }
+
+  .resource-grid--featured .resource-card {
+    min-height: 0;
+  }
+
+  .site-hero--with-art .screenshot {
+    max-width: 480px;
+  }
+}
+
+@media (max-width: 640px) {
+  .site-header {
+    align-items: flex-start;
+  }
+}
+
+/* Desktop distribution: readable download choices on small screens. */
+.download-version {
+  margin: 0.6rem 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.download-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr));
+  gap: 1rem;
+  align-items: stretch;
+  margin: 1.5rem 0;
+}
+
+.download-card,
+.download-option {
+  padding: 1.4rem;
+  background: var(--surface);
+  border: 1px solid var(--warm-border);
+  border-radius: 14px;
+}
+
+.download-card h2,
+.download-option h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1.4rem;
+  font-weight: 720;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+}
+
+.download-option .download-status {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.download-option .cta-row {
+  margin-bottom: 0;
+}
+
+.download-card > p:not(.download-actions):not(.download-platform) {
+  color: var(--muted);
+}
+
+.download-platform {
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--brand-dark);
+  margin: 0 0 0.5rem;
+}
+
+.download-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.download-actions .button {
+  text-align: center;
+}
+
+.download-options {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  margin: 1.5rem 0;
+}
+
+.download-status {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #255e43;
+}
+
+.download-status-untested {
+  color: #8a4c16;
+}
+
+.download-status-note {
+  line-height: 1.5;
+}
+
+main > .download-status-note {
+  max-width: none;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  background: #f5f3ef;
+}
+
+.download-notice {
+  padding: 1rem 1.25rem;
+  margin: 2rem 0;
+  border: 1px solid #c8b59b;
+  border-radius: 8px;
+  background: #fffaf1;
+}
+
+.download-notice a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .download-card, .download-option { padding: 1rem; }
+}
+
+/* The desktop hub echoes the board's graph paper and chalkboard badge. */
+.download-page {
+  font-size: 1rem;
+}
+
+.download-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 3rem);
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  overflow: hidden;
+  border: 2px solid var(--accent);
+  border-radius: 16px;
+  color: #f7f5f1;
+  background-color: var(--brand-dark);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.download-hero .download-hero-lead {
+  max-width: 25ch;
+  margin: 0;
+  font-size: clamp(1.6rem, 2.7vw, 2.15rem);
+  font-weight: 720;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.download-hero .lede {
+  max-width: 47ch;
+  margin: 1.15rem 0 0;
+  font-size: clamp(1rem, 1.65vw, 1.1rem);
+  font-weight: 450;
+  line-height: 1.58;
+}
+
+.download-hero .download-version {
+  margin: 1.25rem 0 0;
+  color: #eee5d8;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.download-hero a {
+  color: #f6dbb3;
+  text-underline-offset: 3px;
+}
+
+.download-hero a:hover {
+  color: #fff;
+}
+
+.download-hero .screenshot {
+  margin: 0;
+}
+
+.download-hero .screenshot img {
+  border: 5px solid #fff;
+  border-radius: 8px;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.download-hero .screenshot figcaption {
+  margin-top: 0.7rem;
+  color: #eee5d8;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.download-choice-title {
+  margin: 2.5rem 0 0;
+  font-size: clamp(1.65rem, 3vw, 2rem);
+  font-weight: 740;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.download-page .download-grid {
+  margin-top: 1rem;
+}
+
+.download-preflight {
+  margin: 0.65rem 0 1.15rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--warm-border);
+  border-radius: 8px;
+  background: var(--warm-surface);
+  line-height: 1.5;
+}
+
+.download-page .download-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem;
+  border-radius: 14px;
+}
+
+.download-page .download-platform {
+  color: #795a32;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.download-page .download-card h3 {
+  margin: 0 0 0.45rem;
+  color: var(--brand-dark);
+  font-size: 1.4rem;
+  font-weight: 720;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.download-page .download-card > p:not(.download-actions):not(.download-platform) {
+  margin: 0.55rem 0;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.download-page .download-card > .download-status-note {
+  padding: 0.65rem 0.75rem;
+  border-radius: 6px;
+  background: #f5f3ef;
+  line-height: 1.5;
+}
+
+.download-page .download-status {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.download-page .download-actions {
+  margin: auto 0 0.75rem;
+  padding-top: 1rem;
+}
+
+.download-page .download-actions .button {
+  min-height: 44px;
+  font-size: 1rem;
+}
+
+.download-page .download-card > a:last-child {
+  margin-top: 0.25rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.download-page .download-card > a:last-child:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.download-page .download-notice {
+  border-left-width: 1px;
+}
+
+.download-followup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+  margin-top: 2.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.download-followup h2 {
+  margin-top: 1rem;
+  font-size: 1.45rem;
+  font-weight: 720;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.download-followup p {
+  max-width: 58ch;
+}
+
+.privacy-content {
+  max-width: 800px;
+}
+
+.privacy-heading {
+  margin-bottom: 3rem;
+}
+
+.privacy-heading h1 {
+  margin-bottom: 0.5rem;
+}
+
+.privacy-heading .last-updated {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.privacy-content section {
+  margin-top: 2.75rem;
+}
+
+.privacy-content section > h2,
+.privacy-content .contact > h2 {
+  margin-top: 0;
+}
+
+.privacy-content h3 {
+  margin: 1.75rem 0 0.5rem;
+  color: var(--brand-dark);
+  font-size: 1.1rem;
+  font-weight: 720;
+  line-height: 1.3;
+}
+
+.privacy-content .highlight,
+.privacy-content .contact {
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--warm-border);
+  border-radius: 12px;
+  background: var(--warm-surface);
+}
+
+.privacy-content .highlight {
+  margin: 1.5rem 0;
+}
+
+.privacy-content .contact {
+  margin-top: 2.75rem;
+}
+
+.privacy-content .contact p:last-child {
+  margin-bottom: 0;
+}
+
+.privacy-back-link {
+  margin-top: 2.5rem;
+}
+
+@media (max-width: 720px) {
+  .download-hero,
+  .download-followup {
+    grid-template-columns: 1fr;
+  }
+
+  .download-hero .lede {
+    max-width: 60ch;
+  }
+
+  .download-hero .screenshot {
+    max-width: 480px;
+  }
+
+  .download-page .download-card {
+    padding: 1.25rem;
+  }
+}
+
+/*
+ * Editorial download experiment: MathBoard's chalkboard and warm-paper identity,
+ * guided by Dia's contrast, quiet typography and generous section rhythm.
+ * Deliberately scoped to the hub, not its guides or the interactive board.
+ */
+.download-page--editorial .download-hero {
+  grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+  gap: clamp(1.7rem, 4vw, 3rem);
+  padding: clamp(1.6rem, 4vw, 3.5rem);
+  border: 1px solid #494540;
+  border-radius: 24px;
+  color: #f8f7f4;
+  background-color: #292a28;
+  background-image:
+    radial-gradient(circle at 94% 4%, rgba(210, 180, 140, 0.13), transparent 42%),
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: auto, 30px 30px, 30px 30px;
+}
+
+.download-page--editorial .download-eyebrow {
+  margin: 0 0 1.3rem;
+  color: #e2bd91;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.download-page--editorial .download-hero h1 {
+  max-width: 13ch;
+  margin: 0;
+  color: #fffdf9;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.8rem, 5.1vw, 4.5rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.download-page--editorial .download-hero .download-hero-lead {
+  max-width: 26ch;
+  margin: 1.45rem 0 0;
+  font-size: clamp(1.2rem, 2vw, 1.45rem);
+  font-weight: 560;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.download-page--editorial .download-hero .lede {
+  max-width: 48ch;
+  margin: 1rem 0 0;
+  color: #d7d5d1;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.download-page--editorial .download-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin: 1.6rem 0 0;
+}
+
+.download-page--editorial .download-hero .button {
+  min-height: 46px;
+  border-radius: 20px;
+  padding: 0.65rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 650;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.download-page--editorial .download-hero .button-primary {
+  border-color: #f7f4ee;
+  background: #f7f4ee;
+  color: #2b2c2b;
+}
+
+.download-page--editorial .download-hero .button-primary:hover {
+  border-color: #e8d8c0;
+  background: #e8d8c0;
+  color: #2b2c2b;
+}
+
+.download-page--editorial .download-hero .button:focus-visible,
+.download-page--editorial .download-hero a:not(.button):focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 3px;
+}
+
+/* Shared CTA helper uses primary styling; here the browser path is secondary. */
+.download-page--editorial .download-hero-actions a[data-seo-cta="open-board"] {
+  border-color: #9a9489;
+  background: rgba(255, 255, 255, 0.055);
+  color: #f7f4ee;
+}
+
+.download-page--editorial .download-hero-actions a[data-seo-cta="open-board"]:hover {
+  border-color: #e1d5c6;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.download-page--editorial .download-hero .download-version {
+  margin: 1.2rem 0 0;
+  color: #cbc6be;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.download-page--editorial .download-hero a:not(.button) {
+  color: #ead3ae;
+}
+
+.download-page--editorial .download-hero a:not(.button):hover {
+  color: #ffffff;
+}
+
+.download-page--editorial .download-product-frame {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dedbd6;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 18px 24px rgba(0, 0, 0, 0.12),
+    0 32px 56px rgba(0, 0, 0, 0.18);
+}
+
+.download-page--editorial .download-product-frame-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 38px;
+  padding: 0.65rem 0.85rem;
+  color: #646464;
+  background: #f8f8f7;
+  border-bottom: 1px solid #eae8e5;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.download-page--editorial .download-product-frame-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.download-page--editorial .download-product-frame-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d1cdc7;
+}
+
+.download-page--editorial .download-product-frame .screenshot {
+  max-width: none;
+  margin: 0;
+}
+
+.download-page--editorial .download-product-frame .screenshot img {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.download-page--editorial .download-product-frame .screenshot figcaption {
+  margin: 0;
+  padding: 0.9rem 1.1rem;
+  color: #625f59;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.download-page--editorial .download-section-eyebrow {
+  margin: 3.75rem 0 0.6rem;
+  color: #72685d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.77rem;
+  letter-spacing: 0.11em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.download-page--editorial .download-choice-title {
+  scroll-margin-top: 1.5rem;
+  margin: 0;
+  font-size: clamp(1.85rem, 3.5vw, 2.35rem);
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+
+.download-page--editorial .download-preflight {
+  margin: 1.2rem 0 0;
+  padding: 1rem 1.2rem;
+  border: 1px solid #e3d4bf;
+  border-left: 4px solid #aa8461;
+  border-radius: 12px;
+  background: #fffbf4;
+}
+
+.download-page--editorial .download-grid {
+  gap: 1.15rem;
+  margin: 1.4rem 0 0;
+}
+
+.download-page--editorial .download-card {
+  border-color: #e1dbd4;
+  border-radius: 16px;
+  padding: 1.5rem;
+  background: #ffffff;
+  box-shadow: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.download-page--editorial .download-card:hover {
+  border-color: #bb9c79;
+  background: #fffcf7;
+}
+
+.download-page--editorial .download-platform {
+  color: #6e6258;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.download-page--editorial .download-card h3 {
+  margin-top: 0.15rem;
+  font-size: 1.5rem;
+  font-weight: 650;
+}
+
+.download-page--editorial .download-card .button {
+  border-radius: 20px;
+}
+
+.download-page--editorial .download-followup {
+  gap: clamp(1.5rem, 4vw, 3rem);
+  margin-top: 3.75rem;
+  padding-top: 1.5rem;
+}
+
+@media (max-width: 720px) {
+  .download-page--editorial .download-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: clamp(1.35rem, 5vw, 2.2rem);
+    border-radius: 20px;
+  }
+
+  .download-page--editorial .download-hero h1 {
+    max-width: 14ch;
+  }
+
+  .download-page--editorial .download-product-frame {
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 380px) {
+  .download-page--editorial .download-hero-actions {
+    flex-direction: column;
+  }
+
+  .download-page--editorial .download-hero-actions .button {
+    width: 100%;
+  }
+
+  .download-page--editorial .download-card {
+    padding: 1.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .download-page--editorial .download-hero .button,
+  .download-page--editorial .download-card {
+    transition: none;
+  }
+}
+
+
+/*
+ * Shared chalkboard/editorial language for all static MathBoard routes.
+ * The downloadable beta hub retains its own scoped hero composition above.
+ * These changes are visual only; documentation and release claims stay intact.
+ */
+:root {
+  --bg: #f8f8f8;
+  --text: #292a28;
+  --muted: #625f5a;
+  --border: #e1ddd7;
+  --focus: #292a28;
+  --editorial-ink: #292a28;
+  --editorial-paper: #f8f8f8;
+  --editorial-bone: #fffbf4;
+  --editorial-line: #e1ddd7;
+}
+
+body {
+  background: var(--editorial-paper);
+}
+
+/* Keep the original 960px content measure and pre-experiment header layout. */
+.site-header {
+  --text: #2c3e50;
+  --muted: #5b6572;
+  --focus: #2c3e50;
+}
+
+main {
+  padding-top: 1.6rem;
+  padding-bottom: 4.5rem;
+}
+
+main > h1,
+.privacy-heading h1,
+.not-found h1 {
+  max-width: 19ch;
+  margin: 0 0 1.45rem;
+  color: var(--editorial-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.75rem, 5.1vw, 4.5rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+main > section {
+  margin-top: clamp(3rem, 6vw, 4.25rem);
+}
+
+main > section > h2 {
+  margin-top: 0;
+  font-size: clamp(1.65rem, 2.9vw, 2.25rem);
+  font-weight: 650;
+  line-height: 1.18;
+  letter-spacing: -0.045em;
+}
+
+main > section > p,
+main > section > ul,
+main > section > ol {
+  line-height: 1.7;
+}
+
+main .button,
+.copy-latex {
+  border-radius: 20px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+main .button-primary:hover {
+  filter: none;
+  background: #2e2f2e;
+}
+
+.site-footer {
+  margin-bottom: 2rem;
+  padding: clamp(1.5rem, 3vw, 2.3rem);
+  border: 1px solid #343632;
+  border-radius: 20px;
+  color: #d2ceca;
+  background: var(--editorial-ink);
+}
+
+.site-footer nav {
+  gap: 0.8rem 1.2rem;
+}
+
+.site-footer a {
+  color: #e7e2dc;
+}
+
+.site-footer a:hover {
+  color: #ffffff;
+}
+
+.site-footer a:focus-visible {
+  outline-color: #ffffff;
+}
+
+
+
+.site-hero h1 {
+  max-width: 14ch;
+  margin: 0 0 1.35rem;
+  color: #fffdf9;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.75rem, 5.1vw, 4.5rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.editorial-eyebrow,
+.reading-intro::before {
+  display: block;
+  margin: 0 0 1.2rem;
+  color: #e2bd91;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+
+
+.site-hero .button {
+  border-radius: 20px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+
+
+.site-hero .button-primary:hover {
+  border-color: #e8d8c0;
+  background: #e8d8c0;
+  color: var(--editorial-ink);
+}
+
+
+
+
+
+.site-hero a:focus-visible {
+  outline-color: #ffffff;
+  outline-offset: 3px;
+}
+
+.site-hero--with-art .screenshot {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dedbd6;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 18px 24px rgba(0, 0, 0, 0.12),
+    0 32px 56px rgba(0, 0, 0, 0.18);
+}
+
+.site-hero--with-art .screenshot img {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.site-hero--with-art .screenshot figcaption {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  color: #625f59;
+  background: #ffffff;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+
+
+.reading-intro::before {
+  content: "MathBoard / Guide";
+  margin-bottom: 0.85rem;
+  color: #79634c;
+}
+
+.privacy-heading::before {
+  content: "MathBoard / Privacy";
+}
+
+.reading-intro .lede {
+  max-width: 65ch;
+  margin: 0;
+  color: #4e4c49;
+  font-size: clamp(1.05rem, 1.65vw, 1.17rem);
+  line-height: 1.65;
+}
+
+.resource-group {
+  counter-increment: editorial-chapter;
+  margin-top: clamp(3.25rem, 6vw, 4.75rem);
+}
+
+.resource-group > h2 {
+  margin: 0;
+  font-size: clamp(1.65rem, 2.9vw, 2.25rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+}
+
+.resource-group > h2::before {
+  content: counter(editorial-chapter, decimal-leading-zero) " / Section";
+  display: block;
+  margin-bottom: 0.65rem;
+  color: #6c645c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.77rem;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.resource-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+  margin-top: 1.3rem;
+}
+
+.resource-card,
+.formula-example,
+.download-option {
+  border: 1px solid var(--editorial-line);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.resource-card {
+  padding: clamp(1.4rem, 2.4vw, 1.9rem);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+
+
+.resource-card h2,
+.resource-card h3 {
+  font-weight: 650;
+  font-size: clamp(1.2rem, 2vw, 1.4rem);
+  letter-spacing: -0.035em;
+}
+
+.resource-grid--featured .resource-card {
+  background: #fffcf7;
+}
+
+
+
+.formula-example {
+  padding: 1.35rem;
+}
+
+.formula-label,
+.download-option h2 {
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.copy-latex {
+  background: #f5f1e9;
+}
+
+.copy-latex:hover {
+  background: #eae1d4;
+}
+
+.table-wrap {
+  border-color: var(--editorial-line);
+  border-radius: 16px;
+}
+
+th {
+  background: #f1eee8;
+  font-weight: 650;
+}
+
+.download-option {
+  padding: clamp(1.25rem, 2.6vw, 1.7rem);
+}
+
+.download-option .button {
+  border-radius: 20px;
+}
+
+.not-found {
+  margin-top: 2rem;
+  margin-bottom: 4rem;
+  padding: clamp(2rem, 5vw, 4rem);
+  border: 1px solid #494540;
+  border-radius: 24px;
+  color: #e1ded9;
+  background-color: var(--editorial-ink);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+.not-found h1 {
+  color: #fffdf9;
+}
+
+.not-found .button-primary {
+  border-color: #f7f4ee;
+  background: #f7f4ee;
+  color: #292a28;
+}
+
+.not-found .button-primary:hover {
+  background: #e8d8c0;
+  color: #292a28;
+}
+
+@media (max-width: 720px) {
+  .resource-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-hero {
+    border-radius: 20px;
+  }
+
+}
+
+@media (max-width: 440px) {
+
+  main > h1,
+  .privacy-heading h1,
+  .not-found h1,
+  .site-hero h1 {
+    font-size: clamp(2.55rem, 10vw, 3.2rem);
+  }
+
+  .site-footer {
+    padding: 1.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-hero .button,
+  .resource-card,
+  main .button,
+  .copy-latex {
+    transition: none;
+  }
+}

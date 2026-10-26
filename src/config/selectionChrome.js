@@ -28,21 +28,21 @@ const BOARD_CHROME = {
     borderColor: '#1565c0',
     cornerColor: '#ffffff',
     cornerStrokeColor: '#1565c0',
-    selectionColor: 'rgba(21, 101, 192, 0.16)',
+    selectionColor: 'rgba(21, 101, 192, 0.08)',
     selectionBorderColor: '#1565c0',
   },
   dark: {
     borderColor: '#80deea',
-    cornerColor: '#102027',
+    cornerColor: '#ffffff',
     cornerStrokeColor: '#80deea',
-    selectionColor: 'rgba(128, 222, 234, 0.2)',
+    selectionColor: 'rgba(128, 222, 234, 0.10)',
     selectionBorderColor: '#80deea',
   },
   chalkboard: {
     borderColor: '#ffe082',
-    cornerColor: '#1b3a2f',
+    cornerColor: '#fffaf0',
     cornerStrokeColor: '#ffe082',
-    selectionColor: 'rgba(255, 224, 130, 0.22)',
+    selectionColor: 'rgba(255, 224, 130, 0.10)',
     selectionBorderColor: '#ffe082',
   },
 }
@@ -56,20 +56,30 @@ export function selectionChromeForBoard(boardTheme) {
   const theme = normalizeBoardTheme(boardTheme)
   return {
     ...BOARD_CHROME[theme],
-    cornerSize: 14,
+    cornerSize: 11,
     touchCornerSize: 32,
     transparentCorners: false,
     cornerStyle: 'circle',
-    borderScaleFactor: 2,
+    borderScaleFactor: 1.35,
     padding: 4, // default for newly created generic Fabric objects
-    selectionLineWidth: 2,
+    selectionLineWidth: 1,
+    selectionDashArray: [5, 4], // drag-to-select marquee; object borders remain solid
   }
 }
+
+// Fabric control keys at side midpoints. Keep corner scaling and rotation handles.
+const HIDDEN_SIDE_CONTROLS = Object.freeze({
+  mt: false,
+  mr: false,
+  mb: false,
+  ml: false,
+})
 
 const CANVAS_MARQUEE_KEYS = [
   'selectionColor',
   'selectionBorderColor',
   'selectionLineWidth',
+  'selectionDashArray',
 ]
 
 /** Control colors for one object (excludes canvas marquee fields). */
@@ -93,6 +103,7 @@ export function applySelectionObjectChrome(object, objectChrome) {
   const themeChrome = { ...objectChrome }
   delete themeChrome.padding
   object.set(themeChrome)
+  object.setControlsVisibility?.(HIDDEN_SIDE_CONTROLS)
 
   const isGroup = typeof object.isType === 'function' && object.isType('Group')
   if (!isGroup || typeof object.getObjects !== 'function') return

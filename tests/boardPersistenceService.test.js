@@ -105,7 +105,7 @@ class MapStorage {
 test('flush defers an unstable document until it becomes committed', async () => {
   const rect = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(rect, 'mbobj_rect')
-  const repository = makeRepository()
+  const repository = makeRepository(new Map([['mb_current', { id: 'mb_current', kind: 'saved', title: 'Board', document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }]]))
   let stable = false
   const service = makeService({
     canvas: makeCanvas([rect]),
@@ -131,7 +131,7 @@ test('failed flush blocks opening another board and preserves the current canvas
   const current = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(current, 'mbobj_current')
   const canvas = makeCanvas([current])
-  const repository = makeRepository(new Map([['mb_target', {
+  const repository = makeRepository(new Map([['mb_current', { id: 'mb_current', kind: 'saved', title: 'Board', document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }], ['mb_target', {
     id: 'mb_target',
     title: 'Target',
     document: { format: 'mathboard-board', version: 1, title: 'Target', objects: [] },
@@ -266,7 +266,7 @@ test('a fresh tab session bootstraps a new board and records it as active', asyn
   assert.match(result.id, /^mb_/)
   assert.equal(service.boardId, result.id)
   assert.equal(records.has(result.id), true)
-  assert.equal(records.get(result.id).kind, 'scratch')
+  assert.equal(records.get(result.id).kind, 'saved')
   assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), service.boardId)
   service.dispose()
 })
@@ -298,7 +298,7 @@ test('an active tab session restores its existing board without creating a repla
   service.dispose()
 })
 
-test('adopting the current canvas creates a scratch board owned by this tab', async () => {
+test('adopting the current canvas creates a retained board owned by this tab', async () => {
   const sessionStorage = new MapStorage()
   const records = new Map()
   const repository = makeRepository(records)
@@ -311,14 +311,14 @@ test('adopting the current canvas creates a scratch board owned by this tab', as
 
   const record = await service.adoptCurrentCanvasAsNewBoard()
 
-  assert.equal(record.kind, 'scratch')
-  assert.equal(records.get(record.id).kind, 'scratch')
+  assert.equal(record.kind, 'saved')
+  assert.equal(records.get(record.id).kind, 'saved')
   assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), record.id)
   assert.equal(service.boardId, record.id)
   service.dispose()
 })
 
-test('flush preserves explicit record kinds and upgrades legacy records to scratch', async () => {
+test('flush marks all persisted legacy records saved after writing', async () => {
   const sessionStorage = new MapStorage()
   const saved = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(saved, 'mbobj_rect')
@@ -357,16 +357,16 @@ test('flush preserves explicit record kinds and upgrades legacy records to scrat
   service.boardId = 'mb_unknown'
   service.notifyDocumentChanged()
   await service.flush()
-  assert.equal(repository.puts.at(-1).kind, 'future-kind')
+  assert.equal(repository.puts.at(-1).kind, 'saved')
 
   service.boardId = 'mb_legacy'
   service.notifyDocumentChanged()
   await service.flush()
-  assert.equal(repository.puts.at(-1).kind, 'scratch')
+  assert.equal(repository.puts.at(-1).kind, 'saved')
   service.dispose()
 })
 
-test('scratch garbage collection only deletes expired unprotected scratch records', async () => {
+test('bootstrap retains all historical scratch boards without age-based pruning', async () => {
   const nowMs = Date.parse('2026-10-14T00:00:00.000Z')
   const daysAgo = (days) => new Date(nowMs - days * 24 * 60 * 60 * 1000).toISOString()
   const sessionStorage = new MapStorage()
@@ -377,6 +377,7 @@ test('scratch garbage collection only deletes expired unprotected scratch record
     ['mb_active', { id: 'mb_active', kind: 'scratch', updatedAt: daysAgo(100), document }],
     ['mb_expired', { id: 'mb_expired', kind: 'scratch', updatedAt: daysAgo(31), document }],
     ['mb_recent', { id: 'mb_recent', kind: 'scratch', updatedAt: daysAgo(10), document }],
+    ['mb_trashed', { id: 'mb_trashed', kind: 'scratch', updatedAt: daysAgo(100), trashedAt: daysAgo(90), document }],
     ['mb_saved', { id: 'mb_saved', kind: 'saved', updatedAt: daysAgo(200), document }],
     ['mb_unknown', { id: 'mb_unknown', kind: 'future-kind', updatedAt: daysAgo(200), document }],
     ['mb_legacy', { id: 'mb_legacy', updatedAt: daysAgo(200), document }],
@@ -395,19 +396,21 @@ test('scratch garbage collection only deletes expired unprotected scratch record
 
   assert.deepEqual([...records.keys()].sort(), [
     'mb_active',
+    'mb_expired',
     'mb_invalid',
     'mb_legacy',
     'mb_recent',
     'mb_recovery',
     'mb_saved',
+    'mb_trashed',
     'mb_unknown',
   ])
-  assert.deepEqual(repository.deletes, ['mb_expired'])
+  assert.deepEqual(repository.deletes, [])
   assert.equal(service.boardId, 'mb_active')
   service.dispose()
 })
 
-test('a scratch cleanup failure does not block bootstrap', async () => {
+test('bootstrap does not require listing local boards for cleanup', async () => {
   const sessionStorage = new MapStorage()
   const repository = makeRepository()
   repository.list = async () => {
@@ -433,7 +436,7 @@ test('a change during an in-flight save stays dirty until the next flush', async
   ensureMathBoardObjectId(rect, 'mbobj_rect')
   let releaseFirstPut
   let puts = 0
-  const repository = makeRepository()
+  const repository = makeRepository(new Map([['mb_current', { id: 'mb_current', kind: 'saved', title: 'Board', document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }]]))
   repository.put = async (record) => {
     puts += 1
     if (puts === 1) await new Promise((resolve) => { releaseFirstPut = resolve })
@@ -452,5 +455,17 @@ test('a change during an in-flight save stays dirty until the next flush', async
   await service.flush()
   assert.equal(puts, 2)
   assert.equal(service.status.state, SAVE_STATES.CLEAN)
+  service.dispose()
+})
+
+test('implicit board creation and Stamp adoption use generated titles', async () => {
+  const service = makeService()
+  const blank = await service.createNewBoard()
+  assert.match(blank.title, /^[a-z]+-[a-z]+$/)
+  assert.equal(blank.document.title, blank.title)
+  const adopted = await service.adoptCurrentCanvasAsNewBoard()
+  assert.match(adopted.title, /^[a-z]+-[a-z]+$/)
+  assert.equal(adopted.document.title, adopted.title)
+  assert.equal(service.title, adopted.title)
   service.dispose()
 })

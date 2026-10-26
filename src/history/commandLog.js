@@ -122,11 +122,15 @@ function pickKeys(object, keys) {
  * transform.original is not used: it is only scale, skew, angle, left, top,
  * and flip of the gesture target, and its origin is the control corner.
  */
-export function snapshotObject(object) {
+export function snapshotObject(object, { includeGeometry = false } = {}) {
   const kind = snapshotPolicy.kindOf(object);
   const styleKeys = ["shape", "path", "text"].includes(kind)
     ? [...STYLE_KEYS, "mathboardInkMode"] : ["opacity"];
-  const keys = [...keysFor(object), ...styleKeys];
+  // Explicit geometry gestures include intrinsic endpoints. Ordinary move/scale/rotate
+  // snapshots keep the established transform-only contract (ADR 0001).
+  const geometryKeys = includeGeometry && object.isType('Line')
+    ? ['x1', 'y1', 'x2', 'y2'] : [];
+  const keys = [...geometryKeys, ...keysFor(object), ...styleKeys];
   const group = object.group;
   if (!isActiveSelection(group)) {
     return pickKeys(object, keys);

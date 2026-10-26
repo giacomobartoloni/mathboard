@@ -1,3 +1,8 @@
+<!--
+MathBoard
+Copyright (C) 2026 Giacomo Bartoloni
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,109 +10,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <title>Privacy Policy - MathBoard</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: #f8f9fa;
-        }
-        
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 40px 20px;
-            background: white;
-            min-height: 100vh;
-        }
-        
-        header {
-            border-bottom: 3px solid #2c3e50;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        
-        h1 {
-            color: #2c3e50;
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
-        
-        .last-updated {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        h2 {
-            color: #2c3e50;
-            font-size: 24px;
-            margin: 30px 0 15px;
-        }
-        
-        h3 {
-            color: #2c3e50;
-            font-size: 18px;
-            margin: 20px 0 10px;
-        }
-        
-        p {
-            margin-bottom: 15px;
-            color: #555;
-        }
-        
-        ul {
-            margin: 15px 0 15px 20px;
-        }
-        
-        li {
-            margin: 8px 0;
-            color: #555;
-        }
-        
-        .highlight {
-            background: #fff3cd;
-            padding: 15px;
-            border-left: 4px solid #ffc107;
-            margin: 20px 0;
-        }
-        
-        .contact {
-            background: #e9ecef;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 30px 0;
-        }
-        
-        a {
-            color: #007bff;
-            text-decoration: none;
-        }
-        
-        a:hover {
-            text-decoration: underline;
-        }
-        
-        .back-link {
-            display: inline-block;
-            margin-top: 30px;
-            padding: 10px 20px;
-            background: #2c3e50;
-            color: white;
-            border-radius: 6px;
-            transition: background 0.2s;
-        }
-        
-        .back-link:hover {
-            background: #1a252f;
-            text-decoration: none;
-        }
-    </style>
+    <link rel="stylesheet" href="/seo/site.css">
     <!-- Simple Analytics: load only on the canonical production host, same gate as the SPA adapter. -->
     <script>
       (function () {
@@ -135,12 +38,28 @@
       })();
     </script>
 </head>
-<body>
-    <div class="container">
-        <header>
+<body class="privacy-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+        <a href="/" class="brand" aria-label="MathBoard home"><span class="logo">MathBoard</span></a>
+        <nav aria-label="Primary">
+            <a href="/resources/">Resources</a>
+            <a href="/download/">Download</a>
+            <a href="https://github.com/giacomobartoloni/mathboard">GitHub</a>
+            <a class="button button-primary" href="/">Open MathBoard</a>
+        </nav>
+    </header>
+    <main id="main" class="privacy-content">
+        <nav aria-label="Breadcrumb">
+            <ol class="breadcrumbs">
+                <li><a href="/">MathBoard</a></li>
+                <li aria-current="page">Privacy Policy</li>
+            </ol>
+        </nav>
+        <div class="reading-intro privacy-heading">
             <h1>Privacy Policy</h1>
             <p class="last-updated">Last updated: October 1, 2026</p>
-        </header>
+        </div>
 
         <section>
             <h2>1. Introduction</h2>
@@ -320,7 +239,18 @@
             </p>
         </div>
 
-        <a href="/" class="back-link">← Back to MathBoard</a>
-    </div>
+        <a href="/" class="button button-primary privacy-back-link">Back to MathBoard</a>
+    </main>
+    <footer class="site-footer">
+        <nav aria-label="Footer">
+            <a href="/resources/">Resources</a>
+            <a href="/download/">Desktop downloads</a>
+            <a href="/docs/keyboard-shortcuts/">Keyboard shortcuts</a>
+            <a href="/docs/latex/">LaTeX examples</a>
+            <a href="/privacy-policy.html">Privacy Policy</a>
+            <a href="https://github.com/giacomobartoloni/mathboard">GitHub</a>
+        </nav>
+        <p class="footer-note">MathBoard is free and open source under the GNU AGPL v3.</p>
+    </footer>
 </body>
 </html>

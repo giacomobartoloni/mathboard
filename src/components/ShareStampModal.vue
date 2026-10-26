@@ -72,6 +72,16 @@ export default {
     }
   },
   methods: {
+    prepareVisibleState() {
+      // The async modal first mounts while visible, so the visibility watcher
+      // alone cannot select and focus the share URL.
+      this.copyLabel = 'Copy'
+      this.$nextTick(() => {
+        this.selectUrl()
+        const field = this.$refs.urlField
+        if (field) field.focus()
+      })
+    },
     selectUrl() {
       const field = this.$refs.urlField
       if (field && typeof field.select === 'function') {
@@ -115,16 +125,12 @@ export default {
       this.$emit('close')
     },
   },
+  mounted() {
+    if (this.isVisible) this.prepareVisibleState()
+  },
   watch: {
     isVisible(visible) {
-      if (visible) {
-        this.copyLabel = 'Copy'
-        this.$nextTick(() => {
-          this.selectUrl()
-          const field = this.$refs.urlField
-          if (field) field.focus()
-        })
-      }
+      if (visible) this.prepareVisibleState()
     },
   },
   beforeUnmount() {

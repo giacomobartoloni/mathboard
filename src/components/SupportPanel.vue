@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div class="support-panel">
+  <div class="support-panel" :class="{ 'about-open': showAbout }">
     <button
       type="button"
       class="about-button"
@@ -93,6 +93,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <a href="/resources/" @click="onSiteLink($event, '/resources/')">
               Resources &amp; shortcuts
             </a>
+            <a href="/download/" target="_blank" rel="noopener noreferrer" @click="onSiteLink($event, '/download/')">
+              Download desktop beta
+            </a>
             <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard')">
               <font-awesome-icon :icon="['fab', 'github']" /> GitHub Repository
             </a>
@@ -103,6 +106,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <p><strong>Get in touch</strong></p>
           <p>Send your feedback, suggestions, or bug reports:</p>
           <div class="contact-links">
+            <a href="https://github.com/giacomobartoloni/mathboard/issues/new" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard/issues/new')">Suggest a feature / report a bug</a>
             <a href="mailto:gbartoloni@proton.me" @click.prevent="onExternalLink('mailto:gbartoloni@proton.me')">Email me</a>
             <a href="https://www.linkedin.com/in/giacomobartoloni/" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://www.linkedin.com/in/giacomobartoloni/')">LinkedIn</a>
           </div>
@@ -196,6 +200,8 @@ export default {
   min-height: 40px;
 }
 
+.support-panel.about-open { z-index: 10000; }
+
 .about-button {
   background: none;
   border: none;
@@ -223,8 +229,8 @@ export default {
 
 @media (max-width: 768px) {
   .support-panel {
-    top: 12px;
-    bottom: auto;
+    top: auto;
+    bottom: max(80px, calc(env(safe-area-inset-bottom) + 68px));
   }
 
   .about-label {
