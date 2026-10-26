@@ -58,6 +58,41 @@ test('offline and DNT signals drop events before native invocation', async () =>
   assert.deepEqual(calls, ['allowed'])
 })
 
+test('default DNT reader checks both exposed WebView signals independently', async () => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  try {
+    for (const [navigatorDnt, windowDnt, expectedCalls] of [
+      [undefined, undefined, 1],
+      ['0', undefined, 1],
+      ['1', undefined, 0],
+      [undefined, 'yes', 0],
+      ['0', '1', 0],
+      ['yes', '0', 0],
+    ]) {
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true, value: { doNotTrack: navigatorDnt },
+      })
+      Object.defineProperty(globalThis, 'window', {
+        configurable: true, value: { doNotTrack: windowDnt },
+      })
+      const calls = []
+      const sender = createDesktopEventSender({
+        send: (name) => calls.push(name),
+        isOnline: () => true,
+      })
+      sender('object_created', {})
+      await nextTurn()
+      assert.equal(calls.length, expectedCalls, `${navigatorDnt}/${windowDnt}`)
+    }
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+    if (windowDescriptor) Object.defineProperty(globalThis, 'window', windowDescriptor)
+    else delete globalThis.window
+  }
+})
+
 test('desktop sender limits active invokes to four and pending events to 100', async () => {
   let calls = 0
   const pending = []
