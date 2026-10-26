@@ -35,7 +35,7 @@ test('desktop bridge executes a correlated native observe and returns one bounde
       calls.push({ name, args })
       return name === 'board_bridge_state' ? 'app-1' : undefined
     },
-    captureFactory: () => ({ dispose() {}, beginMutation: () => () => {} }),
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
   })
 
   assert.equal(calls[0].name, 'board_bridge_state')
@@ -47,6 +47,26 @@ test('desktop bridge executes a correlated native observe and returns one bounde
     requestId: 'r-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
     boardEpoch: 0, schemaVersion: 1, ok: true, result: { stable: true, objects: [] },
   })
+  disconnect()
+})
+
+test('desktop bridge attaches capture tracking before native requests can run', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  let attachments = 0
+  const board = { _boardLifecycle: lifecycle, sessionReady: true }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async () => () => {},
+    invokeCommand: async () => 'app-1',
+    captureFactory: () => ({
+      attach() { attachments += 1 },
+      dispose() {},
+      beginMutation: () => () => {},
+    }),
+  })
+
+  assert.equal(attachments, 1)
   disconnect()
 })
 
@@ -65,7 +85,7 @@ test('desktop bridge never executes a stale or excluded board command', async ()
       calls.push({ name, args })
       return name === 'board_bridge_state' ? 'app-1' : undefined
     },
-    captureFactory: () => ({ dispose() {}, beginMutation: () => () => {} }),
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
   })
   await lifecycle.transition(async () => {})
   const envelope = { requestId: 'r-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
@@ -91,7 +111,7 @@ test('desktop bridge reports failed native registration and removes its listener
     rendererGeneration: 'renderer-1',
     subscribe: async () => () => { unlistened = true },
     invokeCommand: async () => { throw new Error('native unavailable') },
-    captureFactory: () => ({ dispose() {} }),
+    captureFactory: () => ({ attach() {}, dispose() {} }),
   }), /native unavailable/)
   assert.equal(unlistened, true)
 })
@@ -111,7 +131,7 @@ test('a repeated native request ID never executes a write twice', async () => {
       if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
       return name === 'board_bridge_state' ? 'app-1' : undefined
     },
-    captureFactory: () => ({ dispose() {}, beginMutation: () => () => {} }),
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
   })
   const payload = { requestId: 'r-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
     boardEpoch: 0, schemaVersion: 1, expiresAtMs: Date.now() + 10_000,
@@ -138,7 +158,7 @@ test('an expired queued request is rejected before any board mutation', async ()
       if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
       return name === 'board_bridge_state' ? 'app-1' : undefined
     },
-    captureFactory: () => ({ dispose() {}, beginMutation: () => () => {} }),
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
   })
   await onRequest({ payload: { requestId: 'expired', appGeneration: 'app-1',
     rendererGeneration: 'renderer-1', boardEpoch: 0, schemaVersion: 1,

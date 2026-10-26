@@ -62,6 +62,7 @@ export async function connectDesktopBoardBridge(getBoard, {
   const lifecycle = board?._boardLifecycle
   if (!board?.sessionReady || !lifecycle?.isReady()) throw new Error('Board is not ready for desktop bridge.')
   const capture = captureFactory(getBoard)
+  capture.attach()
   let disposed = false
   let appGeneration = null
   let stateQueue = Promise.resolve()
