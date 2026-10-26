@@ -66,17 +66,20 @@ mod unix {
     fn ping_at(dir: &Path) -> io::Result<()> {
         // A closed app must not create any directory as a side effect.
         let dir_meta = fs::symlink_metadata(dir)?;
-        if !dir_meta.is_dir() || dir_meta.uid() != user_id()
-            || dir_meta.mode() & 0o777 != 0o700
-        {
-            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "unsafe probe directory"));
+        if !dir_meta.is_dir() || dir_meta.uid() != user_id() || dir_meta.mode() & 0o777 != 0o700 {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "unsafe probe directory",
+            ));
         }
         let socket = socket_path(dir);
         let meta = fs::symlink_metadata(&socket)?;
-        if !meta.file_type().is_socket() || meta.uid() != user_id()
-            || meta.mode() & 0o777 != 0o600
+        if !meta.file_type().is_socket() || meta.uid() != user_id() || meta.mode() & 0o777 != 0o600
         {
-            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "unsafe probe socket"));
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "unsafe probe socket",
+            ));
         }
         let mut stream = UnixStream::connect(socket)?;
         stream.set_read_timeout(Some(Duration::from_secs(2)))?;
@@ -85,7 +88,10 @@ mod unix {
         let mut reply = [0; 5];
         stream.read_exact(&mut reply)?;
         if reply != *b"PONG\n" {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid companion probe reply"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "invalid companion probe reply",
+            ));
         }
         Ok(())
     }
@@ -110,10 +116,16 @@ mod unix {
             let path = socket_path(&dir);
             if let Ok(meta) = fs::symlink_metadata(&path) {
                 if !meta.file_type().is_socket() || meta.uid() != user_id() {
-                    return Err(io::Error::new(io::ErrorKind::PermissionDenied, "unsafe stale socket"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "unsafe stale socket",
+                    ));
                 }
                 if UnixStream::connect(&path).is_ok() {
-                    return Err(io::Error::new(io::ErrorKind::AddrInUse, "probe already running"));
+                    return Err(io::Error::new(
+                        io::ErrorKind::AddrInUse,
+                        "probe already running",
+                    ));
                 }
                 fs::remove_file(&path)?;
             }
@@ -140,7 +152,11 @@ mod unix {
                     }
                 }
             });
-            Ok(Self { stop, worker: Mutex::new(Some(worker)), dir })
+            Ok(Self {
+                stop,
+                worker: Mutex::new(Some(worker)),
+                dir,
+            })
         }
     }
 
@@ -169,9 +185,14 @@ mod unix {
             let dir = temp_dir();
             let server = ProbeServer::start_at(dir.clone()).unwrap();
             assert_eq!(fs::metadata(&dir).unwrap().mode() & 0o777, 0o700);
-            assert_eq!(fs::metadata(socket_path(&dir)).unwrap().mode() & 0o777, 0o600);
+            assert_eq!(
+                fs::metadata(socket_path(&dir)).unwrap().mode() & 0o777,
+                0o600
+            );
             ping_at(&dir).unwrap();
-            assert!(matches!(ProbeServer::start_at(dir.clone()), Err(e) if e.kind() == io::ErrorKind::AddrInUse));
+            assert!(
+                matches!(ProbeServer::start_at(dir.clone()), Err(e) if e.kind() == io::ErrorKind::AddrInUse)
+            );
             drop(server);
             assert!(!socket_path(&dir).exists());
         }
@@ -181,7 +202,9 @@ mod unix {
             let dir = temp_dir();
             fs::create_dir(&dir).unwrap();
             fs::set_permissions(&dir, Permissions::from_mode(0o755)).unwrap();
-            assert!(matches!(ProbeServer::start_at(dir.clone()), Err(e) if e.kind() == io::ErrorKind::PermissionDenied));
+            assert!(
+                matches!(ProbeServer::start_at(dir.clone()), Err(e) if e.kind() == io::ErrorKind::PermissionDenied)
+            );
             fs::remove_dir(dir).unwrap();
         }
     }
