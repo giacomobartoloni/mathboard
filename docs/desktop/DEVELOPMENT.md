@@ -58,6 +58,37 @@ the native application without creating installers:
 npm run desktop:build -- --no-bundle
 ```
 
+## Desktop CI policy
+
+The [Desktop CI workflow](../../.github/workflows/desktop.yml) is separate from
+the main [web CI workflow](../../.github/workflows/main.yml):
+
+- Every PR targeting `main` or `develop` runs a lightweight changed-file check.
+  The Linux, Windows, and macOS native build matrix runs only when the PR changes
+  `src-tauri/`, `src/platform/`, `src/analytics/`, `package.json`,
+  `package-lock.json`, `.node-version`, `vite.config.js`, or the desktop
+  CI/release workflow definitions.
+- Regular pushes do not trigger Desktop CI. The main CI still checks lint,
+  unit tests, production web build, and browser/agent E2E on pushes and PRs.
+- Every night at 02:17 UTC, the desktop matrix compiles the current `develop`
+  revision on all three platforms. GitHub Actions reads scheduled workflow
+  definitions from the default branch (`main`), so this schedule becomes
+  active once the workflow change also reaches `main`. The scheduled job
+  explicitly checks out `develop`.
+- `workflow_dispatch` provides a full desktop matrix on the selected branch.
+  A release tag (`desktop-v*`) is handled by
+  [Desktop Release Candidate](../../.github/workflows/release-desktop.yml),
+  which builds installers independently of the no-bundle CI.
+- Rust compilation dependencies are cached per runner OS. The Linux job checks Rust formatting and all three platforms run locked
+  native Rust unit tests.
+- Tauri invokes `npm run build` through `beforeBuildCommand`; the desktop
+  workflow does not repeat a separate web build or lint step.
+
+The nightly builds detect integration regressions in shared frontend changes
+that do not independently trigger native compilation on PRs. Before shipping,
+perform the installed-app and offline checks in [TEST_MATRIX.md](TEST_MATRIX.md);
+a passing `--no-bundle` compile is not a packaged-app acceptance test.
+
 ## Troubleshooting
 
 - Run `npm run desktop:info` first to inspect the detected Rust, Node, WebView, and

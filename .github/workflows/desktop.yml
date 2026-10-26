@@ -1,28 +1,95 @@
+# MathBoard
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Keep native compilation off routine web-only PRs. GitHub schedules only
+# workflows on the default branch, so the nightly run checks out develop.
 name: Desktop CI
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: desktop-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  changes:
+    name: Desktop change detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      build: ${{ steps.detect.outputs.build }}
+    steps:
+      - name: Check out PR merge commit
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to compile desktop
+        id: detect
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "Scheduled and manual runs always build all desktop platforms."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Compare the checked-out PR merge commit against its exact base.
+          # Always run this lightweight job so path-only PRs get a completed check.
+          git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/desktop-changed-files.txt"
+          cat "$RUNNER_TEMP/desktop-changed-files.txt"
+
+          # Native code, desktop-specific JS and build/dependency configuration.
+          # All other shared-frontend changes remain covered by CI and the
+          # nightly full-platform build.
+          if grep -Eq '^(src-tauri/|src/platform/|src/analytics/|\.github/workflows/(desktop|release-desktop)\.yml$|package(-lock)?\.json$|\.node-version$|vite\.config\.js$)' "$RUNNER_TEMP/desktop-changed-files.txt"; then
+            echo "Desktop-sensitive changes detected."
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No desktop-sensitive changes: skipping the native matrix."
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
   desktop:
+    name: Desktop (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
+
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version-file: '.node-version'
           cache: npm
+
       - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -37,8 +104,17 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
+
       - run: npm ci
-      - run: npm run lint
-      - run: npm run build
-      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
-      - run: npm run desktop:build -- --no-bundle
+
+      - name: Check Rust formatting (Linux)
+        if: runner.os == 'Linux'
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      - name: Test native Rust code
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+
+      # Tauri runs npm run build via beforeBuildCommand. Do not run it twice.
+      # Web lint/tests/build are already enforced by main.yml on every PR.
+      - name: Compile desktop without installers
+        run: npm run desktop:build -- --no-bundle
