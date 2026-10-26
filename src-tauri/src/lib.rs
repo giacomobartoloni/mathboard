@@ -102,6 +102,25 @@ pub fn run() {
             }
         });
 
+    // Verification builds need an explicit exit hook: App::run exits the process
+    // directly, so managed state is not guaranteed to reach Drop.
+    #[cfg(feature = "phase-c-verification")]
+    builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                #[cfg(unix)]
+                {
+                    use tauri::Manager;
+                    if let Some(server) = app.try_state::<ipc_probe::ProbeServer>() {
+                        server.shutdown();
+                    }
+                }
+            }
+        });
+
+    #[cfg(not(feature = "phase-c-verification"))]
     builder
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
