@@ -1,6 +1,6 @@
 [package]
 name = "mathboard"
-version = "1.8.0"
+version = "1.9.0"
 description = "Interactive digital whiteboard for mathematical notation and LaTeX"
 authors = ["Giacomo Bartoloni"]
 license = "AGPL-3.0-or-later"
