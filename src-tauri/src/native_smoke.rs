@@ -63,34 +63,48 @@ fn run(app: &tauri::AppHandle) -> Result<Value, String> {
         }
     };
     let before = object_count(&initial)?;
-    let created = request(app, "create", json!({
-        "spec": {"type": "rect", "width": 36, "height": 24, "left": 80, "top": 80},
-        "options": {"select": false}
-    }))?;
+    let created = request(
+        app,
+        "create",
+        json!({
+            "spec": {"type": "rect", "width": 36, "height": 24, "left": 80, "top": 80},
+            "options": {"select": false}
+        }),
+    )?;
     let id = created["id"].as_str().ok_or("create returned no ID")?;
     let measure = request(app, "measure", json!({"id": id}))?;
     if measure["width"].as_f64().unwrap_or(0.0) <= 0.0 {
         return Err("native measure returned an invalid width".into());
     }
-    let batch = request(app, "createMany", json!({
-        "specs": [
-            {"type": "rect", "width": 26, "height": 22, "left": 140, "top": 80},
-            {"type": "rect", "width": 22, "height": 26, "left": 190, "top": 80}
-        ],
-        "options": {"select": false}
-    }))?;
+    let batch = request(
+        app,
+        "createMany",
+        json!({
+            "specs": [
+                {"type": "rect", "width": 26, "height": 22, "left": 140, "top": 80},
+                {"type": "rect", "width": 22, "height": 26, "left": 190, "top": 80}
+            ],
+            "options": {"select": false}
+        }),
+    )?;
     if batch.as_array().map(Vec::len) != Some(2) {
         return Err("createMany did not return exactly two objects".into());
     }
     if object_count(&request(app, "observe", json!({}))?)? != before + 3 {
         return Err("native observe did not see committed create/createMany objects".into());
     }
-    let screenshot = request(app, "screenshot", json!({
-        "target": {"kind": "viewport"}, "scale": 0.5
-    }))?;
+    let screenshot = request(
+        app,
+        "screenshot",
+        json!({
+            "target": {"kind": "viewport"}, "scale": 0.5
+        }),
+    )?;
     if screenshot["mimeType"] != "image/png"
         || screenshot["encoding"] != "base64"
-        || !screenshot["data"].as_str().is_some_and(|s| s.starts_with("iVBORw0KGgo"))
+        || !screenshot["data"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("iVBORw0KGgo"))
     {
         return Err("native screenshot did not return a valid PNG signature".into());
     }
