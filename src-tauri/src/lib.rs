@@ -33,11 +33,23 @@ pub fn run() {
                         edit.remove_at(0)?;
                         edit.remove_at(0)?;
                         edit.insert(
-                            &MenuItem::with_id(handle, "mathboard-undo", "Undo", true, None::<&str>)?,
+                            &MenuItem::with_id(
+                                handle,
+                                "mathboard-undo",
+                                "Undo",
+                                true,
+                                None::<&str>,
+                            )?,
                             0,
                         )?;
                         edit.insert(
-                            &MenuItem::with_id(handle, "mathboard-redo", "Redo", true, None::<&str>)?,
+                            &MenuItem::with_id(
+                                handle,
+                                "mathboard-redo",
+                                "Redo",
+                                true,
+                                None::<&str>,
+                            )?,
                             1,
                         )?;
                         break;
