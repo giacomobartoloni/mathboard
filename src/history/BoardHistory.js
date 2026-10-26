@@ -133,7 +133,9 @@ export class BoardHistory {
       this._syncAutoInk();
     });
     this._step = direction === "undo" ? index - 1 : index;
-    canvas.requestRenderAll();
+    try { canvas.requestRenderAll(); } catch (error) {
+      console.error('Board history replay refresh failed.', error);
+    }
     return command;
   }
 

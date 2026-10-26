@@ -30,7 +30,7 @@ import { SelectionMutations } from '../src/board/interactions/SelectionMutations
 
 installFabricDomStub();
 
-function setup(reject = false) {
+function setup(reject = false, onCommittedOperation = () => {}) {
   const canvas = makeControllerCanvas();
   canvas.add = (...objects) => objects.forEach((object) => canvas.insertAt(canvas.getObjects().length, object));
   canvas.fire = () => {};
@@ -45,9 +45,54 @@ function setup(reject = false) {
     history,
     boardObjectPolicy: new BoardObjectPolicy(),
     getDefaultInk: () => '#111111',
+    onCommittedOperation,
   });
   return { canvas, history, mutations };
 }
+
+for (const action of ['group', 'ungroup', 'delete']) {
+  test(action + ' reports one effect and succeeds when rendering fails after history commit', () => {
+    const effects = [];
+    const { canvas, history, mutations } = setup(false, (effect) => effects.push(effect));
+    const a = rect(0), b = rect(90);
+    if (action === 'ungroup') {
+      const group = new Group([a, b]);
+      canvas.add(group);
+      canvas.setActiveObject(group);
+    } else {
+      canvas.add(a, b);
+      canvas.setActiveObject(new ActiveSelection([a, b], { canvas }));
+    }
+    const original = console.error;
+    const logged = [];
+    console.error = (message) => logged.push(message);
+    canvas.requestRenderAll = () => { throw new Error('paint unavailable'); };
+    try {
+      const result = mutations[action]();
+      assert.equal(action === 'delete' ? result.length : result, action === 'delete' ? 2 : true);
+    } finally {
+      console.error = original;
+    }
+    assert.equal(history.summary().length, 1);
+    assert.deepEqual(effects, action === 'delete'
+      ? [{ kind: 'delete', objectKinds: ['shape', 'shape'] }]
+      : [{ kind: action }]);
+    assert.deepEqual(logged, ['Board selection refresh failed after commit.']);
+  });
+}
+
+test('deletion remains committed if analytics kind classification fails', () => {
+  const effects = [];
+  const { canvas, history, mutations } = setup(false, (effect) => effects.push(effect));
+  const object = rect(0);
+  canvas.add(object);
+  canvas.setActiveObject(object);
+  mutations._policy.kindOf = () => { throw new Error('analytics classification unavailable'); };
+  assert.deepEqual(mutations.delete(), [object]);
+  assert.equal(canvas.getObjects().length, 0);
+  assert.equal(history.summary().tipType, 'delete');
+  assert.deepEqual(effects, [{ kind: 'delete', objectKinds: ['unknown'] }]);
+});
 function rect(left) { return new Rect({ left, top: 40, width: 30, height: 20 }); }
 function roots(canvas) { return canvas.getObjects().slice(); }
 
