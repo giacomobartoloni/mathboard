@@ -1,3 +1,8 @@
+<!--
+MathBoard
+Copyright (C) 2026 Giacomo Bartoloni
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
 <svg xmlns="http://www.w3.org/2000/svg" width="860" height="540" viewBox="0 0 860 540" role="img" aria-labelledby="linear-graph-title linear-graph-desc">
   <title id="linear-graph-title">Graph of y equals 2x plus 1</title>
   <desc id="linear-graph-desc">On a coordinate grid, a rising straight line passes through the y-intercept (0, 1), then (1, 3) and (2, 5). A right-angle annotation shows that moving one unit right raises y by two units.</desc>
