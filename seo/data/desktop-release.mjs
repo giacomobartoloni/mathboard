@@ -10,18 +10,18 @@ SPDX-License-Identifier: AGPL-3.0-or-later
  * Do not infer platform verification from a successful packaging workflow.
  */
 export const desktopRelease = Object.freeze({
-  version: '1.8.0',
-  tag: 'v1.8.0',
+  version: '1.9.0',
+  tag: 'v1.9.0',
   prerelease: true,
   status: 'unsigned-public-beta',
   testedPlatforms: ['macos-arm64'],
   assets: {
-    macosArm64: 'MathBoard_1.8.0_aarch64.dmg',
-    macosIntel: 'MathBoard_1.8.0_x64.dmg',
-    windowsExe: 'MathBoard_1.8.0_x64-setup.exe',
-    windowsMsi: 'MathBoard_1.8.0_x64_en-US.msi',
-    linuxAppImage: 'MathBoard_1.8.0_amd64.AppImage',
-    linuxDeb: 'MathBoard_1.8.0_amd64.deb',
+    macosArm64: 'MathBoard_1.9.0_aarch64.dmg',
+    macosIntel: 'MathBoard_1.9.0_x64.dmg',
+    windowsExe: 'MathBoard_1.9.0_x64-setup.exe',
+    windowsMsi: 'MathBoard_1.9.0_x64_en-US.msi',
+    linuxAppImage: 'MathBoard_1.9.0_amd64.AppImage',
+    linuxDeb: 'MathBoard_1.9.0_amd64.deb',
     checksums: 'SHA256SUMS.txt',
   },
 })
