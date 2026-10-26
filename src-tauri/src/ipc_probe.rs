@@ -166,7 +166,11 @@ mod unix {
         /// Called by the Tauri exit event: Tauri can exit without dropping managed state.
         /// Safe to invoke again from Drop or after a previous shutdown.
         pub fn shutdown(&self) {
-            self.stop.store(true, Ordering::Relaxed);
+            // The first shutdown owns unlinking; later Drop must not remove a
+            // new listener that reused the same pathname after a restart.
+            if self.stop.swap(true, Ordering::AcqRel) {
+                return;
+            }
             if let Ok(mut worker) = self.worker.lock() {
                 if let Some(worker) = worker.take() {
                     let _ = worker.join();
@@ -225,10 +229,11 @@ mod unix {
 
             let restarted = ProbeServer::start_at(dir.clone()).unwrap();
             ping_at(&dir).unwrap();
+            drop(server);
+            ping_at(&dir).unwrap();
             restarted.shutdown();
             assert!(!socket_path(&dir).exists());
             drop(restarted);
-            drop(server);
         }
 
         #[test]
