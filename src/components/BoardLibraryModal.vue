@@ -111,7 +111,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
               @focusout="onMoreMenuFocusOut">
               <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
                 role="menuitem" :disabled="busy" :aria-label="'Delete ' + board.title"
-                @click="beginDelete(board)">
+                @mousedown.left="beginDelete(board)" @click="beginDelete(board)">
                 <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
                 <span>Delete</span>
               </button>
