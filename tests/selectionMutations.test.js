@@ -27,10 +27,11 @@ import { makeControllerCanvas } from './helpers/controller-canvas.js';
 import { BoardHistory } from '../src/history/BoardHistory.js';
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js';
 import { SelectionMutations } from '../src/board/interactions/SelectionMutations.js';
+import { BoardLifecycle } from '../src/board/BoardLifecycle.js';
 
 installFabricDomStub();
 
-function setup(reject = false, onCommittedOperation = () => {}) {
+function setup(reject = false, onCommittedOperation = () => {}, lifecycle = null) {
   const canvas = makeControllerCanvas();
   canvas.add = (...objects) => objects.forEach((object) => canvas.insertAt(canvas.getObjects().length, object));
   canvas.fire = () => {};
@@ -46,6 +47,7 @@ function setup(reject = false, onCommittedOperation = () => {}) {
     boardObjectPolicy: new BoardObjectPolicy(),
     getDefaultInk: () => '#111111',
     onCommittedOperation,
+    lifecycle,
   });
   return { canvas, history, mutations };
 }
@@ -220,6 +222,25 @@ test('clone rejection does not change roots or history', async () => {
   canvas.setActiveObject(a);
   assert.equal(await mutations.duplicate(), false);
   assert.deepEqual(roots(canvas), [a]);
+  assert.equal(history.summary().length, 0);
+});
+
+test('duplicate cannot add a delayed clone after the board epoch changes', async () => {
+  const lifecycle = new BoardLifecycle();
+  const { canvas, history, mutations } = setup(false, () => {}, lifecycle);
+  const source = rect(0);
+  const originalClone = source.clone.bind(source);
+  let finishClone;
+  source.clone = () => new Promise(resolve => { finishClone = () => resolve(originalClone()); });
+  canvas.add(source);
+  canvas.setActiveObject(source);
+
+  const pending = mutations.duplicate();
+  await lifecycle.transition(async () => {});
+  finishClone();
+
+  assert.equal(await pending, false);
+  assert.deepEqual(roots(canvas), [source]);
   assert.equal(history.summary().length, 0);
 });
 

@@ -23,6 +23,20 @@ import {
   BoardDocumentError,
 } from './schema.js'
 
+export class BoardReplacementRollbackError extends globalThis.AggregateError {
+  constructor(cause, rollbackError) {
+    super([cause, rollbackError], 'Board replacement and rollback failed.')
+    this.name = 'BoardReplacementRollbackError'
+  }
+}
+
+export class BoardReplacementCommitError extends Error {
+  constructor(cause) {
+    super(cause?.message || 'Board replacement could not finish.', { cause })
+    this.name = 'BoardReplacementCommitError'
+  }
+}
+
 /**
  * Atomically replace canvas contents from a BoardDocument.
  * Materializes off-canvas first; on failure the current board is untouched.
@@ -34,6 +48,7 @@ import {
  *   resetHistory: Function,
  *   suspendHistory?: (flag: boolean) => void,
  *   afterReplace?: Function,
+ *   beforeInstall?: Function,
  * }} args
  */
 export async function replaceBoardFromDocument({
@@ -43,6 +58,7 @@ export async function replaceBoardFromDocument({
   resetHistory,
   suspendHistory,
   afterReplace,
+  beforeInstall,
 }) {
   if (!canvas || typeof canvas.getObjects !== 'function') {
     throw new BoardDocumentError(
@@ -61,26 +77,47 @@ export async function replaceBoardFromDocument({
     buildFormula,
   })
 
+  beforeInstall?.()
+
   if (typeof canvas.discardActiveObject === 'function') {
     canvas.discardActiveObject()
   }
 
   const setSuspend = typeof suspendHistory === 'function' ? suspendHistory : () => {}
+  const current = canvas.getObjects().slice()
   setSuspend(true)
+  let installError = null
   try {
-    const current = canvas.getObjects().slice()
     current.forEach((object) => canvas.remove(object))
     objects.forEach((object) => canvas.add(object))
-  } finally {
-    setSuspend(false)
+  } catch (error) {
+    try {
+      canvas.getObjects().slice().forEach((object) => canvas.remove(object))
+      current.forEach((object) => canvas.add(object))
+    } catch (rollbackError) {
+      installError = new BoardReplacementRollbackError(error, rollbackError)
+    }
+    if (!installError) installError = error
   }
+  let resumeError = null
+  try { setSuspend(false) } catch (error) {
+    resumeError = error
+  }
+  if (resumeError) throw new BoardReplacementCommitError(resumeError)
+  if (installError) throw installError
 
-  resetHistory()
+  try { resetHistory() } catch (error) {
+    throw new BoardReplacementCommitError(error)
+  }
   if (typeof canvas.requestRenderAll === 'function') {
-    canvas.requestRenderAll()
+    try { canvas.requestRenderAll() } catch (error) {
+      console.error('Board repaint failed after replacement.', error)
+    }
   }
   if (typeof afterReplace === 'function') {
-    afterReplace(doc)
+    try { afterReplace(doc) } catch (error) {
+      console.error('Board presentation failed after replacement.', error)
+    }
   }
   return doc
 }

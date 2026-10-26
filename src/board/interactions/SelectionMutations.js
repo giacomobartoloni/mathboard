@@ -34,12 +34,17 @@ const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
 const FILL_INK_TYPES = ["IText", "Text"];
 
 export class SelectionMutations {
-  constructor({ getCanvas, history, boardObjectPolicy, getDefaultInk, onCommittedOperation = () => {} }) {
+  constructor({ getCanvas, history, boardObjectPolicy, getDefaultInk, onCommittedOperation = () => {}, lifecycle = null }) {
     this._getCanvas = getCanvas;
     this._history = history;
     this._policy = boardObjectPolicy;
     this._getDefaultInk = getDefaultInk;
     this._onCommittedOperation = onCommittedOperation;
+    this._lifecycle = lifecycle;
+  }
+
+  _canMutate() {
+    return !this._lifecycle || this._lifecycle.isReady();
   }
 
   _selection(canvas) {
@@ -97,6 +102,7 @@ export class SelectionMutations {
   }
 
   group() {
+    if (!this._canMutate()) return false;
     const canvas = this._getCanvas();
     const active = canvas?.getActiveObject();
     if (!active || !this._policy.isActiveSelection(active)) return false;
@@ -147,6 +153,7 @@ export class SelectionMutations {
   }
 
   ungroup() {
+    if (!this._canMutate()) return false;
     const canvas = this._getCanvas();
     const group = canvas?.getActiveObject();
     // A Formula can be implemented as a Fabric Group; it remains atomic.
@@ -196,6 +203,7 @@ export class SelectionMutations {
 
 
   delete() {
+    if (!this._canMutate()) return [];
     const canvas = this._getCanvas();
     const active = canvas?.getActiveObject();
     if (!active || active.isEditing) return [];
@@ -249,6 +257,8 @@ export class SelectionMutations {
   }
 
   async duplicate() {
+    if (!this._canMutate()) return false;
+    const lease = this._lifecycle?.capture();
     const canvas = this._getCanvas();
     const active = canvas?.getActiveObject();
     if (!active || active.isEditing) return false;
@@ -262,7 +272,8 @@ export class SelectionMutations {
       console.error("Duplicate failed", error);
       return false;
     }
-    if (this._getCanvas() !== canvas || clones.some((clone) => !clone)) return false;
+    if (this._getCanvas() !== canvas || clones.some((clone) => !clone)
+      || (lease && !this._lifecycle.assertCurrent(lease))) return false;
     if (!sources.every((object) => canvas.getObjects().includes(object))) return false;
 
     const selection = this._selection(canvas);
@@ -314,6 +325,7 @@ export class SelectionMutations {
   }
 
   recolor(color, { coalesce = false } = {}) {
+    if (!this._canMutate()) return false;
     const canvas = this._getCanvas();
     const active = canvas?.getActiveObject();
     if (!active) return false;

@@ -309,6 +309,7 @@ export default {
     let fullscreenInitialized = false
     let previousFullscreen = false
     let disconnectDesktopWindow = null
+    let disconnectDesktopBoardBridge = null
     let componentUnmounted = false
 
     const setFullscreenState = (next) => {
@@ -444,12 +445,25 @@ export default {
       } finally {
         boardSessionReady.value = true
       }
+      if (desktopRuntime && !componentUnmounted) {
+        await nextTick()
+        try {
+          const { connectDesktopBoardBridge } = await import('./platform/desktopBoardBridge.js')
+          const disconnect = await connectDesktopBoardBridge(() => drawBoardRef.value)
+          if (componentUnmounted) disconnect()
+          else disconnectDesktopBoardBridge = disconnect
+        } catch (error) {
+          console.warn('Desktop board bridge unavailable:', error)
+        }
+      }
     })
 
     onBeforeUnmount(() => {
       componentUnmounted = true
-      if (desktopRuntime) disconnectDesktopWindow?.()
-      else document.removeEventListener('fullscreenchange', syncWebFullscreenState)
+      if (desktopRuntime) {
+        disconnectDesktopWindow?.()
+        disconnectDesktopBoardBridge?.()
+      } else document.removeEventListener('fullscreenchange', syncWebFullscreenState)
     })
 
     const onToolSelected = (tool) => {

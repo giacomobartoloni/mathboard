@@ -88,6 +88,27 @@ The nightly builds detect integration regressions in shared frontend changes
 that do not independently trigger native compilation on PRs. Before shipping,
 perform the installed-app and offline checks in [TEST_MATRIX.md](TEST_MATRIX.md);
 a passing `--no-bundle` compile is not a packaged-app acceptance test.
+## Board bridge harness
+
+The desktop runtime connects `src/platform/desktopBoardBridge.js` after the board
+session is ready; the web build never loads it. The adapter exposes only the 11 canvas
+methods in `src/board/agent/desktop-commands.js` (`observe`, `measure`, `screenshot`,
+`create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, `layout`).
+The Vite-only development bridge keeps its 19-method help and is not part of `dist/`.
+
+Run the harness and native broker tests before changing the bridge:
+
+```sh
+npm run test:agent-bridge   # Vite agent mode + e2e-agent/, includes board lifecycle races
+npm run assert:no-e2e-hook  # fails if development instrumentation leaks into dist/
+cd src-tauri && cargo test --locked && cargo fmt --check
+```
+
+Rust accepts correlated replies only from WebView `main` through
+`src-tauri/capabilities/board-bridge.json`; request IDs, app generation, board epoch,
+schema version, deadlines and payload limits are validated before execution. Phase C
+has no MCP listener: `--mathboard-companion-version` only proves the packaged binary
+can dispatch a companion mode before Tauri starts its GUI.
 
 ## Troubleshooting
 

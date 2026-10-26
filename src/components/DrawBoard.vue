@@ -46,6 +46,7 @@ import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from
 import { extendedShapeInkPatch } from '../board/objects/shapeInk.js';
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
+import { BoardLifecycle } from "../board/BoardLifecycle.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
 import {
   ensureMathBoardObjectId,
@@ -199,13 +200,22 @@ export default {
     this._textInsertion = null;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
+    this._pendingFormulaRenders = 0;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
+    this._boardLifecycle = new BoardLifecycle({
+      onReadyChanged: (ready) => {
+        if (this.canvas?.upperCanvasEl) {
+          this.canvas.upperCanvasEl.style.pointerEvents = ready ? '' : 'none';
+        }
+      },
+    });
     this._selectionMutations = new SelectionMutations({
       getCanvas: () => this.canvas,
       history: this._boardHistory,
       boardObjectPolicy: this._boardObjectPolicy,
       getDefaultInk: () => this.boardThemeConfig.defaultInk,
       onCommittedOperation: (effect) => this._recordUiOperation(effect),
+      lifecycle: this._boardLifecycle,
     });
     this._persistence = null;
     this._boardWorkspace = null;
@@ -240,6 +250,7 @@ export default {
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
         onActiveBoardChanged: (board) => this.$emit('active-board-changed', board),
+        lifecycle: this._boardLifecycle,
       });
       return this._persistence;
     },
@@ -270,6 +281,7 @@ export default {
         getBoardId: () => this.getBoardId(),
         getLayoutSafeArea: () => workspaceSafeArea(this.canvas, this.$el.closest("#app")),
         onCommittedOperation: (effect) => this._boardAnalytics.record(effect, { interactionChannel }),
+        lifecycle: this._boardLifecycle,
       });
       this._boardControllers.set(interactionChannel, controller);
       return controller;
@@ -291,6 +303,7 @@ export default {
         transform: Boolean(this._pendingTransform),
         textEdit: Boolean(this._pendingText),
         textInsertionEditing: Boolean(this._textInsertion?.isPendingEditing()),
+        formulaRender: this._pendingFormulaRenders > 0,
       };
     },
     _isBoardInteractionStable() {
@@ -640,6 +653,7 @@ export default {
       this.refreshSelectionPanel();
     },
     onSelectionAction(actionId) {
+      if (!this._boardLifecycle.isReady()) return;
       if (actionId === ACTION_DELETE) {
         this.deleteSelection();
         this.$nextTick(() => this._focusBoard());
@@ -846,9 +860,11 @@ export default {
      * @returns {Promise<{ ok: true, group: object } | { ok: false, message: string }>}
      */
     async insertStamp(encoded) {
-      if (!this.canvas) {
+      if (!this.canvas || !this._boardLifecycle.isReady()) {
         return { ok: false, message: "Board is not ready." };
       }
+      const canvas = this.canvas;
+      const lease = this._boardLifecycle.capture();
       let objects;
       try {
         objects = await this._materializeStamp(encoded);
@@ -859,7 +875,7 @@ export default {
         console.error("insertStamp failed", error);
         return { ok: false, message };
       }
-      if (!this.canvas) {
+      if (this.canvas !== canvas || !this._boardLifecycle.assertCurrent(lease)) {
         return { ok: false, message: "Board is not ready." };
       }
 
@@ -901,37 +917,42 @@ export default {
      * Materializes before clearing so a failed stamp leaves the board intact.
      */
     async bootstrapFromStamp(encoded) {
-      if (!this.canvas) {
+      if (!this.canvas || !this._boardLifecycle.isReady()) {
         return { ok: false, message: "Board is not ready." };
       }
-      let objects;
-      try {
-        objects = await this._materializeStamp(encoded);
-      } catch (error) {
-        const message = error instanceof StampError
-          ? error.message
-          : "Could not recreate stamp objects.";
-        console.error("bootstrapFromStamp failed", error);
-        return { ok: false, message };
-      }
-      if (!this.canvas) {
-        return { ok: false, message: "Board is not ready." };
-      }
+      return this._boardLifecycle.transition(async (token) => {
+        const canvas = this.canvas;
+        let objects;
+        try {
+          objects = await this._materializeStamp(encoded);
+        } catch (error) {
+          const message = error instanceof StampError
+            ? error.message
+            : "Could not recreate stamp objects.";
+          console.error("bootstrapFromStamp failed", error);
+          return { ok: false, message };
+        }
+        if (this.canvas !== canvas || !this._boardLifecycle.assertTransition(token)) {
+          return { ok: false, message: "Board is not ready." };
+        }
 
-      this._clearBoardContents();
-      const group = this._wrapAsStampGroup(objects);
-      regenerateMathBoardObjectIds(group);
-      this._applyBoardDefaultInkToObjectTree(group);
-      this._placeGroupAtViewportCenter(group);
-      this.canvas.add(group);
-      this.canvas.setActiveObject(group);
-      if (!this._recordAdd(group)) return { ok: false, message: "Stamp could not be committed." };
-      this._recordUiOperation({ kind: 'create', objectKinds: ['stamp_template'] });
-      this._presentAfterUiCommit(() => {
-        this.canvas.requestRenderAll();
-        this.refreshSelectionPanel();
+        this._clearBoardContents();
+        const group = this._wrapAsStampGroup(objects);
+        regenerateMathBoardObjectIds(group);
+        this._applyBoardDefaultInkToObjectTree(group);
+        this._placeGroupAtViewportCenter(group);
+        this.canvas.add(group);
+        this.canvas.setActiveObject(group);
+        if (!this._recordAdd(group, { transitionToken: token })) {
+          return { ok: false, message: "Stamp could not be committed." };
+        }
+        this._recordUiOperation({ kind: 'create', objectKinds: ['stamp_template'] });
+        this._presentAfterUiCommit(() => {
+          this.canvas.requestRenderAll();
+          this.refreshSelectionPanel();
+        });
+        return { ok: true, group };
       });
-      return { ok: true, group };
     },
     exportSelectionToStamp() {
       if (!this.canvas) {
@@ -1004,6 +1025,7 @@ export default {
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
     async _buildFormulaObject(formulaData, position) {
+      this._pendingFormulaRenders += 1;
       try {
         return await this._formulaRenderer.render({
           latex: formulaData.latex,
@@ -1015,6 +1037,8 @@ export default {
       } catch (error) {
         console.error("Formula rendering failed", error);
         return null;
+      } finally {
+        this._pendingFormulaRenders -= 1;
       }
     },
     async addFormulaToCanvas(formulaData, position) {
@@ -1152,16 +1176,18 @@ export default {
       if (this._cancelGeometryTransform()) return true;
       return this.clearSelection();
     },
-    _recordAdd(object) {
+    _recordAdd(object, { transitionToken = null } = {}) {
       if (!object || !this.canvas) return false;
       this._ensureObjectId(object);
       const index = this.canvas.getObjects().indexOf(object);
       if (index < 0) return false;
       let committed = false;
-      try {
-        committed = this._boardHistory.record({ type: 'add', object, index }) === true;
-      } catch (error) {
-        console.error('Board object could not be recorded.', error);
+      if (this._boardLifecycle.isReady() || this._boardLifecycle.assertTransition(transitionToken)) {
+        try {
+          committed = this._boardHistory.record({ type: 'add', object, index }) === true;
+        } catch (error) {
+          console.error('Board object could not be recorded.', error);
+        }
       }
       if (committed) return true;
       if (this.canvas.getActiveObjects().includes(object)) this.canvas.discardActiveObject();
@@ -1177,6 +1203,7 @@ export default {
       return command;
     },
     undo() {
+      if (!this._boardLifecycle.isReady()) return;
       const command = this._runHistory('undo');
       if (!command) return;
       this._recordUiOperation({ kind: 'undo', commandType: command.type });
@@ -1185,6 +1212,7 @@ export default {
       }
     },
     redo() {
+      if (!this._boardLifecycle.isReady()) return;
       const command = this._runHistory('redo');
       if (!command) return;
       this._recordUiOperation({ kind: 'redo', commandType: command.type });
@@ -1436,6 +1464,7 @@ export default {
     });
   },
   beforeUnmount() {
+    this._boardLifecycle.dispose();
     this._clearGeometryEditing();
     this._shapeGesture?.dispose();
     this._textInsertion?.dispose();

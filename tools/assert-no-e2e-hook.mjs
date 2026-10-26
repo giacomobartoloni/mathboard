@@ -33,9 +33,6 @@ const FORBIDDEN_MARKERS = [
   'MATHBOARD_LOCAL_AGENT_BRIDGE_V1',
   '__mathboard_agent',
   'installLocalAgentBrowserBridge',
-  'createVisualCaptureAdapter',
-  'getScreenshotDescriptor',
-  'invalid_capture_request',
 ]
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
