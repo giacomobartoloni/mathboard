@@ -162,16 +162,29 @@ mod unix {
         }
     }
 
-    impl Drop for ProbeServer {
-        fn drop(&mut self) {
+    impl ProbeServer {
+        /// Called by the Tauri exit event: Tauri can exit without dropping managed state.
+        /// Safe to invoke again from Drop or after a previous shutdown.
+        pub fn shutdown(&self) {
             self.stop.store(true, Ordering::Relaxed);
             if let Ok(mut worker) = self.worker.lock() {
                 if let Some(worker) = worker.take() {
                     let _ = worker.join();
                 }
             }
-            let _ = fs::remove_file(socket_path(&self.dir));
+            let path = socket_path(&self.dir);
+            if let Ok(meta) = fs::symlink_metadata(&path) {
+                if meta.file_type().is_socket() && meta.uid() == user_id() {
+                    let _ = fs::remove_file(&path);
+                }
+            }
             let _ = fs::remove_dir(&self.dir);
+        }
+    }
+
+    impl Drop for ProbeServer {
+        fn drop(&mut self) {
+            self.shutdown();
         }
     }
 
@@ -197,6 +210,25 @@ mod unix {
             );
             drop(server);
             assert!(!socket_path(&dir).exists());
+        }
+
+        #[test]
+        fn explicit_app_exit_removes_socket_and_allows_restart() {
+            let dir = temp_dir();
+            let server = ProbeServer::start_at(dir.clone()).unwrap();
+            ping_at(&dir).unwrap();
+
+            server.shutdown();
+            server.shutdown();
+            assert!(!socket_path(&dir).exists());
+            assert!(ping_at(&dir).is_err());
+
+            let restarted = ProbeServer::start_at(dir.clone()).unwrap();
+            ping_at(&dir).unwrap();
+            restarted.shutdown();
+            assert!(!socket_path(&dir).exists());
+            drop(restarted);
+            drop(server);
         }
 
         #[test]
