@@ -6,9 +6,14 @@ sidecar, not the Vue application shell. The interactive board must remain at `/`
 
 ## Trust and release data
 
-The single reviewed source of distribution metadata is
-`seo/data/desktop-release.mjs`. No installer or checksum is hosted on MathBoard's
-web origin. Each link points directly to an official GitHub Release asset.
+The application/build version comes from `package.json` (also consumed by Tauri).
+The approved public download is deliberately separate: `seo/data/desktop-release.mjs`
+pins one owner-reviewed GitHub release tag and records platform-specific manual QA.
+`seo/lib/desktop-release.mjs` derives the release version and all asset filenames
+from that single tag. A development version bump must not silently change downloads.
+
+No installer or checksum is hosted on MathBoard's web origin. Each link points
+directly to an official GitHub Release asset.
 
 The build checks that the release is explicitly marked as an unsigned public
 prerelease, the version matches the tag, every expected format exists in the
@@ -24,11 +29,13 @@ When preparing the next approved public desktop release:
 2. Inspect the actual release's seven assets on GitHub, including
    `SHA256SUMS.txt`. Check the version, asset filenames and checksum entries.
    Do not use `releases/latest` to select an unsigned prerelease.
-3. Update the version, tag and reviewed asset names in
-   `seo/data/desktop-release.mjs`. Set `testedPlatforms` based on *recorded*
-   manual validation of each specific installer, never packaging CI alone.
-   Keep the status `unsigned-public-beta` until a separately approved signed
-   release strategy changes the page schema and copy.
+3. Change only the approved `tag` in `seo/data/desktop-release.mjs` after
+   publication. The release version and seven filenames are derived from it;
+   do not update filename strings individually or use `package.json` to select
+   an unpublished release. Set `testedPlatforms` based on *recorded* manual
+   validation of each specific installer, never packaging CI alone. Keep the
+   status `unsigned-public-beta` until a separately approved signed release
+   strategy changes the page schema and copy.
 4. Run `npm run test:unit`, `npm run build` and check the
    HTML generated in `dist/download/**/index.html`, download URL targets,
    sitemap, platform guidance, breadcrumbs and metadata.
@@ -44,8 +51,8 @@ No individual, board content or persistent identifier is sent.
 
 ## Page content boundaries
 
-- Mac Apple Silicon is the only platform described as manually validated
-  for the initial v1.10.0 release, per its published release notes.
+- Only platforms documented as manually validated for the approved release may
+  be listed in `testedPlatforms`; never carry QA claims forward implicitly.
 - Windows, Linux and macOS Intel must not be presented as manually validated
   without corresponding release acceptance evidence.
 - macOS is not Apple Developer ID-signed or notarized; Windows is not

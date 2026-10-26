@@ -8,6 +8,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { desktopRelease } from '../seo/data/desktop-release.mjs'
+import { createDesktopRelease } from '../seo/lib/desktop-release.mjs'
 import {
   assetName, assetUrl, releaseUrl, validateDesktopRelease,
 } from '../seo/lib/desktop-downloads.mjs'
@@ -36,7 +37,7 @@ test('download pages have unique paths and valid rendered HTML, structured data 
 
 test('all download links resolve directly to official versioned GitHub assets', () => {
   assert.doesNotThrow(() => validateDesktopRelease())
-  assert.equal(releaseUrl(), 'https://github.com/giacomobartoloni/mathboard/releases/tag/v1.10.0')
+  assert.equal(releaseUrl(), `https://github.com/giacomobartoloni/mathboard/releases/tag/${desktopRelease.tag}`)
   for (const [key, name] of Object.entries(desktopRelease.assets)) {
     assert.equal(assetName(key), name)
     assert.equal(assetUrl(key),
@@ -47,6 +48,28 @@ test('all download links resolve directly to official versioned GitHub assets', 
   for (const key of Object.keys(desktopRelease.assets).filter((x) => x !== 'checksums')) {
     assert.match(hub, new RegExp(`data-download-asset="${key}"`))
   }
+})
+
+test('release assets derive from one approved tag, independently of package version', () => {
+  const approved = createDesktopRelease({
+    tag: 'v2.3.4',
+    prerelease: true,
+    status: 'unsigned-public-beta',
+    testedPlatforms: ['macos-arm64'],
+  })
+
+  assert.equal(approved.version, '2.3.4')
+  assert.equal(approved.assets.macosArm64, 'MathBoard_2.3.4_aarch64.dmg')
+  assert.equal(approved.assets.windowsMsi, 'MathBoard_2.3.4_x64_en-US.msi')
+  assert.equal(approved.assets.linuxAppImage, 'MathBoard_2.3.4_amd64.AppImage')
+  assert.equal(approved.assets.checksums, 'SHA256SUMS.txt')
+  assert.doesNotThrow(() => validateDesktopRelease(approved))
+  assert.throws(() => createDesktopRelease({
+    tag: 'desktop-v2.3.4',
+    prerelease: true,
+    status: 'unsigned-public-beta',
+    testedPlatforms: [],
+  }), /tag must use/)
 })
 
 test('manifest validation rejects incorrect tags, missing assets or unapproved releases', () => {
