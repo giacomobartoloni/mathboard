@@ -269,6 +269,32 @@ test('WebKit focusout with no related target preserves pointer Delete confirmati
   await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeFocused()
 })
 
+test('mouse activation opens Delete confirmation before a WebKit outside-focus blur', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Board library' })
+  const moreActions = dialog.getByRole('button', { name: /^More actions for / }).first()
+  await moreActions.click()
+
+  const deleteAction = dialog.getByRole('menuitem', { name: /^Delete / })
+  await expect(deleteAction).toBeFocused()
+
+  // Emulate WebKit moving focus outside the menu on mouse press before click.
+  await deleteAction.evaluate(element => {
+    element.addEventListener('mousedown', () => {
+      element.dispatchEvent(new FocusEvent('focusout', {
+        bubbles: true,
+        relatedTarget: document.getElementById('board-library-search-input'),
+      }))
+    }, { once: true })
+  })
+
+  await deleteAction.click()
+  await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeFocused()
+})
+
 test('board library isolates drawing shortcuts and returns focus on Escape', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
