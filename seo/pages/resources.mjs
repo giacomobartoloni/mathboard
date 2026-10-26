@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { renderOpenBoardCTA, renderResourceCard } from '../lib/render-components.mjs'
 
 export default {
-  lastmod: '2026-10-23',
+  lastmod: '2026-10-26',
   path: '/resources/',
   title: 'MathBoard Resources — Guides, LaTeX and Shortcuts',
   description:
@@ -61,6 +61,12 @@ export default {
     <section class="resource-group">
       <h2>Learn and reference</h2>
       <div class="resource-grid">
+        ${renderResourceCard({
+          href: '/examples/graph-linear-function/',
+          title: 'Graph a linear function by hand',
+          description: 'A worked example for tutors: slope, y-intercept, points and a MathBoard drawing walkthrough.',
+          headingLevel: 3,
+        })}
         ${renderResourceCard({
           href: '/latex-whiteboard/',
           title: 'LaTeX whiteboard',
