@@ -22,6 +22,7 @@ import { ANALYTICS_EVENTS, ANALYTICS_MILESTONES } from './events.js'
 import { isDesktopRuntime } from '../platform/runtime.js'
 import { selectAnalyticsTransport } from './selectTransport.js'
 import { webAnalyticsTransport } from './transports/web.js'
+import { desktopAnalyticsTransport } from './transports/desktop.js'
 
 const APP_VERSION = packageInfo.version
 const selectedTransport = typeof window === 'undefined' ? null : selectAnalyticsTransport({
@@ -29,7 +30,7 @@ const selectedTransport = typeof window === 'undefined' ? null : selectAnalytics
   desktop: isDesktopRuntime(),
   hostname: window.location.hostname,
   webTransport: webAnalyticsTransport,
-  desktopTransport: null,
+  desktopTransport: desktopAnalyticsTransport,
 })
 
 let initialized = false
