@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
   <div class="board-library-overlay" @click.self="$emit('close')" @keydown.esc.stop.prevent="$emit('close')"
     @keydown.tab="trapTab">
     <section ref="dialogPanel" class="board-library-panel" role="dialog" aria-modal="true"
-      aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1" @click="onPanelClick">
+      aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
       <header class="board-library-header">
         <span class="board-library-heading-icon" aria-hidden="true">
           <font-awesome-icon :icon="['fas', 'chalkboard']" />
@@ -95,26 +95,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                   @click="submitAction('archive', board.id)">
                   <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" />
                 </button>
-                <button :id="'more-action-' + board.id" type="button" :disabled="busy"
-                  :aria-label="'More actions for ' + board.title" :title="'More actions for ' + board.title"
-                  :aria-expanded="moreMenuId === board.id" aria-haspopup="menu"
-                  :aria-controls="'more-menu-' + board.id" @click="toggleMoreMenu(board.id)">
-                  <font-awesome-icon :icon="['fas', 'ellipsis']" aria-hidden="true" />
+                <button :id="'delete-action-' + board.id" type="button" :disabled="busy"
+                  :aria-label="'Delete ' + board.title" :title="'Delete ' + board.title"
+                  @click="beginDelete(board)">
+                  <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
                 </button>
               </div>
-            </div>
-
-            <div v-if="moreMenuId === board.id" :id="'more-menu-' + board.id"
-              class="board-library-more-menu" role="menu" :aria-label="'More actions for ' + board.title"
-              @keydown.esc.stop.prevent="closeMoreMenu(board.id)"
-              @keydown.down.prevent="focusDelete(board.id)" @keydown.up.prevent="focusDelete(board.id)"
-              @focusout="onMoreMenuFocusOut">
-              <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
-                role="menuitem" :disabled="busy" :aria-label="'Delete ' + board.title"
-                @mousedown.left="beginDelete(board)" @click="beginDelete(board)">
-                <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
-                <span>Delete</span>
-              </button>
             </div>
 
             <form v-if="renameId === board.id" class="board-library-rename" @submit.prevent="submitRename(board.id)"
@@ -177,7 +163,6 @@ export default {
     const renameId = ref(null)
     const renameTitle = ref('')
     const confirmDeleteId = ref(null)
-    const moreMenuId = ref(null)
     const showArchived = ref(false)
     const closeButton = ref(null)
     const dialogPanel = ref(null)
@@ -233,33 +218,6 @@ export default {
       showArchived.value = archived
       renameId.value = null
       confirmDeleteId.value = null
-      moreMenuId.value = null
-    }
-    const focusDelete = (boardId) => document.getElementById('delete-action-' + boardId)?.focus()
-    const closeMoreMenu = async (boardId) => {
-      moreMenuId.value = null
-      await nextTick()
-      document.getElementById('more-action-' + boardId)?.focus()
-    }
-    const toggleMoreMenu = async (boardId) => {
-      if (moreMenuId.value === boardId) {
-        await closeMoreMenu(boardId)
-        return
-      }
-      renameId.value = null
-      confirmDeleteId.value = null
-      moreMenuId.value = boardId
-      await nextTick()
-      focusDelete(boardId)
-    }
-    const onPanelClick = (event) => {
-      if (moreMenuId.value && !event.target.closest('.board-library-more-menu, [id^="more-action-"]')) {
-        moreMenuId.value = null
-      }
-    }
-    const onMoreMenuFocusOut = (event) => {
-      // A null focus destination must not dismiss Delete before its pointer click.
-      if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) moreMenuId.value = null
     }
     const createBoard = () => {
       emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
@@ -269,7 +227,6 @@ export default {
       return `${action} ${board.title}`
     }
     const selectBoard = (board) => {
-      moreMenuId.value = null
       if (board.isActive) emit('close')
       else {
         awaitActionFocus('close')
@@ -277,12 +234,10 @@ export default {
       }
     }
     const submitAction = (action, boardId) => {
-      moreMenuId.value = null
       awaitActionFocus('close')
       emit('action', { action, boardId })
     }
     const beginRename = async (board) => {
-      moreMenuId.value = null
       confirmDeleteId.value = null
       renameId.value = board.id
       renameTitle.value = board.title
@@ -290,14 +245,13 @@ export default {
       document.getElementById('rename-' + board.id)?.focus()
     }
     const beginDelete = async (board) => {
-      moreMenuId.value = null
       renameId.value = null
       confirmDeleteId.value = board.id
       await nextTick()
       document.getElementById('confirm-delete-' + board.id)?.focus()
     }
     const cancelInline = async (boardId) => {
-      const actionId = renameId.value === boardId ? 'rename-action-' : 'more-action-'
+      const actionId = renameId.value === boardId ? 'rename-action-' : 'delete-action-'
       renameId.value = null
       confirmDeleteId.value = null
       await nextTick()
@@ -314,10 +268,9 @@ export default {
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { boardQuery, renameId, renameTitle, confirmDeleteId, moreMenuId, showArchived, closeButton, dialogPanel,
+    return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, dialogPanel,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
-      submitRename, beginRename, beginDelete, cancelInline, submitDelete, trapTab,
-      toggleMoreMenu, closeMoreMenu, focusDelete, onPanelClick, onMoreMenuFocusOut }
+      submitRename, beginRename, beginDelete, cancelInline, submitDelete, trapTab }
   },
 }
 </script>
@@ -538,27 +491,7 @@ export default {
   cursor: pointer;
 }
 .board-library-row-actions button:hover:enabled { background: var(--hover-bg); }
-.board-library-more-menu {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 0 6px;
-}
-.board-library-more-delete {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 140px;
-  min-height: 44px;
-  padding: 9px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--surface-secondary);
-  color: var(--danger);
-  box-shadow: var(--panel-shadow);
-  text-align: left;
-  cursor: pointer;
-}
-.board-library-more-delete:hover:enabled { background: var(--hover-bg); }
+.board-library-row-actions button:last-child { color: var(--danger); }
 .board-library-delete-confirm, .board-library-rename {
   margin: 2px 0 12px 54px;
   padding: 9px;
