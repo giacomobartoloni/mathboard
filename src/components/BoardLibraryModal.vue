@@ -97,7 +97,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                 </button>
                 <button :id="'more-action-' + board.id" type="button" :disabled="busy"
                   :aria-label="'More actions for ' + board.title" :title="'More actions for ' + board.title"
-                  :aria-expanded="moreMenuId === board.id" aria-haspopup="true"
+                  :aria-expanded="moreMenuId === board.id"
                   :aria-controls="'more-menu-' + board.id" @click="toggleMoreMenu(board.id)">
                   <font-awesome-icon :icon="['fas', 'ellipsis']" aria-hidden="true" />
                 </button>
