@@ -246,26 +246,39 @@ test('a failed board selection reports the error and keeps focus in the library'
   await expect(dialog.getByRole('button', { name: 'Close board library' })).toBeFocused()
 })
 
-test('More actions supports mouse, keyboard, dismissal and confirmed Delete', async ({ page, request }) => {
+test('Anchored icon-only actions popover supports mouse, keyboard and confirmed Delete', async ({ page, request }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
   const active = (await send(request, 'boards.list')).find(board => board.isActive)
+  await send(request, 'boards.create', { title: 'Popover sibling board' })
   await page.getByRole('button', { name: 'Open Board library' }).click()
 
   const dialog = page.getByRole('dialog', { name: 'Board library' })
   const row = dialog.locator('.board-library-list li').filter({ hasText: active.title }).first()
+  const sibling = dialog.locator('.board-library-list li').filter({ hasText: 'Popover sibling board' })
   const more = row.getByRole('button', { name: `More actions for ${active.title}` })
+  const popover = row.locator('.board-library-more-menu')
   const deleteAction = row.getByRole('button', { name: `Delete ${active.title}` })
   const confirm = row.getByRole('button', { name: 'Permanently delete' })
 
   await expect(more).toBeVisible()
-  await expect(more).toHaveAttribute('aria-expanded', 'false')
-  await expect(deleteAction).toHaveCount(0)
+  await expect(more).toHaveAttribute('popovertarget', `more-menu-${active.id}`)
+  await expect(popover).toBeHidden()
+  const rowHeight = await row.evaluate(element => element.getBoundingClientRect().height)
+  const siblingY = (await sibling.boundingBox()).y
 
   await more.click()
-  await expect(more).toHaveAttribute('aria-expanded', 'true')
+  await expect(popover).toBeVisible()
   await expect(deleteAction).toBeFocused()
+  await expect(deleteAction).toHaveText('')
+  await expect(deleteAction).toHaveAttribute('aria-label', `Delete ${active.title}`)
+  expect((await row.evaluate(element => element.getBoundingClientRect().height))).toBe(rowHeight)
+  expect((await sibling.boundingBox()).y).toBe(siblingY)
+  const popupBox = await popover.boundingBox()
+  const moreBox = await more.boundingBox()
+  expect(popupBox.x + popupBox.width).toBeLessThanOrEqual(moreBox.x + moreBox.width + 8)
+  expect(popupBox.x + popupBox.width).toBeGreaterThanOrEqual(moreBox.x - 8)
 
   // Focus moving away must not unmount Delete before a pointer click.
   await deleteAction.evaluate(element => {
@@ -281,14 +294,14 @@ test('More actions supports mouse, keyboard, dismissal and confirmed Delete', as
   await page.keyboard.press('Escape')
   await expect(confirm).toHaveCount(0)
   await expect(more).toBeFocused()
-  await expect(more).toHaveAttribute('aria-expanded', 'false')
+  await expect(popover).toBeHidden()
 
   await more.focus()
   await page.keyboard.press('Enter')
   await expect(deleteAction).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(more).toBeFocused()
-  await expect(deleteAction).toHaveCount(0)
+  await expect(popover).toBeHidden()
 
   await page.keyboard.press('Enter')
   await expect(deleteAction).toBeFocused()
@@ -302,7 +315,7 @@ test('More actions supports mouse, keyboard, dismissal and confirmed Delete', as
   await more.click()
   await expect(deleteAction).toBeVisible()
   await dialog.getByRole('textbox', { name: 'Find or create a board' }).click()
-  await expect(deleteAction).toHaveCount(0)
+  await expect(popover).toBeHidden()
 
   await page.setViewportSize({ width: 320, height: 800 })
   await more.scrollIntoViewIfNeeded()
@@ -311,8 +324,8 @@ test('More actions supports mouse, keyboard, dismissal and confirmed Delete', as
   expect(bounds.x).toBeGreaterThanOrEqual(0)
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(320)
   await more.click()
-  await deleteAction.scrollIntoViewIfNeeded()
   await expect(deleteAction).toBeInViewport()
+  await expect(deleteAction).toHaveText('')
 })
 
 test('board library isolates drawing shortcuts and returns focus on Escape', async ({ page }) => {
