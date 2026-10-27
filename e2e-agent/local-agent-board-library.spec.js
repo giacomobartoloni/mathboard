@@ -49,8 +49,8 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await expect(dialog.getByText('Algebra B')).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Save current board to library' })).toHaveCount(0)
   const item = dialog.locator('.board-library-list li').filter({ hasText: 'Algebra B' }).first()
-  await expect(item.getByRole('button', { name: 'More actions for Algebra B' })).toBeVisible()
-  await expect(item.getByRole('menuitem', { name: 'Delete Algebra B' })).toHaveCount(0)
+  await expect(item.getByRole('button', { name: 'Delete Algebra B' })).toBeVisible()
+  await expect(item.getByRole('button', { name: 'Permanently delete' })).toHaveCount(0)
   await expect(item.getByRole('button', { name: 'Rename Algebra B' })).toBeVisible()
   await expect(item.getByRole('button', { name: 'Archive Algebra B' })).toBeVisible()
   await expect(item.locator('.board-library-row-actions').getByRole('button')).toHaveCount(3)
@@ -68,11 +68,11 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await dialog.getByRole('button', { name: 'Archived (1)' }).click()
   const archivedItem = dialog.locator('.board-library-trash li').filter({ hasText: 'Algebra B' })
   await expect(archivedItem.getByRole('button', { name: 'Rename Algebra B (unarchive first)' })).toBeDisabled()
-  await archivedItem.getByRole('button', { name: 'More actions for Algebra B' }).click()
-  await expect(archivedItem.getByRole('menuitem', { name: 'Delete Algebra B' })).toBeFocused()
+  await archivedItem.getByRole('button', { name: 'Delete Algebra B' }).click()
+  await expect(archivedItem.getByRole('button', { name: 'Permanently delete' })).toBeFocused()
   await page.keyboard.press('Escape')
-  await expect(archivedItem.getByRole('button', { name: 'More actions for Algebra B' })).toBeFocused()
-  await expect(archivedItem.getByRole('menuitem', { name: 'Delete Algebra B' })).toHaveCount(0)
+  await expect(archivedItem.getByRole('button', { name: 'Delete Algebra B' })).toBeFocused()
+  await expect(archivedItem.getByRole('button', { name: 'Permanently delete' })).toHaveCount(0)
   await archivedItem.getByRole('button', { name: 'Unarchive Algebra B' }).click()
   await expect.poll(async () => (await send(request, 'boards.list')).some(board => board.id === created.id)).toBe(true)
   await expect(dialog.getByRole('button', { name: 'Close board library' })).toBeFocused()
@@ -103,8 +103,7 @@ test('autosaved local board archive, unarchive and confirmed irreversible delete
   await page.getByRole('button', { name: 'Open Board library' }).click()
   const current = page.getByRole('dialog', { name: 'Board library' })
   const currentRow = current.locator('.board-library-list li').filter({ hasText: 'Algebra B' }).first()
-  await currentRow.getByRole('button', { name: 'More actions for Algebra B' }).click()
-  await currentRow.getByRole('menuitem', { name: 'Delete Algebra B' }).click()
+  await currentRow.getByRole('button', { name: 'Delete Algebra B' }).click()
   await expect(currentRow.getByText(/Permanently delete.*Algebra B/)).toBeVisible()
   await currentRow.getByRole('button', { name: 'Permanently delete' }).click()
   await expect.poll(async () => (await send(request, 'observe')).boardId).not.toBe(created.id)
@@ -243,56 +242,41 @@ test('a failed board selection reports the error and keeps focus in the library'
   await expect(dialog.getByRole('button', { name: 'Close board library' })).toBeFocused()
 })
 
-test('WebKit focusout with no related target preserves pointer Delete confirmation', async ({ page }) => {
+test('direct Delete button supports mouse, keyboard and explicit cancellation', async ({ page, request }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
-
+  await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
+  const active = (await send(request, 'boards.list')).find(board => board.isActive)
   await page.getByRole('button', { name: 'Open Board library' }).click()
+
   const dialog = page.getByRole('dialog', { name: 'Board library' })
-  const moreActions = dialog.getByRole('button', { name: /^More actions for / }).first()
-  await expect(moreActions).toBeVisible()
-  await moreActions.click()
-
-  const deleteAction = dialog.getByRole('menuitem', { name: /^Delete / })
-  await expect(deleteAction).toBeFocused()
-
-  // macOS WebKit can move focus to no element on mousedown before click.
-  await deleteAction.evaluate(element => {
-    element.dispatchEvent(new FocusEvent('focusout', {
-      bubbles: true,
-      relatedTarget: null,
-    }))
-  })
+  const row = dialog.locator('.board-library-list li').filter({ hasText: active.title }).first()
+  const deleteAction = row.getByRole('button', { name: `Delete ${active.title}` })
+  const confirm = row.getByRole('button', { name: 'Permanently delete' })
 
   await expect(deleteAction).toBeVisible()
+  await expect(dialog.getByRole('button', { name: /^More actions for / })).toHaveCount(0)
   await deleteAction.click()
-  await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeFocused()
-})
+  await expect(confirm).toBeFocused()
+  expect((await send(request, 'boards.list')).some(board => board.id === active.id)).toBe(true)
 
-test('mouse activation opens Delete confirmation before a WebKit outside-focus blur', async ({ page }) => {
-  await page.goto('/')
-  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
-  await page.getByRole('button', { name: 'Open Board library' }).click()
-
-  const dialog = page.getByRole('dialog', { name: 'Board library' })
-  const moreActions = dialog.getByRole('button', { name: /^More actions for / }).first()
-  await moreActions.click()
-
-  const deleteAction = dialog.getByRole('menuitem', { name: /^Delete / })
+  await page.keyboard.press('Escape')
+  await expect(confirm).toHaveCount(0)
   await expect(deleteAction).toBeFocused()
 
-  // Emulate WebKit moving focus outside the menu on mouse press before click.
-  await deleteAction.evaluate(element => {
-    element.addEventListener('mousedown', () => {
-      element.dispatchEvent(new FocusEvent('focusout', {
-        bubbles: true,
-        relatedTarget: document.getElementById('board-library-search-input'),
-      }))
-    }, { once: true })
-  })
+  await deleteAction.focus()
+  await page.keyboard.press('Enter')
+  await expect(confirm).toBeFocused()
+  await row.getByRole('button', { name: 'Cancel' }).click()
+  await expect(confirm).toHaveCount(0)
+  await expect(deleteAction).toBeFocused()
+  expect((await send(request, 'boards.list')).some(board => board.id === active.id)).toBe(true)
 
-  await deleteAction.click()
-  await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeFocused()
+  await page.setViewportSize({ width: 320, height: 800 })
+  await expect(deleteAction).toBeInViewport()
+  const bounds = await deleteAction.boundingBox()
+  expect(bounds.x).toBeGreaterThanOrEqual(0)
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(320)
 })
 
 test('board library isolates drawing shortcuts and returns focus on Escape', async ({ page }) => {
@@ -304,7 +288,7 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await expect(dialog).toBeVisible()
   const closeButton = dialog.getByRole('button', { name: 'Close board library' })
   const lastControl = dialog.getByRole('button', { name: 'About board storage and sync' })
-  const lastAction = dialog.getByRole('button', { name: /^More actions for / }).last()
+  const lastAction = dialog.getByRole('button', { name: /^Delete / }).last()
   await expect(closeButton).toBeFocused()
   await expect(lastAction).toBeVisible()
   await page.keyboard.press('Shift+Tab')
@@ -321,20 +305,13 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await page.keyboard.press('Escape')
   await expect(renameAction).toBeFocused()
   await lastAction.click()
-  const menuDelete = dialog.getByRole('menuitem', { name: /^Delete / })
-  await expect(menuDelete).toBeFocused()
-  await page.keyboard.press('ArrowDown')
-  await expect(menuDelete).toBeFocused()
-  await page.keyboard.press('Escape')
-  await expect(lastAction).toBeFocused()
-  await expect(menuDelete).toHaveCount(0)
-  await lastAction.click()
-  await dialog.getByRole('textbox', { name: 'Find or create a board' }).click()
-  await expect(menuDelete).toHaveCount(0)
-  await lastAction.click()
-  await menuDelete.click()
   await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeFocused()
   await page.keyboard.press('Escape')
+  await expect(lastAction).toBeFocused()
+  await lastAction.focus()
+  await page.keyboard.press('Enter')
+  await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeFocused()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
   await expect(lastAction).toBeFocused()
   await page.keyboard.press('p')
   await expect(page.locator('.tool-button[aria-label="Select"]')).toHaveAttribute('aria-pressed', 'true')
