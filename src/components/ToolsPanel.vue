@@ -575,7 +575,10 @@ export default {
   outline-offset: 2px;
 }
 
-@media (max-height: 600px) {
+/* Keep the vertical rail on wide desktop viewports such as 1280x585.
+   Use the compact row on narrow landscape screens or when the rail would
+   collide with the bottom-left view/history controls. */
+@media (max-height: 580px), (max-height: 600px) and (max-width: 900px) {
   .left-chrome {
     top: 100px;
     flex-direction: row;
