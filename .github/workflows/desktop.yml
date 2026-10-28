@@ -114,6 +114,9 @@ jobs:
       - name: Test native Rust code
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
 
+      - name: Test opt-in Phase C native verification probes
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --features phase-c-verification
+
       # Tauri runs npm run build via beforeBuildCommand. Do not run it twice.
       # Web lint/tests/build are already enforced by main.yml on every PR.
       - name: Compile desktop without installers

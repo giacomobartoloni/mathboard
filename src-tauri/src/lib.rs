@@ -19,6 +19,11 @@ mod analytics;
 pub mod board_bridge;
 pub mod companion;
 
+#[cfg(feature = "phase-c-verification")]
+pub mod ipc_probe;
+#[cfg(feature = "phase-c-verification")]
+mod native_smoke;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -31,6 +36,17 @@ pub fn run() {
             board_bridge::board_bridge_state,
             board_bridge::board_bridge_reply,
         ]);
+
+    #[cfg(feature = "phase-c-verification")]
+    let builder = builder.setup(|app| {
+        use tauri::Manager;
+        if std::env::var_os("MATHBOARD_PHASE_C_IPC_PROBE").is_some() {
+            #[cfg(unix)]
+            app.manage(ipc_probe::ProbeServer::start()?);
+        }
+        native_smoke::install(app.handle().clone());
+        Ok(())
+    });
 
     // Keep Tauri's default macOS menus, replacing only text-input Undo/Redo
     // with actions dispatched to MathBoard's existing board command log.
@@ -86,6 +102,25 @@ pub fn run() {
             }
         });
 
+    // Verification builds need an explicit exit hook: App::run exits the process
+    // directly, so managed state is not guaranteed to reach Drop.
+    #[cfg(feature = "phase-c-verification")]
+    builder
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                #[cfg(unix)]
+                {
+                    use tauri::Manager;
+                    if let Some(server) = app.try_state::<ipc_probe::ProbeServer>() {
+                        server.shutdown();
+                    }
+                }
+            }
+        });
+
+    #[cfg(not(feature = "phase-c-verification"))]
     builder
         .run(tauri::generate_context!())
         .expect("error while building tauri application");
