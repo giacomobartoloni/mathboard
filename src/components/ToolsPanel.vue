@@ -320,6 +320,17 @@ export default {
   },
   methods: {
     getToolShortcutHint,
+    syncToolLayout() {
+      const rail = this.$el;
+      if (!rail?.isConnected) return;
+
+      // Measure the full vertical rail before applying the fallback.
+      rail.classList.remove('tools-compact');
+      const viewControls = document.querySelector('.zoom-panel');
+      const availableBottom = viewControls?.getBoundingClientRect().top ?? window.innerHeight - 12;
+      const fullBottom = rail.getBoundingClientRect().bottom;
+      rail.classList.toggle('tools-compact', fullBottom > availableBottom - 8);
+    },
     select: function (element) {
       this.selected = element;
       this.$emit('tool-selected', element);
