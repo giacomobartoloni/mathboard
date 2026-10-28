@@ -236,6 +236,9 @@ export default {
     getPersistenceStatus() {
       return this._persistence?.status || null;
     },
+    recoverConflictedBoardAsCopy() {
+      return this._ensurePersistenceService().recoverConflictAsCopy();
+    },
     getBoardId() {
       return this._persistence?.boardId || null;
     },
@@ -250,6 +253,7 @@ export default {
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
         onActiveBoardChanged: (board) => this.$emit('active-board-changed', board),
+        onStatusChanged: (status) => this.$emit('persistence-status', status),
         lifecycle: this._boardLifecycle,
       });
       return this._persistence;
