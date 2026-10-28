@@ -19,8 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 const SCRIPT_ID = 'simple-analytics-script'
 const SCRIPT_SRC = 'https://scripts.simpleanalyticscdn.com/latest.js'
-// Collect pageviews and categorical events without extra browser/device metrics.
-const IGNORED_METRICS = 'country,session,timeonpage,scrolled,useragent,screensize,viewportsize,language'
 
 function ensureEventQueue() {
   if (typeof window.sa_event === 'function') return
@@ -39,7 +37,6 @@ function loadScript() {
   const script = document.createElement('script')
   script.id = SCRIPT_ID
   script.async = true
-  script.setAttribute('data-ignore-metrics', IGNORED_METRICS)
   script.src = SCRIPT_SRC
   document.head.appendChild(script)
 }
