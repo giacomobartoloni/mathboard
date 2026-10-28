@@ -82,7 +82,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </button>
 
       <div
-        class="tool-menu"
+        class="tool-menu tool-secondary"
         @mouseenter="showShapesSubmenu = true"
         @mouseleave="showShapesSubmenu = false"
         @focusout="onShapesFocusOut"
