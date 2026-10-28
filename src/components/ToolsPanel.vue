@@ -329,7 +329,13 @@ export default {
       const viewControls = document.querySelector('.zoom-panel');
       const availableBottom = viewControls?.getBoundingClientRect().top ?? window.innerHeight - 12;
       const fullBottom = rail.getBoundingClientRect().bottom;
-      rail.classList.toggle('tools-compact', fullBottom > availableBottom - 8);
+      const compact = fullBottom > availableBottom - 8;
+      rail.classList.toggle('tools-compact', compact);
+      if (compact) {
+        this.showShapesSubmenu = false;
+        this.showKitsSubmenu = false;
+        this.showColorPopover = false;
+      }
     },
     select: function (element) {
       this.selected = element;
