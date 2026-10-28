@@ -134,15 +134,18 @@ for (const boardTheme of ['light', 'dark', 'chalkboard']) {
 }
 
 for (const viewport of [
-  { width: 1024, height: 768 },
-  { width: 640, height: 600 },
-  { width: 1280, height: 600 },
-  { width: 320, height: 568 },
-  { width: 844, height: 390 },
+  { width: 1024, height: 768, direction: 'column' },
+  { width: 640, height: 600, direction: 'row' },
+  { width: 1280, height: 600, direction: 'column' },
+  { width: 1280, height: 585, direction: 'column' },
+  { width: 1280, height: 560, direction: 'row' },
+  { width: 320, height: 568, direction: 'row' },
+  { width: 844, height: 390, direction: 'row' },
 ]) {
   test(`hints degrade gracefully at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport)
     const before = await gotoBoard(page)
+    await expect(page.getByRole('toolbar', { name: 'Drawing tools' })).toHaveCSS('flex-direction', viewport.direction)
     for (const [name] of tools) {
       const button = page.getByRole('button', { name, exact: true })
       await expect(button).toBeInViewport()
@@ -162,6 +165,26 @@ for (const viewport of [
     await testInfo.attach('constrained toolbar', { path, contentType: 'image/png' })
   })
 }
+
+test('DPR 3 desktop at 1280x585 keeps vertical tools clear of view controls', async ({ browser }) => {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 585 },
+    deviceScaleFactor: 3,
+  })
+  try {
+    const page = await context.newPage()
+    const before = await gotoBoard(page)
+    expect(await page.evaluate(() => window.devicePixelRatio)).toBe(3)
+    await expect(page.getByRole('toolbar', { name: 'Drawing tools' })).toHaveCSS('flex-direction', 'column')
+    const rail = await page.locator('.left-chrome').boundingBox()
+    const viewControls = await page.getByRole('toolbar', { name: 'Board view and history' }).boundingBox()
+    expect(rail.y + rail.height).toBeLessThanOrEqual(viewControls.y - 8)
+    await page.getByRole('button', { name: 'Stamps', exact: true }).click({ trial: true })
+    expect(await getBoardState(page)).toEqual(before)
+  } finally {
+    await context.close()
+  }
+})
 
 for (const lineHeight of ['normal', '18px']) {
 test(`coarse pointer preserves incumbent touch targets with ${lineHeight} line height`, async ({ browser }, testInfo) => {
