@@ -8,6 +8,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { desktopRelease } from '../seo/data/desktop-release.mjs'
+import { createDesktopRelease } from '../seo/lib/desktop-release.mjs'
 import {
   assetName, assetUrl, releaseUrl, validateDesktopRelease,
 } from '../seo/lib/desktop-downloads.mjs'
@@ -21,6 +22,9 @@ import { renderHeader, renderFooter } from '../seo/lib/render-components.mjs'
 import { validatePages, validateRenderedHtml } from '../seo/lib/validate-pages.mjs'
 
 const pages = [download, macos, windows, linux, security]
+const { version: packageVersion } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+)
 
 test('download pages have unique paths and valid rendered HTML, structured data and breadcrumbs', () => {
   const { paths } = validatePages(pages)
@@ -36,7 +40,9 @@ test('download pages have unique paths and valid rendered HTML, structured data 
 
 test('all download links resolve directly to official versioned GitHub assets', () => {
   assert.doesNotThrow(() => validateDesktopRelease())
-  assert.equal(releaseUrl(), 'https://github.com/giacomobartoloni/mathboard/releases/tag/v1.10.0')
+  assert.equal(desktopRelease.version, packageVersion)
+  assert.equal(desktopRelease.tag, `v${packageVersion}`)
+  assert.equal(releaseUrl(), `https://github.com/giacomobartoloni/mathboard/releases/tag/${desktopRelease.tag}`)
   for (const [key, name] of Object.entries(desktopRelease.assets)) {
     assert.equal(assetName(key), name)
     assert.equal(assetUrl(key),
@@ -47,6 +53,33 @@ test('all download links resolve directly to official versioned GitHub assets', 
   for (const key of Object.keys(desktopRelease.assets).filter((x) => x !== 'checksums')) {
     assert.match(hub, new RegExp(`data-download-asset="${key}"`))
   }
+})
+
+test('release asset naming derives all filenames from the supplied tag', () => {
+  const approved = createDesktopRelease({
+    tag: 'v2.3.4',
+    prerelease: true,
+    status: 'unsigned-public-beta',
+    testedPlatforms: ['macos-arm64'],
+  })
+
+  assert.equal(approved.version, '2.3.4')
+  assert.deepEqual(approved.assets, {
+    macosArm64: 'MathBoard_2.3.4_aarch64.dmg',
+    macosIntel: 'MathBoard_2.3.4_x64.dmg',
+    windowsExe: 'MathBoard_2.3.4_x64-setup.exe',
+    windowsMsi: 'MathBoard_2.3.4_x64_en-US.msi',
+    linuxAppImage: 'MathBoard_2.3.4_amd64.AppImage',
+    linuxDeb: 'MathBoard_2.3.4_amd64.deb',
+    checksums: 'SHA256SUMS.txt',
+  })
+  assert.doesNotThrow(() => validateDesktopRelease(approved))
+  assert.throws(() => createDesktopRelease({
+    tag: 'desktop-v2.3.4',
+    prerelease: true,
+    status: 'unsigned-public-beta',
+    testedPlatforms: [],
+  }), /tag must use/)
 })
 
 test('manifest validation rejects incorrect tags, missing assets or unapproved releases', () => {

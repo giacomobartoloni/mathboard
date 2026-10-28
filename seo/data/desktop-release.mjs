@@ -4,25 +4,19 @@ Copyright (C) 2026 Giacomo Bartoloni
 SPDX-License-Identifier: AGPL-3.0-or-later
 */
 
+import { readFileSync } from 'node:fs'
+import { createDesktopRelease } from '../lib/desktop-release.mjs'
+
+const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
+
 /**
- * Reviewed, published desktop release snapshot. GitHub hosts every binary.
- * Update this file only after a new public release has been owner-approved.
- * Do not infer platform verification from a successful packaging workflow.
+ * Download links follow package.json, like Tauri. Only main is deployed to users;
+ * publish and approve its matching GitHub release before promoting main.
+ * Manual platform QA remains release-specific.
  */
-export const desktopRelease = Object.freeze({
-  version: '1.10.0',
-  tag: 'v1.10.0',
+export const desktopRelease = createDesktopRelease({
+  tag: `v${version}`,
   prerelease: true,
   status: 'unsigned-public-beta',
   testedPlatforms: ['macos-arm64'],
-  assets: {
-    macosArm64: 'MathBoard_1.10.0_aarch64.dmg',
-    macosIntel: 'MathBoard_1.10.0_x64.dmg',
-    windowsExe: 'MathBoard_1.10.0_x64-setup.exe',
-    windowsMsi: 'MathBoard_1.10.0_x64_en-US.msi',
-    linuxAppImage: 'MathBoard_1.10.0_amd64.AppImage',
-    linuxDeb: 'MathBoard_1.10.0_amd64.deb',
-    checksums: 'SHA256SUMS.txt',
-  },
 })
-
