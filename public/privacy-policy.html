@@ -33,7 +33,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         var script = document.createElement('script');
         script.id = 'simple-analytics-script';
         script.async = true;
-        script.setAttribute('data-ignore-metrics', 'country,session,timeonpage,scrolled,useragent,screensize,viewportsize,language');
         script.src = 'https://scripts.simpleanalyticscdn.com/latest.js';
         document.head.appendChild(script);
       })();
@@ -105,11 +104,11 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 processes ordinary connection information when requests arrive, including
                 the IP address in transit. It states that it discards IP addresses rather
                 than storing them and does not set analytics cookies or persistent browser
-                identifiers. MathBoard configures the browser script to omit optional
-                country/time-zone, language, user-agent, screen/viewport size, page-load
-                identifier, time-on-page and scroll metrics. See
+                identifiers. Simple Analytics also collects optional browser metrics such as device type,
+                screen dimensions and time on page. MathBoard leaves the provider's
+                standard metric settings unchanged. See
                 <a href="https://docs.simpleanalytics.com/what-we-collect" target="_blank" rel="noopener">the provider's metrics documentation</a>
-                and <a href="https://www.simpleanalytics.com/privacy-policy" target="_blank" rel="noopener">privacy policy</a>.
+                and <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">privacy policy</a>.
             </p>
 
             <h3>2.3 Installed desktop analytics</h3>
@@ -204,11 +203,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 remove individual saved boards using MathBoard's local board controls.
             </p>
             <p>
-                Analytics reporting data is retained according to the Simple Analytics
-                account plan and the provider's documented retention rules. The free plan
-                currently offers one month of analytics history; other plans can differ.
-                See <a href="https://www.simpleanalytics.com/pricing" target="_blank" rel="noopener">Simple Analytics plans</a>
-                and <a href="https://www.simpleanalytics.com/privacy-policy" target="_blank" rel="noopener">retention details</a>.
+                Analytics reporting data is retained according to the configured Simple Analytics
+                account plan and the provider's documented retention practices. See
+                <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">Simple Analytics privacy</a>.
                 Operational/security information processed by Cloudflare is subject to its
                 product and account settings and
                 <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">privacy documentation</a>.
