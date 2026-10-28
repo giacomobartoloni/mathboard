@@ -581,8 +581,8 @@ export default {
 @media (max-height: 580px), (max-height: 600px) and (max-width: 900px) {
   .left-chrome {
     top: 100px;
-    flex-direction: row;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: center;
     gap: 8px;
     max-width: calc(100vw - 24px);
   }
