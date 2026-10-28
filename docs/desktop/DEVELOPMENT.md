@@ -105,10 +105,24 @@ cd src-tauri && cargo test --locked && cargo fmt --check
 ```
 
 Rust accepts correlated replies only from WebView `main` through
-`src-tauri/capabilities/board-bridge.json`; request IDs, app generation, board epoch,
-schema version, deadlines and payload limits are validated before execution. Phase C
-has no MCP listener: `--mathboard-companion-version` only proves the packaged binary
-can dispatch a companion mode before Tauri starts its GUI.
+`src-tauri/capabilities/board-bridge.json`. The native bridge uses schema version 2:
+every request and reply carries a top-level persistent `boardId` as well as the
+request ID, app and renderer generations, and board epoch. A target must be named
+explicitly when trusted native code queues a request. The browser checks its
+existence and revision before editing; inactive targets run in a detached Fabric
+context and commit through IndexedDB revision CAS. `screenshot` and `layout` require
+the active board. A timed-out write may have committed, so `execution_unknown`
+requires readback of that board before another write. The Vite-only development
+bridge keeps its existing command shape and is not an addressed native client.
+For example, an internal native request has this envelope; the correlated reply
+must echo `boardId`, `requestId`, both generations, `boardEpoch`, and `schemaVersion`:
+
+```json
+{"requestId":"app-1","appGeneration":"app","rendererGeneration":"renderer","boardEpoch":2,"boardId":"mb_example","schemaVersion":2,"expiresAtMs":1793200000000,"method":"observe","params":{}}
+```
+
+Phase C3 has no MCP listener: `--mathboard-companion-version` only proves the
+packaged binary can dispatch a companion mode before Tauri starts its GUI.
 
 ## Troubleshooting
 

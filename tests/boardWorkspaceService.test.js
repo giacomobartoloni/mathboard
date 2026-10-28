@@ -27,13 +27,30 @@ function fixture({ onActiveBoardChanged } = {}) {
   const repository = {
     fail: false,
     async get(id) { return records.get(id) },
-    async put(record) {
+    async create(record) {
       if (this.fail) throw new Error('storage unavailable')
       records.set(record.id, record)
       return record
     },
+    async updateIfRevisionMatches(boardId, expectedRevision, build) {
+      if (this.fail) throw new Error('storage unavailable')
+      const current = records.get(boardId)
+      if (!current) throw Object.assign(new Error('Board missing'), { code: 'board_not_found' })
+      if ((current.revision ?? 0) !== expectedRevision) throw Object.assign(new Error('Board conflict'), { code: 'board_conflict' })
+      const next = build(current)
+      if (next === null) return current
+      const updated = { ...next, revision: expectedRevision + 1 }
+      records.set(boardId, updated)
+      return updated
+    },
     async list() { return [...records.values()].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) },
-    async delete(boardId) { if (this.fail) throw new Error('storage unavailable'); records.delete(boardId) },
+    async deleteIfRevisionMatches(boardId, expectedRevision) {
+      if (this.fail) throw new Error('storage unavailable')
+      const current = records.get(boardId)
+      if (!current) throw Object.assign(new Error('Board missing'), { code: 'board_not_found' })
+      if ((current.revision ?? 0) !== expectedRevision) throw Object.assign(new Error('Board conflict'), { code: 'board_conflict' })
+      records.delete(boardId)
+    },
   }
   const objects = []
   const canvas = {
@@ -252,10 +269,10 @@ test('storage errors after choosing a fallback restore the previous active board
 test('late archive failure compensates the persisted last-board replacement', async () => {
   const { workspace, service, repository, records, session } = fixture()
   const active = await workspace.create({ title: 'Only board' })
-  const originalPut = repository.put.bind(repository)
-  repository.put = async record => {
-    if (record.id === active.id && record.archivedAt) throw new Error('late archive failure')
-    return originalPut(record)
+  const originalUpdate = repository.updateIfRevisionMatches.bind(repository)
+  repository.updateIfRevisionMatches = async (boardId, revision, build) => {
+    if (boardId === active.id) throw new Error('late archive failure')
+    return originalUpdate(boardId, revision, build)
   }
 
   await assert.rejects(() => workspace.archive({ boardId: active.id }), /late archive failure/)
@@ -270,12 +287,12 @@ test('late archive failure compensates the persisted last-board replacement', as
 test('late delete failure compensates the persisted last-board replacement', async () => {
   const { workspace, service, repository, records, session } = fixture()
   const active = await workspace.create({ title: 'Only board' })
-  const originalDelete = repository.delete.bind(repository)
+  const originalDelete = repository.deleteIfRevisionMatches.bind(repository)
   const removed = []
-  repository.delete = async boardId => {
+  repository.deleteIfRevisionMatches = async (boardId, revision) => {
     if (boardId === active.id) throw new Error('late delete failure')
     removed.push(boardId)
-    return originalDelete(boardId)
+    return originalDelete(boardId, revision)
   }
 
   await assert.rejects(() => workspace.delete({ boardId: active.id, confirm: true }), /late delete failure/)
@@ -285,6 +302,18 @@ test('late delete failure compensates the persisted last-board replacement', asy
   assert.equal(service.boardId, active.id)
   assert.equal(service.title, 'Only board')
   assert.equal(session.get('mathboard.activeBoardId'), active.id)
+  service.dispose()
+})
+
+test('deleting a dirty active board uses the revision committed by its own flush', async () => {
+  const { workspace, service, records } = fixture()
+  const active = await workspace.create({ title: 'Current' })
+  await workspace.create({ title: 'Other' })
+  await workspace.open({ boardId: active.id })
+  service.notifyDocumentChanged()
+
+  await workspace.delete({ boardId: active.id, confirm: true })
+  assert.equal(records.has(active.id), false)
   service.dispose()
 })
 

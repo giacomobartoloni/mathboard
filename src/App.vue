@@ -55,6 +55,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @text-editing-completed="onTextEditingCompleted"
         @shape-drawing-completed="onShapeDrawingCompleted"
         @selection-color="onSelectionColor"
+        @persistence-status="onPersistenceStatus"
       />
       <ToolsPanel
         :selectedTool="selectedTool"
@@ -79,6 +80,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <div v-if="boardError" class="stamp-error" role="alert">
       <span>{{ boardError }}</span>
       <button type="button" @click="boardError = null" aria-label="Dismiss">×</button>
+    </div>
+    <div v-if="saveConflict" class="stamp-error" role="alert">
+      <span>This board changed in another tab. Save your current work as a copy before opening the newer board.</span>
+      <button class="save-copy-button" type="button" :disabled="recoveringConflict" @click="recoverConflict">
+        {{ recoveringConflict ? 'Saving…' : 'Save a copy' }}
+      </button>
     </div>
     
     <FormulaModal 
@@ -238,6 +245,23 @@ export default {
     const isFullscreen = ref(false)
     const fullscreenSupported = ref(desktopRuntime || detectFullscreenSupport())
     const boardError = ref(null)
+    const saveConflict = ref(false)
+    const recoveringConflict = ref(false)
+    const onPersistenceStatus = (status) => {
+      saveConflict.value = ['board_conflict', 'board_not_found', 'board_archived'].includes(status?.errorCode)
+    }
+    const recoverConflict = async () => {
+      if (recoveringConflict.value) return
+      recoveringConflict.value = true
+      try {
+        await drawBoardRef.value.recoverConflictedBoardAsCopy()
+        boardError.value = null
+      } catch (error) {
+        boardError.value = error?.message || 'Could not save a recovery copy.'
+      } finally {
+        recoveringConflict.value = false
+      }
+    }
     const showBoardLibrary = ref(false)
     const boardLibraryTriggerRef = ref(null)
     const boardList = ref([])
@@ -802,6 +826,10 @@ export default {
       onRedo,
       onInsertKit,
       boardError,
+      saveConflict,
+      recoveringConflict,
+      onPersistenceStatus,
+      recoverConflict,
       showBoardLibrary,
       boardLibraryTriggerRef,
       boardList,
@@ -1009,6 +1037,21 @@ body {
   font-size: 18px;
   line-height: 1;
   padding: 0 2px;
+}
+
+.stamp-error .save-copy-button {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font: inherit;
+  white-space: nowrap;
+}
+
+.stamp-error .save-copy-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 @media (max-width: 768px) {

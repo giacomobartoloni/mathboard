@@ -23,7 +23,7 @@ use std::sync::{Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_REPLY_BYTES: usize = 7 * 1024 * 1024;
 const MAX_PENDING: usize = 16;
@@ -40,6 +40,16 @@ const METHODS: &[&str] = &[
     "group",
     "layout",
 ];
+const READ_ONLY_METHODS: &[&str] = &["observe", "measure", "screenshot"];
+
+fn valid_board_id(value: &str) -> bool {
+    value.len() > 3
+        && value.len() <= 131
+        && value.starts_with("mb_")
+        && value[3..]
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum BrokerError {
@@ -52,6 +62,8 @@ pub enum BrokerError {
     StaleReply,
     UnknownRequest,
     Timeout,
+    InvalidBoardId,
+    ExecutionUnknown,
 }
 
 #[derive(Debug, PartialEq)]
@@ -60,6 +72,7 @@ pub enum BoardReply {
     Failure { code: String, message: String },
     Disconnected,
     TimedOut,
+    ExecutionUnknown,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -69,6 +82,7 @@ pub struct OutboundRequest {
     pub app_generation: String,
     pub renderer_generation: String,
     pub board_epoch: u64,
+    pub board_id: String,
     pub schema_version: u32,
     pub expires_at_ms: u64,
     pub method: String,
@@ -82,6 +96,7 @@ struct IncomingReply {
     app_generation: String,
     renderer_generation: String,
     board_epoch: u64,
+    board_id: String,
     schema_version: u32,
     ok: bool,
     result: Option<Value>,
@@ -98,6 +113,8 @@ struct ReplyError {
 struct Pending {
     renderer_generation: String,
     board_epoch: u64,
+    board_id: String,
+    mutates: bool,
     deadline: Instant,
     sender: mpsc::Sender<BoardReply>,
 }
@@ -106,6 +123,7 @@ struct Pending {
 struct BrokerState {
     renderer_generation: Option<String>,
     board_epoch: u64,
+    active_board_id: Option<String>,
     ready: bool,
     pending: HashMap<String, Pending>,
 }
@@ -135,6 +153,7 @@ impl BoardRequestBroker {
         renderer_generation: &str,
         board_epoch: u64,
         ready: bool,
+        active_board_id: Option<&str>,
     ) -> Result<(), BrokerError> {
         if renderer_generation.is_empty()
             || renderer_generation.len() > 128
@@ -144,42 +163,75 @@ impl BoardRequestBroker {
         {
             return Err(BrokerError::InvalidReply);
         }
+        if ready && !active_board_id.is_some_and(valid_board_id) {
+            return Err(BrokerError::InvalidBoardId);
+        }
+        if active_board_id.is_some_and(|id| !valid_board_id(id)) {
+            return Err(BrokerError::InvalidBoardId);
+        }
         let mut state = self.state.lock().expect("board broker lock poisoned");
         if state.renderer_generation.as_deref() == Some(renderer_generation)
             && board_epoch < state.board_epoch
         {
             return Err(BrokerError::StaleReply);
         }
+        if state.renderer_generation.as_deref() == Some(renderer_generation)
+            && state.board_epoch == board_epoch
+            && state.active_board_id.as_deref() != active_board_id
+        {
+            return Err(BrokerError::StaleReply);
+        }
         let changed = state.renderer_generation.as_deref() != Some(renderer_generation)
             || state.board_epoch != board_epoch
+            || state.active_board_id.as_deref() != active_board_id
             || !ready;
         if changed {
             for (_, pending) in state.pending.drain() {
-                let _ = pending.sender.send(BoardReply::Disconnected);
+                let outcome = if pending.mutates {
+                    BoardReply::ExecutionUnknown
+                } else {
+                    BoardReply::Disconnected
+                };
+                let _ = pending.sender.send(outcome);
             }
         }
         state.renderer_generation = Some(renderer_generation.to_owned());
         state.board_epoch = board_epoch;
+        state.active_board_id = active_board_id.map(str::to_owned);
         state.ready = ready;
         Ok(())
     }
 
+    pub fn active_board_id(&self) -> Option<String> {
+        let state = self.state.lock().expect("board broker lock poisoned");
+        if state.ready {
+            state.active_board_id.clone()
+        } else {
+            None
+        }
+    }
+
     pub fn queue(
         &self,
+        board_id: &str,
         method: &str,
         params: Value,
     ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>), BrokerError> {
-        self.queue_with_timeout(method, params, Duration::from_secs(10))
+        self.queue_with_timeout(board_id, method, params, Duration::from_secs(10))
     }
 
     pub fn queue_with_timeout(
         &self,
+        board_id: &str,
         method: &str,
         params: Value,
         timeout: Duration,
     ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>), BrokerError> {
         if !METHODS.contains(&method) {
             return Err(BrokerError::UnsupportedMethod);
+        }
+        if !valid_board_id(board_id) {
+            return Err(BrokerError::InvalidBoardId);
         }
         let lifetime = timeout.min(Duration::from_secs(10));
         if lifetime.is_zero() {
@@ -206,6 +258,7 @@ impl BoardRequestBroker {
             app_generation: self.app_generation.clone(),
             renderer_generation: renderer_generation.clone(),
             board_epoch: state.board_epoch,
+            board_id: board_id.to_owned(),
             schema_version: SCHEMA_VERSION,
             expires_at_ms: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -228,6 +281,8 @@ impl BoardRequestBroker {
             Pending {
                 renderer_generation,
                 board_epoch: request.board_epoch,
+                board_id: board_id.to_owned(),
+                mutates: !READ_ONLY_METHODS.contains(&method),
                 deadline,
                 sender,
             },
@@ -235,11 +290,18 @@ impl BoardRequestBroker {
         Ok((request, receiver))
     }
 
-    pub fn cancel(&self, request_id: &str) {
+    pub fn cancel(&self, request_id: &str) -> bool {
         let mut state = self.state.lock().expect("board broker lock poisoned");
         if let Some(pending) = state.pending.remove(request_id) {
-            let _ = pending.sender.send(BoardReply::Disconnected);
+            let outcome = if pending.mutates {
+                BoardReply::ExecutionUnknown
+            } else {
+                BoardReply::Disconnected
+            };
+            let _ = pending.sender.send(outcome);
+            return pending.mutates;
         }
+        false
     }
 
     pub fn await_reply(
@@ -248,24 +310,39 @@ impl BoardRequestBroker {
         receiver: mpsc::Receiver<BoardReply>,
         timeout: Duration,
     ) -> Result<BoardReply, BrokerError> {
-        let remaining = self
+        let (remaining, mutates) = self
             .state
             .lock()
             .expect("board broker lock poisoned")
             .pending
             .get(request_id)
-            .map(|pending| pending.deadline.saturating_duration_since(Instant::now()));
+            .map(|pending| {
+                (
+                    Some(pending.deadline.saturating_duration_since(Instant::now())),
+                    pending.mutates,
+                )
+            })
+            .unwrap_or((None, false));
         if remaining == Some(Duration::ZERO) {
             self.cancel(request_id);
-            return Err(BrokerError::Timeout);
+            return Err(if mutates {
+                BrokerError::ExecutionUnknown
+            } else {
+                BrokerError::Timeout
+            });
         }
         let wait = remaining.unwrap_or(Duration::ZERO).min(timeout);
         match receiver.recv_timeout(wait) {
             Ok(BoardReply::TimedOut) => Err(BrokerError::Timeout),
+            Ok(BoardReply::ExecutionUnknown) => Err(BrokerError::ExecutionUnknown),
             Ok(reply) => Ok(reply),
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 self.cancel(request_id);
-                Err(BrokerError::Timeout)
+                Err(if mutates {
+                    BrokerError::ExecutionUnknown
+                } else {
+                    BrokerError::Timeout
+                })
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 self.cancel(request_id);
@@ -290,13 +367,24 @@ impl BoardRequestBroker {
                 .pending
                 .remove(&reply.request_id)
                 .expect("pending request vanished");
-            let _ = expired.sender.send(BoardReply::TimedOut);
-            return Err(BrokerError::Timeout);
+            let outcome = if expired.mutates {
+                BoardReply::ExecutionUnknown
+            } else {
+                BoardReply::TimedOut
+            };
+            let error = if expired.mutates {
+                BrokerError::ExecutionUnknown
+            } else {
+                BrokerError::Timeout
+            };
+            let _ = expired.sender.send(outcome);
+            return Err(error);
         }
         if reply.schema_version != SCHEMA_VERSION
             || reply.app_generation != self.app_generation
             || reply.renderer_generation != pending.renderer_generation
             || reply.board_epoch != pending.board_epoch
+            || reply.board_id != pending.board_id
             || state.renderer_generation.as_deref() != Some(&reply.renderer_generation)
             || state.board_epoch != reply.board_epoch
             || !state.ready
@@ -333,13 +421,19 @@ pub(crate) fn board_bridge_state(
     broker: tauri::State<'_, BoardRequestBroker>,
     renderer_generation: String,
     board_epoch: u64,
+    active_board_id: Option<String>,
     ready: bool,
 ) -> Result<String, String> {
     if webview.label() != "main" {
         return Err("Board bridge unavailable".into());
     }
     broker
-        .renderer_state(&renderer_generation, board_epoch, ready)
+        .renderer_state(
+            &renderer_generation,
+            board_epoch,
+            ready,
+            active_board_id.as_deref(),
+        )
         .map_err(|_| "Invalid board bridge state".to_string())?;
     Ok(broker.app_generation().to_owned())
 }
@@ -362,10 +456,11 @@ pub(crate) fn board_bridge_reply(
 pub fn emit_request(
     app: &tauri::AppHandle,
     broker: &BoardRequestBroker,
+    board_id: &str,
     method: &str,
     params: Value,
 ) -> Result<(String, mpsc::Receiver<BoardReply>), BrokerError> {
-    let (request, receiver) = broker.queue(method, params)?;
+    let (request, receiver) = broker.queue(board_id, method, params)?;
     let request_id = request.request_id.clone();
     if app
         .emit_to("main", "mathboard-board-request", request)

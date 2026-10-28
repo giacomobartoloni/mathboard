@@ -66,3 +66,24 @@ test('formula failure rejects', async () => {
     /Formula render failed/,
   )
 })
+
+test('a later formula failure disposes objects materialized earlier in the batch', async () => {
+  const first = await materializeBoardObject({ type: 'rect', width: 10, height: 10 },
+    { buildFormula: async () => null })
+  let disposed = false
+  const originalDispose = Rect.prototype.dispose
+  Rect.prototype.dispose = function (...args) {
+    disposed = true
+    return originalDispose.apply(this, args)
+  }
+  try {
+    await assert.rejects(() => materializeBoardObjects([
+      { type: 'rect', width: 10, height: 10 },
+      { type: 'formula', latex: 'x' },
+    ], { buildFormula: async () => null }), /Formula render failed/)
+    assert.equal(disposed, true)
+  } finally {
+    Rect.prototype.dispose = originalDispose
+    first.dispose()
+  }
+})

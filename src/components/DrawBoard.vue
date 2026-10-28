@@ -44,9 +44,10 @@ import fabricStaticCanvas from "./fabricStaticCanvas";
 import { paletteColorFromSelection } from "../config/colors";
 import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from "../config/themes";
 import { extendedShapeInkPatch } from '../board/objects/shapeInk.js';
-import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
+import { buildFormulaFromSemanticSpec } from "../formulas/buildFormulaFromSemanticSpec.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
 import { BoardLifecycle } from "../board/BoardLifecycle.js";
+import { BoardDocumentCommandService } from "../board/BoardDocumentCommandService.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
 import {
   ensureMathBoardObjectId,
@@ -218,6 +219,8 @@ export default {
       lifecycle: this._boardLifecycle,
     });
     this._persistence = null;
+    this._boardRepository = null;
+    this._documentCommands = null;
     this._boardWorkspace = null;
     this._boardControllers = new Map();
     this._boardAnalytics = createBoardOperationAnalytics({
@@ -236,13 +239,16 @@ export default {
     getPersistenceStatus() {
       return this._persistence?.status || null;
     },
+    recoverConflictedBoardAsCopy() {
+      return this._ensurePersistenceService().recoverConflictAsCopy();
+    },
     getBoardId() {
       return this._persistence?.boardId || null;
     },
     _ensurePersistenceService() {
       if (this._persistence) return this._persistence;
       this._persistence = new BoardPersistenceService({
-        repository: new IndexedDbBoardRepository(),
+        repository: this._boardRepository = new IndexedDbBoardRepository(),
         boardObjectPolicy: this._boardObjectPolicy,
         getCanvas: () => this.canvas,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
@@ -250,6 +256,7 @@ export default {
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
         onActiveBoardChanged: (board) => this.$emit('active-board-changed', board),
+        onStatusChanged: (status) => this.$emit('persistence-status', status),
         lifecycle: this._boardLifecycle,
       });
       return this._persistence;
@@ -257,18 +264,37 @@ export default {
     getBoardController() {
       return this._ensureBoardController('local_agent');
     },
+    getBoardDocumentCommands() {
+      if (this._documentCommands) return this._documentCommands;
+      this._ensurePersistenceService();
+      this._documentCommands = new BoardDocumentCommandService({
+        repository: this._boardRepository,
+        boardObjectPolicy: this._boardObjectPolicy,
+        lifecycle: this._boardLifecycle,
+        getActiveBoardId: () => this.getBoardId(),
+        getActiveRevision: () => this._persistence?.revision ?? null,
+        getActiveController: (guard, buildFormula) => this._ensureBoardController('local_agent', guard, buildFormula),
+        buildFormula: (spec) => buildFormulaFromSemanticSpec(spec, {
+          defaultInk: this.boardThemeConfig.defaultInk,
+          render: (args) => this._formulaRenderer.render(args),
+        }),
+        prepareCreatedObject: (object) => this._applyBoardDefaultInkToObjectTree(object),
+        prepareUpdatedObject: (object) => this._syncObjectAutoInk(object, this.boardThemeConfig),
+      });
+      return this._documentCommands;
+    },
     getBoardWorkspace() {
       if (!this._boardWorkspace) {
         this._boardWorkspace = new BoardWorkspaceService(this._ensurePersistenceService());
       }
       return this._boardWorkspace;
     },
-    _ensureBoardController(interactionChannel = 'local_agent') {
-      if (this._boardControllers.has(interactionChannel)) return this._boardControllers.get(interactionChannel);
+    _ensureBoardController(interactionChannel = 'local_agent', commitGuard, boundedBuildFormula) {
+      if (!commitGuard && this._boardControllers.has(interactionChannel)) return this._boardControllers.get(interactionChannel);
       const controller = new BoardController({
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
-        buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
+        buildFormula: boundedBuildFormula || ((spec) => this._buildFormulaFromSemanticSpec(spec)),
         pushHistoryCommand: (command) => this._boardHistory.record(command),
         runWithoutHistory: (callback) => this._boardHistory.runSuspended(callback),
         prepareCreatedObject: (object) => {
@@ -282,8 +308,9 @@ export default {
         getLayoutSafeArea: () => workspaceSafeArea(this.canvas, this.$el.closest("#app")),
         onCommittedOperation: (effect) => this._boardAnalytics.record(effect, { interactionChannel }),
         lifecycle: this._boardLifecycle,
+        commitGuard,
       });
-      this._boardControllers.set(interactionChannel, controller);
+      if (!commitGuard) this._boardControllers.set(interactionChannel, controller);
       return controller;
     },
     _recordUiOperation(effect) {
@@ -724,43 +751,10 @@ export default {
       };
     },
     async _buildFormulaFromSemanticSpec(spec) {
-      const fixedInk = spec.mathboardInkMode === INK_MODE_FIXED
-        ? [spec.fill, spec.stroke].find((paint) => paint && paint !== 'none' && paint !== 'transparent')
-        : null;
-      const formula = await this._buildFormulaObject(
-        { latex: spec.latex, ink: fixedInk },
-        {
-          x: spec.left ?? 0,
-          y: spec.top ?? 0,
-        },
-      );
-      if (!formula) return null;
-      const next = {};
-      [
-        "left",
-        "top",
-        "scaleX",
-        "scaleY",
-        "skewX",
-        "skewY",
-        "angle",
-        "flipX",
-        "flipY",
-        "originX",
-        "originY",
-        "opacity",
-      ].forEach((key) => {
-        if (spec[key] !== undefined && spec[key] !== null) next[key] = spec[key];
+      return buildFormulaFromSemanticSpec(spec, {
+        defaultInk: this.boardThemeConfig.defaultInk,
+        render: ({ latex, position, ink }) => this._buildFormulaObject({ latex, ink }, position),
       });
-      if (Object.keys(next).length) {
-        formula.set(next);
-        formula.setCoords();
-      }
-      // Keep the monochrome semantic ink on the root for replacement and persistence.
-      if (fixedInk) formula.set('fill', fixedInk);
-      // Ink mode is semantic; vector formulas apply destination ink via applyInk.
-      applyMaterializedFormulaMetadata(formula, spec);
-      return formula;
     },
     async _materializeStamp(encoded) {
       const doc = decodeStampString(encoded);

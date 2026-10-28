@@ -21,9 +21,10 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { createVisualCaptureAdapter } from '../board/capture/visual-capture.js'
 import { boardCommandMutatesBoard } from '../board/agent/command-registry.js'
-import { executeDesktopBoardCommand, getDesktopBoardMethods } from '../board/agent/desktop-commands.js'
+import { getDesktopBoardMethods } from '../board/agent/desktop-commands.js'
+import { validateBoardId } from '../board/BoardDocumentCommandService.js'
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 const MAX_REPLY_BYTES = 7 * 1024 * 1024
 const MAX_COMMAND_LIFETIME_MS = 10000
 const allowed = new Set(getDesktopBoardMethods())
@@ -31,6 +32,9 @@ const safeCodes = new Set([
   'board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
   'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed',
   'invalid_capture_request', 'capture_too_large', 'capture_failed',
+  'invalid_board_id', 'board_conflict', 'board_not_found', 'board_archived',
+  'board_context_changed', 'board_context_required', 'command_timeout',
+  'execution_unknown', 'board_busy',
 ])
 
 function safeError(error) {
@@ -39,6 +43,7 @@ function safeError(error) {
 }
 
 function validEnvelope(request, appGeneration, rendererGeneration) {
+  try { validateBoardId(request?.boardId) } catch { return false }
   return request && typeof request === 'object'
     && typeof request.requestId === 'string' && request.requestId.length > 0 && request.requestId.length <= 128
     && request.appGeneration === appGeneration
@@ -70,10 +75,11 @@ export async function connectDesktopBoardBridge(getBoard, {
   const seenRequestIds = new Set()
 
   const publishState = (ready, epoch) => {
+    const activeBoardId = board.getBoardId?.() || null
     const task = stateQueue.then(async () => {
       if (disposed) return
       const generation = await invokeCommand('board_bridge_state', {
-        rendererGeneration, boardEpoch: epoch, ready,
+        rendererGeneration, boardEpoch: epoch, activeBoardId, ready,
       })
       if (appGeneration && appGeneration !== generation) throw new Error('Desktop app generation changed.')
       appGeneration = generation
@@ -88,7 +94,8 @@ export async function connectDesktopBoardBridge(getBoard, {
   const handleRequest = async (request) => {
     if (disposed || !validEnvelope(request, appGeneration, rendererGeneration)) return
     const reply = { requestId: request.requestId, appGeneration,
-      rendererGeneration, boardEpoch: request.boardEpoch, schemaVersion: SCHEMA_VERSION }
+      rendererGeneration, boardEpoch: request.boardEpoch, boardId: request.boardId,
+      schemaVersion: SCHEMA_VERSION }
     if (!allowed.has(request.method)) {
       reply.ok = false
       reply.error = { code: 'invalid_command', message: 'Unsupported board command.' }
@@ -99,10 +106,21 @@ export async function connectDesktopBoardBridge(getBoard, {
       reply.ok = false
       reply.error = { code: 'board_not_ready', message: 'Board changed before execution.' }
     } else {
-      const finish = boardCommandMutatesBoard(request.method) ? capture.beginMutation() : () => {}
+      const mutates = boardCommandMutatesBoard(request.method)
+      const finish = mutates && request.boardId === board.getBoardId()
+        ? capture.beginMutation() : () => {}
       try {
-        reply.result = await executeDesktopBoardCommand(board.getBoardController(), request, capture)
+        reply.result = await board.getBoardDocumentCommands().executeOnBoard(request, {
+          expiresAtMs: request.expiresAtMs,
+          capture,
+          isCurrent: () => !disposed && getBoard() === board && request.boardEpoch === lifecycle.epoch,
+        })
         reply.ok = true
+        if (mutates && Date.now() >= request.expiresAtMs) {
+          reply.ok = false
+          delete reply.result
+          reply.error = { code: 'execution_unknown', message: 'Board outcome requires readback.' }
+        }
       } catch (error) {
         reply.ok = false
         reply.error = safeError(error)
@@ -113,9 +131,13 @@ export async function connectDesktopBoardBridge(getBoard, {
     if (disposed) return
     let replyJson = JSON.stringify(reply)
     if (new TextEncoder().encode(replyJson).length > MAX_REPLY_BYTES) {
+      const possibleWrite = boardCommandMutatesBoard(request.method) && reply.ok
       replyJson = JSON.stringify({ requestId: request.requestId, appGeneration,
-        rendererGeneration, boardEpoch: request.boardEpoch, schemaVersion: SCHEMA_VERSION,
-        ok: false, error: { code: 'capture_too_large', message: 'Board result exceeds the limit.' } })
+        rendererGeneration, boardEpoch: request.boardEpoch, boardId: request.boardId,
+        schemaVersion: SCHEMA_VERSION,
+        ok: false, error: possibleWrite
+          ? { code: 'execution_unknown', message: 'Board outcome requires readback.' }
+          : { code: 'capture_too_large', message: 'Board result exceeds the limit.' } })
     }
     try { await invokeCommand('board_bridge_reply', { replyJson }) } catch {
       // Native timeout/revocation may have removed this request already.
@@ -149,7 +171,8 @@ export async function connectDesktopBoardBridge(getBoard, {
     unlisten()
     capture.dispose()
     void invokeCommand('board_bridge_state', {
-      rendererGeneration, boardEpoch: lifecycle.epoch, ready: false,
+      rendererGeneration, boardEpoch: lifecycle.epoch, activeBoardId: board.getBoardId?.() || null,
+      ready: false,
     }).catch(() => {})
   }
 }

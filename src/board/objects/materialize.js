@@ -72,6 +72,13 @@ function applyIdentity(object, node, { restoreIds = false } = {}) {
   }
 }
 
+export function disposeMaterializedObject(object, seen = new Set()) {
+  if (!object || seen.has(object)) return
+  seen.add(object)
+  object.getObjects?.().forEach(child => disposeMaterializedObject(child, seen))
+  try { object.dispose?.() } catch { /* Preserve the original materialization failure. */ }
+}
+
 /**
  * Materialize one semantic node into a Fabric object (off-canvas).
  *
@@ -80,6 +87,7 @@ function applyIdentity(object, node, { restoreIds = false } = {}) {
  * @returns {Promise<object>}
  */
 export async function materializeBoardObject(node, options = {}) {
+  options.beforeNode?.()
   const buildFormula = options.buildFormula
   if (typeof buildFormula !== 'function') {
     throw new Error('Formula builder is required.')
@@ -170,15 +178,20 @@ export async function materializeBoardObject(node, options = {}) {
     }
     case 'group': {
       const children = []
-      for (const child of node.objects || []) {
-        children.push(await materializeBoardObject(child, options))
+      try {
+        for (const child of node.objects || []) {
+          children.push(await materializeBoardObject(child, options))
+        }
+        object = new Group(children, {
+          ...transform,
+          ...style,
+          subTargetCheck: false,
+          interactive: false,
+        })
+      } catch (error) {
+        children.forEach(child => disposeMaterializedObject(child))
+        throw error
       }
-      object = new Group(children, {
-        ...transform,
-        ...style,
-        subTargetCheck: false,
-        interactive: false,
-      })
       applyInkMetadata(object, node)
       break
     }
@@ -197,8 +210,13 @@ export async function materializeBoardObject(node, options = {}) {
  */
 export async function materializeBoardObjects(specs, options = {}) {
   const objects = []
-  for (const node of specs) {
-    objects.push(await materializeBoardObject(node, options))
+  try {
+    for (const node of specs) {
+      objects.push(await materializeBoardObject(node, options))
+    }
+  } catch (error) {
+    objects.forEach(object => disposeMaterializedObject(object))
+    throw error
   }
   return objects
 }
