@@ -16,7 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [features]
 # Never enabled in normal distribution builds.
-phase-c-verification = []
+phase-c-verification = ["dep:windows-sys"]
 
 [build-dependencies]
 tauri-build = { version = "2.7.1", features = [] }
@@ -28,3 +28,14 @@ tauri = { version = "2.12.1", features = [] }
 tauri-plugin-opener = "2"
 uuid = { version = "1.26.1", features = ["v4"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", optional = true, features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+] }

@@ -41,7 +41,7 @@ pub fn run() {
     let builder = builder.setup(|app| {
         use tauri::Manager;
         if std::env::var_os("MATHBOARD_PHASE_C_IPC_PROBE").is_some() {
-            #[cfg(unix)]
+            #[cfg(any(unix, windows))]
             app.manage(ipc_probe::ProbeServer::start()?);
         }
         native_smoke::install(app.handle().clone());
@@ -110,7 +110,7 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
-                #[cfg(unix)]
+                #[cfg(any(unix, windows))]
                 {
                     use tauri::Manager;
                     if let Some(server) = app.try_state::<ipc_probe::ProbeServer>() {

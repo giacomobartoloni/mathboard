@@ -2145,6 +2145,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-opener",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

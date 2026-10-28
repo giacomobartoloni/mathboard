@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-//! Phase C feasibility-only PING/PONG socket, opt-in behind a Cargo feature.
+//! Phase C feasibility-only PING/PONG transport, opt-in behind a Cargo feature.
 //! The probe transports no board data, MCP methods, or authentication grants.
 
 #[cfg(unix)]
@@ -252,10 +252,15 @@ mod unix {
 #[cfg(unix)]
 pub use unix::{ProbeServer, ping};
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+pub use windows::{ProbeServer, ping};
+
+#[cfg(not(any(unix, windows)))]
 pub fn ping() -> std::io::Result<()> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
-        "Windows named-pipe Phase C feasibility is not implemented",
+        "Phase C companion feasibility is unsupported on this platform",
     ))
 }
