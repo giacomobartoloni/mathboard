@@ -94,15 +94,20 @@ test('mobile layout clears the current board switcher', async ({ page, request }
   expect(result.safeArea.top).toBeGreaterThanOrEqual(switcher.y + switcher.height + 15)
   expect(result.bounds.top).toBeGreaterThanOrEqual(result.safeArea.top - 1e-7)
 })
-test('short mobile layout uses the canvas below horizontal drawing tools', async ({ page, request }) => {
+test('short mobile layout keeps objects right of the minimal vertical drawing tools', async ({ page, request }) => {
   await page.setViewportSize({ width: 320, height: 568 })
   await ready(page, request)
+  const toolbar = page.getByRole('toolbar', { name: 'Drawing tools' })
+  await expect(toolbar).toHaveCSS('flex-direction', 'column')
+  await expect(page.locator('.left-chrome')).toHaveClass(/tools-compact/)
+  await expect(page.locator('.color-panel')).toBeHidden()
   const node = await send(request, 'create', { spec: { type: 'rect', width: 80, height: 60, left: 200, top: 300 } })
   const rail = await page.locator('.left-chrome').boundingBox()
   const result = await send(request, 'layout', { ids: [node.id], margin: 16 })
-  expect(result.safeArea.left).toBeLessThanOrEqual(16)
-  expect(result.safeArea.top).toBeGreaterThanOrEqual(rail.y + rail.height - 1)
+  expect(result.safeArea.left).toBeGreaterThanOrEqual(rail.x + rail.width + 15)
+  expect(result.bounds.left).toBeGreaterThanOrEqual(result.safeArea.left - 1e-7)
   expect(result.bounds.top).toBeGreaterThanOrEqual(result.safeArea.top - 1e-7)
+  expect(result.bounds.left + result.bounds.width).toBeLessThanOrEqual(result.safeArea.left + result.safeArea.width + 1e-6)
 })
 test('HTTP overflow changes neither scene nor the existing Redo command', async ({ page, request }) => {
   await ready(page, request)
