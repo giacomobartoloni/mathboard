@@ -46,6 +46,7 @@ import { BOARD_THEMES, INK_MODE_AUTO, INK_MODE_FIXED, normalizeBoardTheme } from
 import { extendedShapeInkPatch } from '../board/objects/shapeInk.js';
 import { applyMaterializedFormulaMetadata } from "../formulas/applyMaterializedFormulaMetadata.js";
 import { BoardController, BOARD_CONTROLLER_ERROR_CODES } from "../board/BoardController.js";
+import { BoardLifecycle } from "../board/BoardLifecycle.js";
 import { MATHBOARD_SERVICES } from "../core/serviceKeys.js";
 import {
   ensureMathBoardObjectId,
@@ -83,6 +84,7 @@ import { SelectionMutations } from "../board/interactions/SelectionMutations.js"
 import { ShapeGesture } from "../board/interactions/ShapeGesture.js";
 import { TextInsertionSession } from "../board/interactions/TextInsertionSession.js";
 import { PanGesture } from "../board/interactions/PanGesture.js";
+import { createBoardOperationAnalytics } from "../board/analytics/BoardOperationAnalytics.js";
 import {
   trackEvent,
   trackBoardEngaged,
@@ -90,10 +92,8 @@ import {
 } from "../analytics";
 import {
   ANALYTICS_EVENTS,
-  ANALYTICS_OBJECT_TYPES,
   ANALYTICS_FORMULA_MODES,
 } from "../analytics/events.js";
-import { buildObjectDeletedMetadata } from "../analytics/deletionMetadata.js";
 import {
   StampError,
   STAMP_ERROR_CODES,
@@ -200,16 +200,29 @@ export default {
     this._textInsertion = null;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
+    this._pendingFormulaRenders = 0;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
+    this._boardLifecycle = new BoardLifecycle({
+      onReadyChanged: (ready) => {
+        if (this.canvas?.upperCanvasEl) {
+          this.canvas.upperCanvasEl.style.pointerEvents = ready ? '' : 'none';
+        }
+      },
+    });
     this._selectionMutations = new SelectionMutations({
       getCanvas: () => this.canvas,
       history: this._boardHistory,
       boardObjectPolicy: this._boardObjectPolicy,
       getDefaultInk: () => this.boardThemeConfig.defaultInk,
+      onCommittedOperation: (effect) => this._recordUiOperation(effect),
+      lifecycle: this._boardLifecycle,
     });
     this._persistence = null;
     this._boardWorkspace = null;
-    this._boardController = null;
+    this._boardControllers = new Map();
+    this._boardAnalytics = createBoardOperationAnalytics({
+      trackEvent, trackBoardEngaged, recordProductAction,
+    });
     this._persistenceBootstrapped = false;
   },
   methods: {
@@ -237,11 +250,12 @@ export default {
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
         onActiveBoardChanged: (board) => this.$emit('active-board-changed', board),
+        lifecycle: this._boardLifecycle,
       });
       return this._persistence;
     },
     getBoardController() {
-      return this._ensureBoardController();
+      return this._ensureBoardController('local_agent');
     },
     getBoardWorkspace() {
       if (!this._boardWorkspace) {
@@ -249,9 +263,9 @@ export default {
       }
       return this._boardWorkspace;
     },
-    _ensureBoardController() {
-      if (this._boardController) return this._boardController;
-      this._boardController = new BoardController({
+    _ensureBoardController(interactionChannel = 'local_agent') {
+      if (this._boardControllers.has(interactionChannel)) return this._boardControllers.get(interactionChannel);
+      const controller = new BoardController({
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
@@ -266,8 +280,19 @@ export default {
         isMutationStable: () => this.sessionReady && this._isBoardInteractionStable(),
         getBoardId: () => this.getBoardId(),
         getLayoutSafeArea: () => workspaceSafeArea(this.canvas, this.$el.closest("#app")),
+        onCommittedOperation: (effect) => this._boardAnalytics.record(effect, { interactionChannel }),
+        lifecycle: this._boardLifecycle,
       });
-      return this._boardController;
+      this._boardControllers.set(interactionChannel, controller);
+      return controller;
+    },
+    _recordUiOperation(effect) {
+      this._boardAnalytics.record(effect, { interactionChannel: 'ui' });
+    },
+    _presentAfterUiCommit(present) {
+      try { present(); } catch (error) {
+        console.error('Board presentation failed after commit.', error);
+      }
     },
     /** Immutable, read-only interaction flags for the local visual capture bridge. */
     readInteractionState() {
@@ -278,6 +303,7 @@ export default {
         transform: Boolean(this._pendingTransform),
         textEdit: Boolean(this._pendingText),
         textInsertionEditing: Boolean(this._textInsertion?.isPendingEditing()),
+        formulaRender: this._pendingFormulaRenders > 0,
       };
     },
     _isBoardInteractionStable() {
@@ -627,6 +653,7 @@ export default {
       this.refreshSelectionPanel();
     },
     onSelectionAction(actionId) {
+      if (!this._boardLifecycle.isReady()) return;
       if (actionId === ACTION_DELETE) {
         this.deleteSelection();
         this.$nextTick(() => this._focusBoard());
@@ -833,9 +860,11 @@ export default {
      * @returns {Promise<{ ok: true, group: object } | { ok: false, message: string }>}
      */
     async insertStamp(encoded) {
-      if (!this.canvas) {
+      if (!this.canvas || !this._boardLifecycle.isReady()) {
         return { ok: false, message: "Board is not ready." };
       }
+      const canvas = this.canvas;
+      const lease = this._boardLifecycle.capture();
       let objects;
       try {
         objects = await this._materializeStamp(encoded);
@@ -846,7 +875,7 @@ export default {
         console.error("insertStamp failed", error);
         return { ok: false, message };
       }
-      if (!this.canvas) {
+      if (this.canvas !== canvas || !this._boardLifecycle.assertCurrent(lease)) {
         return { ok: false, message: "Board is not ready." };
       }
 
@@ -856,13 +885,11 @@ export default {
       this._placeGroupAtViewportCenter(group);
       this.canvas.add(group);
       this.canvas.setActiveObject(group);
-      this.canvas.requestRenderAll();
-      this._recordAdd(group);
-      this.refreshSelectionPanel();
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-        object_type: "stamp",
+      if (!this._recordAdd(group)) return { ok: false, message: "Stamp could not be committed." };
+      this._recordUiOperation({ kind: 'create', objectKinds: ['stamp'] });
+      this._presentAfterUiCommit(() => {
+        this.canvas.requestRenderAll();
+        this.refreshSelectionPanel();
       });
       return { ok: true, group };
     },
@@ -890,39 +917,42 @@ export default {
      * Materializes before clearing so a failed stamp leaves the board intact.
      */
     async bootstrapFromStamp(encoded) {
-      if (!this.canvas) {
+      if (!this.canvas || !this._boardLifecycle.isReady()) {
         return { ok: false, message: "Board is not ready." };
       }
-      let objects;
-      try {
-        objects = await this._materializeStamp(encoded);
-      } catch (error) {
-        const message = error instanceof StampError
-          ? error.message
-          : "Could not recreate stamp objects.";
-        console.error("bootstrapFromStamp failed", error);
-        return { ok: false, message };
-      }
-      if (!this.canvas) {
-        return { ok: false, message: "Board is not ready." };
-      }
+      return this._boardLifecycle.transition(async (token) => {
+        const canvas = this.canvas;
+        let objects;
+        try {
+          objects = await this._materializeStamp(encoded);
+        } catch (error) {
+          const message = error instanceof StampError
+            ? error.message
+            : "Could not recreate stamp objects.";
+          console.error("bootstrapFromStamp failed", error);
+          return { ok: false, message };
+        }
+        if (this.canvas !== canvas || !this._boardLifecycle.assertTransition(token)) {
+          return { ok: false, message: "Board is not ready." };
+        }
 
-      this._clearBoardContents();
-      const group = this._wrapAsStampGroup(objects);
-      regenerateMathBoardObjectIds(group);
-      this._applyBoardDefaultInkToObjectTree(group);
-      this._placeGroupAtViewportCenter(group);
-      this.canvas.add(group);
-      this.canvas.setActiveObject(group);
-      this.canvas.requestRenderAll();
-      this._recordAdd(group);
-      this.refreshSelectionPanel();
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-        object_type: "stamp_template",
+        this._clearBoardContents();
+        const group = this._wrapAsStampGroup(objects);
+        regenerateMathBoardObjectIds(group);
+        this._applyBoardDefaultInkToObjectTree(group);
+        this._placeGroupAtViewportCenter(group);
+        this.canvas.add(group);
+        this.canvas.setActiveObject(group);
+        if (!this._recordAdd(group, { transitionToken: token })) {
+          return { ok: false, message: "Stamp could not be committed." };
+        }
+        this._recordUiOperation({ kind: 'create', objectKinds: ['stamp_template'] });
+        this._presentAfterUiCommit(() => {
+          this.canvas.requestRenderAll();
+          this.refreshSelectionPanel();
+        });
+        return { ok: true, group };
       });
-      return { ok: true, group };
     },
     exportSelectionToStamp() {
       if (!this.canvas) {
@@ -940,21 +970,19 @@ export default {
     groupSelection() {
       const changed = this._selectionMutations.group();
       if (changed) {
-        this.refreshSelectionPanel();
-        trackBoardEngaged();
-        recordProductAction();
+        this._presentAfterUiCommit(() => this.refreshSelectionPanel());
       }
       return changed;
     },
     ungroupSelection() {
       const changed = this._selectionMutations.ungroup();
       if (changed) {
-        const objects = this.canvas.getActiveObjects();
-        const chrome = selectionObjectChromeForBoard(this.boardTheme);
-        objects.forEach((object) => applySelectionObjectChrome(object, chrome));
-        this.refreshSelectionPanel();
-        trackBoardEngaged();
-        recordProductAction();
+        this._presentAfterUiCommit(() => {
+          const objects = this.canvas.getActiveObjects();
+          const chrome = selectionObjectChromeForBoard(this.boardTheme);
+          objects.forEach((object) => applySelectionObjectChrome(object, chrome));
+          this.refreshSelectionPanel();
+        });
       }
       return changed;
     },
@@ -997,6 +1025,7 @@ export default {
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
     async _buildFormulaObject(formulaData, position) {
+      this._pendingFormulaRenders += 1;
       try {
         return await this._formulaRenderer.render({
           latex: formulaData.latex,
@@ -1008,11 +1037,13 @@ export default {
       } catch (error) {
         console.error("Formula rendering failed", error);
         return null;
+      } finally {
+        this._pendingFormulaRenders -= 1;
       }
     },
     async addFormulaToCanvas(formulaData, position) {
       try {
-        await this._ensureBoardController().create({
+        await this._ensureBoardController('ui').create({
           type: 'formula',
           latex: formulaData.latex,
           left: position.x,
@@ -1026,18 +1057,13 @@ export default {
         }
         return false;
       }
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-        object_type: ANALYTICS_OBJECT_TYPES.FORMULA,
-      });
       return true;
     },
     async replaceFormula(existing, formulaData) {
       existing = toRaw(existing);
       if (!existing || !this.canvas) return false;
       try {
-        await this._ensureBoardController().update(getMathBoardObjectId(existing), {
+        await this._ensureBoardController('ui').update(getMathBoardObjectId(existing), {
           latex: formulaData.latex,
         });
       } catch (error) {
@@ -1048,9 +1074,6 @@ export default {
         }
         return false;
       }
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.FORMULA_EDITED);
       return true;
     },
     enableShapeDrawing() {
@@ -1103,15 +1126,10 @@ export default {
     deleteSelection() {
       const removed = this._selectionMutations.delete();
       if (!removed.length) return;
-      const deletionMetadata = buildObjectDeletedMetadata(
-        removed,
-        (object) => this._boardObjectPolicy.kindOf(object),
-      );
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_DELETED, deletionMetadata);
-      this.refreshSelectionPanel();
-      this._focusBoard();
+      this._presentAfterUiCommit(() => {
+        this.refreshSelectionPanel();
+        this._focusBoard();
+      });
     },
     isTextEditing() {
       const active = this.canvas?.getActiveObject();
@@ -1158,41 +1176,55 @@ export default {
       if (this._cancelGeometryTransform()) return true;
       return this.clearSelection();
     },
-    _recordAdd(object) {
-      if (!object || !this.canvas) return;
+    _recordAdd(object, { transitionToken = null } = {}) {
+      if (!object || !this.canvas) return false;
       this._ensureObjectId(object);
       const index = this.canvas.getObjects().indexOf(object);
-      if (index < 0) return;
-      this._boardHistory.record({ type: 'add', object, index });
+      if (index < 0) return false;
+      let committed = false;
+      if (this._boardLifecycle.isReady() || this._boardLifecycle.assertTransition(transitionToken)) {
+        try {
+          committed = this._boardHistory.record({ type: 'add', object, index }) === true;
+        } catch (error) {
+          console.error('Board object could not be recorded.', error);
+        }
+      }
+      if (committed) return true;
+      if (this.canvas.getActiveObjects().includes(object)) this.canvas.discardActiveObject();
+      this.canvas.remove(object);
+      this.canvas.requestRenderAll();
+      return false;
     },
     _runHistory(direction) {
       if (!this.canvas) return null;
       this._pendingTransform = null;
       this._pendingText = null;
       const command = direction === "undo" ? this._boardHistory.undo() : this._boardHistory.redo();
-      if (command) this.refreshSelectionPanel();
       return command;
     },
     undo() {
+      if (!this._boardLifecycle.isReady()) return;
       const command = this._runHistory('undo');
       if (!command) return;
-      this._notifyDocumentChanged();
-      trackEvent(ANALYTICS_EVENTS.UNDO_USED, { command_type: command.type });
+      this._recordUiOperation({ kind: 'undo', commandType: command.type });
+      try { this._notifyDocumentChanged(); } finally {
+        this._presentAfterUiCommit(() => this.refreshSelectionPanel());
+      }
     },
     redo() {
+      if (!this._boardLifecycle.isReady()) return;
       const command = this._runHistory('redo');
       if (!command) return;
-      this._notifyDocumentChanged();
-      trackEvent(ANALYTICS_EVENTS.REDO_USED, { command_type: command.type });
+      this._recordUiOperation({ kind: 'redo', commandType: command.type });
+      try { this._notifyDocumentChanged(); } finally {
+        this._presentAfterUiCommit(() => this.refreshSelectionPanel());
+      }
     },
     onPathCreated({ path }) {
       this._pencilGesture = false;
-      this._recordAdd(path);
-      trackBoardEngaged();
-      recordProductAction();
-      trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-        object_type: ANALYTICS_OBJECT_TYPES.PATH,
-      });
+      if (this._recordAdd(path)) {
+        this._recordUiOperation({ kind: 'create', objectKinds: ['path'] });
+      }
     },
     onBeforeTransform({ transform }) {
       if (!this._selectionGesture) {
@@ -1252,11 +1284,10 @@ export default {
         this._pendingText = null;
         const after = snapshotObject(opt.target);
         if (snapshotsEqual(pendingText.before, after)) return;
-        this._boardHistory.record({
+        if (this._boardHistory.record({
           type: 'modify',
           entries: [{ object: opt.target, before: pendingText.before, after }]
-        });
-        trackEvent(ANALYTICS_EVENTS.TEXT_EDITED);
+        })) this._recordUiOperation({ kind: 'text_edit' });
       } finally {
         this.refreshSelectionPanel();
       }
@@ -1353,13 +1384,9 @@ export default {
         getInk: () => this.activeInk,
         getInkMode: () => this.inkMode,
         onCommitted: (shape, shapeType) => {
-          this._recordAdd(shape);
-          trackBoardEngaged();
-          recordProductAction();
-          trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-            object_type: ANALYTICS_OBJECT_TYPES.SHAPE,
-            shape: shapeType,
-          });
+          if (this._recordAdd(shape)) {
+            this._recordUiOperation({ kind: 'create', objectKinds: ['shape'], shape: shapeType });
+          }
         },
         onComplete: () => this.$emit('shape-drawing-completed'),
       });
@@ -1385,12 +1412,9 @@ export default {
           trackEvent(ANALYTICS_EVENTS.TEXT_CREATION_CANCELLED);
         },
         onCommitted: (text) => {
-          this._recordAdd(text);
-          trackBoardEngaged();
-          recordProductAction();
-          trackEvent(ANALYTICS_EVENTS.OBJECT_CREATED, {
-            object_type: ANALYTICS_OBJECT_TYPES.TEXT,
-          });
+          if (this._recordAdd(text)) {
+            this._recordUiOperation({ kind: 'create', objectKinds: ['text'] });
+          }
         },
         onComplete: () => this.$emit('text-editing-completed'),
       });
@@ -1440,6 +1464,7 @@ export default {
     });
   },
   beforeUnmount() {
+    this._boardLifecycle.dispose();
     this._clearGeometryEditing();
     this._shapeGesture?.dispose();
     this._textInsertion?.dispose();

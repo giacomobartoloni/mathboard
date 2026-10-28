@@ -23,6 +23,7 @@ import { Rect } from 'fabric'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js'
 import { ensureMathBoardObjectId } from '../src/board/ids.js'
+import { BoardLifecycle } from '../src/board/BoardLifecycle.js'
 import {
   BoardPersistenceService,
   BOARD_PERSISTENCE_ERROR_CODES,
@@ -36,6 +37,7 @@ function makeCanvas(objects = []) {
   const list = objects.slice()
   return {
     getObjects: () => list.slice(),
+    add: (object) => { list.push(object) },
     remove: (object) => {
       const index = list.indexOf(object)
       if (index >= 0) list.splice(index, 1)
@@ -67,20 +69,22 @@ function makeRepository(records = new Map()) {
   }
 }
 
-function makeService({ canvas = makeCanvas(), repository = makeRepository(), isDocumentStable } = {}) {
+function makeService({ canvas = makeCanvas(), repository = makeRepository(), isDocumentStable, lifecycle,
+  resetHistory = () => {}, suspendHistory = () => {} } = {}) {
   return new BoardPersistenceService({
     repository,
     boardObjectPolicy: new BoardObjectPolicy(),
     getCanvas: () => canvas,
     buildFormula: async () => null,
-    resetHistory: () => {},
-    suspendHistory: () => {},
+    resetHistory,
+    suspendHistory,
     getTitle: () => 'Board',
     sessionStorage: new MapStorage(),
     now: () => '2026-10-08T00:00:00.000Z',
     idleDebounceMs: 60000,
     maxWaitMs: 60000,
     isDocumentStable,
+    lifecycle,
   })
 }
 
@@ -127,6 +131,29 @@ test('flush defers an unstable document until it becomes committed', async () =>
   service.dispose()
 })
 
+test('a delayed flush cannot save or update status for a different active board', async () => {
+  const rect = new Rect({ width: 10, height: 10 })
+  ensureMathBoardObjectId(rect, 'mbobj_rect')
+  const repository = makeRepository()
+  let finishRead
+  repository.get = () => new Promise(resolve => {
+    finishRead = () => resolve({ id: 'mb_a', kind: 'saved', createdAt: '2026-10-08T00:00:00.000Z' })
+  })
+  const service = makeService({ canvas: makeCanvas([rect]), repository })
+  service.boardId = 'mb_a'
+  service.notifyDocumentChanged()
+  const pending = service.flush()
+  await new Promise(resolve => setImmediate(resolve))
+  service.boardId = 'mb_b'
+  service.status = { ...service.status, state: SAVE_STATES.CLEAN }
+  finishRead()
+
+  await assert.rejects(pending, /Active board changed while saving/)
+  assert.equal(repository.puts.length, 0)
+  assert.equal(service.status.state, SAVE_STATES.CLEAN)
+  service.dispose()
+})
+
 test('failed flush blocks opening another board and preserves the current canvas', async () => {
   const current = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(current, 'mbobj_current')
@@ -146,6 +173,116 @@ test('failed flush blocks opening another board and preserves the current canvas
   await assert.rejects(() => service.openBoard('mb_target'), /disk full/)
   assert.deepEqual(canvas.getObjects(), [current])
   assert.equal(service.boardId, 'mb_current')
+  service.dispose()
+})
+
+test('opening a board blocks new work before reading storage and invalidates the previous lease', async () => {
+  const lifecycle = new BoardLifecycle()
+  const old = lifecycle.capture()
+  const document = { format: 'mathboard-board', version: 1, title: 'Target', objects: [] }
+  let finishRead
+  const repository = makeRepository()
+  repository.get = async id => id === 'mb_target'
+    ? new Promise(resolve => { finishRead = () => resolve({ id, title: 'Target', document }) })
+    : null
+  const service = makeService({ repository, lifecycle })
+  service.boardId = 'mb_current'
+  const pending = service.openBoard('mb_target')
+
+  assert.equal(lifecycle.isReady(), false)
+  assert.equal(lifecycle.assertCurrent(old), false)
+  await new Promise(resolve => setImmediate(resolve))
+  finishRead()
+  await pending
+  assert.equal(service.boardId, 'mb_target')
+  assert.equal(lifecycle.isReady(), true)
+  assert.equal(lifecycle.assertCurrent(old), false)
+  service.dispose()
+})
+
+test('an unrecoverable canvas replacement leaves the board lifecycle closed', async () => {
+  const lifecycle = new BoardLifecycle()
+  const keep = new Rect({ width: 10, height: 10 })
+  const canvas = makeCanvas([keep])
+  canvas.add = () => { throw new Error('canvas cannot restore') }
+  const document = { format: 'mathboard-board', version: 1, title: 'Target',
+    objects: [{ id: 'mbobj_new', type: 'rect', width: 12, height: 8 }] }
+  const repository = makeRepository(new Map([['mb_target', { id: 'mb_target', title: 'Target', document }]]))
+  const service = makeService({ canvas, repository, lifecycle })
+
+  await assert.rejects(() => service.openBoard('mb_target'), /replacement and rollback failed/)
+  assert.equal(lifecycle.isReady(), false)
+  service.dispose()
+})
+
+test('failed new-board canvas installation preserves the active board and objects', async () => {
+  const lifecycle = new BoardLifecycle()
+  const first = new Rect({ width: 10, height: 10 })
+  const second = new Rect({ width: 20, height: 20 })
+  const canvas = makeCanvas([first, second])
+  const remove = canvas.remove
+  let calls = 0
+  canvas.remove = object => {
+    calls += 1
+    if (calls === 2) throw new Error('canvas removal failed')
+    remove(object)
+  }
+  const repository = makeRepository(new Map([['mb_current', {
+    id: 'mb_current', kind: 'saved', title: 'Current',
+    document: { format: 'mathboard-board', version: 1, title: 'Current', objects: [] },
+  }]]))
+  const service = makeService({ canvas, repository, lifecycle })
+  service.boardId = 'mb_current'
+
+  await assert.rejects(() => service.createNewBoard('Next'), /canvas removal failed/)
+  assert.equal(service.boardId, 'mb_current')
+  assert.deepEqual(canvas.getObjects(), [first, second])
+  assert.equal((await repository.list()).length, 1)
+  assert.equal(lifecycle.isReady(), true)
+  service.dispose()
+})
+
+test('a failed repaint after replacement keeps the new board identity and a usable lifecycle', async () => {
+  const lifecycle = new BoardLifecycle()
+  const canvas = makeCanvas([new Rect({ width: 10, height: 10 })])
+  canvas.requestRenderAll = () => { throw new Error('paint failed') }
+  const document = { format: 'mathboard-board', version: 1, title: 'B', objects: [] }
+  const repository = makeRepository(new Map([['mb_b', { id: 'mb_b', title: 'B', document }]]))
+  const service = makeService({ canvas, repository, lifecycle })
+  service.boardId = 'mb_a'
+
+  await service.openBoard('mb_b')
+  assert.equal(service.boardId, 'mb_b')
+  assert.deepEqual(canvas.getObjects(), [])
+  assert.equal(lifecycle.isReady(), true)
+  service.dispose()
+})
+
+test('failed history reset after canvas replacement fails closed', async () => {
+  const lifecycle = new BoardLifecycle()
+  const canvas = makeCanvas([new Rect({ width: 10, height: 10 })])
+  const document = { format: 'mathboard-board', version: 1, title: 'B', objects: [] }
+  const repository = makeRepository(new Map([['mb_b', { id: 'mb_b', title: 'B', document }]]))
+  const service = makeService({ canvas, repository, lifecycle,
+    resetHistory: () => { throw new Error('history reset failed') } })
+  service.boardId = 'mb_a'
+
+  await assert.rejects(() => service.openBoard('mb_b'), /history reset failed/)
+  assert.equal(lifecycle.isReady(), false)
+  service.dispose()
+})
+
+test('failed history resume after canvas replacement fails closed', async () => {
+  const lifecycle = new BoardLifecycle()
+  const canvas = makeCanvas([new Rect({ width: 10, height: 10 })])
+  const document = { format: 'mathboard-board', version: 1, title: 'B', objects: [] }
+  const repository = makeRepository(new Map([['mb_b', { id: 'mb_b', title: 'B', document }]]))
+  const service = makeService({ canvas, repository, lifecycle,
+    suspendHistory: flag => { if (!flag) throw new Error('history resume failed') } })
+  service.boardId = 'mb_a'
+
+  await assert.rejects(() => service.openBoard('mb_b'), /history resume failed/)
+  assert.equal(lifecycle.isReady(), false)
   service.dispose()
 })
 

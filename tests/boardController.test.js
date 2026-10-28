@@ -118,6 +118,34 @@ test('Formula render failure leaves single and batch creation unchanged', async 
   }
 })
 
+test('delayed Formula creation cannot commit after a board transition reuses the canvas', async () => {
+  let finishFormula
+  let epoch = 0
+  let ready = true
+  const lifecycle = {
+    capture: () => ({ epoch }),
+    isReady: () => ready,
+    assertCurrent: (lease) => ready && lease.epoch === epoch,
+  }
+  const effects = []
+  const { controller, canvas, history } = setup({
+    lifecycle,
+    buildFormula: () => new Promise(resolve => { finishFormula = resolve }),
+    onCommittedOperation: effect => effects.push(effect),
+  })
+  const pending = controller.create(formula)
+  await Promise.resolve()
+  ready = false
+  epoch += 1
+  ready = true
+  finishFormula(new FormulaObject([new Path('M 0 0 L 20 20')], { latex: formula.latex }))
+
+  await rejectsCode(() => pending, C.NOT_READY)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  assert.deepEqual(effects, [])
+})
+
 test('failed batch history commit leaves the board unchanged', async () => {
   const { canvas, controller, history } = setup({
     pushHistoryCommand: () => { throw new Error('history failed') },
@@ -126,6 +154,74 @@ test('failed batch history commit leaves the board unchanged', async () => {
   assert.equal(canvas.getObjects().length, 0)
   assert.equal(history.length, 0)
   assert.equal(canvas.renderOnAddRemove, true)
+})
+
+test('a declined history command rolls back creation without a committed effect', async () => {
+  const effects = []
+  const { canvas, controller } = setup({
+    pushHistoryCommand: () => false,
+    onCommittedOperation: (effect) => effects.push(effect),
+  })
+  await rejectsCode(() => controller.create(rect), C.COMMIT_FAILED)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.deepEqual(effects, [])
+})
+
+test('committed effects fire once after accepted history, including when presentation fails', async () => {
+  const effects = []
+  const { canvas, controller, history } = setup({
+    onCommittedOperation: (effect) => effects.push(effect),
+    afterMutation: () => { throw new Error('panel unavailable') },
+  })
+  canvas.requestRenderAll = () => { throw new Error('paint unavailable') }
+  const logged = []
+  const original = console.error
+  console.error = (message) => logged.push(message)
+  try {
+    const node = await controller.create(rect)
+    assert.equal(history.length, 1)
+    assert.equal(node.type, 'rect')
+    assert.deepEqual(effects, [{ kind: 'create', objectKinds: ['shape'] }])
+    await controller.update(node.id, { left: 100 })
+    assert.equal(history.length, 1)
+    assert.equal(effects.length, 1)
+  } finally {
+    console.error = original
+  }
+  assert.deepEqual(logged, [
+    'Board refresh failed.', 'Board mutation committed, but post-commit refresh failed.',
+    'Board refresh failed.', 'Board mutation committed, but post-commit refresh failed.',
+  ])
+})
+
+test('batch creation, Formula edit and batch deletion report categorical committed effects once', async () => {
+  const effects = []
+  const { controller } = setup({ onCommittedOperation: (effect) => effects.push(effect) })
+  const nodes = await controller.createMany([rect, formula])
+  await controller.update(nodes[1].id, { latex: 'x=2' })
+  await controller.deleteMany(nodes.map((node) => node.id))
+  await controller.clear()
+  assert.deepEqual(effects, [
+    { kind: 'create', objectKinds: ['shape', 'formula'] },
+    { kind: 'formula_edit' },
+    { kind: 'delete', objectKinds: ['shape', 'formula'] },
+  ])
+  assert.equal(JSON.stringify(effects).includes('x=2'), false)
+})
+
+test('an analytics callback exception does not undo an accepted history command', async () => {
+  const { controller, history, canvas } = setup({
+    onCommittedOperation: () => { throw new Error('provider unavailable') },
+  })
+  const original = console.error
+  console.error = () => {}
+  try {
+    await controller.create(rect)
+  } finally {
+    console.error = original
+  }
+  assert.equal(history.length, 1)
+  assert.equal(canvas.getObjects().length, 1)
 })
 
 test('get traverses Group children while mutation rejects nested IDs', async () => {

@@ -75,6 +75,24 @@ test('history retains Fabric identities and z-order across add, delete, replace 
   assert.deepEqual(canvas.getObjects(), [c, a, b])
 })
 
+test('an applied undo returns its command even when the final repaint fails', () => {
+  const object = rect()
+  const { canvas, history } = setup([object])
+  history.record({ type: 'add', object, index: 0 })
+  canvas.requestRenderAll = () => { throw new Error('paint unavailable') }
+  const logged = []
+  const original = console.error
+  console.error = (message) => logged.push(message)
+  try {
+    assert.equal(history.undo().type, 'add')
+  } finally {
+    console.error = original
+  }
+  assert.deepEqual(canvas.getObjects(), [])
+  assert.equal(history.summary().step, -1)
+  assert.deepEqual(logged, ['Board history replay refresh failed.'])
+})
+
 test('group and ungroup replay restores the exact members in canvas order', () => {
   const a = rect(), b = new Circle({ left: 100, top: 40, radius: 20 }), other = rect(300)
   const { canvas, history } = setup([a, b, other])

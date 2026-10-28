@@ -27,17 +27,24 @@ import { snapshotObject, applySnapshot } from "../../history/commandLog.js";
 
 /**
  * Owns direct UI selection mutations and their history commands.
- * Presentation, analytics, and App-facing methods stay in DrawBoard.
+ * App-facing presentation stays in DrawBoard. A narrow callback reports
+ * categorical effects only after history accepts a command.
  */
 const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
 const FILL_INK_TYPES = ["IText", "Text"];
 
 export class SelectionMutations {
-  constructor({ getCanvas, history, boardObjectPolicy, getDefaultInk }) {
+  constructor({ getCanvas, history, boardObjectPolicy, getDefaultInk, onCommittedOperation = () => {}, lifecycle = null }) {
     this._getCanvas = getCanvas;
     this._history = history;
     this._policy = boardObjectPolicy;
     this._getDefaultInk = getDefaultInk;
+    this._onCommittedOperation = onCommittedOperation;
+    this._lifecycle = lifecycle;
+  }
+
+  _canMutate() {
+    return !this._lifecycle || this._lifecycle.isReady();
   }
 
   _selection(canvas) {
@@ -74,13 +81,28 @@ export class SelectionMutations {
     });
   }
 
-  _record(command) {
+  _record(command, effect) {
     if (!this._history.record(command)) {
       throw new Error("Selection mutation could not be recorded.");
+    }
+    if (effect) {
+      try { this._onCommittedOperation(effect); } catch (error) {
+        console.error('Board effect callback failed after commit.', error);
+      }
+    }
+  }
+
+  _presentAfterCommit(canvas, updateSelection = () => {}) {
+    try {
+      updateSelection();
+      canvas.requestRenderAll();
+    } catch (error) {
+      console.error('Board selection refresh failed after commit.', error);
     }
   }
 
   group() {
+    if (!this._canMutate()) return false;
     const canvas = this._getCanvas();
     const active = canvas?.getActiveObject();
     if (!active || !this._policy.isActiveSelection(active)) return false;
@@ -112,7 +134,7 @@ export class SelectionMutations {
       });
       const index = canvas.getObjects().indexOf(group);
       if (index < 0) throw new Error("Grouped object was not inserted.");
-      this._record({ type: "group", group, index, members });
+      this._record({ type: "group", group, index, members }, { kind: 'group' });
     } catch (error) {
       this._history.runSuspended(() => {
         canvas.discardActiveObject();
@@ -126,11 +148,12 @@ export class SelectionMutations {
       canvas.requestRenderAll();
       throw error;
     }
-    canvas.requestRenderAll();
+    this._presentAfterCommit(canvas);
     return true;
   }
 
   ungroup() {
+    if (!this._canMutate()) return false;
     const canvas = this._getCanvas();
     const group = canvas?.getActiveObject();
     // A Formula can be implemented as a Fabric Group; it remains atomic.
@@ -151,7 +174,7 @@ export class SelectionMutations {
       const members = items.map((object) => ({
         object, index: canvas.getObjects().indexOf(object),
       })).filter(({ index: at }) => at >= 0);
-      this._record({ type: "ungroup", group, index, members });
+      this._record({ type: "ungroup", group, index, members }, { kind: 'ungroup' });
     } catch (error) {
       this._history.runSuspended(() => {
         canvas.discardActiveObject();
@@ -166,19 +189,21 @@ export class SelectionMutations {
       canvas.requestRenderAll();
       throw error;
     }
-    if (items.length > 1) {
-      canvas.setActiveObject(new ActiveSelection(items, { canvas }));
-    } else if (items.length === 1) {
-      canvas.setActiveObject(items[0]);
-    } else {
-      canvas.discardActiveObject();
-    }
-    canvas.requestRenderAll();
+    this._presentAfterCommit(canvas, () => {
+      if (items.length > 1) {
+        canvas.setActiveObject(new ActiveSelection(items, { canvas }));
+      } else if (items.length === 1) {
+        canvas.setActiveObject(items[0]);
+      } else {
+        canvas.discardActiveObject();
+      }
+    });
     return true;
   }
 
 
   delete() {
+    if (!this._canMutate()) return [];
     const canvas = this._getCanvas();
     const active = canvas?.getActiveObject();
     if (!active || active.isEditing) return [];
@@ -192,12 +217,17 @@ export class SelectionMutations {
     const roots = entries.map(({ object, index }) => ({
       object, index, snapshot: snapshotObject(object),
     }));
+    const objectKinds = entries.map(({ object }) => {
+      try { return this._policy.kindOf(object) || 'unknown'; } catch { return 'unknown'; }
+    });
     try {
       this._history.runSuspended(() => {
         canvas.discardActiveObject();
         entries.forEach(({ object }) => canvas.remove(object));
       });
-      this._record({ type: "delete", entries });
+      this._record({ type: "delete", entries }, {
+        kind: 'delete', objectKinds,
+      });
     } catch (error) {
       this._history.runSuspended(() => {
         this._restoreRoots(canvas, roots);
@@ -206,7 +236,7 @@ export class SelectionMutations {
       canvas.requestRenderAll();
       throw error;
     }
-    canvas.requestRenderAll();
+    this._presentAfterCommit(canvas);
     return entries.map(({ object }) => object);
   }
   async _cloneForDuplicate(object) {
@@ -227,6 +257,8 @@ export class SelectionMutations {
   }
 
   async duplicate() {
+    if (!this._canMutate()) return false;
+    const lease = this._lifecycle?.capture();
     const canvas = this._getCanvas();
     const active = canvas?.getActiveObject();
     if (!active || active.isEditing) return false;
@@ -240,7 +272,8 @@ export class SelectionMutations {
       console.error("Duplicate failed", error);
       return false;
     }
-    if (this._getCanvas() !== canvas || clones.some((clone) => !clone)) return false;
+    if (this._getCanvas() !== canvas || clones.some((clone) => !clone)
+      || (lease && !this._lifecycle.assertCurrent(lease))) return false;
     if (!sources.every((object) => canvas.getObjects().includes(object))) return false;
 
     const selection = this._selection(canvas);
@@ -269,7 +302,7 @@ export class SelectionMutations {
       canvas.requestRenderAll();
       throw error;
     }
-    canvas.requestRenderAll();
+    this._presentAfterCommit(canvas);
     return true;
   }
 
@@ -292,6 +325,7 @@ export class SelectionMutations {
   }
 
   recolor(color, { coalesce = false } = {}) {
+    if (!this._canMutate()) return false;
     const canvas = this._getCanvas();
     const active = canvas?.getActiveObject();
     if (!active) return false;
@@ -326,7 +360,7 @@ export class SelectionMutations {
       canvas.requestRenderAll();
       throw error;
     }
-    canvas.requestRenderAll();
+    this._presentAfterCommit(canvas);
     return true;
   }
 

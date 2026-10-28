@@ -94,15 +94,18 @@ test('mobile layout clears the current board switcher', async ({ page, request }
   expect(result.safeArea.top).toBeGreaterThanOrEqual(switcher.y + switcher.height + 15)
   expect(result.bounds.top).toBeGreaterThanOrEqual(result.safeArea.top - 1e-7)
 })
-test('short mobile layout uses the canvas below horizontal drawing tools', async ({ page, request }) => {
+test('short mobile layout keeps objects right of the vertical drawing tools', async ({ page, request }) => {
   await page.setViewportSize({ width: 320, height: 568 })
   await ready(page, request)
+  const toolbar = page.getByRole('toolbar', { name: 'Drawing tools' })
+  await expect(toolbar).toHaveCSS('flex-direction', 'column')
   const node = await send(request, 'create', { spec: { type: 'rect', width: 80, height: 60, left: 200, top: 300 } })
   const rail = await page.locator('.left-chrome').boundingBox()
   const result = await send(request, 'layout', { ids: [node.id], margin: 16 })
-  expect(result.safeArea.left).toBeLessThanOrEqual(16)
-  expect(result.safeArea.top).toBeGreaterThanOrEqual(rail.y + rail.height - 1)
+  expect(result.safeArea.left).toBeGreaterThanOrEqual(rail.x + rail.width + 15)
+  expect(result.bounds.left).toBeGreaterThanOrEqual(result.safeArea.left - 1e-7)
   expect(result.bounds.top).toBeGreaterThanOrEqual(result.safeArea.top - 1e-7)
+  expect(result.bounds.left + result.bounds.width).toBeLessThanOrEqual(result.safeArea.left + result.safeArea.width + 1e-6)
 })
 test('HTTP overflow changes neither scene nor the existing Redo command', async ({ page, request }) => {
   await ready(page, request)
@@ -118,10 +121,10 @@ test('HTTP overflow changes neither scene nor the existing Redo command', async 
   await expect.poll(async () => (await send(request, 'observe')).objects.map(n => n.id)).toEqual([...nodes.map(n => n.id), extra.id])
 })
 
-test('visible cookie banner and Shapes submenu are excluded from layout area', async ({ page, request }) => {
+test('Shapes submenu is excluded from layout area without the obsolete cookie banner', async ({ page, request }) => {
   await page.route(/simpleanalyticscdn\.com/, route => route.abort())
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Essential Only', exact: true })).toBeVisible()
+  await expect(page.locator('.cookie-banner')).toHaveCount(0)
   await expect.poll(async () => {
     const response = await request.post('/__mathboard_agent/command', { data: { method: 'observe' } })
     return response.ok() && (await response.json()).result.stable
@@ -129,8 +132,8 @@ test('visible cookie banner and Shapes submenu are excluded from layout area', a
   const [node] = await send(request, 'createMany', { specs: [{type: 'rect', width: 100, height: 80}] })
   await page.getByRole('button', { name: 'Shapes', exact: true }).click()
   const menu = await page.getByRole('group', { name: 'Shape options', exact: true }).boundingBox()
-  const banner = await page.locator('.cookie-banner').boundingBox()
   const result = await send(request, 'layout', { ids: [node.id], margin: 16 })
   expect(result.safeArea.left).toBeGreaterThanOrEqual(menu.x+menu.width+15)
-  expect(result.safeArea.top+result.safeArea.height).toBeLessThanOrEqual(banner.y-15)
+  expect(result.bounds.left).toBeGreaterThanOrEqual(result.safeArea.left-1e-7)
+  expect(result.bounds.top+result.bounds.height).toBeLessThanOrEqual(result.safeArea.top+result.safeArea.height+1e-7)
 })

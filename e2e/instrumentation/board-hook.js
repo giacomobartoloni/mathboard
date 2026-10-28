@@ -207,6 +207,9 @@ function setFormulaTransform(getBoard, latex, patch) {
 }
 
 export function installBoardE2eHook(getBoard, bootstrapGate) {
+  const analyticsEffects = []
+  let restoreAnalytics = null
+  let formulaRenderGate = null
   // Canary string must remain in dist-e2e for assert:e2e-hook (void alone is DCE'd).
   window.__MATHBOARD_E2E__ = Object.freeze({
     marker: E2E_MARKER,
@@ -232,9 +235,62 @@ export function installBoardE2eHook(getBoard, bootstrapGate) {
     measureObject: (id) => getBoard().getBoardController().measure(id),
     layoutObjects: (options) => getBoard().getBoardController().layout(options),
     observeBoard: () => getBoard().getBoardController().observe(),
+    startAnalyticsCapture: () => {
+      if (restoreAnalytics) return true
+      const analytics = getBoard()?._boardAnalytics
+      if (!analytics) return false
+      const original = analytics.record
+      analytics.record = (effect, context) => {
+        analyticsEffects.push(structuredClone({ effect, context }))
+        return original(effect, context)
+      }
+      restoreAnalytics = () => { analytics.record = original }
+      return true
+    },
+    takeAnalyticsEffects: () => analyticsEffects.splice(0),
+    groupSelection: () => getBoard()?.groupSelection(),
+    undoBoard: () => getBoard()?.undo(),
+    failNextPanelRefreshForCommand: (commandType) => {
+      const board = getBoard()
+      if (!board) return false
+      const original = board.refreshSelectionPanel
+      board.refreshSelectionPanel = function (...args) {
+        if (this._boardHistory.summary().tipType === commandType) {
+          this.refreshSelectionPanel = original
+          throw new Error('Injected post-commit panel failure')
+        }
+        return original.apply(this, args)
+      }
+      return true
+    },
+    holdFormulaRenders: () => {
+      if (formulaRenderGate) return false
+      const renderer = getBoard()?._formulaRenderer
+      if (!renderer) return false
+      const original = renderer.render
+      const pending = []
+      renderer.render = async function (...args) {
+        const formula = await original.apply(this, args)
+        return new Promise((resolve) => {
+          pending.push({ release: () => resolve(formula), released: false })
+        })
+      }
+      formulaRenderGate = { renderer, original, pending }
+      return true
+    },
+    pendingFormulaRenders: () => formulaRenderGate?.pending.length || 0,
+    releaseFormulaRender: (index) => {
+      const entry = formulaRenderGate?.pending[index]
+      if (!entry || entry.released) return false
+      entry.released = true
+      entry.release()
+      return true
+    },
   })
 
   return () => {
+    restoreAnalytics?.()
+    if (formulaRenderGate) formulaRenderGate.renderer.render = formulaRenderGate.original
     delete window.__MATHBOARD_E2E__
   }
 }

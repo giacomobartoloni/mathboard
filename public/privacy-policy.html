@@ -58,89 +58,127 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         </nav>
         <div class="reading-intro privacy-heading">
             <h1>Privacy Policy</h1>
-            <p class="last-updated">Last updated: October 1, 2026</p>
+            <p class="last-updated">Last updated: October 28, 2026</p>
         </div>
 
         <section>
-            <h2>1. Introduction</h2>
+            <h2>1. Introduction and Controller</h2>
             <p>
-                Welcome to MathBoard. We respect your privacy and are committed to protecting your personal data. 
-                This privacy policy explains how we handle information when you use our interactive digital whiteboard application.
+                MathBoard is a free, open-source mathematics whiteboard available at
+                <code>mathboard.app</code> and as an installed desktop application.
+                This notice explains which information stays on your device and which
+                technical information may be processed when you visit the website,
+                use product analytics, or contact the project.
+            </p>
+            <p>
+                For privacy questions and requests, the project maintainer and contact
+                is Giacomo Bartoloni. Contact details appear in section 12.
             </p>
         </section>
 
         <section>
-            <h2>2. Information We Collect</h2>
-            <p>MathBoard is designed with privacy in mind. We collect minimal information:</p>
-            
-            <h3>2.1 Information Stored Locally</h3>
+            <h2>2. Information and Data Flows</h2>
+            <h3>2.1 Data stored on your device</h3>
             <ul>
-                <li><strong>Drawing Board State:</strong> Your drawings and formulas are stored locally in your browser's storage</li>
-                <li><strong>User Preferences:</strong> Settings like zoom level, tool selection, and UI preferences</li>
-                <li><strong>Cookie Consent:</strong> Your cookie policy preferences</li>
+                <li><strong>Board content:</strong> Drawings, formulas, text and saved boards are stored in browser or desktop WebView storage, including IndexedDB; active session state may also use session storage.</li>
+                <li><strong>Preferences:</strong> Appearance and other editor settings may be stored in local storage.</li>
             </ul>
-            
             <div class="highlight">
-                <strong>Important:</strong> Your drawings, formulas, typed text, and LaTeX stay on your device. 
-                MathBoard does not send board content as analytics metadata.
+                <strong>Board privacy:</strong> MathBoard does not send your board content,
+                drawings, entered text or LaTeX as analytics metadata. Sharing an exported
+                file or a board link is a separate action you initiate.
             </div>
 
-            <h3>2.2 Product Analytics (Production Website)</h3>
+            <h3>2.2 Website analytics</h3>
             <p>
-                On the production website (<code>mathboard.app</code>), MathBoard uses 
-                <a href="https://www.simpleanalytics.com/" target="_blank" rel="noopener">Simple Analytics</a> 
-                to collect page views and counts of semantic product events (for example, which tools are used). 
-                Custom metadata may include functional categories and globals such as <code>runtime</code> and 
-                <code>app_version</code>. MathBoard does not introduce its own persistent user identifiers for these events.
+                On <code>mathboard.app</code>, MathBoard uses
+                <a href="https://www.simpleanalytics.com/" target="_blank" rel="noopener">Simple Analytics</a>
+                to count page views and categorical product events, such as tools being
+                selected or operations completed. Event metadata is limited by MathBoard's
+                product policy to functional categories and counts, plus values such as
+                <code>runtime</code> and <code>app_version</code>. It does not intentionally
+                include board content, user IDs or persistent device identifiers.
             </p>
             <p>
-                For how Simple Analytics handles data, see their 
-                <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">privacy policy</a>.
+                The provider can receive page URLs, referrers and campaign parameters and
+                processes ordinary connection information when requests arrive, including
+                the IP address in transit. It states that it discards IP addresses rather
+                than storing them and does not set analytics cookies or persistent browser
+                identifiers. Simple Analytics also collects optional browser metrics such as device type,
+                screen dimensions and time on page. MathBoard leaves the provider's
+                standard metric settings unchanged. See
+                <a href="https://docs.simpleanalytics.com/what-we-collect" target="_blank" rel="noopener">the provider's metrics documentation</a>
+                and <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">privacy policy</a>.
             </p>
 
-            <h3>2.3 Information We Do NOT Collect</h3>
-            <ul>
-                <li>Personal identification information that you enter into MathBoard (name, email, address)</li>
-                <li>Your mathematical content, drawings, typed text, or LaTeX as analytics metadata</li>
-                <li>Advertising profiles or cross-site tracking cookies set by MathBoard</li>
-            </ul>
+            <h3>2.3 Installed desktop analytics</h3>
             <p>
-                Simple Analytics may process technical data typical of privacy-focused web analytics 
-                (such as request metadata). MathBoard itself does not attach board content or MathBoard-created 
-                persistent user IDs to analytics events.
+                Production desktop builds send counts of approved semantic product events
+                through a native HTTPS transport to Simple Analytics. They do not send
+                page views. Events carry approved functional categories,
+                <code>runtime=desktop</code> and the app version, without board content,
+                URLs, user identifiers or device identifiers. The provider necessarily
+                receives technical connection data for each request.
+            </p>
+            <p>
+                Desktop analytics drops events while offline or when the WebView exposes
+                a Do Not Track value of <code>1</code> or <code>yes</code>. Some WebViews
+                may not expose an operating-system Do Not Track setting. Events are not
+                stored persistently or retried. Development builds do not send analytics.
+            </p>
+
+            <h3>2.4 Website delivery and contact</h3>
+            <p>
+                The public website is served through Cloudflare. To deliver the website
+                and protect its infrastructure, Cloudflare may process request information
+                such as IP addresses, requested resources, timestamps, user-agent and
+                security-related metadata. See the
+                <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Cloudflare Privacy Policy</a>.
+                If you email the project, the message and your contact details are processed
+                to handle your enquiry.
+            </p>
+            <h3>2.5 What is not part of analytics</h3>
+            <p>
+                MathBoard does not use analytics for advertising profiles or cross-site
+                identification, and does not intentionally transmit user-entered board
+                content, email addresses or free-text fields in product events. This
+                does not eliminate the technical request data processed by the hosting
+                and analytics providers.
             </p>
         </section>
 
         <section>
-            <h2>3. Cookies and Local Storage</h2>
-            <p>MathBoard uses browser storage technologies for essential functionality:</p>
-            
-            <h3>3.1 Essential Local Storage</h3>
-            <ul>
-                <li><strong>Session Storage:</strong> Temporarily stores your active drawing board state</li>
-                <li><strong>Local Storage:</strong> Saves your preferences and cookie consent choices</li>
-            </ul>
-            
-            <h3>3.2 Cookies and Analytics</h3>
-            <ul>
-                <li>MathBoard does not use advertising cookies or social media tracking cookies</li>
-                <li>
-                    Product analytics on the live site uses Simple Analytics, which is designed as 
-                    cookieless analytics (distinct from advertising or third-party tracking cookies). 
-                    Details are in section 2.2 and Simple Analytics' privacy policy.
-                </li>
-            </ul>
+            <h2>3. Cookies and On-Device Storage</h2>
+            <p>
+                MathBoard uses local browser or WebView storage to keep the editor usable,
+                preserve saved boards and remember preferences. This application storage
+                is separate from measurement of website visits.
+            </p>
+            <p>
+                MathBoard does not use advertising or profiling cookies. Its standard
+                Simple Analytics integration does not place analytics cookies, use
+                persistent browser identifiers or read a stored cookie-consent choice.
+                No consent banner is presented for the currently configured, cookieless
+                aggregate measurements. If non-exempt tracking is added in the future,
+                its consent requirements must be reassessed before deployment.
+            </p>
         </section>
 
         <section>
-            <h2>4. How We Use Your Information</h2>
-            <p>Information is used to:</p>
+            <h2>4. Purposes and Legal Bases</h2>
+            <p>
+                Where personal data is processed, the purposes and legal bases are:
+            </p>
             <ul>
-                <li>Provide the core functionality of MathBoard</li>
-                <li>Remember your preferences and settings (stored locally)</li>
-                <li>Save your work between sessions (stored locally)</li>
-                <li>Understand aggregate product usage on the production website via privacy-conscious analytics</li>
+                <li><strong>Website delivery and security:</strong> Technical request and security information may be processed to provide a reliable service and protect against abuse, based on legitimate interests (Article 6(1)(f) GDPR).</li>
+                <li><strong>Project support:</strong> When you voluntarily send an email, its contents and contact details are used to respond to you, based on legitimate interests in handling correspondence (Article 6(1)(f) GDPR).</li>
+                <li><strong>Product statistics:</strong> Simple Analytics is configured to produce privacy-focused pageview and product-event statistics without user or device identifiers. To the extent any incidental personal data is processed in delivering these measurements, the purpose is improving MathBoard through aggregate usage insights, based on legitimate interests (Article 6(1)(f) GDPR), subject to any applicable ePrivacy requirements.</li>
             </ul>
+            <p>
+                Editor content and preferences normally remain on your device, rather than
+                being received by MathBoard as server-side data. MathBoard does not sell
+                personal data or use the analytics described here for behavioural advertising.
+            </p>
         </section>
 
         <section>
@@ -157,39 +195,56 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         </section>
 
         <section>
-            <h2>6. Data Retention and Deletion</h2>
-            <p>You can delete local data at any time by:</p>
-            <ul>
-                <li>Clearing your browser's local storage</li>
-                <li>Clearing your browser's cache and cookies</li>
-                <li>Using your browser's privacy tools</li>
-            </ul>
+            <h2>6. Retention and Deletion</h2>
             <p>
-                Aggregate analytics retained by Simple Analytics follow that provider's retention practices, 
-                as described in their privacy policy.
+                Boards and preferences stored locally remain on your device until you
+                delete them, clear the applicable browser or WebView storage, or uninstall
+                the application (subject to your device's storage behaviour). You can also
+                remove individual saved boards using MathBoard's local board controls.
+            </p>
+            <p>
+                Analytics reporting data is retained according to the configured Simple Analytics
+                account plan and the provider's documented retention practices. See
+                <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">Simple Analytics privacy</a>.
+                Operational/security information processed by Cloudflare is subject to its
+                product and account settings and
+                <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">privacy documentation</a>.
+            </p>
+            <p>
+                Email enquiries are retained as necessary to respond and for any applicable
+                legal obligations. You can request deletion of personal data held by the
+                project where the right applies by using the contact address below.
             </p>
         </section>
 
         <section>
-            <h2>7. Third-Party Services</h2>
+            <h2>7. Providers and External Services</h2>
             <p>
-                On the production website, MathBoard uses Simple Analytics for cookieless product analytics 
-                (see section 2.2 and 
-                <a href="https://www.simpleanalytics.com/privacy" target="_blank" rel="noopener">Simple Analytics privacy</a>).
+                MathBoard uses Cloudflare to deliver the public site and Simple Analytics
+                for the limited measurement described in sections 2.2 and 2.3.
+                These providers have their own published privacy practices and may use
+                subprocessors. Simple Analytics states that its standard analytics
+                infrastructure is based in the EU; Cloudflare's operations and relevant
+                international-transfer safeguards are described in its privacy notice.
+                No optional transfer-dependent Simple Analytics dashboard feature is
+                required for MathBoard's basic analytics.
             </p>
             <p>
-                MathBoard may also contain links to external websites (such as donation platforms). We are not responsible 
-                for the privacy practices of those third-party sites. We encourage you to read their privacy policies.
+                MathBoard may link to external sites (including donation platforms and
+                GitHub). Visiting those sites is a separate interaction governed by their
+                privacy notices.
             </p>
         </section>
 
         <section>
             <h2>8. Children's Privacy</h2>
             <p>
-                MathBoard is suitable for all ages. We do not knowingly collect personal identification information 
-                from children through the application itself. Board content stays local. On the production website, 
-                privacy-conscious product analytics may still record page views and semantic event counts as described 
-                in section 2.2; those events are not intended to identify individual children.
+                MathBoard is an educational tool that can be used by children. It does
+                not require an account or ask children to provide identifying information
+                to draw or edit a board. Website traffic and approved aggregate product
+                events may still be measured as described above; they are not designed
+                to identify individual children. Any direct email correspondence is
+                handled as described in section 2.4.
             </p>
         </section>
 
@@ -202,28 +257,31 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         </section>
 
         <section>
-            <h2>10. GDPR Compliance</h2>
+            <h2>10. GDPR Rights</h2>
             <p>
-                For users in the European Union, MathBoard aims to align with GDPR principles. Board content and 
-                preferences are stored locally on your device. Product analytics on the production website is limited 
-                to privacy-conscious page views and semantic event counts via Simple Analytics, without MathBoard-introduced 
-                persistent user identifiers. Depending on how analytics data is processed, certain GDPR obligations 
-                may apply to that processing. In any case:
+                Where the GDPR applies to personal data processed in connection with
+                MathBoard, you may have the rights to access, rectification, erasure,
+                restriction, objection, and, where its conditions are met, data portability.
+                You may object to processing based on legitimate interests. These rights
+                depend on the processing and applicable legal requirements; aggregate,
+                non-identifying analytics may not allow individual records to be located.
             </p>
-            <ul>
-                <li>You have full control over data stored locally on your device</li>
-                <li>You can delete local data at any time through your browser settings</li>
-                <li>We do not sell personal information</li>
-                <li>We do not use analytics for advertising profiles or automated decision-making that produces legal effects</li>
-            </ul>
+            <p>
+                To exercise your rights, contact the project using section 12.
+                You may also lodge a complaint with your local supervisory authority,
+                including the
+                <a href="https://www.garanteprivacy.it/" target="_blank" rel="noopener">Italian Data Protection Authority (Garante)</a>.
+                MathBoard does not use the described analytics for automated decisions
+                producing legal or similarly significant effects.
+            </p>
         </section>
 
         <section>
             <h2>11. California Privacy Rights</h2>
             <p>
                 For California residents, under the CCPA: We do not sell your personal information. 
-                Board content and preferences remain on your device. Product analytics on the production website 
-                is limited as described in section 2.2.
+                Board content and preferences remain on your device. Product analytics on the production website
+                and in installed desktop builds is limited as described in sections 2.2 and 2.3.
             </p>
         </section>
 
@@ -231,7 +289,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             <h2>12. Contact Us</h2>
             <p>
                 If you have any questions about this Privacy Policy or MathBoard's privacy practices, 
-                please contact us at:
+                please contact us at (controller contact: Giacomo Bartoloni):
             </p>
             <p>
                 <strong>Email:</strong> <a href="mailto:giacomo.bartoloni@gmail.com">giacomo.bartoloni@gmail.com</a><br>

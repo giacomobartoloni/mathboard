@@ -117,8 +117,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     
     <SupportPanel class="secondary-chrome" :inert="showBoardLibrary" />
     
-    <CookieBanner v-if="!desktopRuntime" v-show="!isFullscreen && !showBoardLibrary" :inert="showBoardLibrary" />
-    
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
 </template>
@@ -133,7 +131,6 @@ const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModa
 const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
-import CookieBanner from './components/CookieBanner.vue'
 import {
   BOARD_THEMES,
   loadThemePreferences,
@@ -193,7 +190,6 @@ export default {
     ShareStampModal,
     SupportPanel,
     ZoomPanel,
-    CookieBanner,
   },
   setup() {
     const desktopRuntime = isDesktopRuntime()
@@ -313,6 +309,7 @@ export default {
     let fullscreenInitialized = false
     let previousFullscreen = false
     let disconnectDesktopWindow = null
+    let disconnectDesktopBoardBridge = null
     let componentUnmounted = false
 
     const setFullscreenState = (next) => {
@@ -448,12 +445,25 @@ export default {
       } finally {
         boardSessionReady.value = true
       }
+      if (desktopRuntime && !componentUnmounted) {
+        await nextTick()
+        try {
+          const { connectDesktopBoardBridge } = await import('./platform/desktopBoardBridge.js')
+          const disconnect = await connectDesktopBoardBridge(() => drawBoardRef.value)
+          if (componentUnmounted) disconnect()
+          else disconnectDesktopBoardBridge = disconnect
+        } catch (error) {
+          console.warn('Desktop board bridge unavailable:', error)
+        }
+      }
     })
 
     onBeforeUnmount(() => {
       componentUnmounted = true
-      if (desktopRuntime) disconnectDesktopWindow?.()
-      else document.removeEventListener('fullscreenchange', syncWebFullscreenState)
+      if (desktopRuntime) {
+        disconnectDesktopWindow?.()
+        disconnectDesktopBoardBridge?.()
+      } else document.removeEventListener('fullscreenchange', syncWebFullscreenState)
     })
 
     const onToolSelected = (tool) => {

@@ -45,6 +45,7 @@ export class BoardController {
   constructor({ getCanvas, boardObjectPolicy, buildFormula, pushHistoryCommand,
     runWithoutHistory = (fn) => fn(), prepareCreatedObject = () => {},
     afterMutation = () => {}, prepareUpdatedObject = () => {}, getBoardId = () => null, isMutationStable,
+    onCommittedOperation = () => {}, lifecycle = null,
     getLayoutSafeArea = (canvas) => ({ left: 0, top: 0, width: canvas.getWidth(), height: canvas.getHeight() }) }) {
     if (typeof isMutationStable !== 'function') throw new TypeError('isMutationStable must be a function.')
     this._getCanvas = getCanvas
@@ -58,6 +59,8 @@ export class BoardController {
     this._getBoardId = getBoardId
     this._isMutationStable = isMutationStable
     this._getLayoutSafeArea = getLayoutSafeArea
+    this._onCommittedOperation = onCommittedOperation
+    this._lifecycle = lifecycle
   }
 
   _canvas() {
@@ -118,7 +121,11 @@ export class BoardController {
     return Boolean(this._isMutationStable())
   }
 
-  _assertCanMutate() {
+  _assertCanMutate(lease) {
+    if (this._lifecycle && (!this._lifecycle.isReady()
+      || (lease && !this._lifecycle.assertCurrent(lease)))) {
+      throw new BoardControllerError(C.NOT_READY, 'Board changed before the mutation could commit.')
+    }
     if (!this._isStable()) {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Finish the current board gesture before a programmable mutation.')
     }
@@ -132,16 +139,20 @@ export class BoardController {
     if (errors.length) throw new globalThis.AggregateError(errors, 'Board rollback encountered errors.')
   }
 
-  _commit(canvas, change, rollback, command, readResult) {
-    this._assertCanMutate()
+  _commit(canvas, change, rollback, command, readResult, effect, lease) {
+    this._assertCanMutate(lease)
     const previous = canvas.renderOnAddRemove
     canvas.renderOnAddRemove = false
     let result
+    let committed = false
     try {
       this._runWithoutHistory(change)
       result = readResult()
       const entry = typeof command === 'function' ? command() : command
-      if (entry) this._pushHistoryCommand(entry)
+      if (entry) {
+        if (this._pushHistoryCommand(entry) === false) throw new Error('History command declined.')
+        committed = true
+      }
     } catch (cause) {
       try {
         this._runWithoutHistory(rollback)
@@ -151,10 +162,17 @@ export class BoardController {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Board mutation could not be committed.', { cause })
     } finally {
       canvas.renderOnAddRemove = previous
-      canvas.requestRenderAll()
+      try { canvas.requestRenderAll() } catch (error) {
+        console.error('Board refresh failed.', error)
+      }
     }
     try { this._afterMutation() } catch (error) {
       console.error('Board mutation committed, but post-commit refresh failed.', error)
+    }
+    if (committed && effect) {
+      try { this._onCommittedOperation(effect) } catch (error) {
+        console.error('Board analytics callback failed.', error)
+      }
     }
     return result
   }
@@ -162,6 +180,7 @@ export class BoardController {
   async _create(specs, options, batch) {
     const canvas = this._canvas()
     this._assertCanMutate()
+    const lease = this._lifecycle?.capture()
     if (!Array.isArray(specs) || !specs.length) throw new BoardControllerError(C.INVALID_SPEC, 'Expected a non-empty array of specs.')
     specs.forEach((spec) => validateCreateSpec(spec))
     try { specs = structuredClone(specs) } catch (cause) {
@@ -169,7 +188,9 @@ export class BoardController {
     }
     specs = specs.map(normalizeCreateOrigins)
     const objects = await this._materialize(specs)
-    if (this._canvas() !== canvas) throw new BoardControllerError(C.NOT_READY, 'Board canvas changed during materialization.')
+    if (this._canvas() !== canvas || (lease && !this._lifecycle.assertCurrent(lease))) {
+      throw new BoardControllerError(C.NOT_READY, 'Board changed during materialization.')
+    }
     regenerateMathBoardObjectIds(objects, { boardObjectPolicy: this._policy })
     objects.forEach((object, index) => this._prepareCreatedObject(object, specs[index]))
     const start = canvas.getObjects().length
@@ -184,7 +205,8 @@ export class BoardController {
     }, () => this._rollback([
       () => { if (objects.some((object) => this._selectionContains(canvas, object))) canvas.discardActiveObject() },
       ...objects.map((object) => () => canvas.remove(object)),
-    ]), command, () => objects.map((object) => this._read(object)))
+    ]), command, () => objects.map((object) => this._read(object)),
+    { kind: 'create', objectKinds: objects.map((object) => this._policy.kindOf(object)) }, lease)
   }
 
   async create(spec, options = {}) {
@@ -229,12 +251,16 @@ export class BoardController {
       after = snapshotObject(object)
     }, () => applySnapshot(object, before), () => snapshotsEqual(before, after) ? null : {
       type: 'modify', entries: [{ object, before, after }],
-    }, () => this._read(object))
+    }, () => this._read(object), { kind: 'update' })
   }
 
   async _replaceFormula(canvas, existing, patch, options) {
+    const lease = this._lifecycle?.capture()
     const [next] = await this._materialize([{ ...this._read(existing), ...patch }])
-    if (this._canvas() !== canvas || !canvas.getObjects().includes(existing)) {
+    if (this._canvas() !== canvas || (lease && !this._lifecycle.assertCurrent(lease))) {
+      throw new BoardControllerError(C.NOT_READY, 'Board changed while rendering.')
+    }
+    if (!canvas.getObjects().includes(existing)) {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Formula changed while rendering.')
     }
     this._assertCanMutate()
@@ -264,7 +290,8 @@ export class BoardController {
       () => canvas.remove(next),
       () => { if (!canvas.getObjects().includes(existing)) canvas.insertAt(index, existing) },
       () => { if (selected) canvas.setActiveObject(existing) },
-    ]), { type: 'replace', index, removed: existing, added: next }, () => this._read(next))
+    ]), { type: 'replace', index, removed: existing, added: next }, () => this._read(next),
+    { kind: 'formula_edit' }, lease)
   }
 
   async group(ids, options = {}) {
@@ -322,7 +349,8 @@ export class BoardController {
         }
         if (active) canvas.setActiveObject(active)
       },
-    ]), () => ({ type: 'group', group, index, members }), () => this._read(group))
+    ]), () => ({ type: 'group', group, index, members }), () => this._read(group),
+    { kind: 'group' })
   }
 
   async delete(id) {
@@ -337,7 +365,8 @@ export class BoardController {
       if (canvas.getObjects().includes(object)) throw new Error('Object was not removed.')
     }, () => {
       if (!canvas.getObjects().includes(object)) canvas.insertAt(index, object)
-    }, { type: 'delete', entries: [{ object, index }] }, () => node)
+    }, { type: 'delete', entries: [{ object, index }] }, () => node,
+    { kind: 'delete', objectKinds: [this._policy.kindOf(object)] })
   }
 
   async deleteMany(ids) {
@@ -393,7 +422,8 @@ export class BoardController {
         }
         canvas.setActiveObject(active)
       },
-    ]), { type: 'delete', entries }, () => nodes)
+    ]), { type: 'delete', entries }, () => nodes,
+    { kind: 'delete', objectKinds: entries.map(({ object }) => this._policy.kindOf(object)) })
   }
 
   measure(id) {
@@ -467,7 +497,7 @@ export class BoardController {
         }
         canvas.setActiveObject(active)
       },
-    ]), { type: 'modify', entries }, result)
+    ]), { type: 'modify', entries }, result, { kind: 'layout' })
   }
 
   observe() {

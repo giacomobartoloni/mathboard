@@ -134,34 +134,92 @@ for (const boardTheme of ['light', 'dark', 'chalkboard']) {
 }
 
 for (const viewport of [
-  { width: 1024, height: 768 },
-  { width: 640, height: 600 },
-  { width: 1280, height: 600 },
+  { width: 1024, height: 768, mode: 'full' },
+  { width: 640, height: 600, mode: 'full' },
+  { width: 1280, height: 600, mode: 'full' },
+  { width: 1280, height: 585, mode: 'full' },
+  { width: 1280, height: 560 },
+  { width: 1280, height: 440, mode: 'compact' },
   { width: 320, height: 568 },
-  { width: 844, height: 390 },
+  { width: 844, height: 390, mode: 'compact' },
 ]) {
   test(`hints degrade gracefully at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
-    await page.setViewportSize(viewport)
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
     const before = await gotoBoard(page)
+    const toolbar = page.getByRole('toolbar', { name: 'Drawing tools' })
+    await expect(toolbar).toHaveCSS('flex-direction', 'column')
+    const rail = page.locator('.left-chrome')
+    if (viewport.mode === 'compact') await expect(rail).toHaveClass(/tools-compact/)
+    if (viewport.mode === 'full') await expect(rail).not.toHaveClass(/tools-compact/)
+    const compact = await rail.evaluate((node) => node.classList.contains('tools-compact'))
     for (const [name] of tools) {
       const button = page.getByRole('button', { name, exact: true })
-      await expect(button).toBeInViewport()
-      await button.click({ trial: true })
+      const hidden = compact && !['Select', 'Pan', 'Pen'].includes(name)
+      if (hidden) await expect(button).toBeHidden()
+      else {
+        await expect(button).toBeInViewport()
+        await button.click({ trial: true })
+      }
       const hint = button.locator('span')
-      if (viewport.height <= 700 || viewport.width <= 600) await expect(hint).toBeHidden()
+      if (hidden || viewport.height <= 700 || viewport.width <= 600) await expect(hint).toBeHidden()
       else await expect(hint).toBeVisible()
     }
+    const stamps = page.getByRole('button', { name: 'Stamps', exact: true })
+    const colors = page.locator('.color-panel')
+    if (compact) {
+      await expect(stamps).toBeHidden()
+      await expect(colors).toBeHidden()
+    } else {
+      await expect(stamps).toBeVisible()
+      await expect(colors).toBeVisible()
+    }
     await expect(page.getByRole('button', { name: 'Redo', exact: true })).toBeInViewport()
-    const rail = await page.locator('.left-chrome').boundingBox()
+    const railBox = await rail.boundingBox()
     const viewControls = await page.getByRole('toolbar', { name: 'Board view and history' }).boundingBox()
-    expect(rail.y + rail.height).toBeLessThanOrEqual(viewControls.y - 8)
-    expect(rail.x + rail.width).toBeLessThanOrEqual(viewport.width)
+    expect(railBox.y + railBox.height).toBeLessThanOrEqual(viewControls.y - 8)
+    expect(railBox.x + railBox.width).toBeLessThanOrEqual(viewport.width)
     expect(await getBoardState(page)).toEqual(before)
     const path = testInfo.outputPath('constrained.png')
     await page.screenshot({ path, animations: 'disabled' })
     await testInfo.attach('constrained toolbar', { path, contentType: 'image/png' })
   })
 }
+
+test('minimal rail restores all controls after viewport expansion', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const before = await gotoBoard(page)
+  const rail = page.locator('.left-chrome')
+  await expect(rail).not.toHaveClass(/tools-compact/)
+
+  await page.setViewportSize({ width: 1280, height: 440 })
+  await expect(rail).toHaveClass(/tools-compact/)
+  await expect(page.locator('.color-panel')).toBeHidden()
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await expect(rail).not.toHaveClass(/tools-compact/)
+  await expect(page.locator('.color-panel')).toBeVisible()
+  expect(await getBoardState(page)).toEqual(before)
+})
+
+test('DPR 3 desktop at 1280x585 keeps vertical tools clear of view controls', async ({ browser }) => {
+  const context = await browser.newContext({
+    viewport: { width: 1280, height: 585 },
+    deviceScaleFactor: 3,
+  })
+  try {
+    const page = await context.newPage()
+    const before = await gotoBoard(page)
+    expect(await page.evaluate(() => window.devicePixelRatio)).toBe(3)
+    await expect(page.getByRole('toolbar', { name: 'Drawing tools' })).toHaveCSS('flex-direction', 'column')
+    const rail = await page.locator('.left-chrome').boundingBox()
+    const viewControls = await page.getByRole('toolbar', { name: 'Board view and history' }).boundingBox()
+    expect(rail.y + rail.height).toBeLessThanOrEqual(viewControls.y - 8)
+    await page.getByRole('button', { name: 'Stamps', exact: true }).click({ trial: true })
+    expect(await getBoardState(page)).toEqual(before)
+  } finally {
+    await context.close()
+  }
+})
 
 for (const lineHeight of ['normal', '18px']) {
 test(`coarse pointer preserves incumbent touch targets with ${lineHeight} line height`, async ({ browser }, testInfo) => {
