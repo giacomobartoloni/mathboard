@@ -575,41 +575,14 @@ export default {
   outline-offset: 2px;
 }
 
-/* Keep the vertical rail on wide desktop viewports such as 1280x585.
-   Use the compact row on narrow landscape screens or when the rail would
-   collide with the bottom-left view/history controls. */
-@media (max-height: 580px), (max-height: 600px) and (max-width: 900px) {
-  .left-chrome {
-    top: 100px;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    max-width: calc(100vw - 24px);
-  }
-
-  .tools-panel {
-    width: max-content;
-    max-width: calc(100vw - 90px);
-    flex-flow: row wrap;
-  }
-
-  .tool-button--shortcut { width: auto; }
-
-  .shapes-submenu {
-    left: 0;
-    top: 100%;
-    margin: 10px 0 0;
-  }
-
-  .color-popover {
-    left: auto;
-    right: 100%;
-    top: 0;
-    margin: 0 10px 0 0;
-  }
+/* Constrained layout: keep the rail vertical with Select, Pan and Pen. */
+.left-chrome.tools-compact .tool-secondary,
+.left-chrome.tools-compact .color-panel {
+  display: none;
 }
 
-@media (max-height: 600px) and (max-width: 600px) {
-  .left-chrome { top: 154px; }
+/* Allow the three-tool fallback to move nearer the header on short screens. */
+.left-chrome.tools-compact {
+  top: min(100px, max(76px, 15vh));
 }
 </style>
