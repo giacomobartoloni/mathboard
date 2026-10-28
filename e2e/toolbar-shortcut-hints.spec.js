@@ -185,6 +185,22 @@ for (const viewport of [
   })
 }
 
+test('minimal rail restores all controls after viewport expansion', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const before = await gotoBoard(page)
+  const rail = page.locator('.left-chrome')
+  await expect(rail).not.toHaveClass(/tools-compact/)
+
+  await page.setViewportSize({ width: 1280, height: 440 })
+  await expect(rail).toHaveClass(/tools-compact/)
+  await expect(page.locator('.color-panel')).toBeHidden()
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await expect(rail).not.toHaveClass(/tools-compact/)
+  await expect(page.locator('.color-panel')).toBeVisible()
+  expect(await getBoardState(page)).toEqual(before)
+})
+
 test('DPR 3 desktop at 1280x585 keeps vertical tools clear of view controls', async ({ browser }) => {
   const context = await browser.newContext({
     viewport: { width: 1280, height: 585 },
