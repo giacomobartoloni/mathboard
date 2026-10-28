@@ -143,7 +143,7 @@ for (const viewport of [
   { width: 844, height: 390, direction: 'row' },
 ]) {
   test(`hints degrade gracefully at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
-    await page.setViewportSize(viewport)
+    await page.setViewportSize({ width: viewport.width, height: viewport.height })
     const before = await gotoBoard(page)
     await expect(page.getByRole('toolbar', { name: 'Drawing tools' })).toHaveCSS('flex-direction', viewport.direction)
     for (const [name] of tools) {
