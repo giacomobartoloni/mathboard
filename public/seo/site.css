@@ -328,6 +328,12 @@ button:focus-visible {
   font-size: 0.9rem;
 }
 
+/* Supporting board capture: keep it legible without dominating the page. */
+.screenshot--board-capture {
+  max-width: 620px;
+  margin-inline: auto;
+}
+
 .formula-grid {
   display: grid;
   gap: 1rem;

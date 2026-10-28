@@ -20,15 +20,16 @@ import latexWhiteboard from '../seo/pages/latex-whiteboard.mjs'
 import openSource from '../seo/pages/open-source-math-whiteboard.mjs'
 import shortcuts from '../seo/pages/keyboard-shortcuts.mjs'
 import latexDocs from '../seo/pages/latex-docs.mjs'
+import graphLinearFunction from '../seo/pages/graph-linear-function.mjs'
 
 const pages = [
   download, macos, windows, linux, security,
   resources, overview, latexWhiteboard, openSource,
-  shortcuts, latexDocs,
+  shortcuts, latexDocs, graphLinearFunction,
 ]
 
 const editorialHeroes = [resources, overview, latexWhiteboard, openSource]
-const readingPages = [macos, windows, linux, security, shortcuts, latexDocs]
+const readingPages = [macos, windows, linux, security, shortcuts, latexDocs, graphLinearFunction]
 
 test('every generated static page retains one semantically correct heading and structured data', () => {
   for (const page of pages) {

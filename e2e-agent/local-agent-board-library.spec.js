@@ -152,6 +152,8 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
   const initial = (await send(request, 'boards.list')).find(board => board.isActive)
+  // Keep the filter assertion independent of randomly generated names such as geometry-euclid.
+  await send(request, 'boards.rename', { boardId: initial.id, title: 'Baseline Algebra' })
   const geometry = await send(request, 'boards.create', { title: 'Geometry' })
   await send(request, 'boards.open', { boardId: initial.id })
 
@@ -165,7 +167,8 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
   await search.fill('Geom')
   const geometryGlyph = dialog.getByRole('button', { name: 'Open Geometry' })
   await expect(geometryGlyph).toBeVisible()
-  await expect(dialog.getByRole('button', { name: `Continue with ${initial.title}` })).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: 'Continue with Baseline Algebra' })).toHaveCount(0)
+  await expect(dialog.locator('.board-library-list > li')).toHaveCount(1)
   const glyphBox = await geometryGlyph.boundingBox()
   expect(panelBox.y - (switcherBox.y + switcherBox.height)).toBeGreaterThanOrEqual(0)
   expect(panelBox.y - (switcherBox.y + switcherBox.height)).toBeLessThanOrEqual(16)
@@ -206,6 +209,31 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
   await expect(dialog.getByText('No matching boards')).toBeVisible()
   await dialog.getByRole('button', { name: 'Create “Vectors”' }).click()
   await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
+})
+
+test('board library search includes every matching title, including the active board', async ({ page, request }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
+
+  const initial = (await send(request, 'boards.list')).find(board => board.isActive)
+  await send(request, 'boards.rename', { boardId: initial.id, title: 'geometry-euclid' })
+  await send(request, 'boards.create', { title: 'Geometry' })
+  await send(request, 'boards.open', { boardId: initial.id })
+
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Board library' })
+  const search = dialog.getByRole('textbox', { name: 'Find or create a board' })
+  await search.fill('Geom')
+
+  await expect(dialog.getByRole('button', { name: 'Continue with geometry-euclid' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Open Geometry' })).toBeVisible()
+  await expect(dialog.locator('.board-library-list > li')).toHaveCount(2)
+
+  await search.fill('EUCLID')
+  await expect(dialog.getByRole('button', { name: 'Continue with geometry-euclid' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Open Geometry' })).toHaveCount(0)
+  await expect(dialog.locator('.board-library-list > li')).toHaveCount(1)
 })
 
 test('a long board list scrolls while creation stays reachable', async ({ page, request }) => {

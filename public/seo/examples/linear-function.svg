@@ -1,0 +1,139 @@
+<!--
+MathBoard
+Copyright (C) 2026 Giacomo Bartoloni
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="660" viewBox="0 0 800 660" role="img" aria-labelledby="linear-graph-title linear-graph-desc">
+  <title id="linear-graph-title">Graph of y equals 2x plus 1</title>
+  <desc id="linear-graph-desc">On a coordinate grid with the same unit spacing on both axes, a rising straight line passes through (0, 1), (1, 3) and (2, 5). An orange dashed right triangle between (1, 3) and (2, 5) marks a run of one unit and a rise of two. The equation y = 2x + 1 is written in the upper-left corner. A key on the right explains that the slope is 2 and the y-intercept is 1.</desc>
+  <defs>
+    <linearGradient id="paper" x2="0" y2="1">
+      <stop stop-color="#fffcf7"/>
+      <stop offset="1" stop-color="#f8f5ee"/>
+    </linearGradient>
+    <linearGradient id="function-line" x1="0" y1="1" x2="1" y2="0">
+      <stop stop-color="#2451b2"/>
+      <stop offset="1" stop-color="#1685ca"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="660" rx="18" fill="url(#paper)"/>
+  <rect x="42" y="12" width="730" height="636" rx="12" fill="#fffefd" stroke="#e8e1d5"/>
+
+  <!-- Unit grid: 88 px per unit on both axes, x from -3 to 5, y from -1 to 6. -->
+  <g class="grid" stroke="#e6eaf0" stroke-width="1">
+    <line x1="56" y1="24" x2="56" y2="640"/>
+    <line x1="144" y1="24" x2="144" y2="640"/>
+    <line x1="232" y1="24" x2="232" y2="640"/>
+    <line x1="320" y1="24" x2="320" y2="640"/>
+    <line x1="408" y1="24" x2="408" y2="640"/>
+    <line x1="496" y1="24" x2="496" y2="640"/>
+    <line x1="584" y1="24" x2="584" y2="640"/>
+    <line x1="672" y1="24" x2="672" y2="640"/>
+    <line x1="760" y1="24" x2="760" y2="640"/>
+    <line x1="56" y1="24" x2="760" y2="24"/>
+    <line x1="56" y1="112" x2="760" y2="112"/>
+    <line x1="56" y1="200" x2="760" y2="200"/>
+    <line x1="56" y1="288" x2="760" y2="288"/>
+    <line x1="56" y1="376" x2="760" y2="376"/>
+    <line x1="56" y1="464" x2="760" y2="464"/>
+    <line x1="56" y1="552" x2="760" y2="552"/>
+    <line x1="56" y1="640" x2="760" y2="640"/>
+  </g>
+
+  <!-- The slope is one square across and two squares up. -->
+  <path d="M 408 288 H 496 V 112 Z" fill="#eabf81" fill-opacity="0.25"/>
+  <path d="M 320 464 H 408 V 288 Z" fill="#6f9ed6" fill-opacity="0.09"/>
+
+  <!-- Axes with light arrowheads on the positive ends. -->
+  <g stroke="#344151" stroke-width="2.2">
+    <line x1="56" y1="552" x2="744" y2="552"/>
+    <line x1="320" y1="640" x2="320" y2="40"/>
+  </g>
+  <g fill="#344151">
+    <path d="M 760 552 L 742 545 L 742 559 Z"/>
+    <path d="M 320 24 L 313 42 L 327 42 Z"/>
+  </g>
+
+  <!-- Tick labels: one consistent distance from each axis, zero at the origin. -->
+  <g font-family="Figtree, Avenir, Helvetica, Arial, sans-serif" font-size="16" fill="#667080">
+    <g text-anchor="middle">
+      <text x="56" y="578">&#8722;3</text>
+      <text x="144" y="578">&#8722;2</text>
+      <text x="232" y="578">&#8722;1</text>
+      <text x="408" y="578">1</text>
+      <text x="496" y="578">2</text>
+      <text x="584" y="578">3</text>
+      <text x="672" y="578">4</text>
+      <text x="760" y="578">5</text>
+    </g>
+    <g text-anchor="end" dominant-baseline="middle">
+      <text x="308" y="24">6</text>
+      <text x="308" y="112">5</text>
+      <text x="308" y="200">4</text>
+      <text x="308" y="288">3</text>
+      <text x="308" y="376">2</text>
+      <text x="308" y="464">1</text>
+      <text x="308" y="640">&#8722;1</text>
+    </g>
+    <text x="304" y="578" text-anchor="end">0</text>
+  </g>
+  <g font-family="Iowan Old Style, Palatino Linotype, Georgia, Times New Roman, serif" font-style="italic" font-size="20" fill="#344151">
+    <text x="744" y="534" text-anchor="end">x</text>
+    <text x="334" y="46">y</text>
+  </g>
+
+  <!-- The line: y = 2x + 1 from (-1, -1) to (2.5, 6). -->
+  <path d="M 232 640 L 540 24" fill="none" stroke="#dbeaf7" stroke-width="12" stroke-linecap="round"/>
+  <path d="M 232 640 L 540 24" fill="none" stroke="url(#function-line)" stroke-width="5.5" stroke-linecap="round"/>
+
+  <!-- Slope triangle between (1, 3) and (2, 5): run 1, rise 2. -->
+  <path d="M 408 288 H 496 V 112" fill="none" stroke="#b85c2b" stroke-width="3" stroke-dasharray="8 7" stroke-linecap="round"/>
+  <circle cx="496" cy="288" r="4" fill="#b85c2b"/>
+
+  <!-- Marked points. -->
+  <g fill="#fffefd" stroke="#245fbd" stroke-width="3.5">
+    <circle cx="320" cy="464" r="9"/>
+    <circle cx="408" cy="288" r="9"/>
+    <circle cx="496" cy="112" r="9"/>
+  </g>
+
+  <!-- Equation set in the empty upper-left region, as on the board. -->
+  <rect x="75" y="36" width="202" height="55" rx="9" fill="#ffffff" stroke="#ddd8cd"/>
+  <rect x="75" y="36" width="5" height="55" rx="2.5" fill="#2866bb"/>
+  <text x="95" y="73" font-family="Iowan Old Style, Palatino Linotype, Georgia, Times New Roman, serif" font-size="31" fill="#26394f"><tspan font-style="italic">y</tspan><tspan> = 2</tspan><tspan font-style="italic">x</tspan><tspan> + 1</tspan></text>
+
+  <!-- Point labels. -->
+  <g fill="#ffffff" stroke="#e0e5ea">
+    <rect x="338" y="465" width="69" height="32" rx="7"/>
+    <rect x="417" y="304" width="69" height="32" rx="7"/>
+    <rect x="413" y="65" width="69" height="32" rx="7"/>
+  </g>
+  <g font-family="Figtree, Avenir, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#26394f">
+    <text x="372.5" y="486" text-anchor="middle">(0, 1)</text>
+    <text x="451.5" y="325" text-anchor="middle">(1, 3)</text>
+    <text x="447.5" y="86" text-anchor="middle">(2, 5)</text>
+  </g>
+
+  <!-- Run and rise labels. -->
+  <g font-family="Figtree, Avenir, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#9f4a22">
+    <text x="452" y="274" text-anchor="middle">run 1</text>
+    <text x="509" y="202">rise 2</text>
+  </g>
+
+  <!-- Reading key, placed in the open space to the right of the plotted line. -->
+  <g font-family="Figtree, Avenir, Helvetica, Arial, sans-serif">
+    <rect x="555" y="88" width="184" height="209" rx="11" fill="#fffefd" stroke="#d9dfe7"/>
+    <text x="574" y="117" font-size="16" font-weight="800" fill="#26394f">Read the graph</text>
+    <line x1="574" y1="130" x2="720" y2="130" stroke="#e6eaf0"/>
+    <circle cx="581" cy="154" r="5" fill="#fffefd" stroke="#245fbd" stroke-width="2.5"/>
+    <text x="595" y="159" font-size="14" font-weight="700" fill="#26394f">Start at (0, 1)</text>
+    <path d="M 576 195 H 588 M 588 195 V 178" fill="none" stroke="#b85c2b" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="595" y="183" font-size="14" font-weight="700" fill="#26394f">Right 1, up 2</text>
+    <text x="595" y="202" font-size="12.5" fill="#667080">to reach (1, 3)</text>
+    <line x1="574" y1="218" x2="720" y2="218" stroke="#e6eaf0"/>
+    <text x="574" y="246" font-size="14" font-weight="700" fill="#2451b2">m = 2</text>
+    <text x="574" y="270" font-size="14" font-weight="700" fill="#9f4a22">b = 1</text>
+    <text x="633" y="246" font-size="12.5" fill="#667080">slope</text>
+    <text x="633" y="270" font-size="12.5" fill="#667080">y-intercept</text>
+  </g>
+</svg>
