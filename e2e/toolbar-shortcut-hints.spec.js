@@ -134,13 +134,14 @@ for (const boardTheme of ['light', 'dark', 'chalkboard']) {
 }
 
 for (const viewport of [
-  { width: 1024, height: 768, direction: 'column' },
-  { width: 640, height: 600, direction: 'row' },
-  { width: 1280, height: 600, direction: 'column' },
-  { width: 1280, height: 585, direction: 'column' },
-  { width: 1280, height: 560, direction: 'row' },
-  { width: 320, height: 568, direction: 'row' },
-  { width: 844, height: 390, direction: 'row' },
+  { width: 1024, height: 768, mode: 'full' },
+  { width: 640, height: 600, mode: 'full' },
+  { width: 1280, height: 600, mode: 'full' },
+  { width: 1280, height: 585, mode: 'full' },
+  { width: 1280, height: 560, mode: 'full' },
+  { width: 1280, height: 440, mode: 'compact' },
+  { width: 320, height: 568 },
+  { width: 844, height: 390, mode: 'compact' },
 ]) {
   test(`hints degrade gracefully at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
