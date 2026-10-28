@@ -31,3 +31,24 @@ ADR 0001 remains authoritative for history. Analytics must not change command-lo
 - Gate the production analytics script on the cookie banner's `mathboard_cookie_consent.analytics` flag. That would be a fake gate for a cookieless product-analytics path already described in the privacy policy; consent storage remains for local preference UX only.
 - Full-session replay or content-bearing telemetry. Rejected: board content, typed text, and LaTeX must not be analytics metadata.
 - No product analytics. Leaves no production signal beyond ad-hoc observation; rejected for the live site while keeping content local.
+
+## Follow-up: non-functional consent UI removal (2026-10-28)
+
+The original choice to keep Simple Analytics independent from a browser cookie
+consent preference remains in effect. The former consent banner offered three
+choices but none affected the analytics transport, so retaining it would
+misleadingly imply that it offered an effective analytics opt-out.
+
+The web application no longer presents that banner or saves new consent choices.
+The Privacy Policy now explains local storage, web and desktop analytics,
+technical data received by providers, and GDPR rights. Browser analytics metric
+settings, semantic events, and the separate native desktop transport are not
+modified in this change.
+
+This is a documentation and user-interface consistency change, **not** a
+compliance certification. The conditions for consent-exempt analytics under
+Italian ePrivacy rules and EDPB technical scope guidance should be verified
+against actual network traffic and provider terms before publishing.
+
+See `docs/privacy-analytics-review.md` for release verification and unresolved
+legal/provider checks.
