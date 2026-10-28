@@ -248,7 +248,7 @@ export default {
     const saveConflict = ref(false)
     const recoveringConflict = ref(false)
     const onPersistenceStatus = (status) => {
-      saveConflict.value = status?.errorCode === 'board_conflict'
+      saveConflict.value = ['board_conflict', 'board_not_found', 'board_archived'].includes(status?.errorCode)
     }
     const recoverConflict = async () => {
       if (recoveringConflict.value) return

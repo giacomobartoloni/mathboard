@@ -65,3 +65,55 @@ test('inactive document commits render in Chromium with stable IDs and Formula g
     expect(Math.abs(liveMeasure[key] - result.updatedMeasure[key])).toBeLessThan(0.5)
   }
 })
+
+test('all nine inactive methods retain live semantic behavior', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  const result = await page.evaluate(async () => {
+    const { IndexedDbBoardRepository, createBoardRecord } = await import('/src/storage/local/IndexedDbBoardRepository.js')
+    const board = document.querySelector('#board').__vueParentComponent.proxy
+    const service = board.getBoardDocumentCommands()
+    const activeId = board.getBoardId()
+    const repository = new IndexedDbBoardRepository()
+    const target = await repository.create(createBoardRecord({ title: 'Parity target',
+      document: { format: 'mathboard-board', version: 1, title: 'Parity target', objects: [] } }))
+    const run = (boardId, method, params = {}) => service.executeOnBoard({ boardId, method, params },
+      { expiresAtMs: Date.now() + 10000 })
+    const stripIds = value => {
+      if (Array.isArray(value)) return value.map(stripIds)
+      if (!value || typeof value !== 'object') return value
+      return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'id')
+        .map(([key, item]) => [key, stripIds(item)]))
+    }
+    const sequence = async boardId => {
+      const snapshots = []
+      const record = async method => snapshots.push({ method,
+        objects: stripIds((await run(boardId, 'observe')).objects) })
+      const first = await run(boardId, 'create', { spec: { type: 'rect', width: 10, height: 20, left: 30, top: 40 } })
+      await record('create')
+      const pair = await run(boardId, 'createMany', { specs: [
+        { type: 'rect', width: 15, height: 15, left: 100, top: 80 },
+        { type: 'rect', width: 20, height: 10, left: 140, top: 80 },
+      ] })
+      await record('createMany')
+      await run(boardId, 'update', { id: first.id, patch: { left: 50 } })
+      await record('update')
+      const measured = stripIds(await run(boardId, 'measure', { id: first.id }))
+      const group = await run(boardId, 'group', { ids: pair.map(object => object.id) })
+      await record('group')
+      await run(boardId, 'delete', { id: first.id })
+      await record('delete')
+      await run(boardId, 'deleteMany', { ids: [group.id] })
+      await record('deleteMany')
+      await run(boardId, 'create', { spec: { type: 'rect', width: 5, height: 5 } })
+      await run(boardId, 'clear')
+      await record('clear')
+      return { snapshots, measured }
+    }
+    return { active: await sequence(activeId), inactive: await sequence(target.id) }
+  })
+  expect(result.inactive.snapshots).toEqual(result.active.snapshots)
+  for (const key of ['left', 'top', 'width', 'height']) {
+    expect(Math.abs(result.inactive.measured[key] - result.active.measured[key])).toBeLessThan(0.5)
+  }
+})

@@ -152,6 +152,30 @@ test('active autosave preserves dirty canvas after another repository changes it
   service.dispose()
 })
 
+test('deleted active record offers a recoverable copy of unsaved canvas edits', async () => {
+  const openDb = () => openMathBoardDb(fakeIndexedDB)
+  const repository = new IndexedDbBoardRepository({ openDb })
+  const otherTab = new IndexedDbBoardRepository({ openDb })
+  const boardId = `mb_${globalThis.crypto.randomUUID()}`
+  await repository.create(createBoardRecord({ id: boardId, title: 'Board',
+    document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }))
+  const canvas = makeCanvas()
+  const service = makeService({ canvas, repository })
+  await service.openBoard(boardId)
+  const rect = new Rect({ width: 10, height: 10 })
+  ensureMathBoardObjectId(rect, 'mbobj_unsaved')
+  canvas.add(rect)
+  service.notifyDocumentChanged()
+  await otherTab.deleteIfRevisionMatches(boardId, 1)
+  await assert.rejects(() => service.flush(), { code: 'board_not_found' })
+  assert.equal(service.status.errorCode, 'board_not_found')
+  const recovered = await service.recoverConflictAsCopy()
+  assert.notEqual(recovered.id, boardId)
+  assert.deepEqual(recovered.document.objects.map(object => object.id), ['mbobj_unsaved'])
+  assert.equal(service.status.state, SAVE_STATES.CLEAN)
+  service.dispose()
+})
+
 test('active rename does not clear a document edit made during its storage commit', async () => {
   const records = new Map([['mb_rename', { id: 'mb_rename', title: 'Before', revision: 1,
     document: { format: 'mathboard-board', version: 1, title: 'Before', objects: [] } }]])

@@ -20,14 +20,109 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { BoardLifecycle } from '../src/board/BoardLifecycle.js'
+import { executeDesktopBoardCommand } from '../src/board/agent/desktop-commands.js'
+
+function addressed(board) {
+  board.getBoardId = () => 'mb_active'
+  board.getBoardDocumentCommands = () => ({
+    executeOnBoard: command => executeDesktopBoardCommand(board.getBoardController(), command),
+  })
+  return board
+}
+
+test('desktop bridge routes an addressed inactive request and echoes its board ID', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  let onRequest
+  const calls = []
+  const routed = []
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: async command => {
+      routed.push(command)
+      return { boardId: command.boardId, objects: [] }
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    invokeCommand: async (name, args) => {
+      calls.push({ name, args })
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  assert.equal(calls[0].args.activeBoardId, 'mb_active')
+  await onRequest({ payload: { requestId: 'r-1', appGeneration: 'app-1',
+    rendererGeneration: 'renderer-1', boardEpoch: 0, boardId: 'mb_other', schemaVersion: 2,
+    expiresAtMs: Date.now() + 10000, method: 'observe', params: {} } })
+  assert.equal(routed.length, 1)
+  assert.equal(routed[0].boardId, 'mb_other')
+  const reply = JSON.parse(calls.find(call => call.name === 'board_bridge_reply').args.replyJson)
+  assert.equal(reply.boardId, 'mb_other')
+  assert.equal(reply.schemaVersion, 2)
+  disconnect()
+})
+
+test('desktop bridge rejects absent and legacy board targets before dispatch', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  let onRequest
+  const calls = []
+  let dispatched = 0
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: () => { dispatched += 1 } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    invokeCommand: async (name, args) => { calls.push({ name, args }); return 'app-1' },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  const request = { requestId: 'r-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, schemaVersion: 2, expiresAtMs: Date.now() + 10000,
+    method: 'create', params: { spec: { type: 'rect' } } }
+  await onRequest({ payload: request })
+  await onRequest({ payload: { ...request, requestId: 'r-2', boardId: 'mb_bad!', schemaVersion: 2 } })
+  await onRequest({ payload: { ...request, requestId: 'r-3', boardId: 'mb_active', schemaVersion: 1 } })
+  assert.equal(dispatched, 0)
+  assert.equal(calls.filter(call => call.name === 'board_bridge_reply').length, 0)
+  disconnect()
+})
+
+test('oversized result after an addressed write reports uncertain outcome', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  let onRequest
+  let replyJson
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: async () => ({ payload: 'x'.repeat(7 * 1024 * 1024) }) }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replyJson = args.replyJson
+      return 'app-1'
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  await onRequest({ payload: { requestId: 'r-1', appGeneration: 'app-1',
+    rendererGeneration: 'renderer-1', boardEpoch: 0, boardId: 'mb_other', schemaVersion: 2,
+    expiresAtMs: Date.now() + 10000, method: 'clear', params: {} } })
+  assert.equal(JSON.parse(replyJson).error.code, 'execution_unknown')
+  disconnect()
+})
 
 test('desktop bridge executes a correlated native observe and returns one bounded reply', async () => {
   const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
   const lifecycle = new BoardLifecycle()
   const calls = []
   let onRequest
-  const board = { _boardLifecycle: lifecycle, sessionReady: true,
-    getBoardController: () => ({ observe: () => ({ stable: true, objects: [] }) }) }
+  const board = addressed({ _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardController: () => ({ observe: () => ({ stable: true, objects: [] }) }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
     subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
@@ -40,12 +135,12 @@ test('desktop bridge executes a correlated native observe and returns one bounde
 
   assert.equal(calls[0].name, 'board_bridge_state')
   await onRequest({ payload: { requestId: 'r-1', appGeneration: 'app-1',
-    rendererGeneration: 'renderer-1', boardEpoch: 0, schemaVersion: 1,
+    rendererGeneration: 'renderer-1', boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2,
     expiresAtMs: Date.now() + 10_000, method: 'observe', params: {} } })
   const reply = calls.find(call => call.name === 'board_bridge_reply')
   assert.deepEqual(JSON.parse(reply.args.replyJson), {
     requestId: 'r-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
-    boardEpoch: 0, schemaVersion: 1, ok: true, result: { stable: true, objects: [] },
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, ok: true, result: { stable: true, objects: [] },
   })
   disconnect()
 })
@@ -54,7 +149,7 @@ test('desktop bridge attaches capture tracking before native requests can run', 
   const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
   const lifecycle = new BoardLifecycle()
   let attachments = 0
-  const board = { _boardLifecycle: lifecycle, sessionReady: true }
+  const board = addressed({ _boardLifecycle: lifecycle, sessionReady: true })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
     subscribe: async () => () => {},
@@ -76,8 +171,8 @@ test('desktop bridge never executes a stale or excluded board command', async ()
   let onRequest
   let creations = 0
   const calls = []
-  const board = { _boardLifecycle: lifecycle, sessionReady: true,
-    getBoardController: () => ({ create: () => { creations += 1 } }) }
+  const board = addressed({ _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardController: () => ({ create: () => { creations += 1 } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
     subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
@@ -89,7 +184,7 @@ test('desktop bridge never executes a stale or excluded board command', async ()
   })
   await lifecycle.transition(async () => {})
   const envelope = { requestId: 'r-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
-    boardEpoch: 0, schemaVersion: 1, expiresAtMs: Date.now() + 10_000,
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, expiresAtMs: Date.now() + 10_000,
     params: { spec: { type: 'rect' } } }
   await onRequest({ payload: { ...envelope, method: 'create' } })
   await onRequest({ payload: { ...envelope, requestId: 'r-2', boardEpoch: 2, method: 'boards.list' } })
@@ -106,7 +201,7 @@ test('desktop bridge reports failed native registration and removes its listener
   const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
   const lifecycle = new BoardLifecycle()
   let unlistened = false
-  const board = { _boardLifecycle: lifecycle, sessionReady: true }
+  const board = addressed({ _boardLifecycle: lifecycle, sessionReady: true })
   await assert.rejects(() => connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
     subscribe: async () => () => { unlistened = true },
@@ -122,8 +217,8 @@ test('a repeated native request ID never executes a write twice', async () => {
   let onRequest
   let creates = 0
   const replies = []
-  const board = { _boardLifecycle: lifecycle, sessionReady: true,
-    getBoardController: () => ({ create: () => { creates += 1; return { id: 'new', type: 'rect' } } }) }
+  const board = addressed({ _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardController: () => ({ create: () => { creates += 1; return { id: 'new', type: 'rect' } } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
     subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
@@ -134,7 +229,7 @@ test('a repeated native request ID never executes a write twice', async () => {
     captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
   })
   const payload = { requestId: 'r-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
-    boardEpoch: 0, schemaVersion: 1, expiresAtMs: Date.now() + 10_000,
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, expiresAtMs: Date.now() + 10_000,
     method: 'create', params: { spec: { type: 'rect' } } }
   await Promise.all([onRequest({ payload }), onRequest({ payload })])
 
@@ -149,8 +244,8 @@ test('an expired queued request is rejected before any board mutation', async ()
   let onRequest
   let creations = 0
   const replies = []
-  const board = { _boardLifecycle: lifecycle, sessionReady: true,
-    getBoardController: () => ({ create: () => { creations += 1; return { id: 'new', type: 'rect' } } }) }
+  const board = addressed({ _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardController: () => ({ create: () => { creations += 1; return { id: 'new', type: 'rect' } } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
     subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
@@ -161,7 +256,7 @@ test('an expired queued request is rejected before any board mutation', async ()
     captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
   })
   await onRequest({ payload: { requestId: 'expired', appGeneration: 'app-1',
-    rendererGeneration: 'renderer-1', boardEpoch: 0, schemaVersion: 1,
+    rendererGeneration: 'renderer-1', boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2,
     expiresAtMs: Date.now() - 1, method: 'create', params: { spec: { type: 'rect' } } } })
 
   assert.equal(creations, 0)

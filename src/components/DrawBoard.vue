@@ -273,7 +273,7 @@ export default {
         lifecycle: this._boardLifecycle,
         getActiveBoardId: () => this.getBoardId(),
         getActiveRevision: () => this._persistence?.revision ?? null,
-        getActiveController: (guard) => this._ensureBoardController('local_agent', guard),
+        getActiveController: (guard, buildFormula) => this._ensureBoardController('local_agent', guard, buildFormula),
         buildFormula: (spec) => buildFormulaFromSemanticSpec(spec, {
           defaultInk: this.boardThemeConfig.defaultInk,
           render: (args) => this._formulaRenderer.render(args),
@@ -289,12 +289,12 @@ export default {
       }
       return this._boardWorkspace;
     },
-    _ensureBoardController(interactionChannel = 'local_agent', commitGuard) {
+    _ensureBoardController(interactionChannel = 'local_agent', commitGuard, boundedBuildFormula) {
       if (!commitGuard && this._boardControllers.has(interactionChannel)) return this._boardControllers.get(interactionChannel);
       const controller = new BoardController({
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
-        buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
+        buildFormula: boundedBuildFormula || ((spec) => this._buildFormulaFromSemanticSpec(spec)),
         pushHistoryCommand: (command) => this._boardHistory.record(command),
         runWithoutHistory: (callback) => this._boardHistory.runSuspended(callback),
         prepareCreatedObject: (object) => {

@@ -101,6 +101,27 @@ test('inactive formula aborts when its target becomes active before commit', asy
   assert.equal(disposed(), 1)
 })
 
+test('active addressed Formula rendering releases its command at the deadline', { timeout: 500 }, async () => {
+  const { repository, activeId, service } = await fixture()
+  service._buildFormula = () => new Promise(() => {})
+  service._getActiveController = (_guard, buildFormula) => ({
+    create: spec => buildFormula(spec),
+  })
+  await assert.rejects(service.executeOnBoard({ boardId: activeId, method: 'create',
+    params: { spec: { type: 'formula', latex: 'x=1' } } },
+  { expiresAtMs: Date.now() + 20 }), { code: 'command_timeout' })
+  assert.equal((await repository.get(activeId)).revision, 1)
+})
+
+test('active addressed observation exposes the persisted record revision', async () => {
+  const { activeId, service } = await fixture()
+  service._getActiveController = () => ({ observe: () => ({ boardId: activeId, objects: [] }) })
+  const result = await service.executeOnBoard({ boardId: activeId, method: 'observe', params: {} },
+    { expiresAtMs: Date.now() + 10000 })
+  assert.equal(result.boardId, activeId)
+  assert.equal(result.revision, 1)
+})
+
 test('A to B to A lifecycle transition fences an inactive request', async () => {
   const { repository, activeId, targetId, service, setCurrentId, lifecycle } = await fixture()
   let finishFormula

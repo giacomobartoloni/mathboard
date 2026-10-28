@@ -149,13 +149,14 @@ export class BoardDocumentCommandService {
       if (loadedRevision !== null && record.revision !== loadedRevision) {
         throw new BoardTargetError('board_conflict')
       }
-      const result = await executeDesktopBoardCommand(this._getActiveController(guard), request,
+      const result = await executeDesktopBoardCommand(this._getActiveController(guard,
+        spec => this._renderFormula(spec, guard, context, expiresAtMs)), request,
         context.capture)
       try { guard() } catch (error) {
         if (boardCommandMutatesBoard(method)) throw new BoardTargetError('execution_unknown')
         throw error
       }
-      return result
+      return method === 'observe' ? { ...result, revision: record.revision } : result
     }
     if (!inactive.has(method)) throw new BoardTargetError('board_context_required')
 

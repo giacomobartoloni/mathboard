@@ -287,7 +287,9 @@ export class BoardPersistenceService {
         return record
       } catch (error) {
         if (this.boardId === savingBoardId) {
-          if (error?.code === BOARD_PERSISTENCE_ERROR_CODES.BOARD_CONFLICT) this._conflicted = true
+          if ([BOARD_PERSISTENCE_ERROR_CODES.BOARD_CONFLICT,
+            BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND,
+            BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED].includes(error?.code)) this._conflicted = true
           this._setStatus({
             state: SAVE_STATES.ERROR,
             error: error?.message || String(error),

@@ -30,7 +30,8 @@ const SMOKE_APP_ID: &str = "app.mathboard.desktop.phasecsmoke";
 
 fn request(app: &tauri::AppHandle, method: &str, params: Value) -> Result<Value, String> {
     let broker = app.state::<BoardRequestBroker>();
-    let (id, receiver) = emit_request(app, &broker, method, params)
+    let board_id = broker.active_board_id().ok_or("native board not ready")?;
+    let (id, receiver) = emit_request(app, &broker, &board_id, method, params)
         .map_err(|error| format!("native {method} queue: {error:?}"))?;
     match broker.await_reply(&id, receiver, Duration::from_secs(10)) {
         Ok(BoardReply::Success(value)) => Ok(value),
@@ -39,6 +40,9 @@ fn request(app: &tauri::AppHandle, method: &str, params: Value) -> Result<Value,
         Ok(BoardReply::TimedOut) | Err(BrokerError::Timeout) => {
             Err(format!("native {method} timeout / outcome unknown"))
         }
+        Ok(BoardReply::ExecutionUnknown) | Err(BrokerError::ExecutionUnknown) => Err(format!(
+            "native {method} execution unknown; read back board state"
+        )),
         Err(error) => Err(format!("native {method} transport: {error:?}")),
     }
 }
