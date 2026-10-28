@@ -70,7 +70,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </button>
       <button
         type="button"
-        class="tool-button tool-button--shortcut"
+        class="tool-button tool-button--shortcut tool-secondary"
         :class="{ selected: selected === 'formula' }"
         :aria-pressed="selected === 'formula'"
         aria-label="Formula"
