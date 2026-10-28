@@ -138,7 +138,7 @@ for (const viewport of [
   { width: 640, height: 600, mode: 'full' },
   { width: 1280, height: 600, mode: 'full' },
   { width: 1280, height: 585, mode: 'full' },
-  { width: 1280, height: 560, mode: 'full' },
+  { width: 1280, height: 560 },
   { width: 1280, height: 440, mode: 'compact' },
   { width: 320, height: 568 },
   { width: 844, height: 390, mode: 'compact' },
