@@ -58,7 +58,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </button>
       <button
         type="button"
-        class="tool-button tool-button--shortcut"
+        class="tool-button tool-button--shortcut tool-secondary"
         :class="{ selected: selected === 'font' }"
         :aria-pressed="selected === 'font'"
         aria-label="Text"
@@ -70,7 +70,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </button>
       <button
         type="button"
-        class="tool-button tool-button--shortcut"
+        class="tool-button tool-button--shortcut tool-secondary"
         :class="{ selected: selected === 'formula' }"
         :aria-pressed="selected === 'formula'"
         aria-label="Formula"
@@ -82,7 +82,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </button>
 
       <div
-        class="tool-menu"
+        class="tool-menu tool-secondary"
         @mouseenter="showShapesSubmenu = true"
         @mouseleave="showShapesSubmenu = false"
         @focusout="onShapesFocusOut"
@@ -149,7 +149,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </div>
 
       <div
-        class="tool-menu"
+        class="tool-menu tool-secondary"
         @mouseenter="showKitsSubmenu = true"
         @mouseleave="showKitsSubmenu = false"
         @focusout="onStampsFocusOut"
@@ -293,6 +293,26 @@ export default {
       },
     };
   },
+  mounted() {
+    this.onViewportResize = () => this.syncToolLayout();
+    window.addEventListener('resize', this.onViewportResize);
+    window.visualViewport?.addEventListener('resize', this.onViewportResize);
+    this.layoutObserver = new ResizeObserver(this.onViewportResize);
+    this.layoutObserver.observe(this.$el);
+    this.$nextTick(() => {
+      const viewControls = document.querySelector('.zoom-panel');
+      if (viewControls) this.layoutObserver?.observe(viewControls);
+      this.syncToolLayout();
+    });
+    document.fonts?.ready.then(() => {
+      if (this.$el?.isConnected) this.syncToolLayout();
+    });
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.onViewportResize);
+    window.visualViewport?.removeEventListener('resize', this.onViewportResize);
+    this.layoutObserver?.disconnect();
+  },
   computed: {
     isLightDisplayColor() {
       return this.selectedColor === null && this.mainInkIsLight;
@@ -300,6 +320,23 @@ export default {
   },
   methods: {
     getToolShortcutHint,
+    syncToolLayout() {
+      const rail = this.$el;
+      if (!rail?.isConnected) return;
+
+      // Measure the full vertical rail before applying the fallback.
+      rail.classList.remove('tools-compact');
+      const viewControls = document.querySelector('.zoom-panel');
+      const availableBottom = viewControls?.getBoundingClientRect().top ?? window.innerHeight - 12;
+      const fullBottom = rail.getBoundingClientRect().bottom;
+      const compact = fullBottom > availableBottom - 8;
+      rail.classList.toggle('tools-compact', compact);
+      if (compact) {
+        this.showShapesSubmenu = false;
+        this.showKitsSubmenu = false;
+        this.showColorPopover = false;
+      }
+    },
     select: function (element) {
       this.selected = element;
       this.$emit('tool-selected', element);
@@ -575,38 +612,14 @@ export default {
   outline-offset: 2px;
 }
 
-@media (max-height: 600px) {
-  .left-chrome {
-    top: 100px;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 8px;
-    max-width: calc(100vw - 24px);
-  }
-
-  .tools-panel {
-    width: max-content;
-    max-width: calc(100vw - 90px);
-    flex-flow: row wrap;
-  }
-
-  .tool-button--shortcut { width: auto; }
-
-  .shapes-submenu {
-    left: 0;
-    top: 100%;
-    margin: 10px 0 0;
-  }
-
-  .color-popover {
-    left: auto;
-    right: 100%;
-    top: 0;
-    margin: 0 10px 0 0;
-  }
+/* Constrained layout: keep the rail vertical with Select, Pan and Pen. */
+.left-chrome.tools-compact .tool-secondary,
+.left-chrome.tools-compact .color-panel {
+  display: none;
 }
 
-@media (max-height: 600px) and (max-width: 600px) {
-  .left-chrome { top: 154px; }
+/* Allow the three-tool fallback to move nearer the header on short screens. */
+.left-chrome.tools-compact {
+  top: min(100px, max(76px, 15vh));
 }
 </style>
