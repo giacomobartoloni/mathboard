@@ -46,6 +46,27 @@ const rect = { type: 'rect', left: 100, top: 150, width: 50, height: 40 }
 const formula = { type: 'formula', latex: 'x=1', left: 200, top: 150, scaleX: 1.5, angle: 20, opacity: 0.4 }
 const rejectsCode = (operation, code) => assert.rejects(operation, (error) => error.code === code)
 
+test('request commit guard prevents a late formula from mutating the live canvas', async () => {
+  let finishFormula
+  let expired = false
+  const { controller, canvas, history } = setup({
+    commitGuard: () => { if (expired) throw Object.assign(new Error('expired'), { code: 'command_timeout' }) },
+    buildFormula: () => new Promise(resolve => { finishFormula = resolve }),
+  })
+  const pending = controller.create(formula)
+  await Promise.resolve()
+  expired = true
+  const rendered = new FormulaObject([new Path('M 0 0 L 20 20')], { latex: formula.latex })
+  let disposed = false
+  const originalDispose = rendered.dispose.bind(rendered)
+  rendered.dispose = (...args) => { disposed = true; return originalDispose(...args) }
+  finishFormula(rendered)
+  await assert.rejects(pending, { code: 'command_timeout' })
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  assert.equal(disposed, true)
+})
+
 test('controller requires an interaction stability boundary', () => {
   assert.throws(() => new BoardController({
     getCanvas: () => makeControllerCanvas(),
@@ -365,10 +386,16 @@ test('missing canvas rejects every public operation with the readiness code', as
 test('async Formula update rejects a removed target without resurrecting it', async () => {
   let finish
   let delay = false
+  let replacementDisposed = false
   const { controller, canvas, history } = setup({
     buildFormula: async (spec) => {
       if (delay) await new Promise((resolve) => { finish = resolve })
-      return new FormulaObject([new Path('M 0 0 L 20 20')], { ...spec, latex: spec.latex })
+      const next = new FormulaObject([new Path('M 0 0 L 20 20')], { ...spec, latex: spec.latex })
+      if (delay) {
+        const dispose = next.dispose.bind(next)
+        next.dispose = (...args) => { replacementDisposed = true; return dispose(...args) }
+      }
+      return next
     },
   })
   const node = await controller.create(formula)
@@ -379,6 +406,7 @@ test('async Formula update rejects a removed target without resurrecting it', as
   await rejectsCode(() => pending, C.COMMIT_FAILED)
   assert.equal(canvas.getObjects().length, 0)
   assert.equal(history.length, 1)
+  assert.equal(replacementDisposed, true)
 })
 
 test('async Formula update keeps a human transform completed during rendering', async () => {
