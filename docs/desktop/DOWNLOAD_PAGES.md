@@ -6,11 +6,13 @@ sidecar, not the Vue application shell. The interactive board must remain at `/`
 
 ## Trust and release data
 
-The application/build version comes from `package.json` (also consumed by Tauri).
-The approved public download is deliberately separate: `seo/data/desktop-release.mjs`
-pins one owner-reviewed GitHub release tag and records platform-specific manual QA.
-`seo/lib/desktop-release.mjs` derives the release version and all asset filenames
-from that single tag. A development version bump must not silently change downloads.
+`package.json` is the single source of the application/build version (consumed by
+Tauri) and desktop download version. At build time,
+`seo/data/desktop-release.mjs` derives the GitHub tag (`v<version>`) from it,
+while `seo/lib/desktop-release.mjs` derives the seven release asset filenames.
+Only `main` is deployed to users; development previews can point to unpublished
+release assets and must not be used for distribution.
+Platform-specific manual QA remains recorded separately in `testedPlatforms`.
 
 No installer or checksum is hosted on MathBoard's web origin. Each link points
 directly to an official GitHub Release asset.
@@ -29,19 +31,19 @@ When preparing the next approved public desktop release:
 2. Inspect the actual release's seven assets on GitHub, including
    `SHA256SUMS.txt`. Check the version, asset filenames and checksum entries.
    Do not use `releases/latest` to select an unsigned prerelease.
-3. Change only the approved `tag` in `seo/data/desktop-release.mjs` after
-   publication. The release version and seven filenames are derived from it;
-   do not update filename strings individually or use `package.json` to select
-   an unpublished release. Set `testedPlatforms` based on *recorded* manual
-   validation of each specific installer, never packaging CI alone. Keep the
-   status `unsigned-public-beta` until a separately approved signed release
-   strategy changes the page schema and copy.
+3. Update the version in `package.json` and follow `docs/desktop/RELEASE.md`
+   to keep the native build versions aligned. Do not edit release tags or
+   installer filenames in the download manifest: they are derived at build
+   time. Update `testedPlatforms` based on *recorded* manual validation of each
+   specific installer, never packaging CI alone. Keep the status
+   `unsigned-public-beta` until a separately approved signed release strategy
+   changes the page schema and copy.
 4. Run `npm run test:unit`, `npm run build` and check the
    HTML generated in `dist/download/**/index.html`, download URL targets,
    sitemap, platform guidance, breadcrumbs and metadata.
-5. Promote the web changes to the production site only after the manifest and
-   GitHub assets have been reviewed together. The static site never resolves
-   an unapproved tag or fetches GitHub data at page-load time.
+5. Promote `main` to production only after the corresponding `v<version>`
+   GitHub Release is published and its assets and QA claims are reviewed.
+   The static site does not call GitHub APIs at page-load time.
 
 The asset links have `data-download-*` attributes. On the production site,
 the existing privacy-preserving Simple Analytics transport emits a

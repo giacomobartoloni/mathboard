@@ -22,6 +22,9 @@ import { renderHeader, renderFooter } from '../seo/lib/render-components.mjs'
 import { validatePages, validateRenderedHtml } from '../seo/lib/validate-pages.mjs'
 
 const pages = [download, macos, windows, linux, security]
+const { version: packageVersion } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+)
 
 test('download pages have unique paths and valid rendered HTML, structured data and breadcrumbs', () => {
   const { paths } = validatePages(pages)
@@ -37,6 +40,8 @@ test('download pages have unique paths and valid rendered HTML, structured data 
 
 test('all download links resolve directly to official versioned GitHub assets', () => {
   assert.doesNotThrow(() => validateDesktopRelease())
+  assert.equal(desktopRelease.version, packageVersion)
+  assert.equal(desktopRelease.tag, `v${packageVersion}`)
   assert.equal(releaseUrl(), `https://github.com/giacomobartoloni/mathboard/releases/tag/${desktopRelease.tag}`)
   for (const [key, name] of Object.entries(desktopRelease.assets)) {
     assert.equal(assetName(key), name)
@@ -50,7 +55,7 @@ test('all download links resolve directly to official versioned GitHub assets', 
   }
 })
 
-test('release assets derive from one approved tag, independently of package version', () => {
+test('release asset naming derives all filenames from the supplied tag', () => {
   const approved = createDesktopRelease({
     tag: 'v2.3.4',
     prerelease: true,
@@ -59,10 +64,15 @@ test('release assets derive from one approved tag, independently of package vers
   })
 
   assert.equal(approved.version, '2.3.4')
-  assert.equal(approved.assets.macosArm64, 'MathBoard_2.3.4_aarch64.dmg')
-  assert.equal(approved.assets.windowsMsi, 'MathBoard_2.3.4_x64_en-US.msi')
-  assert.equal(approved.assets.linuxAppImage, 'MathBoard_2.3.4_amd64.AppImage')
-  assert.equal(approved.assets.checksums, 'SHA256SUMS.txt')
+  assert.deepEqual(approved.assets, {
+    macosArm64: 'MathBoard_2.3.4_aarch64.dmg',
+    macosIntel: 'MathBoard_2.3.4_x64.dmg',
+    windowsExe: 'MathBoard_2.3.4_x64-setup.exe',
+    windowsMsi: 'MathBoard_2.3.4_x64_en-US.msi',
+    linuxAppImage: 'MathBoard_2.3.4_amd64.AppImage',
+    linuxDeb: 'MathBoard_2.3.4_amd64.deb',
+    checksums: 'SHA256SUMS.txt',
+  })
   assert.doesNotThrow(() => validateDesktopRelease(approved))
   assert.throws(() => createDesktopRelease({
     tag: 'desktop-v2.3.4',

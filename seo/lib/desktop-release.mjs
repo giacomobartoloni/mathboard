@@ -5,8 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 */
 
 /**
- * Release asset naming rules. This module has no dependency on the application
- * version, GitHub API, or approved distribution data.
+ * Pure asset naming rules, independent of package.json and GitHub APIs.
  */
 export const DESKTOP_ASSET_FORMATS = Object.freeze({
   macosArm64: { platform: 'macos', suffix: '_aarch64.dmg' },
@@ -19,8 +18,7 @@ export const DESKTOP_ASSET_FORMATS = Object.freeze({
 })
 
 /**
- * Materialize one approved release without duplicating its version in filenames.
- * Application versions can advance independently of the published download.
+ * Materialize release asset names from the versioned tag passed by the caller.
  */
 export function createDesktopRelease({ tag, prerelease, status, testedPlatforms }) {
   if (typeof tag !== 'string' || !/^v\d+\.\d+\.\d+$/.test(tag)) {
