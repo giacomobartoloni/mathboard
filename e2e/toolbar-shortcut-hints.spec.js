@@ -146,20 +146,38 @@ for (const viewport of [
   test(`hints degrade gracefully at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     const before = await gotoBoard(page)
-    await expect(page.getByRole('toolbar', { name: 'Drawing tools' })).toHaveCSS('flex-direction', viewport.direction)
+    const toolbar = page.getByRole('toolbar', { name: 'Drawing tools' })
+    await expect(toolbar).toHaveCSS('flex-direction', 'column')
+    const rail = page.locator('.left-chrome')
+    if (viewport.mode === 'compact') await expect(rail).toHaveClass(/tools-compact/)
+    if (viewport.mode === 'full') await expect(rail).not.toHaveClass(/tools-compact/)
+    const compact = await rail.evaluate((node) => node.classList.contains('tools-compact'))
     for (const [name] of tools) {
       const button = page.getByRole('button', { name, exact: true })
-      await expect(button).toBeInViewport()
-      await button.click({ trial: true })
+      const hidden = compact && !['Select', 'Pan', 'Pen'].includes(name)
+      if (hidden) await expect(button).toBeHidden()
+      else {
+        await expect(button).toBeInViewport()
+        await button.click({ trial: true })
+      }
       const hint = button.locator('span')
-      if (viewport.height <= 700 || viewport.width <= 600) await expect(hint).toBeHidden()
+      if (hidden || viewport.height <= 700 || viewport.width <= 600) await expect(hint).toBeHidden()
       else await expect(hint).toBeVisible()
     }
+    const stamps = page.getByRole('button', { name: 'Stamps', exact: true })
+    const colors = page.locator('.color-panel')
+    if (compact) {
+      await expect(stamps).toBeHidden()
+      await expect(colors).toBeHidden()
+    } else {
+      await expect(stamps).toBeVisible()
+      await expect(colors).toBeVisible()
+    }
     await expect(page.getByRole('button', { name: 'Redo', exact: true })).toBeInViewport()
-    const rail = await page.locator('.left-chrome').boundingBox()
+    const railBox = await rail.boundingBox()
     const viewControls = await page.getByRole('toolbar', { name: 'Board view and history' }).boundingBox()
-    expect(rail.y + rail.height).toBeLessThanOrEqual(viewControls.y - 8)
-    expect(rail.x + rail.width).toBeLessThanOrEqual(viewport.width)
+    expect(railBox.y + railBox.height).toBeLessThanOrEqual(viewControls.y - 8)
+    expect(railBox.x + railBox.width).toBeLessThanOrEqual(viewport.width)
     expect(await getBoardState(page)).toEqual(before)
     const path = testInfo.outputPath('constrained.png')
     await page.screenshot({ path, animations: 'disabled' })
