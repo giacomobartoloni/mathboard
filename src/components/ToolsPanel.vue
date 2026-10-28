@@ -149,7 +149,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       </div>
 
       <div
-        class="tool-menu"
+        class="tool-menu tool-secondary"
         @mouseenter="showKitsSubmenu = true"
         @mouseleave="showKitsSubmenu = false"
         @focusout="onStampsFocusOut"
