@@ -293,6 +293,26 @@ export default {
       },
     };
   },
+  mounted() {
+    this.onViewportResize = () => this.syncToolLayout();
+    window.addEventListener('resize', this.onViewportResize);
+    window.visualViewport?.addEventListener('resize', this.onViewportResize);
+    this.layoutObserver = new ResizeObserver(this.onViewportResize);
+    this.layoutObserver.observe(this.$el);
+    this.$nextTick(() => {
+      const viewControls = document.querySelector('.zoom-panel');
+      if (viewControls) this.layoutObserver?.observe(viewControls);
+      this.syncToolLayout();
+    });
+    document.fonts?.ready.then(() => {
+      if (this.$el?.isConnected) this.syncToolLayout();
+    });
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this.onViewportResize);
+    window.visualViewport?.removeEventListener('resize', this.onViewportResize);
+    this.layoutObserver?.disconnect();
+  },
   computed: {
     isLightDisplayColor() {
       return this.selectedColor === null && this.mainInkIsLight;
