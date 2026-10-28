@@ -154,9 +154,8 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
 
   const switcher = page.getByRole('button', { name: 'Open Board library' })
   const switcherBox = await switcher.boundingBox()
-  await expect(page.locator('.cookie-banner')).toBeVisible()
+  await expect(page.locator('.cookie-banner')).toHaveCount(0)
   await switcher.click()
-  await expect(page.locator('.cookie-banner')).toBeHidden()
   let dialog = page.getByRole('dialog', { name: 'Board library' })
   const panelBox = await dialog.boundingBox()
   const search = dialog.getByRole('textbox', { name: 'Find or create a board' })
@@ -171,7 +170,7 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
   await geometryGlyph.click()
   await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   await expect(dialog).toHaveCount(0)
-  await expect(page.locator('.cookie-banner')).toBeVisible()
+  await expect(page.locator('.cookie-banner')).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Open Board library' }).click()
   dialog = page.getByRole('dialog', { name: 'Board library' })
