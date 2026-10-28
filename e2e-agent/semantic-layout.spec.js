@@ -118,10 +118,10 @@ test('HTTP overflow changes neither scene nor the existing Redo command', async 
   await expect.poll(async () => (await send(request, 'observe')).objects.map(n => n.id)).toEqual([...nodes.map(n => n.id), extra.id])
 })
 
-test('visible cookie banner and Shapes submenu are excluded from layout area', async ({ page, request }) => {
+test('Shapes submenu is excluded from layout area without the obsolete cookie banner', async ({ page, request }) => {
   await page.route(/simpleanalyticscdn\.com/, route => route.abort())
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Essential Only', exact: true })).toBeVisible()
+  await expect(page.locator('.cookie-banner')).toHaveCount(0)
   await expect.poll(async () => {
     const response = await request.post('/__mathboard_agent/command', { data: { method: 'observe' } })
     return response.ok() && (await response.json()).result.stable
@@ -129,8 +129,8 @@ test('visible cookie banner and Shapes submenu are excluded from layout area', a
   const [node] = await send(request, 'createMany', { specs: [{type: 'rect', width: 100, height: 80}] })
   await page.getByRole('button', { name: 'Shapes', exact: true }).click()
   const menu = await page.getByRole('group', { name: 'Shape options', exact: true }).boundingBox()
-  const banner = await page.locator('.cookie-banner').boundingBox()
   const result = await send(request, 'layout', { ids: [node.id], margin: 16 })
   expect(result.safeArea.left).toBeGreaterThanOrEqual(menu.x+menu.width+15)
-  expect(result.safeArea.top+result.safeArea.height).toBeLessThanOrEqual(banner.y-15)
+  expect(result.bounds.left).toBeGreaterThanOrEqual(result.safeArea.left-1e-7)
+  expect(result.bounds.top+result.bounds.height).toBeLessThanOrEqual(result.safeArea.top+result.safeArea.height+1e-7)
 })
