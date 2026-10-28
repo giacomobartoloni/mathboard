@@ -15,18 +15,17 @@ test('the application does not mount a non-functional cookie consent UI', () => 
   assert.doesNotMatch(app, /CookieBanner/)
 })
 
-test('both web analytics entry points omit optional device/browser metrics', () => {
+test('web analytics retains its canonical-host script and existing metrics', () => {
   const transport = source('../src/analytics/transports/web.js')
   const privacyPage = source('../public/privacy-policy.html')
-  for (const metric of ['country', 'session', 'timeonpage', 'scrolled', 'useragent', 'screensize', 'viewportsize', 'language']) {
-    assert.match(transport, new RegExp(metric))
-    assert.match(privacyPage, new RegExp(metric))
-  }
-  assert.match(transport, /data-ignore-metrics/)
-  assert.match(privacyPage, /data-ignore-metrics/)
+  assert.match(transport, /scripts\.simpleanalyticscdn\.com\/latest\.js/)
+  assert.match(privacyPage, /scripts\.simpleanalyticscdn\.com\/latest\.js/)
+  assert.match(privacyPage, /mathboard\.app/)
+  assert.doesNotMatch(transport, /mathboard_cookie_consent|data-ignore-metrics/)
+  assert.doesNotMatch(privacyPage, /mathboard_cookie_consent|data-ignore-metrics/)
 })
 
-test('privacy policy covers web and native analytics, technical requests and rights', () => {
+test('privacy policy covers web and native analytics, delivery and GDPR rights', () => {
   const policy = source('../public/privacy-policy.html')
   assert.match(policy, /Cloudflare/)
   assert.match(policy, /Installed desktop analytics/)
