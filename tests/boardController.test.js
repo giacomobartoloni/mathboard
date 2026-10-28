@@ -118,6 +118,34 @@ test('Formula render failure leaves single and batch creation unchanged', async 
   }
 })
 
+test('delayed Formula creation cannot commit after a board transition reuses the canvas', async () => {
+  let finishFormula
+  let epoch = 0
+  let ready = true
+  const lifecycle = {
+    capture: () => ({ epoch }),
+    isReady: () => ready,
+    assertCurrent: (lease) => ready && lease.epoch === epoch,
+  }
+  const effects = []
+  const { controller, canvas, history } = setup({
+    lifecycle,
+    buildFormula: () => new Promise(resolve => { finishFormula = resolve }),
+    onCommittedOperation: effect => effects.push(effect),
+  })
+  const pending = controller.create(formula)
+  await Promise.resolve()
+  ready = false
+  epoch += 1
+  ready = true
+  finishFormula(new FormulaObject([new Path('M 0 0 L 20 20')], { latex: formula.latex }))
+
+  await rejectsCode(() => pending, C.NOT_READY)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  assert.deepEqual(effects, [])
+})
+
 test('failed batch history commit leaves the board unchanged', async () => {
   const { canvas, controller, history } = setup({
     pushHistoryCommand: () => { throw new Error('history failed') },

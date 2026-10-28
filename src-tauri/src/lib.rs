@@ -16,12 +16,21 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 mod analytics;
+pub mod board_bridge;
+pub mod companion;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![analytics::track_desktop_analytics]);
+        .manage(board_bridge::BoardRequestBroker::new(
+            &uuid::Uuid::new_v4().to_string(),
+        ))
+        .invoke_handler(tauri::generate_handler![
+            analytics::track_desktop_analytics,
+            board_bridge::board_bridge_state,
+            board_bridge::board_bridge_reply,
+        ]);
 
     // Keep Tauri's default macOS menus, replacing only text-input Undo/Redo
     // with actions dispatched to MathBoard's existing board command log.
