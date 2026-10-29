@@ -293,6 +293,8 @@ test('native MCP revocation aborts an active read and suppresses its reply', asy
     method: 'observe', params: {}, mcpRead: true, mcpGrantEpoch: 1 }
   const handling = handlers.get('mathboard-board-request')({ payload: request })
   const context = await entered
+  handlers.get('mathboard-mcp-cancel')({ payload: 1 })
+  assert.equal(context.signal.aborted, false)
   handlers.get('mathboard-mcp-cancel')({ payload: 2 })
   assert.equal(context.signal.aborted, true)
   finishRead({ boardId: 'mb_active', objects: [] })
