@@ -21,6 +21,11 @@ fn main() {
             "track_desktop_analytics",
             "board_bridge_state",
             "board_bridge_reply",
+            "mcp_permission_status",
+            "mcp_set_enabled",
+            "mcp_grant_read",
+            "mcp_grant_screenshot",
+            "mcp_revoke_all",
         ]),
     ))
     .expect("Tauri build configuration failed");

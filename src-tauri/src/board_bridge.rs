@@ -64,6 +64,9 @@ pub enum BrokerError {
     Timeout,
     InvalidBoardId,
     ExecutionUnknown,
+    PermissionDenied,
+    ScreenshotNotAuthorized,
+    BoardContextChanged,
 }
 
 #[derive(Debug, PartialEq)]
@@ -117,6 +120,7 @@ struct Pending {
     mutates: bool,
     deadline: Instant,
     sender: mpsc::Sender<BoardReply>,
+    mcp_grant_epoch: Option<u64>,
 }
 
 #[derive(Default)]
@@ -126,6 +130,30 @@ struct BrokerState {
     active_board_id: Option<String>,
     ready: bool,
     pending: HashMap<String, Pending>,
+    mcp_enabled: bool,
+    mcp_read_board_id: Option<String>,
+    mcp_screenshot: bool,
+    mcp_grant_epoch: u64,
+}
+
+/** A single read admission tied to both the renderer and permission generation. */
+pub struct McpReadLease {
+    grant_epoch: u64,
+    board_epoch: u64,
+    renderer_generation: String,
+    board_id: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpPermissionStatus {
+    pub enabled: bool,
+    pub active_board_id: Option<String>,
+    pub board_epoch: u64,
+    pub renderer_generation: Option<String>,
+    pub grant_epoch: u64,
+    pub read_board_id: Option<String>,
+    pub screenshot: bool,
 }
 
 /** A one-shot, bounded request registry. It never executes a board operation. */
@@ -194,6 +222,12 @@ impl BoardRequestBroker {
                 };
                 let _ = pending.sender.send(outcome);
             }
+            if !ready
+                || state.renderer_generation.as_deref() != Some(renderer_generation)
+                || state.active_board_id.as_deref() != active_board_id
+            {
+                Self::revoke_mcp_locked(&mut state);
+            }
         }
         state.renderer_generation = Some(renderer_generation.to_owned());
         state.board_epoch = board_epoch;
@@ -209,6 +243,188 @@ impl BoardRequestBroker {
         } else {
             None
         }
+    }
+
+    fn revoke_mcp_locked(state: &mut BrokerState) {
+        state.mcp_read_board_id = None;
+        state.mcp_screenshot = false;
+        state.mcp_grant_epoch = state.mcp_grant_epoch.wrapping_add(1);
+        let ids: Vec<_> = state
+            .pending
+            .iter()
+            .filter(|(_, pending)| pending.mcp_grant_epoch.is_some())
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in ids {
+            if let Some(pending) = state.pending.remove(&id) {
+                let _ = pending.sender.send(BoardReply::Disconnected);
+            }
+        }
+    }
+
+    pub fn mcp_status(&self) -> McpPermissionStatus {
+        let state = self.state.lock().expect("board broker lock poisoned");
+        McpPermissionStatus {
+            enabled: state.mcp_enabled,
+            active_board_id: if state.ready {
+                state.active_board_id.clone()
+            } else {
+                None
+            },
+            board_epoch: state.board_epoch,
+            renderer_generation: state.renderer_generation.clone(),
+            grant_epoch: state.mcp_grant_epoch,
+            read_board_id: state.mcp_read_board_id.clone(),
+            screenshot: state.mcp_screenshot,
+        }
+    }
+
+    pub fn mcp_visible_methods(&self) -> Vec<&'static str> {
+        let state = self.state.lock().expect("board broker lock poisoned");
+        if !state.mcp_enabled || !state.ready || state.mcp_read_board_id != state.active_board_id {
+            return Vec::new();
+        }
+        let mut methods = vec!["observe", "measure"];
+        if state.mcp_screenshot {
+            methods.push("screenshot");
+        }
+        methods
+    }
+
+    pub fn mcp_set_enabled(&self, enabled: bool) {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        if state.mcp_enabled != enabled {
+            Self::revoke_mcp_locked(&mut state);
+            state.mcp_enabled = enabled;
+        }
+    }
+
+    pub fn mcp_grant_read(
+        &self,
+        expected_board_id: &str,
+        expected_board_epoch: u64,
+        expected_grant_epoch: u64,
+        expected_renderer_generation: &str,
+    ) -> Result<McpPermissionStatus, BrokerError> {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        if !state.mcp_enabled || !state.ready {
+            return Err(BrokerError::NotReady);
+        }
+        if !valid_board_id(expected_board_id) {
+            return Err(BrokerError::InvalidBoardId);
+        }
+        if state.active_board_id.as_deref() != Some(expected_board_id)
+            || state.board_epoch != expected_board_epoch
+            || state.mcp_grant_epoch != expected_grant_epoch
+            || state.renderer_generation.as_deref() != Some(expected_renderer_generation)
+        {
+            return Err(BrokerError::BoardContextChanged);
+        }
+        let board_id = state.active_board_id.clone().ok_or(BrokerError::NotReady)?;
+        Self::revoke_mcp_locked(&mut state);
+        state.mcp_read_board_id = Some(board_id);
+        Ok(McpPermissionStatus {
+            enabled: true,
+            active_board_id: state.active_board_id.clone(),
+            board_epoch: state.board_epoch,
+            renderer_generation: state.renderer_generation.clone(),
+            grant_epoch: state.mcp_grant_epoch,
+            read_board_id: state.mcp_read_board_id.clone(),
+            screenshot: false,
+        })
+    }
+
+    pub fn mcp_grant_screenshot(
+        &self,
+        expected_board_id: &str,
+        expected_board_epoch: u64,
+        expected_grant_epoch: u64,
+        expected_renderer_generation: &str,
+    ) -> Result<McpPermissionStatus, BrokerError> {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        if state.active_board_id.as_deref() != Some(expected_board_id)
+            || state.board_epoch != expected_board_epoch
+            || state.mcp_grant_epoch != expected_grant_epoch
+            || state.renderer_generation.as_deref() != Some(expected_renderer_generation)
+        {
+            return Err(BrokerError::BoardContextChanged);
+        }
+        if !state.mcp_enabled || !state.ready || state.mcp_read_board_id != state.active_board_id {
+            return Err(BrokerError::PermissionDenied);
+        }
+        state.mcp_screenshot = true;
+        Ok(McpPermissionStatus {
+            enabled: true,
+            active_board_id: state.active_board_id.clone(),
+            board_epoch: state.board_epoch,
+            renderer_generation: state.renderer_generation.clone(),
+            grant_epoch: state.mcp_grant_epoch,
+            read_board_id: state.mcp_read_board_id.clone(),
+            screenshot: true,
+        })
+    }
+
+    pub fn mcp_revoke_all(&self) {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        Self::revoke_mcp_locked(&mut state);
+    }
+
+    pub fn mcp_lease_valid(&self, lease: &McpReadLease) -> bool {
+        let state = self.state.lock().expect("board broker lock poisoned");
+        state.mcp_enabled
+            && state.ready
+            && state.mcp_grant_epoch == lease.grant_epoch
+            && state.board_epoch == lease.board_epoch
+            && state.renderer_generation.as_deref() == Some(&lease.renderer_generation)
+            && state.active_board_id.as_deref() == Some(&lease.board_id)
+            && state.mcp_read_board_id.as_deref() == Some(&lease.board_id)
+    }
+
+    pub fn queue_mcp_read(
+        &self,
+        board_id: Option<&str>,
+        method: &str,
+        params: Value,
+    ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>, McpReadLease), BrokerError> {
+        if !READ_ONLY_METHODS.contains(&method) {
+            return Err(BrokerError::UnsupportedMethod);
+        }
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        if !state.mcp_enabled || state.mcp_read_board_id.is_none() {
+            return Err(BrokerError::PermissionDenied);
+        }
+        if method == "screenshot" && !state.mcp_screenshot {
+            return Err(BrokerError::ScreenshotNotAuthorized);
+        }
+        if method != "observe" && board_id.is_none() {
+            return Err(BrokerError::InvalidBoardId);
+        }
+        let active = state.active_board_id.clone().ok_or(BrokerError::NotReady)?;
+        let target = board_id.unwrap_or(&active);
+        if !valid_board_id(target) {
+            return Err(BrokerError::InvalidBoardId);
+        }
+        if target != active || state.mcp_read_board_id.as_deref() != Some(target) {
+            return Err(BrokerError::BoardContextChanged);
+        }
+        let lease = McpReadLease {
+            grant_epoch: state.mcp_grant_epoch,
+            board_epoch: state.board_epoch,
+            renderer_generation: state
+                .renderer_generation
+                .clone()
+                .ok_or(BrokerError::NotReady)?,
+            board_id: active.clone(),
+        };
+        let (request, receiver) = self.queue_locked(
+            &mut state,
+            target,
+            method,
+            params,
+            Duration::from_secs(10),
+            Some(lease.grant_epoch),
+        )?;
+        Ok((request, receiver, lease))
     }
 
     pub fn queue(
@@ -227,6 +443,19 @@ impl BoardRequestBroker {
         params: Value,
         timeout: Duration,
     ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>), BrokerError> {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        self.queue_locked(&mut state, board_id, method, params, timeout, None)
+    }
+
+    fn queue_locked(
+        &self,
+        state: &mut BrokerState,
+        board_id: &str,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+        mcp_grant_epoch: Option<u64>,
+    ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>), BrokerError> {
         if !METHODS.contains(&method) {
             return Err(BrokerError::UnsupportedMethod);
         }
@@ -237,7 +466,6 @@ impl BoardRequestBroker {
         if lifetime.is_zero() {
             return Err(BrokerError::Timeout);
         }
-        let mut state = self.state.lock().expect("board broker lock poisoned");
         if !state.ready {
             return Err(BrokerError::NotReady);
         }
@@ -285,6 +513,7 @@ impl BoardRequestBroker {
                 mutates: !READ_ONLY_METHODS.contains(&method),
                 deadline,
                 sender,
+                mcp_grant_epoch,
             },
         );
         Ok((request, receiver))
@@ -470,4 +699,104 @@ pub fn emit_request(
         return Err(BrokerError::NotReady);
     }
     Ok((request_id, receiver))
+}
+
+/** The MCP path admits one of three reads and its grant in the same broker lock. */
+pub fn emit_mcp_read(
+    app: &tauri::AppHandle,
+    broker: &BoardRequestBroker,
+    board_id: Option<&str>,
+    method: &str,
+    params: Value,
+) -> Result<(String, mpsc::Receiver<BoardReply>, McpReadLease), BrokerError> {
+    let (request, receiver, lease) = broker.queue_mcp_read(board_id, method, params)?;
+    let request_id = request.request_id.clone();
+    if app
+        .emit_to("main", "mathboard-board-request", request)
+        .is_err()
+    {
+        broker.cancel(&request_id);
+        return Err(BrokerError::NotReady);
+    }
+    Ok((request_id, receiver, lease))
+}
+
+#[tauri::command]
+pub(crate) fn mcp_permission_status(
+    webview: tauri::Webview,
+    broker: tauri::State<'_, BoardRequestBroker>,
+) -> Result<McpPermissionStatus, String> {
+    if webview.label() != "main" {
+        return Err("MCP controls unavailable".into());
+    }
+    Ok(broker.mcp_status())
+}
+
+#[tauri::command]
+pub(crate) fn mcp_set_enabled(
+    webview: tauri::Webview,
+    broker: tauri::State<'_, BoardRequestBroker>,
+    enabled: bool,
+) -> Result<McpPermissionStatus, String> {
+    if webview.label() != "main" {
+        return Err("MCP controls unavailable".into());
+    }
+    broker.mcp_set_enabled(enabled);
+    Ok(broker.mcp_status())
+}
+
+#[tauri::command]
+pub(crate) fn mcp_grant_read(
+    webview: tauri::Webview,
+    broker: tauri::State<'_, BoardRequestBroker>,
+    expected_board_id: String,
+    expected_board_epoch: u64,
+    expected_grant_epoch: u64,
+    expected_renderer_generation: String,
+) -> Result<McpPermissionStatus, String> {
+    if webview.label() != "main" {
+        return Err("MCP controls unavailable".into());
+    }
+    broker
+        .mcp_grant_read(
+            &expected_board_id,
+            expected_board_epoch,
+            expected_grant_epoch,
+            &expected_renderer_generation,
+        )
+        .map_err(|_| "Board context changed or MCP unavailable".to_owned())
+}
+
+#[tauri::command]
+pub(crate) fn mcp_grant_screenshot(
+    webview: tauri::Webview,
+    broker: tauri::State<'_, BoardRequestBroker>,
+    expected_board_id: String,
+    expected_board_epoch: u64,
+    expected_grant_epoch: u64,
+    expected_renderer_generation: String,
+) -> Result<McpPermissionStatus, String> {
+    if webview.label() != "main" {
+        return Err("MCP controls unavailable".into());
+    }
+    broker
+        .mcp_grant_screenshot(
+            &expected_board_id,
+            expected_board_epoch,
+            expected_grant_epoch,
+            &expected_renderer_generation,
+        )
+        .map_err(|_| "Board context changed or read access unavailable".to_owned())
+}
+
+#[tauri::command]
+pub(crate) fn mcp_revoke_all(
+    webview: tauri::Webview,
+    broker: tauri::State<'_, BoardRequestBroker>,
+) -> Result<McpPermissionStatus, String> {
+    if webview.label() != "main" {
+        return Err("MCP controls unavailable".into());
+    }
+    broker.mcp_revoke_all();
+    Ok(broker.mcp_status())
 }
