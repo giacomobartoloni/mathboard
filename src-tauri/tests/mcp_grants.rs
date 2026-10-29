@@ -37,9 +37,9 @@ fn enabling_mcp_exposes_all_read_tools_without_separate_grants() {
     broker.mcp_set_enabled(true);
     assert_eq!(
         broker.mcp_visible_methods(),
-        ["observe", "measure", "screenshot"]
+        ["observe", "measure", "screenshot", "command"]
     );
-    for method in ["observe", "measure", "screenshot"] {
+    for method in ["observe", "measure", "screenshot", "command"] {
         let board_id = if method == "observe" {
             None
         } else {
@@ -102,7 +102,7 @@ fn board_switch_keeps_mcp_enabled_but_invalidates_prior_lease() {
     assert!(broker.mcp_status().enabled);
     assert_eq!(
         broker.mcp_visible_methods(),
-        ["observe", "measure", "screenshot"]
+        ["observe", "measure", "screenshot", "command"]
     );
     let (request, _, _) = broker
         .queue_mcp_read(Some("mb_a"), "observe", json!({}))
