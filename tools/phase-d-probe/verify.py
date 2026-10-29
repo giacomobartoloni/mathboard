@@ -47,6 +47,17 @@ def request(process, request_id, method, params):
     return response["result"]
 
 
+def rejected_request(process, request_id, method, params):
+    payload = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
+    process.stdin.write(json.dumps(payload) + "\n")
+    process.stdin.flush()
+    readable, _, _ = select.select([process.stdout], [], [], 5)
+    assert readable, f"No rejection of {method} within five seconds"
+    response = json.loads(process.stdout.readline())
+    assert response["id"] == request_id and "error" in response, response
+    return response["error"]
+
+
 def session(modern):
     with subprocess.Popen([str(BINARY)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, text=True, bufsize=1,
@@ -56,6 +67,8 @@ def session(modern):
             assert "2026-07-28" in discovery["supportedVersions"], discovery
             assert discovery["resultType"] == "complete", discovery
             meta = MODERN_META
+            unsupported = {**MODERN_META, "io.modelcontextprotocol/protocolVersion": "9999-01-01"}
+            assert rejected_request(process, "unsupported", "tools/list", {"_meta": unsupported})["code"] < 0
         else:
             initialized = request(process, "initialize", "initialize", {
                 "protocolVersion": "2025-11-25", "capabilities": {},
