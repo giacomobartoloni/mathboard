@@ -73,6 +73,8 @@ export async function connectDesktopBoardBridge(getBoard, {
   let stateQueue = Promise.resolve()
   let commandQueue = Promise.resolve()
   const seenRequestIds = new Set()
+  const activeMcpRequests = new Map()
+  let minimumMcpEpoch = 0
 
   const publishState = (ready, epoch) => {
     const activeBoardId = board.getBoardId?.() || null
@@ -91,15 +93,15 @@ export async function connectDesktopBoardBridge(getBoard, {
   const unsubscribeLifecycle = lifecycle.subscribe((ready, epoch) => {
     void publishState(ready, epoch).catch(() => {})
   })
-  const handleRequest = async (request) => {
-    if (disposed || !validEnvelope(request, appGeneration, rendererGeneration)) return
+  const handleRequest = async (request, signal) => {
+    if (disposed || signal?.aborted || !validEnvelope(request, appGeneration, rendererGeneration)) return
     const reply = { requestId: request.requestId, appGeneration,
       rendererGeneration, boardEpoch: request.boardEpoch, boardId: request.boardId,
       schemaVersion: SCHEMA_VERSION }
     if (!allowed.has(request.method)) {
       reply.ok = false
       reply.error = { code: 'invalid_command', message: 'Unsupported board command.' }
-    } else if (Date.now() >= request.expiresAtMs) {
+    } else if (signal?.aborted || Date.now() >= request.expiresAtMs) {
       reply.ok = false
       reply.error = { code: 'command_timeout', message: 'Board command expired before execution.' }
     } else if (getBoard() !== board || !lifecycle.isReady() || request.boardEpoch !== lifecycle.epoch) {
@@ -112,8 +114,9 @@ export async function connectDesktopBoardBridge(getBoard, {
       try {
         reply.result = await board.getBoardDocumentCommands().executeOnBoard(request, {
           expiresAtMs: request.expiresAtMs,
-          capture,
-          isCurrent: () => !disposed && getBoard() === board && request.boardEpoch === lifecycle.epoch,
+          signal,
+          capture: signal ? { screenshot: (params) => capture.screenshot(params, signal) } : capture,
+          isCurrent: () => !disposed && !signal?.aborted && getBoard() === board && request.boardEpoch === lifecycle.epoch,
         })
         reply.ok = true
         if (mutates && Date.now() >= request.expiresAtMs) {
@@ -128,7 +131,7 @@ export async function connectDesktopBoardBridge(getBoard, {
         finish()
       }
     }
-    if (disposed) return
+    if (disposed || signal?.aborted) return
     let replyJson = JSON.stringify(reply)
     if (new TextEncoder().encode(replyJson).length > MAX_REPLY_BYTES) {
       const possibleWrite = boardCommandMutatesBoard(request.method) && reply.ok
@@ -145,21 +148,34 @@ export async function connectDesktopBoardBridge(getBoard, {
   }
   const onRequest = ({ payload }) => {
     if (!validEnvelope(payload, appGeneration, rendererGeneration)) return commandQueue
+    if (payload.mcpRead === true
+      && (!Number.isSafeInteger(payload.mcpGrantEpoch) || payload.mcpGrantEpoch < minimumMcpEpoch)) return commandQueue
     if (seenRequestIds.has(payload.requestId)) return commandQueue
     seenRequestIds.add(payload.requestId)
     if (seenRequestIds.size > 256) seenRequestIds.delete(seenRequestIds.values().next().value)
-    commandQueue = commandQueue.then(() => handleRequest(payload)).catch(() => {})
+    const aborter = payload.mcpRead === true ? new AbortController() : null
+    if (aborter) activeMcpRequests.set(payload.requestId, { aborter, epoch: payload.mcpGrantEpoch })
+    commandQueue = commandQueue.then(() => handleRequest(payload, aborter?.signal)).catch(() => {})
+      .finally(() => activeMcpRequests.delete(payload.requestId))
     return commandQueue
   }
 
-  let unlisten
+  let unlisten, unlistenMcpCancel
   try {
     unlisten = await subscribe('mathboard-board-request', onRequest)
+    unlistenMcpCancel = await subscribe('mathboard-mcp-cancel', ({ payload }) => {
+      if (!Number.isSafeInteger(payload) || payload < minimumMcpEpoch) return
+      minimumMcpEpoch = payload
+      for (const { aborter, epoch } of activeMcpRequests.values()) {
+        if (epoch < payload) aborter.abort()
+      }
+    })
     await publishState(lifecycle.isReady(), lifecycle.epoch)
   } catch (error) {
     disposed = true
     unsubscribeLifecycle()
     unlisten?.()
+    unlistenMcpCancel?.()
     capture.dispose()
     throw error
   }
@@ -169,6 +185,8 @@ export async function connectDesktopBoardBridge(getBoard, {
     disposed = true
     unsubscribeLifecycle()
     unlisten()
+    unlistenMcpCancel()
+    for (const { aborter } of activeMcpRequests.values()) aborter.abort()
     capture.dispose()
     void invokeCommand('board_bridge_state', {
       rendererGeneration, boardEpoch: lifecycle.epoch, activeBoardId: board.getBoardId?.() || null,

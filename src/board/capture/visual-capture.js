@@ -179,13 +179,16 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
   return {
     attach(){attach()},
     beginMutation(){pendingMutations++;return ()=>{pendingMutations--}},
-    async screenshot(params) {
+    async screenshot(params, externalSignal) {
       if(disposed) throw captureError('capture_failed','Capture adapter is closed.')
+      if(externalSignal?.aborted) throw captureError('capture_failed','Capture was cancelled.')
       const request=validateCaptureRequest(params)
       if(active>=CAPTURE_LIMITS.maxConcurrentCaptures) throw captureError('capture_failed','Capture concurrency limit reached.')
       active++
       const aborter=new AbortController()
       aborters.add(aborter)
+      const cancel=()=>aborter.abort()
+      externalSignal?.addEventListener('abort',cancel,{once:true})
       let timer
       try {
         return await Promise.race([render(request,aborter.signal),new Promise((_,reject)=>{
@@ -194,7 +197,7 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
       } catch(error) {
         if(['invalid_capture_request','board_not_ready','object_not_found','capture_too_large','capture_failed'].includes(error?.code)) throw error
         throw captureError('capture_failed','Unable to capture the local board.')
-      } finally {clearTimeout(timer);aborter.abort();aborters.delete(aborter);active--}
+      } finally {clearTimeout(timer);externalSignal?.removeEventListener('abort',cancel);aborter.abort();aborters.delete(aborter);active--}
     },
     dispose(){
       if(disposed) return

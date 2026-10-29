@@ -58,6 +58,11 @@ fn mcp_reads_require_explicit_enable_and_board_scoped_grant() {
     assert_eq!(broker.mcp_visible_methods(), ["observe", "measure"]);
     let (request, _receiver, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
     assert_eq!(request.board_id, "mb_a");
+    assert!(request.mcp_read);
+    assert_eq!(
+        request.mcp_grant_epoch,
+        Some(broker.mcp_status().grant_epoch)
+    );
     assert!(broker.mcp_lease_valid(&lease));
     assert_eq!(
         broker
@@ -133,14 +138,10 @@ fn active_board_transition_revokes_grants_without_affecting_addressed_internal_r
         broker.queue_mcp_read(None, "observe", json!({})).err(),
         Some(BrokerError::PermissionDenied)
     );
-    assert_eq!(
-        broker
-            .queue("mb_a", "observe", json!({}))
-            .unwrap()
-            .0
-            .board_id,
-        "mb_a"
-    );
+    let internal = broker.queue("mb_a", "observe", json!({})).unwrap().0;
+    assert_eq!(internal.board_id, "mb_a");
+    assert!(!internal.mcp_read);
+    assert_eq!(internal.mcp_grant_epoch, None);
 }
 
 #[test]

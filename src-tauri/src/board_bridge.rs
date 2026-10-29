@@ -91,6 +91,9 @@ pub struct OutboundRequest {
     pub expires_at_ms: u64,
     pub method: String,
     pub params: Value,
+    pub mcp_read: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_grant_epoch: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -559,6 +562,8 @@ impl BoardRequestBroker {
                 + lifetime.as_millis() as u64,
             method: method.to_owned(),
             params,
+            mcp_read: mcp_grant_epoch.is_some(),
+            mcp_grant_epoch,
         };
         if serde_json::to_vec(&request)
             .map_err(|_| BrokerError::RequestTooLarge)?
@@ -720,6 +725,7 @@ pub(crate) fn board_bridge_state(
     if webview.label() != "main" {
         return Err("Board bridge unavailable".into());
     }
+    let previous_epoch = broker.mcp_status().grant_epoch;
     broker
         .renderer_state(
             &renderer_generation,
@@ -728,6 +734,10 @@ pub(crate) fn board_bridge_state(
             active_board_id.as_deref(),
         )
         .map_err(|_| "Invalid board bridge state".to_string())?;
+    let status = broker.mcp_status();
+    if status.grant_epoch != previous_epoch {
+        let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+    }
     Ok(broker.app_generation().to_owned())
 }
 
@@ -819,8 +829,13 @@ pub(crate) fn mcp_set_enabled(
         return Err("Local MCP IPC unavailable".into());
     }
     let _ = app;
+    let previous_epoch = broker.mcp_status().grant_epoch;
     broker.mcp_set_enabled(enabled);
-    Ok(broker.mcp_status())
+    let status = broker.mcp_status();
+    if status.grant_epoch != previous_epoch {
+        let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+    }
+    Ok(status)
 }
 
 #[tauri::command]
@@ -835,14 +850,16 @@ pub(crate) fn mcp_grant_read(
     if webview.label() != "main" {
         return Err("MCP controls unavailable".into());
     }
-    broker
+    let status = broker
         .mcp_grant_read(
             &expected_board_id,
             expected_board_epoch,
             expected_grant_epoch,
             &expected_renderer_generation,
         )
-        .map_err(|_| "Board context changed or MCP unavailable".to_owned())
+        .map_err(|_| "Board context changed or MCP unavailable".to_owned())?;
+    let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+    Ok(status)
 }
 
 #[tauri::command]
@@ -857,14 +874,16 @@ pub(crate) fn mcp_grant_screenshot(
     if webview.label() != "main" {
         return Err("MCP controls unavailable".into());
     }
-    broker
+    let status = broker
         .mcp_grant_screenshot(
             &expected_board_id,
             expected_board_epoch,
             expected_grant_epoch,
             &expected_renderer_generation,
         )
-        .map_err(|_| "Board context changed or read access unavailable".to_owned())
+        .map_err(|_| "Board context changed or read access unavailable".to_owned())?;
+    let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+    Ok(status)
 }
 
 #[tauri::command]
@@ -876,5 +895,7 @@ pub(crate) fn mcp_revoke_all(
         return Err("MCP controls unavailable".into());
     }
     broker.mcp_revoke_all();
-    Ok(broker.mcp_status())
+    let status = broker.mcp_status();
+    let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+    Ok(status)
 }

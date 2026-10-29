@@ -45,7 +45,7 @@ test('desktop bridge routes an addressed inactive request and echoes its board I
   }
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       calls.push({ name, args })
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -76,7 +76,7 @@ test('desktop bridge rejects absent and legacy board targets before dispatch', a
   }
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => { calls.push({ name, args }); return 'app-1' },
     captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
   })
@@ -102,7 +102,7 @@ test('oversized result after an addressed write reports uncertain outcome', asyn
   }
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       if (name === 'board_bridge_reply') replyJson = args.replyJson
       return 'app-1'
@@ -125,7 +125,7 @@ test('desktop bridge executes a correlated native observe and returns one bounde
     getBoardController: () => ({ observe: () => ({ stable: true, objects: [] }) }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       calls.push({ name, args })
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -175,7 +175,7 @@ test('desktop bridge never executes a stale or excluded board command', async ()
     getBoardController: () => ({ create: () => { creations += 1 } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       calls.push({ name, args })
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -221,7 +221,7 @@ test('a repeated native request ID never executes a write twice', async () => {
     getBoardController: () => ({ create: () => { creates += 1; return { id: 'new', type: 'rect' } } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -248,7 +248,7 @@ test('an expired queued request is rejected before any board mutation', async ()
     getBoardController: () => ({ create: () => { creations += 1; return { id: 'new', type: 'rect' } } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -261,5 +261,75 @@ test('an expired queued request is rejected before any board mutation', async ()
 
   assert.equal(creations, 0)
   assert.equal(replies[0].error.code, 'command_timeout')
+  disconnect()
+})
+
+test('native MCP revocation aborts an active read and suppresses its reply', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const handlers = new Map()
+  const replies = []
+  let finishRead
+  let enteredRead
+  const entered = new Promise(resolve => { enteredRead = resolve })
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: (_request, context) => {
+      enteredRead(context)
+      return new Promise(resolve => { finishRead = resolve })
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => { handlers.set(event, handler); return () => handlers.delete(event) },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(args.replyJson)
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {} }),
+  })
+  const request = { requestId: 'mcp-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, expiresAtMs: Date.now() + 10_000,
+    method: 'observe', params: {}, mcpRead: true, mcpGrantEpoch: 1 }
+  const handling = handlers.get('mathboard-board-request')({ payload: request })
+  const context = await entered
+  handlers.get('mathboard-mcp-cancel')({ payload: 2 })
+  assert.equal(context.signal.aborted, true)
+  finishRead({ boardId: 'mb_active', objects: [] })
+  await handling
+  assert.equal(replies.length, 0)
+  await handlers.get('mathboard-board-request')({ payload: { ...request, requestId: 'stale' } })
+  assert.equal(replies.length, 0)
+  disconnect()
+})
+
+test('an earlier cancel event does not abort a read admitted in the new grant epoch', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const handlers = new Map()
+  const replies = []
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: async (_request, context) => {
+      assert.equal(context.signal.aborted, false)
+      return { boardId: 'mb_active', objects: [] }
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => { handlers.set(event, handler); return () => handlers.delete(event) },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {} }),
+  })
+  handlers.get('mathboard-mcp-cancel')({ payload: 2 })
+  await handlers.get('mathboard-board-request')({ payload: {
+    requestId: 'new-epoch', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, expiresAtMs: Date.now() + 10_000,
+    method: 'observe', params: {}, mcpRead: true, mcpGrantEpoch: 2,
+  } })
+  assert.equal(replies.length, 1)
   disconnect()
 })
