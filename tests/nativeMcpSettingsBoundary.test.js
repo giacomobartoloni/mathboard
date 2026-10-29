@@ -49,11 +49,11 @@ test('native MCP grants are restricted to the dedicated settings window', () => 
   }
 })
 
-test('Tauri routes permission commands to settings but read cancellations to the board', () => {
+test('Tauri routes permission commands to settings and generic cancellation to the board', () => {
   const native = source('src-tauri/src/board_bridge.rs')
   const settings = source('src-tauri/src/mcp_settings.rs')
   assert.equal((native.match(/crate::mcp_settings::WINDOW_LABEL/g) || []).length, 5)
-  assert.equal((native.match(/app.emit_to\("main", "mathboard-mcp-cancel"/g) || []).length, 4)
+  assert.equal((native.match(/app.emit_to\("main", "mathboard-board-cancel"/g) || []).length, 4)
   assert.ok(settings.includes('WebviewUrl::App("desktop/mcp-settings.html"'))
   assert.ok(settings.includes('get_webview_window(WINDOW_LABEL)'))
 })
@@ -72,4 +72,17 @@ test('MCP permission UI is a Tauri-only independent Vite entry', () => {
   assert.equal(js.includes('createApp('), false)
   for (const method of ['mcp_permission_status', 'mcp_set_enabled', 'mcp_grant_read',
     'mcp_grant_screenshot', 'mcp_revoke_all']) assert.ok(js.includes(method))
+})
+
+test('the native board bridge is independent of MCP protocol names and transport details', () => {
+  const bridge = source('src/platform/desktopBoardBridge.js')
+  const native = source('src-tauri/src/board_bridge.rs')
+  assert.ok(bridge.includes('cancellationEpoch'))
+  assert.ok(bridge.includes('mathboard-board-cancel'))
+  for (const marker of ['mcpRead', 'mcpGrantEpoch', 'activeMcpRequests',
+    'minimumMcpEpoch', 'mathboard-mcp-cancel']) {
+    assert.equal(bridge.includes(marker), false, 'Shared native bridge leaked ' + marker)
+  }
+  assert.ok(native.includes('pub cancellation_epoch: Option<u64>'))
+  assert.equal(native.includes('pub mcp_read: bool'), false)
 })

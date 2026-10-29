@@ -58,11 +58,11 @@ fn mcp_reads_require_explicit_enable_and_board_scoped_grant() {
     assert_eq!(broker.mcp_visible_methods(), ["observe", "measure"]);
     let (request, _receiver, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
     assert_eq!(request.board_id, "mb_a");
-    assert!(request.mcp_read);
-    assert_eq!(
-        request.mcp_grant_epoch,
-        Some(broker.mcp_status().grant_epoch)
-    );
+    assert_eq!(request.cancellation_epoch, Some(broker.mcp_status().grant_epoch));
+    let on_wire = serde_json::to_value(&request).unwrap();
+    assert_eq!(on_wire["cancellationEpoch"], request.cancellation_epoch.unwrap());
+    assert!(on_wire.get("mcpRead").is_none());
+    assert!(on_wire.get("mcpGrantEpoch").is_none());
     assert!(broker.mcp_lease_valid(&lease));
     assert_eq!(
         broker
@@ -140,8 +140,11 @@ fn active_board_transition_revokes_grants_without_affecting_addressed_internal_r
     );
     let internal = broker.queue("mb_a", "observe", json!({})).unwrap().0;
     assert_eq!(internal.board_id, "mb_a");
-    assert!(!internal.mcp_read);
-    assert_eq!(internal.mcp_grant_epoch, None);
+    assert_eq!(internal.cancellation_epoch, None);
+    let on_wire = serde_json::to_value(&internal).unwrap();
+    assert!(on_wire.get("cancellationEpoch").is_none());
+    assert!(on_wire.get("mcpRead").is_none());
+    assert!(on_wire.get("mcpGrantEpoch").is_none());
 }
 
 #[test]

@@ -53,6 +53,8 @@ function validEnvelope(request, appGeneration, rendererGeneration) {
     && request.boardEpoch >= 0
     && Number.isSafeInteger(request.expiresAtMs)
     && request.expiresAtMs <= Date.now() + MAX_COMMAND_LIFETIME_MS + 1000
+    && (request.cancellationEpoch === undefined
+      || (Number.isSafeInteger(request.cancellationEpoch) && request.cancellationEpoch >= 0))
     && request.params && Object.getPrototypeOf(request.params) === Object.prototype
 }
 
@@ -73,8 +75,9 @@ export async function connectDesktopBoardBridge(getBoard, {
   let stateQueue = Promise.resolve()
   let commandQueue = Promise.resolve()
   const seenRequestIds = new Set()
-  const activeMcpRequests = new Map()
-  let minimumMcpEpoch = 0
+  // Epochs are native transport cancellation tokens, not board-domain permissions.
+  const activeCancellableRequests = new Map()
+  let minimumCancellationEpoch = 0
 
   const publishState = (ready, epoch) => {
     const activeBoardId = board.getBoardId?.() || null
@@ -148,25 +151,26 @@ export async function connectDesktopBoardBridge(getBoard, {
   }
   const onRequest = ({ payload }) => {
     if (!validEnvelope(payload, appGeneration, rendererGeneration)) return commandQueue
-    if (payload.mcpRead === true
-      && (!Number.isSafeInteger(payload.mcpGrantEpoch) || payload.mcpGrantEpoch < minimumMcpEpoch)) return commandQueue
+    if (payload.cancellationEpoch !== undefined
+      && payload.cancellationEpoch < minimumCancellationEpoch) return commandQueue
     if (seenRequestIds.has(payload.requestId)) return commandQueue
     seenRequestIds.add(payload.requestId)
     if (seenRequestIds.size > 256) seenRequestIds.delete(seenRequestIds.values().next().value)
-    const aborter = payload.mcpRead === true ? new AbortController() : null
-    if (aborter) activeMcpRequests.set(payload.requestId, { aborter, epoch: payload.mcpGrantEpoch })
+    const aborter = payload.cancellationEpoch === undefined ? null : new AbortController()
+    if (aborter) activeCancellableRequests.set(payload.requestId,
+      { aborter, epoch: payload.cancellationEpoch })
     commandQueue = commandQueue.then(() => handleRequest(payload, aborter?.signal)).catch(() => {})
-      .finally(() => activeMcpRequests.delete(payload.requestId))
+      .finally(() => activeCancellableRequests.delete(payload.requestId))
     return commandQueue
   }
 
-  let unlisten, unlistenMcpCancel
+  let unlisten, unlistenCancellation
   try {
     unlisten = await subscribe('mathboard-board-request', onRequest)
-    unlistenMcpCancel = await subscribe('mathboard-mcp-cancel', ({ payload }) => {
-      if (!Number.isSafeInteger(payload) || payload < minimumMcpEpoch) return
-      minimumMcpEpoch = payload
-      for (const { aborter, epoch } of activeMcpRequests.values()) {
+    unlistenCancellation = await subscribe('mathboard-board-cancel', ({ payload }) => {
+      if (!Number.isSafeInteger(payload) || payload < 0 || payload < minimumCancellationEpoch) return
+      minimumCancellationEpoch = payload
+      for (const { aborter, epoch } of activeCancellableRequests.values()) {
         if (epoch < payload) aborter.abort()
       }
     })
@@ -175,7 +179,7 @@ export async function connectDesktopBoardBridge(getBoard, {
     disposed = true
     unsubscribeLifecycle()
     unlisten?.()
-    unlistenMcpCancel?.()
+    unlistenCancellation?.()
     capture.dispose()
     throw error
   }
@@ -185,8 +189,8 @@ export async function connectDesktopBoardBridge(getBoard, {
     disposed = true
     unsubscribeLifecycle()
     unlisten()
-    unlistenMcpCancel()
-    for (const { aborter } of activeMcpRequests.values()) aborter.abort()
+    unlistenCancellation()
+    for (const { aborter } of activeCancellableRequests.values()) aborter.abort()
     capture.dispose()
     void invokeCommand('board_bridge_state', {
       rendererGeneration, boardEpoch: lifecycle.epoch, activeBoardId: board.getBoardId?.() || null,

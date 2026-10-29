@@ -91,9 +91,9 @@ pub struct OutboundRequest {
     pub expires_at_ms: u64,
     pub method: String,
     pub params: Value,
-    pub mcp_read: bool,
+    /// Optional native cancellation generation. MCP grants remain private broker state.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub mcp_grant_epoch: Option<u64>,
+    pub cancellation_epoch: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -562,8 +562,7 @@ impl BoardRequestBroker {
                 + lifetime.as_millis() as u64,
             method: method.to_owned(),
             params,
-            mcp_read: mcp_grant_epoch.is_some(),
-            mcp_grant_epoch,
+            cancellation_epoch: mcp_grant_epoch,
         };
         if serde_json::to_vec(&request)
             .map_err(|_| BrokerError::RequestTooLarge)?
@@ -736,7 +735,7 @@ pub(crate) fn board_bridge_state(
         .map_err(|_| "Invalid board bridge state".to_string())?;
     let status = broker.mcp_status();
     if status.grant_epoch != previous_epoch {
-        let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+        let _ = webview.emit("mathboard-board-cancel", status.grant_epoch);
     }
     Ok(broker.app_generation().to_owned())
 }
@@ -832,7 +831,7 @@ pub(crate) fn mcp_set_enabled(
     broker.mcp_set_enabled(enabled);
     let status = broker.mcp_status();
     if status.grant_epoch != previous_epoch {
-        let _ = app.emit_to("main", "mathboard-mcp-cancel", status.grant_epoch);
+        let _ = app.emit_to("main", "mathboard-board-cancel", status.grant_epoch);
     }
     Ok(status)
 }
@@ -858,7 +857,7 @@ pub(crate) fn mcp_grant_read(
             &expected_renderer_generation,
         )
         .map_err(|_| "Board context changed or MCP unavailable".to_owned())?;
-    let _ = app.emit_to("main", "mathboard-mcp-cancel", status.grant_epoch);
+    let _ = app.emit_to("main", "mathboard-board-cancel", status.grant_epoch);
     Ok(status)
 }
 
@@ -883,7 +882,7 @@ pub(crate) fn mcp_grant_screenshot(
             &expected_renderer_generation,
         )
         .map_err(|_| "Board context changed or read access unavailable".to_owned())?;
-    let _ = app.emit_to("main", "mathboard-mcp-cancel", status.grant_epoch);
+    let _ = app.emit_to("main", "mathboard-board-cancel", status.grant_epoch);
     Ok(status)
 }
 
@@ -898,6 +897,6 @@ pub(crate) fn mcp_revoke_all(
     }
     broker.mcp_revoke_all();
     let status = broker.mcp_status();
-    let _ = app.emit_to("main", "mathboard-mcp-cancel", status.grant_epoch);
+    let _ = app.emit_to("main", "mathboard-board-cancel", status.grant_epoch);
     Ok(status)
 }
