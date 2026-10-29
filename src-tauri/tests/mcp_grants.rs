@@ -51,7 +51,9 @@ fn enabling_mcp_exposes_all_read_tools_without_separate_grants() {
         broker.mcp_release_lease(&lease);
     }
     assert_eq!(
-        broker.queue_mcp_read(Some("mb_a"), "create", json!({})).err(),
+        broker
+            .queue_mcp_read(Some("mb_a"), "create", json!({}))
+            .err(),
         Some(BrokerError::UnsupportedMethod)
     );
 }
@@ -67,7 +69,9 @@ fn enabled_mcp_accepts_explicit_non_active_board_ids() {
     assert_eq!(lease.board_id(), "mb_b");
     assert!(broker.mcp_lease_valid(&lease));
     assert_eq!(
-        broker.queue_mcp_read(None, "measure", json!({"id":"x"})).err(),
+        broker
+            .queue_mcp_read(None, "measure", json!({"id":"x"}))
+            .err(),
         Some(BrokerError::InvalidBoardId)
     );
 }

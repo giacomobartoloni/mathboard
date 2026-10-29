@@ -723,4 +723,3 @@ pub(crate) fn mcp_set_enabled(
     }
     Ok(status)
 }
-
