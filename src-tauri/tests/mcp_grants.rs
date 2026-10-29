@@ -58,9 +58,15 @@ fn mcp_reads_require_explicit_enable_and_board_scoped_grant() {
     assert_eq!(broker.mcp_visible_methods(), ["observe", "measure"]);
     let (request, _receiver, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
     assert_eq!(request.board_id, "mb_a");
-    assert_eq!(request.cancellation_epoch, Some(broker.mcp_status().grant_epoch));
+    assert_eq!(
+        request.cancellation_epoch,
+        Some(broker.mcp_status().grant_epoch)
+    );
     let on_wire = serde_json::to_value(&request).unwrap();
-    assert_eq!(on_wire["cancellationEpoch"], request.cancellation_epoch.unwrap());
+    assert_eq!(
+        on_wire["cancellationEpoch"],
+        request.cancellation_epoch.unwrap()
+    );
     assert!(on_wire.get("mcpRead").is_none());
     assert!(on_wire.get("mcpGrantEpoch").is_none());
     assert!(broker.mcp_lease_valid(&lease));
