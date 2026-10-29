@@ -293,7 +293,10 @@ impl LocalMcpHttpServer {
             return Ok(());
         }
 
-        if running.as_ref().is_some_and(|worker| worker.worker.is_finished()) {
+        if running
+            .as_ref()
+            .is_some_and(|worker| worker.worker.is_finished())
+        {
             broker.mcp_set_enabled(false);
             if let Some(worker) = running.take() {
                 worker.shutdown()?;
