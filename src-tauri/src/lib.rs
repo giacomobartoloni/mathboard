@@ -144,7 +144,10 @@ pub fn run() {
                 } else {
                     return;
                 };
-                if app.emit_to("main", "mathboard-native-menu", command).is_err() {
+                if app
+                    .emit_to("main", "mathboard-native-menu", command)
+                    .is_err()
+                {
                     eprintln!("Failed to deliver desktop menu action.");
                 }
             }
