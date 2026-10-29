@@ -83,10 +83,12 @@ impl McpReadBackend for LocalAppBackend {
             tokio::task::spawn_blocking(|| roundtrip(json!({"version":1,"operation":"catalog"})))
                 .await;
         match reply {
-            Ok(Ok(IpcReply::Catalog { methods })) => ["observe", "measure", "screenshot", "command"]
-                .into_iter()
-                .filter(|method| methods.iter().any(|value| value == method))
-                .collect(),
+            Ok(Ok(IpcReply::Catalog { methods })) => {
+                ["observe", "measure", "screenshot", "command"]
+                    .into_iter()
+                    .filter(|method| methods.iter().any(|value| value == method))
+                    .collect()
+            }
             _ => Vec::new(),
         }
     }

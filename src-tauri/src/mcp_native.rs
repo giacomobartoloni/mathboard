@@ -53,7 +53,9 @@ pub fn safe_board_error(code: &str) -> &'static str {
         "capture_failed" | "board_not_ready" => "capture_unavailable",
         "command_timeout" => "read_cancelled",
         "execution_unknown" => "execution_unknown",
-        "board_not_archived" | "confirmation_required" | "invalid_board_title"
+        "board_not_archived"
+        | "confirmation_required"
+        | "invalid_board_title"
         | "edit_in_progress" => "invalid_tool_arguments",
         _ => "internal_error",
     }
@@ -85,7 +87,10 @@ pub fn dispatch(
                 let Some(method) = command_params.get("method").and_then(Value::as_str) else {
                     return error("invalid_tool_arguments");
                 };
-                let Some(params) = command_params.get("params").filter(|value| value.is_object()) else {
+                let Some(params) = command_params
+                    .get("params")
+                    .filter(|value| value.is_object())
+                else {
                     return error("invalid_tool_arguments");
                 };
                 (method, params.clone())
@@ -99,7 +104,10 @@ pub fn dispatch(
                 };
             let reply = broker.await_reply(&request_id, receiver, Duration::from_secs(10));
             // Board-changing writes may have committed before the renderer switched.
-            if matches!(&reply, Ok(BoardReply::ExecutionUnknown) | Err(BrokerError::ExecutionUnknown)) {
+            if matches!(
+                &reply,
+                Ok(BoardReply::ExecutionUnknown) | Err(BrokerError::ExecutionUnknown)
+            ) {
                 broker.mcp_release_lease(&lease);
                 return error("execution_unknown");
             }

@@ -307,7 +307,10 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
         "command" => {
             let args: CommandArgs = serde_json::from_value(arguments).map_err(invalid)?;
             let operation = command_method(&args.method).ok_or(ToolCallError::InvalidArguments)?;
-            if args.board_id.as_deref().is_some_and(|id| !valid_board_id(id))
+            if args
+                .board_id
+                .as_deref()
+                .is_some_and(|id| !valid_board_id(id))
                 || !args.params.is_object()
             {
                 return Err(ToolCallError::InvalidArguments);
