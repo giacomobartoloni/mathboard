@@ -2156,11 +2156,13 @@ name = "mathboard"
 version = "1.10.0"
 dependencies = [
  "base64 0.22.1",
+ "libc",
  "png 0.18.1",
  "reqwest",
  "rmcp",
  "serde",
  "serde_json",
+ "socket2",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",

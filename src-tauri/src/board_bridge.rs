@@ -27,6 +27,7 @@ pub const SCHEMA_VERSION: u32 = 2;
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_REPLY_BYTES: usize = 7 * 1024 * 1024;
 const MAX_PENDING: usize = 16;
+const MAX_MCP_LEASES: usize = 64;
 const METHODS: &[&str] = &[
     "observe",
     "measure",
@@ -134,14 +135,31 @@ struct BrokerState {
     mcp_read_board_id: Option<String>,
     mcp_screenshot: bool,
     mcp_grant_epoch: u64,
+    mcp_leases: HashMap<String, IssuedMcpLease>,
 }
 
-/** A single read admission tied to both the renderer and permission generation. */
+struct IssuedMcpLease {
+    lease: McpReadLease,
+    deadline: Instant,
+}
+
+/** A single read admission tied to the app, renderer and permission generation. */
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct McpReadLease {
+    app_generation: String,
+    request_id: String,
+    expires_at_ms: u64,
     grant_epoch: u64,
     board_epoch: u64,
     renderer_generation: String,
     board_id: String,
+}
+
+impl McpReadLease {
+    pub fn board_id(&self) -> &str {
+        &self.board_id
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -253,6 +271,7 @@ impl BoardRequestBroker {
 
     fn rotate_mcp_epoch_locked(state: &mut BrokerState) {
         state.mcp_grant_epoch = state.mcp_grant_epoch.wrapping_add(1);
+        state.mcp_leases.clear();
         let ids: Vec<_> = state
             .pending
             .iter()
@@ -378,13 +397,27 @@ impl BoardRequestBroker {
 
     pub fn mcp_lease_valid(&self, lease: &McpReadLease) -> bool {
         let state = self.state.lock().expect("board broker lock poisoned");
+        let issued = state.mcp_leases.get(&lease.request_id);
         state.mcp_enabled
             && state.ready
+            && self.app_generation == lease.app_generation
+            && issued.is_some_and(|entry| entry.lease == *lease && Instant::now() < entry.deadline)
             && state.mcp_grant_epoch == lease.grant_epoch
             && state.board_epoch == lease.board_epoch
             && state.renderer_generation.as_deref() == Some(&lease.renderer_generation)
             && state.active_board_id.as_deref() == Some(&lease.board_id)
             && state.mcp_read_board_id.as_deref() == Some(&lease.board_id)
+    }
+
+    pub fn mcp_release_lease(&self, lease: &McpReadLease) {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        if state
+            .mcp_leases
+            .get(&lease.request_id)
+            .is_some_and(|entry| entry.lease == *lease)
+        {
+            state.mcp_leases.remove(&lease.request_id);
+        }
     }
 
     pub fn queue_mcp_read(
@@ -397,6 +430,12 @@ impl BoardRequestBroker {
             return Err(BrokerError::UnsupportedMethod);
         }
         let mut state = self.state.lock().expect("board broker lock poisoned");
+        state
+            .mcp_leases
+            .retain(|_, issued| Instant::now() < issued.deadline);
+        if state.mcp_leases.len() >= MAX_MCP_LEASES {
+            return Err(BrokerError::Busy);
+        }
         if !state.mcp_enabled || state.mcp_read_board_id.is_none() {
             return Err(BrokerError::PermissionDenied);
         }
@@ -414,23 +453,41 @@ impl BoardRequestBroker {
         if target != active || state.mcp_read_board_id.as_deref() != Some(target) {
             return Err(BrokerError::BoardContextChanged);
         }
-        let lease = McpReadLease {
-            grant_epoch: state.mcp_grant_epoch,
-            board_epoch: state.board_epoch,
-            renderer_generation: state
-                .renderer_generation
-                .clone()
-                .ok_or(BrokerError::NotReady)?,
-            board_id: active.clone(),
-        };
+        let grant_epoch = state.mcp_grant_epoch;
+        let board_epoch = state.board_epoch;
+        let renderer_generation = state
+            .renderer_generation
+            .clone()
+            .ok_or(BrokerError::NotReady)?;
         let (request, receiver) = self.queue_locked(
             &mut state,
             target,
             method,
             params,
             Duration::from_secs(10),
-            Some(lease.grant_epoch),
+            Some(grant_epoch),
         )?;
+        let lease = McpReadLease {
+            app_generation: self.app_generation.clone(),
+            request_id: request.request_id.clone(),
+            expires_at_ms: request.expires_at_ms,
+            grant_epoch,
+            board_epoch,
+            renderer_generation,
+            board_id: active,
+        };
+        let deadline = state
+            .pending
+            .get(&request.request_id)
+            .expect("new request missing")
+            .deadline;
+        state.mcp_leases.insert(
+            request.request_id.clone(),
+            IssuedMcpLease {
+                lease: lease.clone(),
+                deadline,
+            },
+        );
         Ok((request, receiver, lease))
     }
 
@@ -723,6 +780,7 @@ pub fn emit_mcp_read(
         .is_err()
     {
         broker.cancel(&request_id);
+        broker.mcp_release_lease(&lease);
         return Err(BrokerError::NotReady);
     }
     Ok((request_id, receiver, lease))

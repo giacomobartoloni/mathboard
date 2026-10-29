@@ -19,6 +19,11 @@ mod analytics;
 pub mod board_bridge;
 pub mod companion;
 pub mod mcp_contract;
+pub mod mcp_ipc_client;
+pub mod mcp_ipc_protocol;
+#[cfg(unix)]
+pub mod mcp_ipc_unix;
+pub mod mcp_native;
 pub mod mcp_server;
 
 #[cfg(feature = "phase-c-verification")]
@@ -44,14 +49,23 @@ pub fn run() {
             board_bridge::mcp_revoke_all,
         ]);
 
-    #[cfg(feature = "phase-c-verification")]
     let builder = builder.setup(|app| {
         use tauri::Manager;
-        if std::env::var_os("MATHBOARD_PHASE_C_IPC_PROBE").is_some() {
-            #[cfg(any(unix, windows))]
-            app.manage(ipc_probe::ProbeServer::start()?);
+        #[cfg(unix)]
+        match mcp_ipc_unix::UnixMcpServer::start(app.handle().clone()) {
+            Ok(server) => {
+                app.manage(server);
+            }
+            Err(_) => eprintln!("Local MCP IPC unavailable; MathBoard will continue without it."),
         }
-        native_smoke::install(app.handle().clone());
+        #[cfg(feature = "phase-c-verification")]
+        {
+            if std::env::var_os("MATHBOARD_PHASE_C_IPC_PROBE").is_some() {
+                #[cfg(any(unix, windows))]
+                app.manage(ipc_probe::ProbeServer::start()?);
+            }
+            native_smoke::install(app.handle().clone());
+        }
         Ok(())
     });
 
@@ -109,26 +123,29 @@ pub fn run() {
             }
         });
 
-    // Verification builds need an explicit exit hook: App::run exits the process
-    // directly, so managed state is not guaranteed to reach Drop.
-    #[cfg(feature = "phase-c-verification")]
+    // App::run exits the process directly, so managed server state needs an exit hook.
     builder
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
-                #[cfg(any(unix, windows))]
+                #[cfg(unix)]
                 {
                     use tauri::Manager;
-                    if let Some(server) = app.try_state::<ipc_probe::ProbeServer>() {
+                    if let Some(server) = app.try_state::<mcp_ipc_unix::UnixMcpServer>() {
                         server.shutdown();
+                    }
+                }
+                #[cfg(feature = "phase-c-verification")]
+                {
+                    #[cfg(any(unix, windows))]
+                    {
+                        use tauri::Manager;
+                        if let Some(server) = app.try_state::<ipc_probe::ProbeServer>() {
+                            server.shutdown();
+                        }
                     }
                 }
             }
         });
-
-    #[cfg(not(feature = "phase-c-verification"))]
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while building tauri application");
 }

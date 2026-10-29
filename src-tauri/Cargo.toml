@@ -33,6 +33,10 @@ png = "0.18.1"
 rmcp = { version = "=3.8.0", default-features = false, features = ["server", "transport-io"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+socket2 = "0.6.5"
+
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", optional = true, features = [
     "Win32_Foundation",

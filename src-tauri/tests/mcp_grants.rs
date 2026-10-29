@@ -187,3 +187,35 @@ fn renderer_reload_with_same_board_and_epoch_rejects_old_consent() {
         .mcp_grant_read("mb_a", 1, current.grant_epoch, "renderer-2")
         .unwrap();
 }
+
+#[test]
+fn serialized_read_lease_expires_and_cannot_cross_app_generation() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    grant_read(&broker);
+    let (_, _, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
+    let serialized = serde_json::to_value(&lease).unwrap();
+    let roundtrip = serde_json::from_value(serialized.clone()).unwrap();
+    assert!(broker.mcp_lease_valid(&roundtrip));
+    let mut expired = serialized;
+    expired["expiresAtMs"] = json!(0);
+    assert!(!broker.mcp_lease_valid(&serde_json::from_value(expired).unwrap()));
+    let mut extended = serde_json::to_value(&roundtrip).unwrap();
+    extended["expiresAtMs"] = json!(u64::MAX);
+    assert!(!broker.mcp_lease_valid(&serde_json::from_value(extended).unwrap()));
+    let mut forged_id = serde_json::to_value(&roundtrip).unwrap();
+    forged_id["requestId"] = json!("app-1-forged");
+    assert!(!broker.mcp_lease_valid(&serde_json::from_value(forged_id).unwrap()));
+    let replacement = BoardRequestBroker::new("app-2");
+    replacement
+        .renderer_state("renderer-1", 1, true, Some("mb_a"))
+        .unwrap();
+    replacement.mcp_set_enabled(true);
+    let status = replacement.mcp_status();
+    replacement
+        .mcp_grant_read("mb_a", 1, status.grant_epoch, "renderer-1")
+        .unwrap();
+    assert!(!replacement.mcp_lease_valid(&roundtrip));
+    broker.mcp_release_lease(&roundtrip);
+    assert!(!broker.mcp_lease_valid(&roundtrip));
+}
