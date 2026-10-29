@@ -15,6 +15,42 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+/// A stdio MCP client is a separate local process, never a second GUI instance.
+/// Log only to stderr: stdout belongs exclusively to JSON-RPC framing.
+fn run_stdio() -> i32 {
+    use rmcp::{ServiceExt, transport::stdio};
+
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(_) => {
+            eprintln!("Unable to initialize the local MCP runtime.");
+            return 1;
+        }
+    };
+
+    runtime.block_on(async {
+        let backend = crate::mcp_ipc_client::LocalAppBackend;
+        let handler = crate::mcp_server::MathBoardMcpServer::new(backend);
+        let service = match handler.serve(stdio()).await {
+            Ok(service) => service,
+            Err(_) => {
+                eprintln!("Unable to start the local MCP stdio service.");
+                return 1;
+            }
+        };
+        match service.waiting().await {
+            Ok(_) => 0,
+            Err(_) => {
+                eprintln!("Local MCP stdio service terminated unexpectedly.");
+                1
+            }
+        }
+    })
+}
+
 /** Dispatches companion-only modes before Tauri initializes its GUI. */
 pub fn run_from_args() -> Option<i32> {
     let mut args = std::env::args_os().skip(1);
@@ -27,6 +63,7 @@ pub fn run_from_args() -> Option<i32> {
             println!("mathboard-companion 1");
             Some(0)
         }
+        "--mathboard-mcp-stdio" if args.next().is_none() => Some(run_stdio()),
         #[cfg(feature = "phase-c-verification")]
         "--mathboard-companion-ping" if args.next().is_none() => match crate::ipc_probe::ping() {
             Ok(()) => {
