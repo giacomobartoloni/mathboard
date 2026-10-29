@@ -698,10 +698,7 @@ pub fn emit_mcp_read(
 }
 
 /// Connection material is disclosed only to the dedicated native settings WebView.
-fn native_mcp_status(
-    app: &tauri::AppHandle,
-    broker: &BoardRequestBroker,
-) -> serde_json::Value {
+fn native_mcp_status(app: &tauri::AppHandle, broker: &BoardRequestBroker) -> serde_json::Value {
     let status = broker.mcp_status();
     let server = app.try_state::<crate::mcp_http::LocalMcpHttpServer>();
     serde_json::json!({
@@ -742,7 +739,11 @@ pub(crate) fn mcp_set_enabled(
     if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
-    if enabled && app.try_state::<crate::mcp_http::LocalMcpHttpServer>().is_none() {
+    if enabled
+        && app
+            .try_state::<crate::mcp_http::LocalMcpHttpServer>()
+            .is_none()
+    {
         return Err("Local MCP HTTP listener unavailable".into());
     }
     let previous_epoch = broker.mcp_status().grant_epoch;

@@ -28,7 +28,7 @@ use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
     Request, Response, StatusCode,
     body::Incoming,
-    header::{AUTHORIZATION, HOST, ORIGIN, HeaderMap},
+    header::{AUTHORIZATION, HOST, HeaderMap, ORIGIN},
     service::{Service, service_fn},
 };
 use hyper_util::{rt::TokioIo, service::TowerToHyperService};
@@ -100,10 +100,7 @@ fn admitted(headers: &HeaderMap, path: &str, token: &str, enabled: bool) -> bool
     if !enabled || path != "/mcp" || headers.contains_key(ORIGIN) {
         return false;
     }
-    let valid_host = headers
-        .get(HOST)
-        .and_then(|value| value.to_str().ok())
-        == Some(BIND_ADDRESS);
+    let valid_host = headers.get(HOST).and_then(|value| value.to_str().ok()) == Some(BIND_ADDRESS);
     let bearer = headers
         .get(AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
@@ -165,7 +162,10 @@ async fn serve(
                     if !admitted(request.headers(), request.uri().path(), &token, enabled) {
                         return Ok::<_, Infallible>(denied());
                     }
-                    let response = service.call(request).await.unwrap_or_else(|never| match never {});
+                    let response = service
+                        .call(request)
+                        .await
+                        .unwrap_or_else(|never| match never {});
                     Ok::<_, Infallible>(response)
                 }
             });
@@ -221,7 +221,9 @@ impl LocalMcpHttpServer {
                         }
                     }
                     Err(_) => {
-                        started.send(Err(io::Error::other("MCP HTTP runtime unavailable"))).ok();
+                        started
+                            .send(Err(io::Error::other("MCP HTTP runtime unavailable")))
+                            .ok();
                     }
                 }
             })?;

@@ -46,7 +46,9 @@ fn safe_error(code: &str) -> McpReadError {
     }
 }
 
-pub(crate) fn read_reply_result(reply: IpcReply) -> Result<McpReadReceipt<McpReadLease>, McpReadError> {
+pub(crate) fn read_reply_result(
+    reply: IpcReply,
+) -> Result<McpReadReceipt<McpReadLease>, McpReadError> {
     match reply {
         IpcReply::ReadJson { value, lease } => Ok(McpReadReceipt {
             output: McpReadOutput::Json(value),
