@@ -104,7 +104,19 @@ impl McpReadBackend for LocalAppBackend {
         let reply = tokio::task::spawn_blocking(move || roundtrip(request))
             .await
             .map_err(|_| McpReadError::Unavailable)??;
-        read_reply_result(reply)
+        let lease = match &reply {
+            IpcReply::ReadJson { lease, .. } | IpcReply::ReadPng { lease, .. } => {
+                Some(lease.clone())
+            }
+            _ => None,
+        };
+        let result = read_reply_result(reply);
+        if result.is_err() {
+            if let Some(lease) = lease {
+                self.release_lease(lease).await;
+            }
+        }
+        result
     }
 
     async fn lease_valid(&self, lease: &Self::Lease) -> bool {
@@ -113,6 +125,11 @@ impl McpReadBackend for LocalAppBackend {
             tokio::task::spawn_blocking(move || roundtrip(request)).await,
             Ok(Ok(IpcReply::Check { valid: true }))
         )
+    }
+
+    async fn release_lease(&self, lease: Self::Lease) {
+        let request = json!({"version":1,"operation":"release","lease":lease});
+        let _ = tokio::task::spawn_blocking(move || roundtrip(request)).await;
     }
 }
 

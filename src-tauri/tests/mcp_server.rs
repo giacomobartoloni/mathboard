@@ -26,6 +26,7 @@ use std::sync::{Arc, Mutex};
 struct FakeBackend {
     visible: Arc<Mutex<Vec<&'static str>>>,
     revoke_on_read: bool,
+    released: Arc<Mutex<Vec<&'static str>>>,
 }
 
 impl McpReadBackend for FakeBackend {
@@ -48,6 +49,9 @@ impl McpReadBackend for FakeBackend {
     async fn lease_valid(&self, lease: &Self::Lease) -> bool {
         self.visible.lock().unwrap().contains(lease)
     }
+    async fn release_lease(&self, lease: Self::Lease) {
+        self.released.lock().unwrap().push(lease);
+    }
 }
 
 #[tokio::test]
@@ -55,6 +59,7 @@ async fn catalog_changes_with_grants_and_cached_calls_are_denied_after_revoke() 
     let backend = FakeBackend {
         visible: Arc::new(Mutex::new(vec![])),
         revoke_on_read: false,
+        released: Arc::new(Mutex::new(Vec::new())),
     };
     let server = MathBoardMcpServer::new(backend.clone());
     assert!(server.catalog().await.is_empty());
@@ -99,6 +104,7 @@ async fn unknown_tools_and_invalid_args_are_protocol_errors() {
     let backend = FakeBackend {
         visible: Arc::new(Mutex::new(vec!["observe", "measure", "screenshot"])),
         revoke_on_read: false,
+        released: Arc::new(Mutex::new(Vec::new())),
     };
     let server = MathBoardMcpServer::new(backend);
     assert!(
@@ -124,14 +130,16 @@ async fn result_is_discarded_if_grant_changes_after_backend_read() {
     let backend = FakeBackend {
         visible: Arc::new(Mutex::new(vec!["observe"])),
         revoke_on_read: true,
+        released: Arc::new(Mutex::new(Vec::new())),
     };
-    let server = MathBoardMcpServer::new(backend);
+    let server = MathBoardMcpServer::new(backend.clone());
     let denied = server
         .dispatch("mathboard_observe", json!({}))
         .await
         .unwrap();
     assert_eq!(denied.is_error, Some(true));
     assert_eq!(denied.structured_content, None);
+    assert_eq!(*backend.released.lock().unwrap(), ["observe"]);
     assert!(
         serde_json::to_value(denied)
             .unwrap()

@@ -97,6 +97,10 @@ pub trait McpReadBackend: Clone + Send + Sync + 'static {
         call: ToolCall,
     ) -> impl Future<Output = Result<McpReadReceipt<Self::Lease>, McpReadError>> + Send;
     fn lease_valid(&self, lease: &Self::Lease) -> impl Future<Output = bool> + Send;
+    fn release_lease(&self, lease: Self::Lease) -> impl Future<Output = ()> + Send {
+        let _ = lease;
+        async {}
+    }
 }
 
 #[derive(Clone)]
@@ -155,9 +159,13 @@ impl<B: McpReadBackend> MathBoardMcpServer<B> {
         };
         let result = receipt.output.into_result();
         if !self.backend.lease_valid(&receipt.lease).await {
+            self.backend.release_lease(receipt.lease).await;
             return Ok(CallToolResult::error(vec![ContentBlock::text(
                 McpReadError::PermissionDenied.code(),
             )]));
+        }
+        if result.is_error == Some(true) {
+            self.backend.release_lease(receipt.lease).await;
         }
         Ok(result)
     }
