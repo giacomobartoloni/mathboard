@@ -20,12 +20,14 @@
 
 import json
 import os
-import select
+import queue
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
-BINARY = Path(__file__).parent / "target/release/mathboard-phase-d-probe"
+BINARY = Path(__file__).parent / "target/release" / (
+    "mathboard-phase-d-probe.exe" if os.name == "nt" else "mathboard-phase-d-probe")
 MODERN_META = {
     "io.modelcontextprotocol/protocolVersion": "2026-07-28",
     "io.modelcontextprotocol/clientInfo": {"name": "mathboard-d0-fixture", "version": "0.1"},
@@ -33,15 +35,22 @@ MODERN_META = {
 }
 
 
+def response_line(process, method):
+    lines = queue.Queue(maxsize=1)
+    threading.Thread(target=lambda: lines.put(process.stdout.readline()), daemon=True).start()
+    try:
+        line = lines.get(timeout=5)
+    except queue.Empty as error:
+        raise AssertionError(f"No response to {method} within five seconds") from error
+    assert line, f"Server closed stdout during {method}"
+    return json.loads(line)
+
+
 def request(process, request_id, method, params):
     payload = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
     process.stdin.write(json.dumps(payload) + "\n")
     process.stdin.flush()
-    readable, _, _ = select.select([process.stdout], [], [], 5)
-    assert readable, f"No response to {method} within five seconds"
-    line = process.stdout.readline()
-    assert line, f"Server closed stdout during {method}"
-    response = json.loads(line)
+    response = response_line(process, method)
     assert response["id"] == request_id, response
     assert "error" not in response, response
     return response["result"]
@@ -51,9 +60,7 @@ def rejected_request(process, request_id, method, params):
     payload = {"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}
     process.stdin.write(json.dumps(payload) + "\n")
     process.stdin.flush()
-    readable, _, _ = select.select([process.stdout], [], [], 5)
-    assert readable, f"No rejection of {method} within five seconds"
-    response = json.loads(process.stdout.readline())
+    response = response_line(process, method)
     assert response["id"] == request_id and "error" in response, response
     return response["error"]
 
