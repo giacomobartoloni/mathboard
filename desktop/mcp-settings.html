@@ -1,0 +1,71 @@
+<!doctype html>
+<!--
+MathBoard
+
+Copyright (C) 2026 Giacomo Bartoloni
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Local assistants — MathBoard</title>
+  <link rel="stylesheet" href="./mcp-settings.css">
+  <script type="module" src="./mcp-settings.js"></script>
+</head>
+<body>
+  <main class="settings">
+    <header>
+      <p class="eyebrow">DESKTOP SETTINGS</p>
+      <h1>Local assistants</h1>
+      <p>Choose what local assistant clients may read from the board currently open in MathBoard.</p>
+    </header>
+    <section class="privacy" aria-label="Data sharing notice">
+      <strong>Before allowing access</strong>
+      <p>Connected assistants may send board text, formulas and screenshots to their provider.
+        Local transport does not guarantee local processing. All eligible clients running as your
+        computer user share these session permissions.</p>
+    </section>
+    <p id="error" role="alert" class="error" hidden></p>
+    <p id="loading" role="status">Reading native permissions…</p>
+    <section id="controls" hidden aria-label="Local MCP permissions">
+      <p class="board">Current board <code id="board-id">Unavailable</code></p>
+      <div class="choice">
+        <div><strong>Allow local connections</strong>
+          <small>Disabled each time MathBoard starts.</small></div>
+        <button id="enable" type="button">Off</button>
+      </div>
+      <div class="choice">
+        <div><strong>Read board content</strong>
+          <small>Allow text, formulas and object geometry on this board. May be shared with the assistant provider.</small></div>
+        <button id="read" type="button">Allow</button>
+      </div>
+      <div class="choice">
+        <div><strong>Read screenshots</strong>
+          <small>Separately allow images, including regions outside the current viewport. May contain private content.</small></div>
+        <button id="screenshot" type="button">Allow</button>
+      </div>
+      <div class="actions">
+        <button id="revoke" class="danger" type="button">Revoke all access</button>
+        <button id="refresh" type="button">Refresh status</button>
+      </div>
+      <p class="note">Grants end when you switch boards or MathBoard closes.
+        Client setup is not yet available in this build.</p>
+    </section>
+    <footer><button id="close" type="button">Close</button></footer>
+  </main>
+</body>
+</html>

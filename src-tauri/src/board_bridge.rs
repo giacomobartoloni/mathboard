@@ -801,7 +801,7 @@ pub(crate) fn mcp_permission_status(
     webview: tauri::Webview,
     broker: tauri::State<'_, BoardRequestBroker>,
 ) -> Result<McpPermissionStatus, String> {
-    if webview.label() != "main" {
+    if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
     Ok(broker.mcp_status())
@@ -814,7 +814,7 @@ pub(crate) fn mcp_set_enabled(
     broker: tauri::State<'_, BoardRequestBroker>,
     enabled: bool,
 ) -> Result<McpPermissionStatus, String> {
-    if webview.label() != "main" {
+    if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
     if enabled {
@@ -828,12 +828,11 @@ pub(crate) fn mcp_set_enabled(
         #[cfg(not(unix))]
         return Err("Local MCP IPC unavailable".into());
     }
-    let _ = app;
     let previous_epoch = broker.mcp_status().grant_epoch;
     broker.mcp_set_enabled(enabled);
     let status = broker.mcp_status();
     if status.grant_epoch != previous_epoch {
-        let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+        let _ = app.emit_to("main", "mathboard-mcp-cancel", status.grant_epoch);
     }
     Ok(status)
 }
@@ -841,13 +840,14 @@ pub(crate) fn mcp_set_enabled(
 #[tauri::command]
 pub(crate) fn mcp_grant_read(
     webview: tauri::Webview,
+    app: tauri::AppHandle,
     broker: tauri::State<'_, BoardRequestBroker>,
     expected_board_id: String,
     expected_board_epoch: u64,
     expected_grant_epoch: u64,
     expected_renderer_generation: String,
 ) -> Result<McpPermissionStatus, String> {
-    if webview.label() != "main" {
+    if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
     let status = broker
@@ -858,20 +858,21 @@ pub(crate) fn mcp_grant_read(
             &expected_renderer_generation,
         )
         .map_err(|_| "Board context changed or MCP unavailable".to_owned())?;
-    let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+    let _ = app.emit_to("main", "mathboard-mcp-cancel", status.grant_epoch);
     Ok(status)
 }
 
 #[tauri::command]
 pub(crate) fn mcp_grant_screenshot(
     webview: tauri::Webview,
+    app: tauri::AppHandle,
     broker: tauri::State<'_, BoardRequestBroker>,
     expected_board_id: String,
     expected_board_epoch: u64,
     expected_grant_epoch: u64,
     expected_renderer_generation: String,
 ) -> Result<McpPermissionStatus, String> {
-    if webview.label() != "main" {
+    if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
     let status = broker
@@ -882,20 +883,21 @@ pub(crate) fn mcp_grant_screenshot(
             &expected_renderer_generation,
         )
         .map_err(|_| "Board context changed or read access unavailable".to_owned())?;
-    let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+    let _ = app.emit_to("main", "mathboard-mcp-cancel", status.grant_epoch);
     Ok(status)
 }
 
 #[tauri::command]
 pub(crate) fn mcp_revoke_all(
     webview: tauri::Webview,
+    app: tauri::AppHandle,
     broker: tauri::State<'_, BoardRequestBroker>,
 ) -> Result<McpPermissionStatus, String> {
-    if webview.label() != "main" {
+    if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
     broker.mcp_revoke_all();
     let status = broker.mcp_status();
-    let _ = webview.emit("mathboard-mcp-cancel", status.grant_epoch);
+    let _ = app.emit_to("main", "mathboard-mcp-cancel", status.grant_epoch);
     Ok(status)
 }

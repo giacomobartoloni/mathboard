@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { defineConfig } from 'vite'
+import { fileURLToPath } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import { localAgentModePlugin } from './tools/vite/local-agent-mode-plugin.mjs'
 
@@ -44,6 +45,13 @@ const tauriBuildOptions = tauriPlatform
         target: tauriPlatform === 'windows' ? 'chrome105' : 'safari13',
         minify: !process.env.TAURI_ENV_DEBUG,
         sourcemap: !!process.env.TAURI_ENV_DEBUG,
+        // Native settings have their own entrypoint. The web build includes only index.html.
+        rollupOptions: {
+          input: {
+            main: fileURLToPath(new URL('./index.html', import.meta.url)),
+            'mcp-settings': fileURLToPath(new URL('./desktop/mcp-settings.html', import.meta.url)),
+          },
+        },
       },
     }
   : {}

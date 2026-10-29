@@ -25,6 +25,7 @@ pub mod mcp_ipc_protocol;
 pub mod mcp_ipc_unix;
 pub mod mcp_native;
 pub mod mcp_server;
+mod mcp_settings;
 
 #[cfg(feature = "phase-c-verification")]
 pub mod ipc_probe;
@@ -69,14 +70,15 @@ pub fn run() {
         Ok(())
     });
 
-    // Keep Tauri's default macOS menus, replacing only text-input Undo/Redo
-    // with actions dispatched to MathBoard's existing board command log.
-    #[cfg(target_os = "macos")]
+    // Native menu owns the local MCP settings. The shared board WebView has no
+    // configuration entrypoint or permission-changing capabilities.
     let builder = builder
         .menu(|handle| {
-            use tauri::menu::{Menu, MenuItem};
+            use tauri::menu::{Menu, MenuItem, Submenu};
 
             let menu = Menu::default(handle)?;
+            // Preserve the existing macOS board Undo/Redo menu overrides.
+            #[cfg(target_os = "macos")]
             for item in menu.items()? {
                 if let Some(edit) = item.as_submenu() {
                     if edit.text()? == "Edit" {
@@ -106,20 +108,45 @@ pub fn run() {
                     }
                 }
             }
+
+            let settings = MenuItem::with_id(
+                handle,
+                mcp_settings::MENU_ID,
+                "Local MCP settings…",
+                true,
+                None::<&str>,
+            )?;
+            let assistants = Submenu::with_items(handle, "Local assistants", true, &[&settings])?;
+            menu.append(&assistants)?;
             Ok(menu)
         })
         .on_menu_event(|app, event| {
-            use tauri::Emitter;
-
-            let command = if event.id() == "mathboard-undo" {
-                "undo"
-            } else if event.id() == "mathboard-redo" {
-                "redo"
-            } else {
+            if event.id() == mcp_settings::MENU_ID {
+                let handle = app.clone();
+                // Windows WebView2 can deadlock if created in the synchronous
+                // menu event callback. The builder marshals work to the UI thread.
+                std::thread::spawn(move || {
+                    if mcp_settings::open_window(&handle).is_err() {
+                        eprintln!("Unable to open local MCP settings window.");
+                    }
+                });
                 return;
-            };
-            if let Err(error) = app.emit_to("main", "mathboard-native-menu", command) {
-                eprintln!("Failed to deliver desktop menu action: {error}");
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::Emitter;
+
+                let command = if event.id() == "mathboard-undo" {
+                    "undo"
+                } else if event.id() == "mathboard-redo" {
+                    "redo"
+                } else {
+                    return;
+                };
+                if app.emit_to("main", "mathboard-native-menu", command).is_err() {
+                    eprintln!("Failed to deliver desktop menu action.");
+                }
             }
         });
 

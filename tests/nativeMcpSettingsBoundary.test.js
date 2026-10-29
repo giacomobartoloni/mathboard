@@ -1,0 +1,75 @@
+/*
+MathBoard
+
+Copyright (C) 2026 Giacomo Bartoloni
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { test } from 'node:test'
+
+const source = (path) => readFileSync(new URL('../' + path, import.meta.url), 'utf8')
+
+test('the shared board UI contains no native MCP settings configuration', () => {
+  const app = source('src/App.vue')
+  const bootstrap = source('src/app-bootstrap.js')
+  for (const marker of ['McpPermissionsModal', 'Local assistants', 'showMcpPermissions', 'mcp-trigger',
+    'mcp_permission_status', 'mcp_grant_read', 'mcp_revoke_all']) {
+    assert.equal(app.includes(marker), false, 'App.vue must not contain ' + marker)
+    assert.equal(bootstrap.includes(marker), false, 'bootstrap must not contain ' + marker)
+  }
+})
+
+test('native MCP grants are restricted to the dedicated settings window', () => {
+  const permissions = JSON.parse(source('src-tauri/capabilities/mcp-permissions.json'))
+  const board = JSON.parse(source('src-tauri/capabilities/board-bridge.json'))
+  const main = JSON.parse(source('src-tauri/capabilities/main.json'))
+  assert.deepEqual(permissions.windows, ['mcp-settings'])
+  assert.equal(permissions.webviews, undefined)
+  assert.deepEqual(board.webviews, ['main'])
+  assert.deepEqual(main.windows, ['main'])
+  for (const command of ['set-enabled', 'grant-read', 'grant-screenshot', 'revoke-all']) {
+    const privilege = 'allow-mcp-' + command
+    assert.ok(permissions.permissions.includes(privilege))
+    assert.ok(!main.permissions.includes(privilege))
+    assert.ok(!board.permissions.includes(privilege))
+  }
+})
+
+test('Tauri routes permission commands to settings but read cancellations to the board', () => {
+  const native = source('src-tauri/src/board_bridge.rs')
+  const settings = source('src-tauri/src/mcp_settings.rs')
+  assert.equal((native.match(/crate::mcp_settings::WINDOW_LABEL/g) || []).length, 5)
+  assert.equal((native.match(/app.emit_to\("main", "mathboard-mcp-cancel"/g) || []).length, 4)
+  assert.ok(settings.includes('WebviewUrl::App("desktop/mcp-settings.html"'))
+  assert.ok(settings.includes('get_webview_window(WINDOW_LABEL)'))
+})
+
+test('MCP permission UI is a Tauri-only independent Vite entry', () => {
+  const vite = source('vite.config.js')
+  const html = source('desktop/mcp-settings.html')
+  const js = source('desktop/mcp-settings.js')
+  assert.ok(vite.includes('tauriPlatform'))
+  assert.ok(vite.includes("'mcp-settings': fileURLToPath("))
+  assert.ok(html.includes('./mcp-settings.js'))
+  assert.ok(html.includes('Connected assistants may send board text'))
+  assert.ok(js.includes("import { invoke } from '@tauri-apps/api/core'"))
+  assert.ok(js.includes('getCurrentWindow().close()'))
+  assert.equal(js.includes('mountMathBoard'), false)
+  assert.equal(js.includes('createApp('), false)
+  for (const method of ['mcp_permission_status', 'mcp_set_enabled', 'mcp_grant_read',
+    'mcp_grant_screenshot', 'mcp_revoke_all']) assert.ok(js.includes(method))
+})

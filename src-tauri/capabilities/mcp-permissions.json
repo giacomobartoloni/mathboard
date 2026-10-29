@@ -1,13 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "mcp-permissions",
-  "description": "Allow local MCP grant controls only from the main MathBoard WebView",
-  "webviews": ["main"],
+  "description": "Allow local MCP permission controls only in the separate native settings window",
   "permissions": [
+    "core:window:allow-close",
     "allow-mcp-permission-status",
     "allow-mcp-set-enabled",
     "allow-mcp-grant-read",
     "allow-mcp-grant-screenshot",
     "allow-mcp-revoke-all"
+  ],
+  "windows": [
+    "mcp-settings"
   ]
 }
