@@ -1,0 +1,157 @@
+[
+  {
+    "name": "mathboard_observe",
+    "description": "Read semantic objects, selection, viewport and interaction stability.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "boardId": {
+          "type": "string",
+          "pattern": "^mb_[A-Za-z0-9_-]+$",
+          "minLength": 4,
+          "maxLength": 131
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mathboard_measure",
+    "description": "Read detached scene bounds for one existing top-level object.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "boardId": {
+          "type": "string",
+          "pattern": "^mb_[A-Za-z0-9_-]+$",
+          "minLength": 4,
+          "maxLength": 131
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "boardId",
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mathboard_screenshot",
+    "description": "Read the rendered live board as a bounded PNG, without changing board state.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "boardId": {
+          "type": "string",
+          "pattern": "^mb_[A-Za-z0-9_-]+$",
+          "minLength": 4,
+          "maxLength": 131
+        },
+        "target": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "sceneRect"
+                },
+                "rect": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "width": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "height": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "kind",
+                "rect"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "objectIds"
+                },
+                "ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 2000,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                },
+                "padding": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 128,
+                  "default": 16
+                }
+              },
+              "required": [
+                "kind",
+                "ids"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "viewport"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 3,
+          "default": 1
+        },
+        "format": {
+          "const": "png",
+          "default": "png"
+        }
+      },
+      "required": [
+        "boardId",
+        "target"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

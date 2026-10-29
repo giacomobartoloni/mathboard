@@ -18,6 +18,8 @@
 mod analytics;
 pub mod board_bridge;
 pub mod companion;
+pub mod mcp_contract;
+pub mod mcp_server;
 
 #[cfg(feature = "phase-c-verification")]
 pub mod ipc_probe;
