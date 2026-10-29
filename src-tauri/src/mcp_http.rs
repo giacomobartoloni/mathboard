@@ -141,6 +141,7 @@ async fn serve(
     let slots = Arc::new(tokio::sync::Semaphore::new(MAX_CONNECTIONS));
     loop {
         let accept = tokio::select! {
+            biased;
             _ = shutdown.cancelled() => break,
             accept = listener.accept() => accept,
         };
@@ -177,13 +178,13 @@ async fn serve(
     Ok(())
 }
 
-pub struct LocalMcpHttpServer {
+struct RunningHttp {
     token: String,
     shutdown: CancellationToken,
-    worker: Mutex<Option<JoinHandle<()>>>,
+    worker: JoinHandle<()>,
 }
 
-impl LocalMcpHttpServer {
+impl RunningHttp {
     pub fn start(app: tauri::AppHandle) -> io::Result<Self> {
         let listener = TcpListener::bind(BIND_ADDRESS)?;
         listener.set_nonblocking(true)?;
@@ -231,7 +232,7 @@ impl LocalMcpHttpServer {
             Ok(Ok(())) => Ok(Self {
                 token,
                 shutdown,
-                worker: Mutex::new(Some(worker)),
+                worker,
             }),
             Ok(Err(error)) => {
                 shutdown.cancel();
@@ -246,23 +247,78 @@ impl LocalMcpHttpServer {
         }
     }
 
-    pub fn token(&self) -> &str {
-        &self.token
+    fn shutdown(self) -> io::Result<()> {
+        self.shutdown.cancel();
+        self.worker
+            .join()
+            .map_err(|_| io::Error::other("MCP HTTP worker panicked"))
+    }
+}
+
+/// Native MCP On/Off owns actual socket and RMCP session lifetimes.
+pub struct LocalMcpHttpServer {
+    app: tauri::AppHandle,
+    running: Mutex<Option<RunningHttp>>,
+}
+
+impl LocalMcpHttpServer {
+    pub fn new(app: tauri::AppHandle) -> Self {
+        Self {
+            app,
+            running: Mutex::new(None),
+        }
     }
 
-    pub fn shutdown(&self) {
-        self.shutdown.cancel();
-        if let Ok(mut worker) = self.worker.lock() {
-            if let Some(worker) = worker.take() {
-                let _ = worker.join();
+    pub fn token(&self) -> Option<String> {
+        self.running
+            .lock()
+            .expect("MCP HTTP lifecycle lock poisoned")
+            .as_ref()
+            .filter(|running| !running.worker.is_finished())
+            .map(|running| running.token.clone())
+    }
+
+    pub fn set_enabled(&self, broker: &BoardRequestBroker, enabled: bool) -> io::Result<()> {
+        // Serialize concurrent On/Off commands and the permission epoch.
+        let mut running = self
+            .running
+            .lock()
+            .expect("MCP HTTP lifecycle lock poisoned");
+        if !enabled {
+            // Off is not confirmed until the runtime drops all HTTP writers.
+            broker.mcp_set_enabled(false);
+            if let Some(worker) = running.take() {
+                worker.shutdown()?;
+            }
+            return Ok(());
+        }
+
+        if running.as_ref().is_some_and(|worker| worker.worker.is_finished()) {
+            broker.mcp_set_enabled(false);
+            if let Some(worker) = running.take() {
+                worker.shutdown()?;
             }
         }
+        if running.is_none() {
+            // Bind only when requested. A port conflict fails closed.
+            *running = Some(RunningHttp::start(self.app.clone())?);
+        }
+        broker.mcp_set_enabled(true);
+        Ok(())
+    }
+
+    pub fn shutdown(&self, broker: &BoardRequestBroker) -> io::Result<()> {
+        self.set_enabled(broker, false)
     }
 }
 
 impl Drop for LocalMcpHttpServer {
     fn drop(&mut self) {
-        self.shutdown();
+        if let Ok(mut running) = self.running.lock() {
+            if let Some(worker) = running.take() {
+                let _ = worker.shutdown();
+            }
+        }
     }
 }
 
@@ -287,6 +343,57 @@ mod tests {
         headers.insert(HOST, BIND_ADDRESS.parse().unwrap());
         headers.insert(AUTHORIZATION, "Bearer wrong".parse().unwrap());
         assert!(!admitted(&headers, "/mcp", token, true));
+    }
+
+    #[test]
+    fn stopping_runtime_closes_an_already_accepted_connection() {
+        use std::io::Read;
+        use std::net::TcpStream;
+
+        let socket = TcpListener::bind("127.0.0.1:0").unwrap();
+        socket.set_nonblocking(true).unwrap();
+        let address = socket.local_addr().unwrap();
+        let shutdown = CancellationToken::new();
+        let cancel = shutdown.clone();
+        let (started, ready) = mpsc::sync_channel(1);
+        let worker = thread::spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            runtime.block_on(async move {
+                let listener = tokio::net::TcpListener::from_std(socket).unwrap();
+                let (stream, _) = listener.accept().await.unwrap();
+                tokio::spawn(async move {
+                    let _stream = stream;
+                    std::future::pending::<()>().await;
+                });
+                started.send(()).unwrap();
+                cancel.cancelled().await;
+            });
+            // The active connection task is aborted when this runtime drops.
+        });
+        let mut client = TcpStream::connect(address).unwrap();
+        ready.recv_timeout(Duration::from_secs(2)).unwrap();
+        RunningHttp {
+            token: String::new(),
+            shutdown,
+            worker,
+        }
+        .shutdown()
+        .unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut buf = [0u8; 1];
+        assert!(matches!(client.read(&mut buf), Ok(0) | Err(_)));
+        assert!(TcpStream::connect(address).is_err());
+    }
+
+    #[test]
+    fn occupied_port_is_rejected() {
+        let owner = TcpListener::bind("127.0.0.1:0").unwrap();
+        assert!(TcpListener::bind(owner.local_addr().unwrap()).is_err());
     }
 
     #[test]

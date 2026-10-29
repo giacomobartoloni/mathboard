@@ -701,16 +701,14 @@ pub fn emit_mcp_read(
 fn native_mcp_status(app: &tauri::AppHandle, broker: &BoardRequestBroker) -> serde_json::Value {
     let status = broker.mcp_status();
     let server = app.try_state::<crate::mcp_http::LocalMcpHttpServer>();
+    let token = server.as_ref().and_then(|instance| instance.token());
+    let active = status.enabled && token.is_some();
     serde_json::json!({
-        "enabled": status.enabled,
+        "enabled": active,
         "available": server.is_some(),
-        "endpoint": if status.enabled && server.is_some() {
-            Some(crate::mcp_http::ENDPOINT)
-        } else {
-            None
-        },
-        "authorization": if status.enabled {
-            server.as_ref().map(|instance| format!("Bearer {}", instance.token()))
+        "endpoint": if active { Some(crate::mcp_http::ENDPOINT) } else { None },
+        "authorization": if active {
+            token.map(|value| format!("Bearer {value}"))
         } else {
             None
         },
@@ -739,15 +737,13 @@ pub(crate) fn mcp_set_enabled(
     if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
-    if enabled
-        && app
-            .try_state::<crate::mcp_http::LocalMcpHttpServer>()
-            .is_none()
-    {
-        return Err("Local MCP HTTP listener unavailable".into());
-    }
+    let server = app
+        .try_state::<crate::mcp_http::LocalMcpHttpServer>()
+        .ok_or("Local MCP HTTP server unavailable")?;
     let previous_epoch = broker.mcp_status().grant_epoch;
-    broker.mcp_set_enabled(enabled);
+    server
+        .set_enabled(&broker, enabled)
+        .map_err(|error| format!("Local MCP transport lifecycle failed: {error}"))?;
     let status = broker.mcp_status();
     if status.grant_epoch != previous_epoch {
         let _ = app.emit_to("main", "mathboard-board-cancel", status.grant_epoch);
