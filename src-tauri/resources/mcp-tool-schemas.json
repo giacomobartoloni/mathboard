@@ -153,5 +153,48 @@
       ],
       "additionalProperties": false
     }
+  },
+  {
+    "name": "mathboard_command",
+    "description": "Execute one existing MathBoard drawing or library operation. BoardId defaults to the open board; boards.* operations use params.boardId where applicable. Re-observe after timeouts or board transitions before retrying writes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "create",
+            "createMany",
+            "update",
+            "delete",
+            "deleteMany",
+            "clear",
+            "group",
+            "layout",
+            "boards.list",
+            "boards.create",
+            "boards.open",
+            "boards.rename",
+            "boards.listArchived",
+            "boards.archive",
+            "boards.unarchive",
+            "boards.delete"
+          ]
+        },
+        "boardId": {
+          "type": "string",
+          "pattern": "^mb_[A-Za-z0-9_-]+$",
+          "minLength": 4,
+          "maxLength": 131
+        },
+        "params": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "additionalProperties": false
+    }
   }
 ]

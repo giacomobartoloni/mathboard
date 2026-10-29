@@ -26,7 +26,11 @@ test('MCP catalog matches the current JS read descriptors and rejects unknown fi
   const committed = JSON.parse(await readFile(new URL('../src-tauri/resources/mcp-tool-schemas.json', import.meta.url)))
   assert.deepEqual(committed, generateMcpToolSchemas())
   assert.deepEqual(committed.map(tool => tool.name), [
-    'mathboard_observe', 'mathboard_measure', 'mathboard_screenshot',
+    'mathboard_observe', 'mathboard_measure', 'mathboard_screenshot', 'mathboard_command',
   ])
   assert.ok(committed.every(tool => tool.inputSchema.additionalProperties === false))
+  const commands = committed.find(tool => tool.name === 'mathboard_command')
+  assert.equal(commands.inputSchema.properties.method.enum.length, 16)
+  assert.ok(commands.inputSchema.properties.method.enum.includes('boards.delete'))
+  assert.ok(commands.inputSchema.properties.method.enum.includes('create'))
 })

@@ -38,6 +38,7 @@ pub enum McpReadError {
     PermissionDenied,
     BoardContextChanged,
     BoardBusy,
+    ExecutionUnknown,
     CaptureTooLarge,
     Internal,
 }
@@ -49,6 +50,7 @@ impl McpReadError {
             Self::PermissionDenied => "permission_denied",
             Self::BoardContextChanged => "board_context_changed",
             Self::BoardBusy => "board_busy",
+            Self::ExecutionUnknown => "execution_unknown",
             Self::CaptureTooLarge => "capture_too_large",
             Self::Internal => "internal_error",
         }

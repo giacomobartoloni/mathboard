@@ -40,8 +40,22 @@ const METHODS: &[&str] = &[
     "clear",
     "group",
     "layout",
+    "boards.list",
+    "boards.create",
+    "boards.open",
+    "boards.rename",
+    "boards.listArchived",
+    "boards.archive",
+    "boards.unarchive",
+    "boards.delete",
 ];
-const READ_ONLY_METHODS: &[&str] = &["observe", "measure", "screenshot"];
+const READ_ONLY_METHODS: &[&str] = &[
+    "observe",
+    "measure",
+    "screenshot",
+    "boards.list",
+    "boards.listArchived",
+];
 
 fn valid_board_id(value: &str) -> bool {
     value.len() > 3
@@ -283,7 +297,7 @@ impl BoardRequestBroker {
         if !state.mcp_enabled {
             return Vec::new();
         }
-        vec!["observe", "measure", "screenshot"]
+        vec!["observe", "measure", "screenshot", "command"]
     }
 
     pub fn mcp_set_enabled(&self, enabled: bool) {
@@ -323,7 +337,7 @@ impl BoardRequestBroker {
         method: &str,
         params: Value,
     ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>, McpReadLease), BrokerError> {
-        if !READ_ONLY_METHODS.contains(&method) {
+        if !METHODS.contains(&method) {
             return Err(BrokerError::UnsupportedMethod);
         }
         let mut state = self.state.lock().expect("board broker lock poisoned");
@@ -336,7 +350,7 @@ impl BoardRequestBroker {
         if !state.mcp_enabled {
             return Err(BrokerError::PermissionDenied);
         }
-        if method != "observe" && board_id.is_none() {
+        if matches!(method, "measure" | "screenshot") && board_id.is_none() {
             return Err(BrokerError::InvalidBoardId);
         }
         let active = state.active_board_id.clone().ok_or(BrokerError::NotReady)?;

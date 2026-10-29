@@ -27,7 +27,8 @@ const boardId = { type: 'string', pattern: '^mb_[A-Za-z0-9_-]+$', minLength: 4, 
 
 export function generateMcpToolSchemas() {
   const descriptors = getBoardCommandDescriptors()
-  return methods.map(method => {
+  const commands = descriptors.filter(entry => !methods.includes(entry.method)).map(entry => entry.method)
+  return [...methods.map(method => {
     const descriptor = descriptors.find(entry => entry.method === method)
     if (!descriptor || descriptor.mutatesBoard) throw new Error(`Invalid MCP read method: ${method}`)
     const inputSchema = structuredClone(descriptor.paramsSchema)
@@ -35,7 +36,20 @@ export function generateMcpToolSchemas() {
     inputSchema.required = method === 'observe' ? [] : ['boardId', ...inputSchema.required]
     inputSchema.additionalProperties = false
     return { name: `mathboard_${method}`, description: descriptor.summary, inputSchema }
-  })
+  }), {
+    name: 'mathboard_command',
+    description: 'Execute one existing MathBoard drawing or library operation. BoardId defaults to the open board; boards.* operations use params.boardId where applicable. Re-observe after timeouts or board transitions before retrying writes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        method: { type: 'string', enum: commands },
+        boardId: structuredClone(boardId),
+        params: { type: 'object' },
+      },
+      required: ['method'],
+      additionalProperties: false,
+    },
+  }]
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

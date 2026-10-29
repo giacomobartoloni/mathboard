@@ -20,21 +20,21 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { createVisualCaptureAdapter } from '../board/capture/visual-capture.js'
-import { boardCommandMutatesBoard } from '../board/agent/command-registry.js'
-import { getDesktopBoardMethods } from '../board/agent/desktop-commands.js'
+import { boardCommandMutatesBoard, executeBoardCommand, getBoardCommandDescriptors } from '../board/agent/command-registry.js'
 import { validateBoardId } from '../board/BoardDocumentCommandService.js'
 
 const SCHEMA_VERSION = 2
 const MAX_REPLY_BYTES = 7 * 1024 * 1024
 const MAX_COMMAND_LIFETIME_MS = 10000
-const allowed = new Set(getDesktopBoardMethods())
+const allowed = new Set(getBoardCommandDescriptors().map(descriptor => descriptor.method))
 const safeCodes = new Set([
   'board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
   'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed',
   'invalid_capture_request', 'capture_too_large', 'capture_failed',
   'invalid_board_id', 'board_conflict', 'board_not_found', 'board_archived',
   'board_context_changed', 'board_context_required', 'command_timeout',
-  'execution_unknown', 'board_busy',
+  'execution_unknown', 'board_busy', 'board_not_archived', 'confirmation_required',
+  'invalid_board_title', 'edit_in_progress',
 ])
 
 function safeError(error) {
@@ -115,12 +115,14 @@ export async function connectDesktopBoardBridge(getBoard, {
       const finish = mutates && request.boardId === board.getBoardId()
         ? capture.beginMutation() : () => {}
       try {
-        reply.result = await board.getBoardDocumentCommands().executeOnBoard(request, {
-          expiresAtMs: request.expiresAtMs,
-          signal,
-          capture: signal ? { screenshot: (params) => capture.screenshot(params, signal) } : capture,
-          isCurrent: () => !disposed && !signal?.aborted && getBoard() === board && request.boardEpoch === lifecycle.epoch,
-        })
+        reply.result = request.method.startsWith('boards.')
+          ? await executeBoardCommand(null, request, null, board.getBoardWorkspace())
+          : await board.getBoardDocumentCommands().executeOnBoard(request, {
+            expiresAtMs: request.expiresAtMs,
+            signal,
+            capture: signal ? { screenshot: (params) => capture.screenshot(params, signal) } : capture,
+            isCurrent: () => !disposed && !signal?.aborted && getBoard() === board && request.boardEpoch === lifecycle.epoch,
+          })
         reply.ok = true
         if (mutates && Date.now() >= request.expiresAtMs) {
           reply.ok = false

@@ -187,7 +187,7 @@ test('desktop bridge never executes a stale or excluded board command', async ()
     boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, expiresAtMs: Date.now() + 10_000,
     params: { spec: { type: 'rect' } } }
   await onRequest({ payload: { ...envelope, method: 'create' } })
-  await onRequest({ payload: { ...envelope, requestId: 'r-2', boardEpoch: 2, method: 'boards.list' } })
+  await onRequest({ payload: { ...envelope, requestId: 'r-2', boardEpoch: 2, method: 'boards.hidden' } })
 
   assert.equal(creations, 0)
   const replies = calls.filter(call => call.name === 'board_bridge_reply')
@@ -431,4 +431,42 @@ test('native cancellation ignores malformed events and applies to queued request
   assert.equal(seen[0].aborted, true)
   finish({ stable: true })
   await handle
+})
+
+test('native board bridge routes library operations through the shared workspace contract', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const replies = []
+  let onRequest
+  const board = {
+    _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardWorkspace: () => ({
+      list: async () => [{ id: 'mb_active', title: 'Algebra', isActive: true }],
+    }),
+    getBoardDocumentCommands: () => ({ executeOnBoard: () => {
+      throw new Error('Library commands must not use the document executor')
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => {
+      if (event === 'mathboard-board-request') onRequest = handler
+      return () => {}
+    },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  await onRequest({ payload: {
+    requestId: 'library-list', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2,
+    expiresAtMs: Date.now() + 10_000, method: 'boards.list', params: {},
+  } })
+  assert.equal(replies.length, 1)
+  assert.equal(replies[0].ok, true)
+  assert.deepEqual(replies[0].result, [{ id: 'mb_active', title: 'Algebra', isActive: true }])
+  disconnect()
 })

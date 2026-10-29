@@ -21,6 +21,7 @@ use crate::board_bridge::{BoardReply, BoardRequestBroker, BrokerError, emit_mcp_
 use crate::mcp_contract::decode_screenshot;
 use crate::mcp_ipc_protocol::{IpcCommand, IpcReply};
 use base64::Engine;
+use serde_json::Value;
 use std::time::Duration;
 
 fn error(code: &'static str) -> IpcReply {
@@ -37,6 +38,7 @@ fn broker_code(value: BrokerError) -> &'static str {
         BrokerError::RequestTooLarge => "invalid_tool_arguments",
         BrokerError::ReplyTooLarge => "capture_too_large",
         BrokerError::Timeout => "read_cancelled",
+        BrokerError::ExecutionUnknown => "execution_unknown",
         _ => "mcp_unavailable",
     }
 }
@@ -50,6 +52,9 @@ pub fn safe_board_error(code: &str) -> &'static str {
         "invalid_capture_request" | "invalid_command" => "invalid_tool_arguments",
         "capture_failed" | "board_not_ready" => "capture_unavailable",
         "command_timeout" => "read_cancelled",
+        "execution_unknown" => "execution_unknown",
+        "board_not_archived" | "confirmation_required" | "invalid_board_title"
+        | "edit_in_progress" => "invalid_tool_arguments",
         _ => "internal_error",
     }
 }
@@ -75,13 +80,29 @@ pub fn dispatch(
             IpcReply::Released
         }
         IpcCommand::Read(call) => {
-            let method = call.method();
+            let command_params = call.params();
+            let (method, params) = if call.method() == "command" {
+                let Some(method) = command_params.get("method").and_then(Value::as_str) else {
+                    return error("invalid_tool_arguments");
+                };
+                let Some(params) = command_params.get("params").filter(|value| value.is_object()) else {
+                    return error("invalid_tool_arguments");
+                };
+                (method, params.clone())
+            } else {
+                (call.method(), command_params.clone())
+            };
             let (request_id, receiver, lease) =
-                match emit_mcp_read(app, broker, call.board_id(), method, call.params()) {
+                match emit_mcp_read(app, broker, call.board_id(), method, params) {
                     Ok(pending) => pending,
                     Err(err) => return error(broker_code(err)),
                 };
             let reply = broker.await_reply(&request_id, receiver, Duration::from_secs(10));
+            // Board-changing writes may have committed before the renderer switched.
+            if matches!(&reply, Ok(BoardReply::ExecutionUnknown) | Err(BrokerError::ExecutionUnknown)) {
+                broker.mcp_release_lease(&lease);
+                return error("execution_unknown");
+            }
             if !broker.mcp_lease_valid(&lease) {
                 broker.mcp_release_lease(&lease);
                 return error("permission_denied");
@@ -102,7 +123,7 @@ pub fn dispatch(
                 },
                 Ok(BoardReply::Failure { code, .. }) => error(safe_board_error(&code)),
                 Ok(BoardReply::Disconnected | BoardReply::TimedOut) => error("read_cancelled"),
-                Ok(BoardReply::ExecutionUnknown) => error("internal_error"),
+                Ok(BoardReply::ExecutionUnknown) => error("execution_unknown"),
                 Err(err) => error(broker_code(err)),
             };
             if !broker.mcp_lease_valid(&lease) {

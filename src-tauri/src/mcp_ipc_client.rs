@@ -39,6 +39,7 @@ fn safe_error(code: &str) -> McpReadError {
         "permission_denied" => McpReadError::PermissionDenied,
         "board_context_required" | "board_context_changed" => McpReadError::BoardContextChanged,
         "board_busy" => McpReadError::BoardBusy,
+        "execution_unknown" => McpReadError::ExecutionUnknown,
         "capture_too_large" => McpReadError::CaptureTooLarge,
         "mcp_unavailable" | "read_cancelled" => McpReadError::Unavailable,
         _ => McpReadError::Internal,
@@ -82,7 +83,7 @@ impl McpReadBackend for LocalAppBackend {
             tokio::task::spawn_blocking(|| roundtrip(json!({"version":1,"operation":"catalog"})))
                 .await;
         match reply {
-            Ok(Ok(IpcReply::Catalog { methods })) => ["observe", "measure", "screenshot"]
+            Ok(Ok(IpcReply::Catalog { methods })) => ["observe", "measure", "screenshot", "command"]
                 .into_iter()
                 .filter(|method| methods.iter().any(|value| value == method))
                 .collect(),

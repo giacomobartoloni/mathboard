@@ -50,10 +50,17 @@ fn enabling_mcp_exposes_all_read_tools_without_separate_grants() {
         assert_eq!(request.board_id, "mb_a");
         broker.mcp_release_lease(&lease);
     }
+    let (create, _, create_lease) = broker
+        .queue_mcp_read(Some("mb_a"), "create", json!({"spec":{"type":"text","text":"Hello"}}))
+        .unwrap();
+    assert_eq!(create.method, "create");
+    assert!(broker.mcp_lease_valid(&create_lease));
+    let (library, _, _) = broker
+        .queue_mcp_read(None, "boards.list", json!({}))
+        .unwrap();
+    assert_eq!(library.method, "boards.list");
     assert_eq!(
-        broker
-            .queue_mcp_read(Some("mb_a"), "create", json!({}))
-            .err(),
+        broker.queue_mcp_read(Some("mb_a"), "arbitrary", json!({})).err(),
         Some(BrokerError::UnsupportedMethod)
     );
 }

@@ -100,6 +100,42 @@ struct ScreenshotArgs {
     format: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CommandArgs {
+    board_id: Option<String>,
+    method: String,
+    #[serde(default = "empty_params")]
+    params: Value,
+}
+
+fn empty_params() -> Value {
+    json!({})
+}
+
+/// MCP may only invoke existing board/domain command names.
+fn command_method(value: &str) -> Option<&'static str> {
+    match value {
+        "create" => Some("create"),
+        "createMany" => Some("createMany"),
+        "update" => Some("update"),
+        "delete" => Some("delete"),
+        "deleteMany" => Some("deleteMany"),
+        "clear" => Some("clear"),
+        "group" => Some("group"),
+        "layout" => Some("layout"),
+        "boards.list" => Some("boards.list"),
+        "boards.create" => Some("boards.create"),
+        "boards.open" => Some("boards.open"),
+        "boards.rename" => Some("boards.rename"),
+        "boards.listArchived" => Some("boards.listArchived"),
+        "boards.archive" => Some("boards.archive"),
+        "boards.unarchive" => Some("boards.unarchive"),
+        "boards.delete" => Some("boards.delete"),
+        _ => None,
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
 enum CaptureTarget {
@@ -207,6 +243,7 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
         "mathboard_observe" => "observe",
         "mathboard_measure" => "measure",
         "mathboard_screenshot" => "screenshot",
+        "mathboard_command" => "command",
         _ => return Err(ToolCallError::UnknownTool),
     };
     if !arguments.is_object()
@@ -265,6 +302,20 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
                 method,
                 board_id: Some(args.board_id),
                 params: json!({"target":args.target,"scale":args.scale,"format":"png"}),
+            }
+        }
+        "command" => {
+            let args: CommandArgs = serde_json::from_value(arguments).map_err(invalid)?;
+            let operation = command_method(&args.method).ok_or(ToolCallError::InvalidArguments)?;
+            if args.board_id.as_deref().is_some_and(|id| !valid_board_id(id))
+                || !args.params.is_object()
+            {
+                return Err(ToolCallError::InvalidArguments);
+            }
+            ToolCall {
+                method,
+                board_id: args.board_id,
+                params: json!({ "method": operation, "params": args.params }),
             }
         }
         _ => unreachable!(),

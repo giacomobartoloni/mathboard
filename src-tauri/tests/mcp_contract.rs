@@ -21,7 +21,7 @@ use app_lib::mcp_contract::{
 use serde_json::json;
 
 #[test]
-fn only_three_typed_read_tools_reach_the_bridge() {
+fn fixed_mcp_tools_reuse_the_existing_command_registry() {
     assert_eq!(
         tool_specs()
             .iter()
@@ -30,7 +30,8 @@ fn only_three_typed_read_tools_reach_the_bridge() {
         [
             "mathboard_observe",
             "mathboard_measure",
-            "mathboard_screenshot"
+            "mathboard_screenshot",
+            "mathboard_command"
         ]
     );
     let observe = parse_tool_call("mathboard_observe", json!({})).unwrap();
@@ -51,6 +52,40 @@ fn only_three_typed_read_tools_reach_the_bridge() {
         assert_eq!(
             parse_tool_call(name, json!({})).err(),
             Some(ToolCallError::UnknownTool)
+        );
+    }
+}
+
+#[test]
+fn command_tool_reuses_existing_drawing_and_library_operations() {
+    let create = parse_tool_call(
+        "mathboard_command",
+        json!({"boardId":"mb_other","method":"create","params":{"spec":{"type":"text","text":"Hi"}}}),
+    )
+    .unwrap();
+    assert_eq!(create.method(), "command");
+    assert_eq!(create.board_id(), Some("mb_other"));
+    assert_eq!(
+        create.params(),
+        json!({"method":"create","params":{"spec":{"type":"text","text":"Hi"}}})
+    );
+    let library = parse_tool_call(
+        "mathboard_command",
+        json!({"method":"boards.delete","params":{"boardId":"mb_other","confirm":true}}),
+    )
+    .unwrap();
+    assert_eq!(library.board_id(), None);
+    assert_eq!(library.params()["method"], "boards.delete");
+    for args in [
+        json!({"method":"arbitrary_exec","params":{}}),
+        json!({"method":"create","params":[]}),
+        json!({"method":"boards.delete","boardId":"invalid!","params":{}}),
+        json!({"method":"boards.delete","params":{},"extra":true}),
+        json!({"method":"observe","params":{}}),
+    ] {
+        assert_eq!(
+            parse_tool_call("mathboard_command", args).err(),
+            Some(ToolCallError::InvalidArguments)
         );
     }
 }
