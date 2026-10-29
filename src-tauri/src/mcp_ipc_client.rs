@@ -37,7 +37,6 @@ fn roundtrip(request: Value) -> Result<IpcReply, McpReadError> {
 fn safe_error(code: &str) -> McpReadError {
     match code {
         "permission_denied" => McpReadError::PermissionDenied,
-        "screenshot_not_authorized" => McpReadError::ScreenshotNotAuthorized,
         "board_context_required" | "board_context_changed" => McpReadError::BoardContextChanged,
         "board_busy" => McpReadError::BoardBusy,
         "capture_too_large" => McpReadError::CaptureTooLarge,

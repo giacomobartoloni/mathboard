@@ -26,22 +26,8 @@ fn ready() -> BoardRequestBroker {
     broker
 }
 
-fn grant_read(broker: &BoardRequestBroker) {
-    let status = broker.mcp_status();
-    broker
-        .mcp_grant_read("mb_a", 1, status.grant_epoch, "renderer-1")
-        .unwrap();
-}
-
-fn grant_screenshot(broker: &BoardRequestBroker) {
-    let status = broker.mcp_status();
-    broker
-        .mcp_grant_screenshot("mb_a", 1, status.grant_epoch, "renderer-1")
-        .unwrap();
-}
-
 #[test]
-fn mcp_reads_require_explicit_enable_and_board_scoped_grant() {
+fn enabling_mcp_exposes_all_read_tools_without_separate_grants() {
     let broker = ready();
     assert!(broker.mcp_visible_methods().is_empty());
     assert_eq!(
@@ -49,183 +35,116 @@ fn mcp_reads_require_explicit_enable_and_board_scoped_grant() {
         Some(BrokerError::PermissionDenied)
     );
     broker.mcp_set_enabled(true);
-    assert!(broker.mcp_visible_methods().is_empty());
     assert_eq!(
-        broker.queue_mcp_read(None, "observe", json!({})).err(),
-        Some(BrokerError::PermissionDenied)
+        broker.mcp_visible_methods(),
+        ["observe", "measure", "screenshot"]
     );
-    grant_read(&broker);
-    assert_eq!(broker.mcp_visible_methods(), ["observe", "measure"]);
-    let (request, _receiver, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
-    assert_eq!(request.board_id, "mb_a");
+    for method in ["observe", "measure", "screenshot"] {
+        let board_id = if method == "observe" {
+            None
+        } else {
+            Some("mb_a")
+        };
+        let (request, _, lease) = broker.queue_mcp_read(board_id, method, json!({})).unwrap();
+        assert!(broker.mcp_lease_valid(&lease));
+        assert_eq!(request.board_id, "mb_a");
+        broker.mcp_release_lease(&lease);
+    }
     assert_eq!(
-        request.cancellation_epoch,
-        Some(broker.mcp_status().grant_epoch)
-    );
-    let on_wire = serde_json::to_value(&request).unwrap();
-    assert_eq!(
-        on_wire["cancellationEpoch"],
-        request.cancellation_epoch.unwrap()
-    );
-    assert!(on_wire.get("mcpRead").is_none());
-    assert!(on_wire.get("mcpGrantEpoch").is_none());
-    assert!(broker.mcp_lease_valid(&lease));
-    assert_eq!(
-        broker
-            .queue_mcp_read(Some("mb_b"), "observe", json!({}))
-            .err(),
-        Some(BrokerError::BoardContextChanged)
-    );
-    assert_eq!(
-        broker
-            .queue_mcp_read(Some("mb_a"), "create", json!({}))
-            .err(),
+        broker.queue_mcp_read(Some("mb_a"), "create", json!({})).err(),
         Some(BrokerError::UnsupportedMethod)
     );
+}
+
+#[test]
+fn enabled_mcp_accepts_explicit_non_active_board_ids() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    let (request, _, lease) = broker
+        .queue_mcp_read(Some("mb_b"), "measure", json!({"id":"x"}))
+        .unwrap();
+    assert_eq!(request.board_id, "mb_b");
+    assert_eq!(lease.board_id(), "mb_b");
+    assert!(broker.mcp_lease_valid(&lease));
     assert_eq!(
-        broker
-            .queue_mcp_read(None, "measure", json!({"id":"x"}))
-            .err(),
+        broker.queue_mcp_read(None, "measure", json!({"id":"x"})).err(),
         Some(BrokerError::InvalidBoardId)
     );
 }
 
 #[test]
-fn screenshot_requires_separate_grant_and_revoke_invalidates_old_lease() {
+fn board_switch_keeps_mcp_enabled_but_invalidates_prior_lease() {
     let broker = ready();
     broker.mcp_set_enabled(true);
-    grant_read(&broker);
-    assert_eq!(
-        broker
-            .queue_mcp_read(Some("mb_a"), "screenshot", json!({}))
-            .err(),
-        Some(BrokerError::ScreenshotNotAuthorized)
-    );
-    let (_, prior_receiver, prior_lease) =
-        broker.queue_mcp_read(None, "observe", json!({})).unwrap();
-    grant_screenshot(&broker);
-    assert_eq!(prior_receiver.recv().unwrap(), BoardReply::Disconnected);
-    assert!(!broker.mcp_lease_valid(&prior_lease));
-    assert_eq!(
-        broker.mcp_visible_methods(),
-        ["observe", "measure", "screenshot"]
-    );
-    let (request, receiver, old_lease) = broker
-        .queue_mcp_read(Some("mb_a"), "screenshot", json!({}))
-        .unwrap();
-    broker.mcp_revoke_all();
-    assert!(broker.mcp_visible_methods().is_empty());
-    assert_eq!(receiver.recv().unwrap(), BoardReply::Disconnected);
-    assert!(!broker.mcp_lease_valid(&old_lease));
-    grant_read(&broker);
-    grant_screenshot(&broker);
-    assert!(!broker.mcp_lease_valid(&old_lease));
-    assert_eq!(broker.accept_reply_json(&json!({"requestId":request.request_id,"appGeneration":"app-1","rendererGeneration":"renderer-1","boardEpoch":1,"boardId":"mb_a","schemaVersion":2,"ok":true,"result":{}}).to_string()), Err(BrokerError::UnknownRequest));
-}
-
-#[test]
-fn active_board_transition_revokes_grants_without_affecting_addressed_internal_reads() {
-    let broker = ready();
-    broker.mcp_set_enabled(true);
-    grant_read(&broker);
     let (_, receiver, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
     broker
         .renderer_state("renderer-1", 2, true, Some("mb_b"))
         .unwrap();
-    assert_eq!(
-        broker
-            .mcp_grant_read("mb_a", 1, broker.mcp_status().grant_epoch, "renderer-1")
-            .err(),
-        Some(BrokerError::BoardContextChanged)
-    );
     assert_eq!(receiver.recv().unwrap(), BoardReply::Disconnected);
     assert!(!broker.mcp_lease_valid(&lease));
+    assert!(broker.mcp_status().enabled);
+    assert_eq!(
+        broker.mcp_visible_methods(),
+        ["observe", "measure", "screenshot"]
+    );
+    let (request, _, _) = broker
+        .queue_mcp_read(Some("mb_a"), "observe", json!({}))
+        .unwrap();
+    assert_eq!(request.board_id, "mb_a");
+}
+
+#[test]
+fn disabling_mcp_cancels_all_pending_requests_and_issued_leases() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    let (request, receiver, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
+    broker.mcp_set_enabled(false);
+    assert_eq!(receiver.recv().unwrap(), BoardReply::Disconnected);
+    assert!(!broker.mcp_lease_valid(&lease));
+    assert!(broker.mcp_visible_methods().is_empty());
     assert_eq!(
         broker.queue_mcp_read(None, "observe", json!({})).err(),
         Some(BrokerError::PermissionDenied)
     );
-    let internal = broker.queue("mb_a", "observe", json!({})).unwrap().0;
-    assert_eq!(internal.board_id, "mb_a");
-    assert_eq!(internal.cancellation_epoch, None);
-    let on_wire = serde_json::to_value(&internal).unwrap();
-    assert!(on_wire.get("cancellationEpoch").is_none());
-    assert!(on_wire.get("mcpRead").is_none());
-    assert!(on_wire.get("mcpGrantEpoch").is_none());
+    assert_eq!(
+        broker.accept_reply_json(
+            &json!({"requestId":request.request_id,"appGeneration":"app-1","rendererGeneration":"renderer-1","boardEpoch":1,"boardId":"mb_a","schemaVersion":2,"ok":true,"result":{}})
+                .to_string()
+        ),
+        Err(BrokerError::UnknownRequest)
+    );
+    broker.mcp_set_enabled(true);
+    assert!(!broker.mcp_lease_valid(&lease));
 }
 
 #[test]
-fn stale_permission_click_cannot_restore_read_or_screenshot_after_revoke() {
+fn mcp_is_disabled_on_app_restart_and_lease_is_app_scoped() {
     let broker = ready();
     broker.mcp_set_enabled(true);
-    let before_read = broker.mcp_status();
-    broker.mcp_revoke_all();
-    assert_eq!(
-        broker
-            .mcp_grant_read("mb_a", 1, before_read.grant_epoch, "renderer-1")
-            .err(),
-        Some(BrokerError::BoardContextChanged)
-    );
-    grant_read(&broker);
-    let before_screenshot = broker.mcp_status();
-    broker.mcp_revoke_all();
-    grant_read(&broker);
-    assert_eq!(
-        broker
-            .mcp_grant_screenshot("mb_a", 1, before_screenshot.grant_epoch, "renderer-1")
-            .err(),
-        Some(BrokerError::BoardContextChanged)
-    );
-    assert!(!broker.mcp_status().screenshot);
-}
-
-#[test]
-fn renderer_reload_with_same_board_and_epoch_rejects_old_consent() {
-    let broker = ready();
-    broker.mcp_set_enabled(true);
-    let before_reload = broker.mcp_status();
-    broker
-        .renderer_state("renderer-2", 1, true, Some("mb_a"))
-        .unwrap();
-    assert_eq!(
-        broker
-            .mcp_grant_read("mb_a", 1, before_reload.grant_epoch, "renderer-1")
-            .err(),
-        Some(BrokerError::BoardContextChanged)
-    );
-    let current = broker.mcp_status();
-    broker
-        .mcp_grant_read("mb_a", 1, current.grant_epoch, "renderer-2")
-        .unwrap();
-}
-
-#[test]
-fn serialized_read_lease_expires_and_cannot_cross_app_generation() {
-    let broker = ready();
-    broker.mcp_set_enabled(true);
-    grant_read(&broker);
     let (_, _, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
     let serialized = serde_json::to_value(&lease).unwrap();
     let roundtrip = serde_json::from_value(serialized.clone()).unwrap();
     assert!(broker.mcp_lease_valid(&roundtrip));
-    let mut expired = serialized;
-    expired["expiresAtMs"] = json!(0);
-    assert!(!broker.mcp_lease_valid(&serde_json::from_value(expired).unwrap()));
-    let mut extended = serde_json::to_value(&roundtrip).unwrap();
-    extended["expiresAtMs"] = json!(u64::MAX);
-    assert!(!broker.mcp_lease_valid(&serde_json::from_value(extended).unwrap()));
-    let mut forged_id = serde_json::to_value(&roundtrip).unwrap();
-    forged_id["requestId"] = json!("app-1-forged");
-    assert!(!broker.mcp_lease_valid(&serde_json::from_value(forged_id).unwrap()));
-    let replacement = BoardRequestBroker::new("app-2");
-    replacement
+    let mut forged = serialized;
+    forged["requestId"] = json!("fake");
+    assert!(!broker.mcp_lease_valid(&serde_json::from_value(forged).unwrap()));
+    let restarted = BoardRequestBroker::new("app-2");
+    restarted
         .renderer_state("renderer-1", 1, true, Some("mb_a"))
         .unwrap();
-    replacement.mcp_set_enabled(true);
-    let status = replacement.mcp_status();
-    replacement
-        .mcp_grant_read("mb_a", 1, status.grant_epoch, "renderer-1")
+    assert!(!restarted.mcp_status().enabled);
+    restarted.mcp_set_enabled(true);
+    assert!(!restarted.mcp_lease_valid(&roundtrip));
+}
+
+#[test]
+fn renderer_reload_keeps_mcp_enabled_but_invalidates_old_receipt() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    let (_, _, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
+    broker
+        .renderer_state("renderer-2", 1, true, Some("mb_a"))
         .unwrap();
-    assert!(!replacement.mcp_lease_valid(&roundtrip));
-    broker.mcp_release_lease(&roundtrip);
-    assert!(!broker.mcp_lease_valid(&roundtrip));
+    assert!(broker.mcp_status().enabled);
+    assert!(!broker.mcp_lease_valid(&lease));
 }

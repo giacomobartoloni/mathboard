@@ -36,7 +36,6 @@ use std::future::Future;
 pub enum McpReadError {
     Unavailable,
     PermissionDenied,
-    ScreenshotNotAuthorized,
     BoardContextChanged,
     BoardBusy,
     CaptureTooLarge,
@@ -48,7 +47,6 @@ impl McpReadError {
         match self {
             Self::Unavailable => "mcp_unavailable",
             Self::PermissionDenied => "permission_denied",
-            Self::ScreenshotNotAuthorized => "screenshot_not_authorized",
             Self::BoardContextChanged => "board_context_changed",
             Self::BoardBusy => "board_busy",
             Self::CaptureTooLarge => "capture_too_large",

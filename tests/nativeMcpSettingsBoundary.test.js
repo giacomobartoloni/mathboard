@@ -41,7 +41,7 @@ test('native MCP grants are restricted to the dedicated settings window', () => 
   assert.equal(permissions.webviews, undefined)
   assert.deepEqual(board.webviews, ['main'])
   assert.deepEqual(main.windows, ['main'])
-  for (const command of ['set-enabled', 'grant-read', 'grant-screenshot', 'revoke-all']) {
+  for (const command of ['set-enabled']) {
     const privilege = 'allow-mcp-' + command
     assert.ok(permissions.permissions.includes(privilege))
     assert.ok(!main.permissions.includes(privilege))
@@ -52,7 +52,7 @@ test('native MCP grants are restricted to the dedicated settings window', () => 
 test('Tauri routes permission commands to settings and generic cancellation to the board', () => {
   const native = source('src-tauri/src/board_bridge.rs')
   const settings = source('src-tauri/src/mcp_settings.rs')
-  assert.equal((native.match(/crate::mcp_settings::WINDOW_LABEL/g) || []).length, 5)
+  assert.equal((native.match(/crate::mcp_settings::WINDOW_LABEL/g) || []).length, 2)
   assert.equal((native.match(/app.emit_to\("main", "mathboard-board-cancel"/g) || []).length, 4)
   assert.ok(settings.includes('WebviewUrl::App("desktop/mcp-settings.html"'))
   assert.ok(settings.includes('get_webview_window(WINDOW_LABEL)'))
@@ -70,8 +70,10 @@ test('MCP permission UI is a Tauri-only independent Vite entry', () => {
   assert.ok(js.includes('getCurrentWindow().close()'))
   assert.equal(js.includes('mountMathBoard'), false)
   assert.equal(js.includes('createApp('), false)
-  for (const method of ['mcp_permission_status', 'mcp_set_enabled', 'mcp_grant_read',
-    'mcp_grant_screenshot', 'mcp_revoke_all']) assert.ok(js.includes(method))
+  for (const method of ['mcp_permission_status', 'mcp_set_enabled']) assert.ok(js.includes(method))
+  for (const removed of ['mcp_grant_read', 'mcp_grant_screenshot', 'mcp_revoke_all']) {
+    assert.equal(js.includes(removed), false)
+  }
 })
 
 test('the native board bridge is independent of MCP protocol names and transport details', () => {

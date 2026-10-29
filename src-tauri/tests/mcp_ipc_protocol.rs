@@ -68,10 +68,6 @@ fn lease_check_frame_retains_app_generated_identity() {
         .renderer_state("renderer-1", 1, true, Some("mb_a"))
         .unwrap();
     broker.mcp_set_enabled(true);
-    let status = broker.mcp_status();
-    broker
-        .mcp_grant_read("mb_a", 1, status.grant_epoch, "renderer-1")
-        .unwrap();
     let (_, _, lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
     let command = read_command(&mut Cursor::new(framed(
         json!({"version":1,"operation":"check","lease":lease}),
@@ -112,10 +108,6 @@ fn reply_frame_keeps_json_bounded_and_explicitly_typed() {
                         .renderer_state("renderer-1", 1, true, Some("mb_a"))
                         .unwrap();
                     broker.mcp_set_enabled(true);
-                    let status = broker.mcp_status();
-                    broker
-                        .mcp_grant_read("mb_a", 1, status.grant_epoch, "renderer-1")
-                        .unwrap();
                     broker.queue_mcp_read(None, "observe", json!({})).unwrap().2
                 }
             }

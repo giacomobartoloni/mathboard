@@ -1,14 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "mcp-permissions",
-  "description": "Allow local MCP permission controls only in the separate native settings window",
+  "description": "Allow the native settings window to enable or disable local MCP",
   "permissions": [
     "core:window:allow-close",
     "allow-mcp-permission-status",
-    "allow-mcp-set-enabled",
-    "allow-mcp-grant-read",
-    "allow-mcp-grant-screenshot",
-    "allow-mcp-revoke-all"
+    "allow-mcp-set-enabled"
   ],
   "windows": [
     "mcp-settings"

@@ -32,7 +32,6 @@ fn error(code: &'static str) -> IpcReply {
 fn broker_code(value: BrokerError) -> &'static str {
     match value {
         BrokerError::PermissionDenied => "permission_denied",
-        BrokerError::ScreenshotNotAuthorized => "screenshot_not_authorized",
         BrokerError::BoardContextChanged | BrokerError::InvalidBoardId => "board_context_required",
         BrokerError::Busy => "board_busy",
         BrokerError::RequestTooLarge => "invalid_tool_arguments",

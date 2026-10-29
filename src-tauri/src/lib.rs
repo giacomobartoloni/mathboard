@@ -45,9 +45,6 @@ pub fn run() {
             board_bridge::board_bridge_reply,
             board_bridge::mcp_permission_status,
             board_bridge::mcp_set_enabled,
-            board_bridge::mcp_grant_read,
-            board_bridge::mcp_grant_screenshot,
-            board_bridge::mcp_revoke_all,
         ]);
 
     let builder = builder.setup(|app| {
