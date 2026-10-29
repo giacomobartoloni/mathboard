@@ -46,7 +46,10 @@ function render() {
   }
   controls.enable.textContent = permission.enabled ? 'On' : 'Off'
   controls.enable.setAttribute('aria-pressed', String(permission.enabled))
-  controls.enable.disabled = busy
+  controls.enable.disabled = busy || !permission.available
+  byId('connection').hidden = !permission.enabled || !permission.available
+  byId('endpoint').textContent = permission.enabled ? permission.endpoint || '' : ''
+  byId('authorization').textContent = permission.enabled ? permission.authorization || '' : ''
   controls.refresh.disabled = busy
 }
 

@@ -697,15 +697,39 @@ pub fn emit_mcp_read(
     Ok((request_id, receiver, lease))
 }
 
+/// Connection material is disclosed only to the dedicated native settings WebView.
+fn native_mcp_status(
+    app: &tauri::AppHandle,
+    broker: &BoardRequestBroker,
+) -> serde_json::Value {
+    let status = broker.mcp_status();
+    let server = app.try_state::<crate::mcp_http::LocalMcpHttpServer>();
+    serde_json::json!({
+        "enabled": status.enabled,
+        "available": server.is_some(),
+        "endpoint": if status.enabled && server.is_some() {
+            Some(crate::mcp_http::ENDPOINT)
+        } else {
+            None
+        },
+        "authorization": if status.enabled {
+            server.as_ref().map(|instance| format!("Bearer {}", instance.token()))
+        } else {
+            None
+        },
+    })
+}
+
 #[tauri::command]
 pub(crate) fn mcp_permission_status(
     webview: tauri::Webview,
+    app: tauri::AppHandle,
     broker: tauri::State<'_, BoardRequestBroker>,
-) -> Result<McpPermissionStatus, String> {
+) -> Result<serde_json::Value, String> {
     if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
-    Ok(broker.mcp_status())
+    Ok(native_mcp_status(&app, &broker))
 }
 
 #[tauri::command]
@@ -714,20 +738,12 @@ pub(crate) fn mcp_set_enabled(
     app: tauri::AppHandle,
     broker: tauri::State<'_, BoardRequestBroker>,
     enabled: bool,
-) -> Result<McpPermissionStatus, String> {
+) -> Result<serde_json::Value, String> {
     if webview.label() != crate::mcp_settings::WINDOW_LABEL {
         return Err("MCP controls unavailable".into());
     }
-    if enabled {
-        #[cfg(unix)]
-        if app
-            .try_state::<crate::mcp_ipc_unix::UnixMcpServer>()
-            .is_none()
-        {
-            return Err("Local MCP IPC unavailable".into());
-        }
-        #[cfg(not(unix))]
-        return Err("Local MCP IPC unavailable".into());
+    if enabled && app.try_state::<crate::mcp_http::LocalMcpHttpServer>().is_none() {
+        return Err("Local MCP HTTP listener unavailable".into());
     }
     let previous_epoch = broker.mcp_status().grant_epoch;
     broker.mcp_set_enabled(enabled);
@@ -735,5 +751,5 @@ pub(crate) fn mcp_set_enabled(
     if status.grant_epoch != previous_epoch {
         let _ = app.emit_to("main", "mathboard-board-cancel", status.grant_epoch);
     }
-    Ok(status)
+    Ok(native_mcp_status(&app, &broker))
 }

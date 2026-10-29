@@ -19,6 +19,7 @@ mod analytics;
 pub mod board_bridge;
 pub mod companion;
 pub mod mcp_contract;
+mod mcp_http;
 pub mod mcp_ipc_client;
 pub mod mcp_ipc_protocol;
 #[cfg(unix)]
@@ -49,6 +50,12 @@ pub fn run() {
 
     let builder = builder.setup(|app| {
         use tauri::Manager;
+        match mcp_http::LocalMcpHttpServer::start(app.handle().clone()) {
+            Ok(server) => {
+                app.manage(server);
+            }
+            Err(_) => eprintln!("Local MCP HTTP listener unavailable; MathBoard will continue."),
+        }
         #[cfg(unix)]
         match mcp_ipc_unix::UnixMcpServer::start(app.handle().clone()) {
             Ok(server) => {
@@ -156,6 +163,12 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
+                use tauri::Manager;
+                app.state::<board_bridge::BoardRequestBroker>()
+                    .mcp_set_enabled(false);
+                if let Some(server) = app.try_state::<mcp_http::LocalMcpHttpServer>() {
+                    server.shutdown();
+                }
                 #[cfg(unix)]
                 {
                     use tauri::Manager;

@@ -47,11 +47,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
           <small>One switch for all MCP tools. Disabled each time MathBoard starts.</small></div>
         <button id="enable" type="button">Off</button>
       </div>
+      <section id="connection" class="connection" hidden aria-label="Local MCP connection">
+        <p><strong>Loopback MCP endpoint</strong>
+          <code id="endpoint"></code></p>
+        <p><strong>Authorization header</strong>
+          <code id="authorization"></code></p>
+        <small>Configure both values in your trusted local MCP client. The connection
+          token changes when MathBoard restarts; it is not a second permission.</small>
+      </section>
       <div class="actions">
         <button id="refresh" type="button">Refresh status</button>
       </div>
       <p class="note">MCP starts disabled each time MathBoard launches.
-        Switching boards does not disable it. Client setup is not yet available in this build.</p>
+        Switching boards does not disable it. Only clients with the current
+        session token can connect to the loopback endpoint.</p>
     </section>
     <footer><button id="close" type="button">Close</button></footer>
   </main>
