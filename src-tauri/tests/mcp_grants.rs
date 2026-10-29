@@ -90,7 +90,11 @@ fn screenshot_requires_separate_grant_and_revoke_invalidates_old_lease() {
             .err(),
         Some(BrokerError::ScreenshotNotAuthorized)
     );
+    let (_, prior_receiver, prior_lease) =
+        broker.queue_mcp_read(None, "observe", json!({})).unwrap();
     grant_screenshot(&broker);
+    assert_eq!(prior_receiver.recv().unwrap(), BoardReply::Disconnected);
+    assert!(!broker.mcp_lease_valid(&prior_lease));
     assert_eq!(
         broker.mcp_visible_methods(),
         ["observe", "measure", "screenshot"]

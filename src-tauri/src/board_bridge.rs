@@ -248,6 +248,10 @@ impl BoardRequestBroker {
     fn revoke_mcp_locked(state: &mut BrokerState) {
         state.mcp_read_board_id = None;
         state.mcp_screenshot = false;
+        Self::rotate_mcp_epoch_locked(state);
+    }
+
+    fn rotate_mcp_epoch_locked(state: &mut BrokerState) {
         state.mcp_grant_epoch = state.mcp_grant_epoch.wrapping_add(1);
         let ids: Vec<_> = state
             .pending
@@ -352,7 +356,10 @@ impl BoardRequestBroker {
         if !state.mcp_enabled || !state.ready || state.mcp_read_board_id != state.active_board_id {
             return Err(BrokerError::PermissionDenied);
         }
-        state.mcp_screenshot = true;
+        if !state.mcp_screenshot {
+            Self::rotate_mcp_epoch_locked(&mut state);
+            state.mcp_screenshot = true;
+        }
         Ok(McpPermissionStatus {
             enabled: true,
             active_board_id: state.active_board_id.clone(),
