@@ -39,7 +39,8 @@ fn enabling_mcp_exposes_all_read_tools_without_separate_grants() {
         broker.mcp_visible_methods(),
         ["observe", "measure", "screenshot", "command"]
     );
-    for method in ["observe", "measure", "screenshot", "command"] {
+    // The MCP command wrapper resolves to a concrete board method before native admission.
+    for method in ["observe", "measure", "screenshot"] {
         let board_id = if method == "observe" {
             None
         } else {
