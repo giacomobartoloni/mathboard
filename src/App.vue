@@ -27,9 +27,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
-      <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
+      <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady || showFormulaModal || showShareStampModal || showMcpPermissions"
         aria-label="Open Board library" title="Open Board library"
-        :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
+        :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary || showMcpPermissions" @click="openBoardLibrary">
         <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
         <span class="board-library-trigger-label">
           <span class="board-library-trigger-label-long">Board library</span>
@@ -37,10 +37,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         </span>
         <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
       </button>
+      <button v-if="desktopRuntime" ref="mcpTriggerRef" class="mcp-trigger" type="button" aria-label="Local assistants"
+        title="Local assistants" :aria-expanded="showMcpPermissions" aria-haspopup="dialog"
+        :disabled="!boardSessionReady || showBoardLibrary || showFormulaModal || showShareStampModal" :inert="showMcpPermissions" @click="showMcpPermissions = true">
+        <font-awesome-icon :icon="['fas', 'plug']" aria-hidden="true" />
+        <span>Local assistants</span>
+      </button>
     </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || showBoardLibrary">
+    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || showBoardLibrary || showMcpPermissions">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
@@ -74,6 +80,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
       :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
       @close="closeBoardLibrary" @action="onBoardLibraryAction" />
+    <McpPermissionsModal v-if="desktopRuntime && showMcpPermissions" @close="closeMcpPermissions" />
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
 
@@ -108,7 +115,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     />
     
     <ZoomPanel 
-      :inert="showBoardLibrary"
+      :inert="showBoardLibrary || showMcpPermissions"
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
       :is-fullscreen="isFullscreen"
@@ -122,7 +129,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @toggle-fullscreen="toggleFullscreen"
     />
     
-    <SupportPanel class="secondary-chrome" :inert="showBoardLibrary" />
+    <SupportPanel class="secondary-chrome" :inert="showBoardLibrary || showMcpPermissions" />
     
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
@@ -136,6 +143,7 @@ import ToolsPanel from './components/ToolsPanel.vue'
 // Deferred until opened: FormulaModal brings the KaTeX preview renderer.
 const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
 const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
+const McpPermissionsModal = defineAsyncComponent(() => import('./components/McpPermissionsModal.vue'))
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import {
@@ -195,6 +203,7 @@ export default {
     ToolsPanel,
     FormulaModal,
     ShareStampModal,
+    McpPermissionsModal,
     SupportPanel,
     ZoomPanel,
   },
@@ -263,6 +272,13 @@ export default {
       }
     }
     const showBoardLibrary = ref(false)
+    const showMcpPermissions = ref(false)
+    const mcpTriggerRef = ref(null)
+    const closeMcpPermissions = async () => {
+      showMcpPermissions.value = false
+      await nextTick()
+      mcpTriggerRef.value?.focus()
+    }
     const boardLibraryTriggerRef = ref(null)
     const boardList = ref([])
     const archivedList = ref([])
@@ -435,11 +451,13 @@ export default {
         try {
           const disconnect = await connectDesktopWindow({
             onUndo: () => {
-              if (boardSessionReady.value && !showBoardLibrary.value
+              if (boardSessionReady.value && !showBoardLibrary.value && !showMcpPermissions.value
+                && !showFormulaModal.value && !showShareStampModal.value
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
             },
             onRedo: () => {
-              if (boardSessionReady.value && !showBoardLibrary.value
+              if (boardSessionReady.value && !showBoardLibrary.value && !showMcpPermissions.value
+                && !showFormulaModal.value && !showShareStampModal.value
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
             },
             onFullscreenChange: setFullscreenState,
@@ -572,6 +590,11 @@ export default {
           event.preventDefault()
           return
         }
+        if (showMcpPermissions.value) {
+          closeMcpPermissions()
+          event.preventDefault()
+          return
+        }
         if (drawBoardRef.value?.isTextEditing()) {
           drawBoardRef.value.exitTextEditing()
           event.preventDefault()
@@ -587,6 +610,7 @@ export default {
         showFormulaModal.value
         || showShareStampModal.value
         || showBoardLibrary.value
+        || showMcpPermissions.value
         || shouldIgnoreGlobalShortcut(event)
         || drawBoardRef.value?.isTextEditing()
       ) return
@@ -831,6 +855,9 @@ export default {
       onPersistenceStatus,
       recoverConflict,
       showBoardLibrary,
+      showMcpPermissions,
+      mcpTriggerRef,
+      closeMcpPermissions,
       boardLibraryTriggerRef,
       boardList,
       archivedList,
@@ -992,6 +1019,28 @@ body {
 .board-library-trigger-label-short { display: none; }
 .board-library-trigger > svg:last-child { color: var(--text-muted); font-size: 12px; }
 .board-library-trigger:disabled { opacity: .6; cursor: default; }
+
+.mcp-trigger {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--panel-shadow);
+  font: inherit;
+  cursor: pointer;
+}
+.mcp-trigger:focus-visible { outline: 2px solid var(--selected-bg); outline-offset: 2px; }
+.mcp-trigger:disabled { opacity: .6; cursor: default; }
+@media (max-width: 760px) { .mcp-trigger span { display: none; } }
 
 .copyright {
   position: absolute;

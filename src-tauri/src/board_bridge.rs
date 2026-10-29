@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 pub const SCHEMA_VERSION: u32 = 2;
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
@@ -800,12 +800,25 @@ pub(crate) fn mcp_permission_status(
 #[tauri::command]
 pub(crate) fn mcp_set_enabled(
     webview: tauri::Webview,
+    app: tauri::AppHandle,
     broker: tauri::State<'_, BoardRequestBroker>,
     enabled: bool,
 ) -> Result<McpPermissionStatus, String> {
     if webview.label() != "main" {
         return Err("MCP controls unavailable".into());
     }
+    if enabled {
+        #[cfg(unix)]
+        if app
+            .try_state::<crate::mcp_ipc_unix::UnixMcpServer>()
+            .is_none()
+        {
+            return Err("Local MCP IPC unavailable".into());
+        }
+        #[cfg(not(unix))]
+        return Err("Local MCP IPC unavailable".into());
+    }
+    let _ = app;
     broker.mcp_set_enabled(enabled);
     Ok(broker.mcp_status())
 }
