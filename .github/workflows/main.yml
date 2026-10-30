@@ -23,10 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.node-version'
-          cache: npm
+      # Temporary: use runner-provided Node while setup-node is stalled.
+      - run: node --version && npm --version
 
       - run: npm ci
 
