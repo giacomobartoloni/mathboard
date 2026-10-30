@@ -18,30 +18,65 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import {readFile} from 'node:fs/promises'
 import test from 'node:test'
+import {createIco, pngSize} from '../tools/generate-icons.mjs'
 
 const root = new URL('../', import.meta.url)
-const officialIcon = new URL('public/icon-512x512.png', root)
-const favicon = new URL('public/favicon.png', root)
-const index = new URL('index.html', root)
 
-test('web favicon is byte-for-byte identical to the official 512px icon', async () => {
-  const [iconPng, faviconPng] = await Promise.all([
-    readFile(officialIcon),
-    readFile(favicon),
-  ])
+function syntheticPng(size) {
+  const png = Buffer.alloc(26)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(png)
+  png.write('IHDR', 12, 'ascii')
+  png.writeUInt32BE(size, 16)
+  png.writeUInt32BE(size, 20)
+  png[25] = 6
+  return png
+}
 
-  assert.deepEqual(faviconPng, iconPng)
-  assert.equal(iconPng.toString('hex', 0, 8), '89504e470d0a1a0a')
-  assert.equal(iconPng.readUInt32BE(16), 512)
-  assert.equal(iconPng.readUInt32BE(20), 512)
+test('favicon generator packages 16/32/48 PNG frames into a valid ICO directory', () => {
+  const sizes = [16, 32, 48]
+  const frames = sizes.map(syntheticPng)
+  const ico = createIco(frames)
+
+  assert.equal(ico.readUInt16LE(0), 0)
+  assert.equal(ico.readUInt16LE(2), 1)
+  assert.equal(ico.readUInt16LE(4), 3)
+  for (const [i, size] of sizes.entries()) {
+    const entry = 6 + i * 16
+    assert.equal(ico[entry], size)
+    assert.equal(ico[entry + 1], size)
+    const length = ico.readUInt32LE(entry + 8)
+    const offset = ico.readUInt32LE(entry + 12)
+    assert.deepEqual(ico.subarray(offset, offset + length), frames[i])
+  }
+  assert.throws(() => createIco(frames.slice(1)), /16, 32 and 48/)
+  assert.throws(() => createIco([frames[1], frames[0], frames[2]]), /must be 16x16/)
 })
 
-test('web page references the correct PNG favicon, not the obsolete SVG or ICO', async () => {
-  const html = await readFile(index, 'utf8')
+test('PNG dimensions are parsed from a real PNG header', () => {
+  assert.deepEqual(pngSize(syntheticPng(32)), {
+    width: 32, height: 32, colorType: 6,
+  })
+  assert.throws(() => pngSize(Buffer.from('not a png')), /Invalid PNG/)
+})
 
-  assert.match(html, /<link rel="icon" type="image\/png" href="\/favicon\.png">/)
-  assert.doesNotMatch(html, /favicon\.(?:svg|ico)/)
-  assert.match(html, /<link rel="apple-touch-icon" href="\/icon-192x192\.png">/)
+test('favicon, Apple and PWA links use dedicated assets and formats', async () => {
+  const [page, manifestText] = await Promise.all([
+    readFile(new URL('index.html', root), 'utf8'),
+    readFile(new URL('public/manifest.json', root), 'utf8'),
+  ])
+
+  for (const size of [16, 32, 48, 96]) {
+    assert.match(page, new RegExp(
+      `rel="icon" type="image/png" sizes="${size}x${size}" href="/favicon-${size}x${size}\\.png"`
+    ))
+  }
+  assert.match(
+    page, /rel="apple-touch-icon" sizes="180x180" href="\/apple-touch-icon\.png"/
+  )
+  assert.doesNotMatch(page, /favicon\.(?:svg|png)/)
+  const icons = JSON.parse(manifestText).icons
+  assert.deepEqual(icons.map(({sizes}) => sizes), ['192x192', '512x512'])
+  assert.ok(icons.every(({purpose}) => purpose === 'any'))
 })

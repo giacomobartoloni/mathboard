@@ -27,7 +27,8 @@ npm run test:e2e     # build:e2e + Playwright Chromium P0 suite
 npm run test:e2e:ui  # same with Playwright UI
 npm run assert:no-e2e-hook # fail if dist/ contains E2E instrumentation markers
 npm run assert:e2e-hook  # fail if dist-e2e/ is missing the E2E canary
-npm run generate:icons # regenerate icon-192x192.png, icon-512x512.png, and byte-identical favicon.png from tools/icon-template.html
+npm run generate:icons # regenerate browser favicons, Apple touch icon and 192/512 PWA icons from tools/icon-template.html
+npm run generate:favicons # regenerate web favicon and Apple touch assets only (also runs before Vite)
 npm run desktop:dev     # Run the Tauri desktop app (requires native prerequisites)
 npm run desktop:build   # Build the desktop app; see docs/desktop/DEVELOPMENT.md
 ```
