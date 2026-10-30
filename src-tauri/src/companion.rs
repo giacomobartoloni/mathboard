@@ -74,7 +74,9 @@ pub fn run_from_args() -> Option<i32> {
                 Some(1)
             }
         },
-        flag if flag.starts_with("--mathboard-companion-") || flag.starts_with("--mathboard-mcp-") => {
+        flag if flag.starts_with("--mathboard-companion-")
+            || flag.starts_with("--mathboard-mcp-") =>
+        {
             eprintln!("Invalid MathBoard companion mode or arguments.");
             Some(2)
         }
