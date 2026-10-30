@@ -230,10 +230,19 @@ async fn c14_rejects_unknown_mutation_fields_before_backend_invocation() {
     };
     let server = MathBoardMcpServer::new(backend.clone());
     for (tool, args) in [
-        ("mathboard_create", json!({"spec":{"type":"text","text":"Hello"},"dryRun":true})),
+        (
+            "mathboard_create",
+            json!({"spec":{"type":"text","text":"Hello"},"dryRun":true}),
+        ),
         ("mathboard_clear", json!({"dryRun":true})),
-        ("mathboard_boards_delete", json!({"boardId":"mb_a","confirm":true,"dryRun":true})),
-        ("mathboard_command", json!({"method":"create","params":{"spec":{"type":"text","text":"Hello"},"dryRun":true}})),
+        (
+            "mathboard_boards_delete",
+            json!({"boardId":"mb_a","confirm":true,"dryRun":true}),
+        ),
+        (
+            "mathboard_command",
+            json!({"method":"create","params":{"spec":{"type":"text","text":"Hello"},"dryRun":true}}),
+        ),
     ] {
         let error = server.dispatch(tool, args).await.unwrap_err();
         assert!(format!("{error:?}").contains("Invalid tool arguments"));

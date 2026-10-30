@@ -281,7 +281,11 @@ fn command_keys_known(operation: &str, params: &Value, direct: bool) -> bool {
     else {
         return false;
     };
-    let Some(properties) = tool.input_schema.get("properties").and_then(Value::as_object) else {
+    let Some(properties) = tool
+        .input_schema
+        .get("properties")
+        .and_then(Value::as_object)
+    else {
         return false;
     };
     fields.iter().all(|(name, value)| {

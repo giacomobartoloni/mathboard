@@ -168,8 +168,14 @@ mod tests {
             safe_error("invalid_tool_arguments"),
             McpReadError::InvalidToolArguments
         );
-        assert_eq!(safe_error("read_cancelled"), McpReadError::Domain("read_cancelled"));
-        assert_eq!(safe_error("capture_unavailable"), McpReadError::Domain("capture_unavailable"));
+        assert_eq!(
+            safe_error("read_cancelled"),
+            McpReadError::Domain("read_cancelled")
+        );
+        assert_eq!(
+            safe_error("capture_unavailable"),
+            McpReadError::Domain("capture_unavailable")
+        );
         assert_eq!(
             McpReadError::InvalidToolArguments.code(),
             "invalid_tool_arguments"
