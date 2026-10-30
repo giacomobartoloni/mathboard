@@ -30,6 +30,22 @@ pub fn http_startup_requested() -> bool {
     is_http_startup(std::env::args_os().skip(1))
 }
 
+/// Windows GUI applications can silently discard writes when stdout is absent.
+pub fn ensure_http_startup_stdout() -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        let handle = io::stdout().as_raw_handle();
+        if handle.is_null() || handle as isize == -1 {
+            return Err(io::Error::new(
+                io::ErrorKind::NotConnected,
+                "MCP HTTP startup requires an inherited stdout handle",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Emit one opt-in machine-readable connection record; never log or persist the secret.
 pub fn write_http_startup_record(output: &mut impl Write, token: &str) -> io::Result<()> {
     let record = serde_json::json!({

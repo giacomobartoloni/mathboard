@@ -57,6 +57,8 @@ pub fn run() {
             let broker = app.state::<board_bridge::BoardRequestBroker>();
             let server = app.state::<mcp_http::LocalMcpHttpServer>();
             let startup = (|| -> std::io::Result<()> {
+                // Refuse Windows GUI startup when stdout would silently discard the token.
+                companion::ensure_http_startup_stdout()?;
                 // Reuse the same transport, ephemeral token and permission gate as native On.
                 server.set_enabled(&broker, true)?;
                 let token = server
