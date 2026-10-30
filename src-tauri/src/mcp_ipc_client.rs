@@ -56,7 +56,9 @@ fn safe_error(code: &str) -> McpReadError {
         "invalid_capture_request" => McpReadError::Domain("invalid_capture_request"),
         "execution_unknown" => McpReadError::ExecutionUnknown,
         "capture_too_large" => McpReadError::CaptureTooLarge,
-        "mcp_unavailable" | "read_cancelled" => McpReadError::Unavailable,
+        "mcp_unavailable" => McpReadError::Unavailable,
+        "read_cancelled" => McpReadError::Domain("read_cancelled"),
+        "capture_unavailable" => McpReadError::Domain("capture_unavailable"),
         _ => McpReadError::Internal,
     }
 }
@@ -166,6 +168,8 @@ mod tests {
             safe_error("invalid_tool_arguments"),
             McpReadError::InvalidToolArguments
         );
+        assert_eq!(safe_error("read_cancelled"), McpReadError::Domain("read_cancelled"));
+        assert_eq!(safe_error("capture_unavailable"), McpReadError::Domain("capture_unavailable"));
         assert_eq!(
             McpReadError::InvalidToolArguments.code(),
             "invalid_tool_arguments"

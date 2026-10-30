@@ -76,6 +76,8 @@ impl McpReadError {
                 Self::Domain("edit_in_progress") => "Editing is in progress.",
                 Self::Domain("nested_object_mutation_not_supported") => "Nested object mutation is unsupported.",
                 Self::Domain("invalid_capture_request") => "Invalid capture request.",
+                Self::Domain("capture_unavailable") => "The screenshot could not be captured.",
+                Self::Domain("read_cancelled") => "The local board request timed out or was cancelled.",
                 Self::Domain("formula_render_failed") => "Formula rendering failed.",
                 Self::Domain("board_commit_failed") => "Board save failed; re-observe before retrying.",
                 _ => "MathBoard could not complete the request.",
