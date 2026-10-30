@@ -17,15 +17,21 @@ and board-library operations, including permanent deletion. There are no
 per-board grants. MCP starts **Off** on each application launch unless
 the user explicitly supplies `--mathboard-mcp-http`.
 
-Configure a Streamable HTTP MCP client with this URL only:
+MathBoard tries the preferred loopback port `43179` first. If it is occupied,
+MathBoard tries the next port, continuing through `65535` until it binds the
+first available one. The listener always binds only to `127.0.0.1` and
+serves `/mcp`. When the preferred port is free, the URL is:
 
 ```text
 http://127.0.0.1:43179/mcp
 ```
 
-No Bearer token, password or custom HTTP header is required. The URL stays
-the same across launches and Off → On cycles. After each restart, the client
-must initialize a new MCP session; previously opened connections are closed.
+**Always copy the active URL shown by Local MCP settings** into your local
+Streamable HTTP MCP client. A fallback port changes the endpoint; client
+configuration must be updated when that happens. No Bearer token, password
+or custom HTTP header is required. Off → On creates a new session manager
+and rescans from the preferred port, so the assigned URL can change.
+Previously opened connections and sessions are closed or invalidated.
 
 **Security tradeoff:** While MCP is enabled, any other application running
 on this computer that can connect to localhost may read, modify or delete
@@ -41,7 +47,8 @@ To start the ordinary GUI with MCP already enabled:
 mathboard --mathboard-mcp-http
 ```
 
-The process emits one machine-readable JSON line on inherited stdout:
+The process emits one machine-readable JSON line on inherited stdout with
+the **actual bound endpoint** (the preferred port when free):
 
 ```json
 {"transport":"streamable-http","endpoint":"http://127.0.0.1:43179/mcp"}
@@ -49,13 +56,16 @@ The process emits one machine-readable JSON line on inherited stdout:
 
 The flag does not start a separate headless server, set up clients, or
 create credentials. The existing CLI output contract requires available
-stdout; failure to bind the port or emit the record shuts down and exits
-nonzero without propagating an error through Tauri's macOS setup hook.
+stdout; failure to bind any available port at or above `43179`, or failure
+to emit the record, shuts down and exits nonzero without propagating an
+error through Tauri's macOS setup hook.
 Installed macOS and Windows GUI launchers may not forward stdout; use
 native settings in that case. A second instance cannot reconfigure the first.
 
-The listener binds only to `127.0.0.1:43179` and only exposes `/mcp`.
-Unexpected `Host` values and browser `Origin` headers are rejected to
+The listener binds only to the selected `127.0.0.1:<port>` address and
+only exposes `/mcp`. The admission gate and RMCP service both validate
+the actual bound `Host` value; unexpected `Host` values and browser `Origin`
+headers are rejected to
 reduce browser-origin and DNS rebinding exposure. These checks **do not**
 protect against a malicious local application. Request body and concurrent
 connection limits remain in place. Switching Off invalidates outstanding
@@ -100,9 +110,9 @@ See [PR #121](https://github.com/giacomobartoloni/mathboard/pull/121) for curren
 
 For each installed Windows, macOS and Linux build, record exact application version, OS, client configuration and MCP traces:
 
-1. While Off, verify the port is unbound. Enable MCP, initialize a Streamable HTTP client, list the tools and exercise observe, command, screenshot, board create/delete and library operations. Also launch a fresh desktop process with `--mathboard-mcp-http`; verify one valid endpoint-only JSON record on inherited stdout, port binding, visible native On state, matching settings URL and fail-closed port/stdout errors.
+1. While Off, verify no listener is bound. Enable MCP, initialize a Streamable HTTP client using the URL shown in native settings, list the tools and exercise observe, command, screenshot, board create/delete and library operations. Hold ports `43179` and `43180` with separate local listeners and verify GUI and explicit CLI startup use `43181` (or the first next-free port), show and copy that same actual endpoint, and enforce exact matching Host admission. Also launch a fresh desktop process with `--mathboard-mcp-http`; verify one valid endpoint-only JSON record on inherited stdout, native On state, and fail-closed stdout/unrecoverable bind errors.
 2. Start concurrent long-running `tools/call` requests and screenshots using persistent HTTP clients. Switch Off: verify the toggle acknowledges only once active sockets have closed, with no further response bytes emitted by the server after acknowledgment. Previously delivered or kernel-buffered data cannot be withdrawn.
-3. Switch On again: confirm a fresh session (without changing the URL) is required; old keep-alive connections cannot resume. Check Host/Origin protection, idle connections, repeated On/Off, application exit and port conflicts.
+3. Switch On again: confirm a fresh session is required, old keep-alive connections cannot resume, and the displayed URL reflects any port reassignment. Check Host/Origin protection, idle connections, repeated On/Off, application exit and occupied-port fallback.
 4. Interrupt a mutation and re-read state before retrying `execution_unknown`; do not automatically replay destructive operations.
 5. Confirm the stdio argument exits nonzero without emitting a JSON-RPC frame.
 

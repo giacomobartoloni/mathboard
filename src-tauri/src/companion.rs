@@ -47,10 +47,10 @@ pub fn ensure_http_startup_stdout() -> io::Result<()> {
 }
 
 /// Emit one opt-in machine-readable endpoint record.
-pub fn write_http_startup_record(output: &mut impl Write) -> io::Result<()> {
+pub fn write_http_startup_record(output: &mut impl Write, endpoint: &str) -> io::Result<()> {
     let record = serde_json::json!({
         "transport": "streamable-http",
-        "endpoint": crate::mcp_http::ENDPOINT,
+        "endpoint": endpoint,
     });
     writeln!(output, "{record}")?;
     output.flush()
@@ -123,12 +123,13 @@ mod tests {
     #[test]
     fn startup_record_is_single_line_json_with_endpoint_only() {
         let mut output = Vec::new();
-        write_http_startup_record(&mut output).unwrap();
+        let endpoint = "http://127.0.0.1:43180/mcp";
+        write_http_startup_record(&mut output, endpoint).unwrap();
         let text = String::from_utf8(output).unwrap();
         assert_eq!(text.lines().count(), 1);
         let record: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
         assert_eq!(record["transport"], "streamable-http");
-        assert_eq!(record["endpoint"], crate::mcp_http::ENDPOINT);
+        assert_eq!(record["endpoint"], endpoint);
         assert!(record.get("token").is_none());
     }
 }

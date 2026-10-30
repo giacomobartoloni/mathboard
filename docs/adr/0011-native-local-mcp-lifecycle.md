@@ -2,7 +2,7 @@
 
 - Status: Proposed (PR #121, not yet merged)
 - Date: 2026-10-29
-- Amended: 2026-10-30 (owner-directed URL-only local setup)
+- Amended: 2026-10-30 (owner-directed URL-only local setup and occupied-port fallback)
 
 ## Context
 
@@ -12,9 +12,12 @@ transport state. A broker lease alone cannot stop an already open HTTP
 response stream.
 
 The first implementation required an activation-scoped Bearer token
-on every MCP On. The owner chose a Penpot-like local UX with a stable URL
-and no token or custom header, superseding that admission decision. This
-is an explicit change to the local security trust model.
+on every MCP On. The owner chose a Penpot-like local UX with no token
+or custom header, superseding that admission decision. The initially
+fixed `43179` address is now the preferred URL: the owner also requested
+automatic ascending-port fallback when occupied. A client may need to
+update its URL when the assigned port changes. This explicitly changes
+the local security trust model and the initial stable-URL assumption.
 
 ## Decision
 
@@ -22,21 +25,26 @@ The dedicated Tauri settings window owns one accessible On/Off switch.
 
 - **Off by default:** no listener or active RMCP sessions, except when
   the user explicitly launches with `--mathboard-mcp-http`.
-- **On:** bind `127.0.0.1:43179`, start the official `rmcp` Streamable
-  HTTP service at `/mcp`, and enable the native broker. Binding conflicts
-  fail closed.
-- **Admission:** require native On, exact Host, absent browser Origin,
-  bounded request size and connection limits; no per-client HTTP token.
+- **On:** attempt `127.0.0.1:43179` and sequentially higher ports
+  through `65535` for `AddrInUse` only, retaining the first successfully
+  bound socket. Start the official `rmcp` Streamable HTTP service at
+  `/mcp` on that port and enable the native broker. Other bind errors or
+  exhaustion fail closed.
+- **Admission:** require native On, exact Host for the **actual** bound port,
+  absent browser Origin, bounded request size and connection limits;
+  no per-client HTTP token. RMCP's own Host allowlist uses that port too.
 - **Off:** invalidate pending operations/leases; cancel the RMCP
   `CancellationToken`; join the Tokio runtime and active Hyper writers
   before acknowledging disable. A later On creates a new session manager.
 - **CLI:** `--mathboard-mcp-http` runs the same native server and emits
-  a one-line JSON record containing only transport and endpoint. Keep the
-  existing stdout-failure rollback and clean nonzero startup exit to
-  preserve the 2026-10-30 occupied-port panic fix. Installed launcher
-  behavior remains an acceptance gate.
+  a one-line JSON record containing only transport and the endpoint
+  actually bound. Keep stdout-failure rollback and clean nonzero startup
+  exit for unrecoverable errors, preserving the 2026-10-30 setup panic fix.
+  Installed launcher behavior remains an acceptance gate.
 - **Native UX:** implement an accessible switch with explicit state text;
-  show only the stable URL, never an authorization header.
+  display/copy the current live URL, including fallback ports, never an
+  authorization header. Clients configured with an old URL must update it
+  if the port changes.
 - **Stdio:** remain unavailable while separately launched companion
   writers cannot be reliably stopped by the native Off boundary. Unix
   production IPC remains disabled and Windows stdio unsupported.
@@ -58,8 +66,9 @@ a product requirement; do not claim localhost provides process identity.
 ## Lifecycle and verification
 
 Off closes admitted connections but cannot recall bytes already delivered
-to OS buffers. Clients keep the same configuration URL, but need a new
-MCP session after re-enabling. Interrupted writes may return
+to OS buffers. The preferred URL remains the same when its port is free;
+otherwise a client must use the reassigned endpoint. In either case,
+a new MCP session is required after re-enabling. Interrupted writes may return
 `execution_unknown` and require state inspection, not automatic retries.
 
 Preserve the bounded completion receipt for same-renderer
@@ -68,8 +77,9 @@ clean failure implemented at PR head `2e0ad63` on 2026-10-30.
 MCP Off and renderer replacement still revoke any outstanding receipt.
 Neither new local UX nor source CI proves installed release acceptance:
 retake the owner's macOS `boards.create` and occupied-port tests, then
-verify real native clients, Host/Origin defenses, and concurrent
-disable/response emission on supported OSes.
+verify real native clients, occupied-port fallback in GUI and CLI,
+Host/Origin defenses, and concurrent disable/response emission on
+supported OSes.
 
 ## Deferred stdio design
 

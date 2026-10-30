@@ -61,8 +61,11 @@ pub fn run() {
                 companion::ensure_http_startup_stdout()?;
                 // Reuse the same native On lifecycle and local MCP transport.
                 server.set_enabled(&broker, true)?;
+                let endpoint = server.endpoint().ok_or_else(|| {
+                    std::io::Error::other("MCP HTTP listener unavailable after startup")
+                })?;
                 let mut output = std::io::stdout().lock();
-                companion::write_http_startup_record(&mut output)
+                companion::write_http_startup_record(&mut output, &endpoint)
             })();
             if let Err(error) = startup {
                 // If the endpoint record cannot be delivered, do not leave a listener behind.

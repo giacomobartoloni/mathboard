@@ -46,8 +46,27 @@ use std::{
 use tauri::Manager;
 use tokio_util::sync::CancellationToken;
 
-const BIND_ADDRESS: &str = "127.0.0.1:43179";
-pub const ENDPOINT: &str = "http://127.0.0.1:43179/mcp";
+const LOOPBACK_HOST: &str = "127.0.0.1";
+pub const PREFERRED_PORT: u16 = 43179;
+
+fn endpoint_for(port: u16) -> String {
+    format!("http://{LOOPBACK_HOST}:{port}/mcp")
+}
+
+/// Keep the successful bound socket; checking and then rebinding would race.
+fn bind_first_available(start_port: u16) -> io::Result<(TcpListener, u16)> {
+    for port in start_port..=u16::MAX {
+        match TcpListener::bind((LOOPBACK_HOST, port)) {
+            Ok(listener) => return Ok((listener, port)),
+            Err(error) if error.kind() == io::ErrorKind::AddrInUse => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AddrInUse,
+        "No available loopback MCP HTTP port at or above the preferred port",
+    ))
+}
 const MAX_HTTP_BODY: usize = 64 * 1024;
 const MAX_CONNECTIONS: usize = 16;
 
@@ -84,11 +103,11 @@ impl McpReadBackend for NativeAppBackend {
 
 /// Native enablement and strict loopback Host/Origin checks form the local MCP gate.
 /// This endpoint intentionally does not authenticate other local applications.
-fn admitted(headers: &HeaderMap, path: &str, enabled: bool) -> bool {
+fn admitted(headers: &HeaderMap, path: &str, enabled: bool, bound_host: &str) -> bool {
     if !enabled || path != "/mcp" || headers.contains_key(ORIGIN) {
         return false;
     }
-    headers.get(HOST).and_then(|value| value.to_str().ok()) == Some(BIND_ADDRESS)
+    headers.get(HOST).and_then(|value| value.to_str().ok()) == Some(bound_host)
 }
 
 fn denied() -> Response<BoxBody<Bytes, Infallible>> {
@@ -103,10 +122,11 @@ async fn serve(
     socket: TcpListener,
     app: tauri::AppHandle,
     shutdown: CancellationToken,
+    bound_host: String,
 ) -> io::Result<()> {
     let listener = tokio::net::TcpListener::from_std(socket)?;
     let settings = StreamableHttpServerConfig::default()
-        .with_allowed_hosts([BIND_ADDRESS])
+        .with_allowed_hosts([bound_host.clone()])
         .enforce_origin_validation()
         .with_max_request_body_bytes(MAX_HTTP_BODY)
         .with_json_response(true)
@@ -133,14 +153,16 @@ async fn serve(
         };
         let service = service.clone();
         let app = app.clone();
+        let bound_host = bound_host.clone();
         tokio::spawn(async move {
             let _slot = slot;
             let handler = service_fn(move |request: Request<Incoming>| {
                 let service = service.clone();
                 let app = app.clone();
+                let bound_host = bound_host.clone();
                 async move {
                     let enabled = app.state::<BoardRequestBroker>().mcp_status().enabled;
-                    if !admitted(request.headers(), request.uri().path(), enabled) {
+                    if !admitted(request.headers(), request.uri().path(), enabled, &bound_host) {
                         return Ok::<_, Infallible>(denied());
                     }
                     let response = service
@@ -161,12 +183,14 @@ async fn serve(
 struct RunningHttp {
     shutdown: CancellationToken,
     worker: JoinHandle<()>,
+    port: u16,
 }
 
 impl RunningHttp {
     pub fn start(app: tauri::AppHandle) -> io::Result<Self> {
-        let listener = TcpListener::bind(BIND_ADDRESS)?;
+        let (listener, port) = bind_first_available(PREFERRED_PORT)?;
         listener.set_nonblocking(true)?;
+        let bound_host = format!("{LOOPBACK_HOST}:{port}");
         let shutdown = CancellationToken::new();
         let cancel = shutdown.clone();
         let (started, ready) = mpsc::sync_channel(1);
@@ -188,7 +212,7 @@ impl RunningHttp {
                             let listener = listener?;
                             started.send(Ok(())).ok();
                             let socket = listener.into_std()?;
-                            serve(socket, app, cancel).await
+                            serve(socket, app, cancel, bound_host).await
                         });
                         if result.is_err() {
                             eprintln!("Local MCP HTTP service stopped.");
@@ -202,7 +226,11 @@ impl RunningHttp {
                 }
             })?;
         match ready.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(())) => Ok(Self { shutdown, worker }),
+            Ok(Ok(())) => Ok(Self {
+                shutdown,
+                worker,
+                port,
+            }),
             Ok(Err(error)) => {
                 shutdown.cancel();
                 let _ = worker.join();
@@ -246,6 +274,16 @@ impl LocalMcpHttpServer {
             .is_some_and(|running| !running.worker.is_finished())
     }
 
+    /// Report exactly the URL of the running listener, never a preferred-port guess.
+    pub fn endpoint(&self) -> Option<String> {
+        self.running
+            .lock()
+            .expect("MCP HTTP lifecycle lock poisoned")
+            .as_ref()
+            .filter(|running| !running.worker.is_finished())
+            .map(|running| endpoint_for(running.port))
+    }
+
     pub fn set_enabled(&self, broker: &BoardRequestBroker, enabled: bool) -> io::Result<()> {
         // Serialize concurrent On/Off commands and the permission epoch.
         let mut running = self
@@ -271,7 +309,7 @@ impl LocalMcpHttpServer {
             }
         }
         if running.is_none() {
-            // Bind only when requested. A port conflict fails closed.
+            // Bind only when requested, falling forward on occupied local ports.
             *running = Some(RunningHttp::start(self.app.clone())?);
         }
         broker.mcp_set_enabled(true);
@@ -300,17 +338,20 @@ mod tests {
     #[test]
     fn local_gate_requires_native_enablement_exact_host_and_no_browser_origin() {
         let mut headers = HeaderMap::new();
-        headers.insert(HOST, BIND_ADDRESS.parse().unwrap());
-        assert!(admitted(&headers, "/mcp", true));
-        assert!(!admitted(&headers, "/mcp", false));
-        assert!(!admitted(&headers, "/other", true));
+        let bound_host = format!("{LOOPBACK_HOST}:{}", PREFERRED_PORT + 1);
+        headers.insert(HOST, bound_host.parse().unwrap());
+        assert!(admitted(&headers, "/mcp", true, &bound_host));
+        assert!(!admitted(&headers, "/mcp", false, &bound_host));
+        assert!(!admitted(&headers, "/other", true, &bound_host));
         headers.insert(ORIGIN, "https://malicious.example".parse().unwrap());
-        assert!(!admitted(&headers, "/mcp", true));
+        assert!(!admitted(&headers, "/mcp", true, &bound_host));
         headers.remove(ORIGIN);
         headers.insert(HOST, "attacker.example".parse().unwrap());
-        assert!(!admitted(&headers, "/mcp", true));
+        assert!(!admitted(&headers, "/mcp", true, &bound_host));
+        headers.insert(HOST, format!("{LOOPBACK_HOST}:{PREFERRED_PORT}").parse().unwrap());
+        assert!(!admitted(&headers, "/mcp", true, &bound_host));
         headers.remove(HOST);
-        assert!(!admitted(&headers, "/mcp", true));
+        assert!(!admitted(&headers, "/mcp", true, &bound_host));
     }
 
     #[test]
@@ -343,7 +384,13 @@ mod tests {
         });
         let mut client = TcpStream::connect(address).unwrap();
         ready.recv_timeout(Duration::from_secs(2)).unwrap();
-        RunningHttp { shutdown, worker }.shutdown().unwrap();
+        RunningHttp {
+            shutdown,
+            worker,
+            port: address.port(),
+        }
+        .shutdown()
+        .unwrap();
         client
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();
@@ -353,8 +400,25 @@ mod tests {
     }
 
     #[test]
-    fn occupied_port_is_rejected() {
+    fn occupied_port_uses_next_available_loopback_port() {
         let owner = TcpListener::bind("127.0.0.1:0").unwrap();
-        assert!(TcpListener::bind(owner.local_addr().unwrap()).is_err());
+        let occupied = owner.local_addr().unwrap().port();
+        if occupied == u16::MAX {
+            return;
+        }
+        let (listener, selected) = bind_first_available(occupied).unwrap();
+        assert!(selected > occupied);
+        assert_eq!(listener.local_addr().unwrap().port(), selected);
+        assert_eq!(listener.local_addr().unwrap().ip().to_string(), LOOPBACK_HOST);
+        assert_eq!(endpoint_for(selected), format!("http://{LOOPBACK_HOST}:{selected}/mcp"));
+    }
+
+    #[test]
+    fn occupied_last_port_fails_closed() {
+        if let Ok(owner) = TcpListener::bind((LOOPBACK_HOST, u16::MAX)) {
+            let error = bind_first_available(u16::MAX).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::AddrInUse);
+            drop(owner);
+        }
     }
 }
