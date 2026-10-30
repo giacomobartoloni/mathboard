@@ -154,7 +154,13 @@ async function main() {
     throw new Error('Missing local font insertion point')
   }
   const html = source.replace('<!-- LOCAL_SATISFY_FONT -->', face)
-  const browser = await puppeteer.launch({headless: true})
+  // GitHub's Linux runners restrict Chrome's namespace sandbox.
+  // The renderer loads only our checked-in template and local WOFF2.
+  const ciLinux = process.env.CI === 'true' && process.platform === 'linux'
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ciLinux ? ['--no-sandbox', '--disable-setuid-sandbox'] : [],
+  })
 
   try {
     const icoFrames = []
