@@ -191,17 +191,6 @@ async function main() {
       }
     }
 
-    // Temporary export of public binary assets for the PR repair.
-    if (process.env.GITHUB_ACTIONS === 'true') {
-      for (const name of [
-        ...faviconSizes.map((size) => `favicon-${size}x${size}.png`),
-        'favicon.ico',
-        'apple-touch-icon.png',
-      ]) {
-        const bytes = await fs.readFile(path.join(publicDir, name))
-        console.log(`MB_ICON_EXPORT:${name}:${bytes.toString('base64')}`)
-      }
-    }
   } finally {
     await browser.close()
   }

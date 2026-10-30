@@ -80,3 +80,38 @@ test('favicon, Apple and PWA links use dedicated assets and formats', async () =
   assert.deepEqual(icons.map(({sizes}) => sizes), ['192x192', '512x512'])
   assert.ok(icons.every(({purpose}) => purpose === 'any'))
 })
+
+
+test('checked-in favicon assets have correct dimensions and the ICO matches PNG frames', async () => {
+  const faviconSizes = [16, 32, 48, 96]
+  const frames = await Promise.all(faviconSizes.map(async (size) => {
+    const filename = `public/favicon-${size}x${size}.png`
+    const data = await readFile(new URL(filename, root))
+    const metadata = pngSize(data)
+    assert.equal(metadata.width, size, filename)
+    assert.equal(metadata.height, size, filename)
+    assert.ok([4, 6].includes(metadata.colorType), filename)
+    return data
+  }))
+  const apple = await readFile(new URL('public/apple-touch-icon.png', root))
+  assert.deepEqual(pngSize(apple), {width: 180, height: 180, colorType: 2})
+
+  const ico = await readFile(new URL('public/favicon.ico', root))
+  assert.equal(ico.readUInt16LE(0), 0)
+  assert.equal(ico.readUInt16LE(2), 1)
+  assert.equal(ico.readUInt16LE(4), 3)
+  for (const [i, size] of faviconSizes.slice(0, 3).entries()) {
+    const entry = 6 + i * 16
+    assert.equal(ico[entry], size)
+    assert.equal(ico[entry + 1], size)
+    const length = ico.readUInt32LE(entry + 8)
+    const offset = ico.readUInt32LE(entry + 12)
+    assert.deepEqual(ico.subarray(offset, offset + length), frames[i])
+  }
+  for (const size of [192, 512]) {
+    const png = await readFile(new URL(`public/icon-${size}x${size}.png`, root))
+    const metadata = pngSize(png)
+    assert.equal(metadata.width, size)
+    assert.equal(metadata.height, size)
+  }
+})

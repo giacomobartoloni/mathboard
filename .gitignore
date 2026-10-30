@@ -24,7 +24,3 @@ yarn-error.log*
 *.sln
 *.sw?
 
-# Web favicons are generated from tools/icon-template.html before Vite starts.
-/public/favicon-*.png
-/public/favicon.ico
-/public/apple-touch-icon.png
