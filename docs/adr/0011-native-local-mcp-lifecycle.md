@@ -16,7 +16,8 @@ launched stdio companion processes.
 The dedicated native settings WebView owns a single MCP On/Off control.
 
 - **Off by default:** no TCP listener, active RMCP sessions or HTTP token
-  exists until native activation.
+  exists until native activation, unless the operator explicitly starts the
+  desktop app with `--mathboard-mcp-http`.
 - **On:** bind `127.0.0.1:43179`, initialize official `rmcp` Streamable HTTP,
   generate an activation-scoped token and then enable broker operations.
   Port conflicts fail closed; the only exposed endpoint is `/mcp`.
@@ -28,6 +29,13 @@ The dedicated native settings WebView owns a single MCP On/Off control.
 - **Admission:** preserve loopback-only binding, exact Host, absent Origin,
   bearer-token authentication, size and connection limits. The token is
   client admission, not an independent user permission.
+- **Explicit CLI HTTP activation:** `--mathboard-mcp-http` uses the same
+  native On lifecycle and exposes a fresh endpoint/token record as one
+  JSON line on inherited stdout. It does not provide a headless mode,
+  configure any external client, or persist the token. Failure to bind or
+  to deliver the stdout record aborts startup and disables the listener.
+  GUI launchers are not guaranteed to expose stdout, particularly on
+  packaged Windows builds, so installed OS-specific verification is required.
 - **Stdio:** do not launch `--mathboard-mcp-stdio` until the separately
   launched companion can terminate its response writer before native Off is
   confirmed. The entrypoint exits nonzero. Disable the unused Unix production
@@ -52,6 +60,12 @@ The source-only Rust tests and GitHub CI are necessary but do not replace
 installed real-client acceptance of long-running calls, persistent connections,
 screenshots, client token rotation, Host/Origin rules and concurrent shutdown
 on Windows/macOS/Linux.
+
+## Deferred stdio design
+
+See [desktop/STDIO-DRAFT.md](../desktop/STDIO-DRAFT.md) for the
+non-shipped companion design and concrete acceptance gates. It does not
+alter the HTTP authentication model or authorize a second server today.
 
 ## Alternatives considered
 

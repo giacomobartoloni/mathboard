@@ -35,6 +35,7 @@ mod native_smoke;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let enable_http_at_start = companion::http_startup_requested();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(board_bridge::BoardRequestBroker::new(
@@ -48,10 +49,28 @@ pub fn run() {
             board_bridge::mcp_set_enabled,
         ]);
 
-    let builder = builder.setup(|app| {
+    let builder = builder.setup(move |app| {
         use tauri::Manager;
-        // No MCP socket is bound before native user activation.
+        // Unless explicitly requested by the CLI, no socket is bound at startup.
         app.manage(mcp_http::LocalMcpHttpServer::new(app.handle().clone()));
+        if enable_http_at_start {
+            let broker = app.state::<board_bridge::BoardRequestBroker>();
+            let server = app.state::<mcp_http::LocalMcpHttpServer>();
+            let startup = (|| -> std::io::Result<()> {
+                // Reuse the same transport, ephemeral token and permission gate as native On.
+                server.set_enabled(&broker, true)?;
+                let token = server
+                    .token()
+                    .ok_or_else(|| std::io::Error::other("MCP HTTP startup token unavailable"))?;
+                let mut output = std::io::stdout().lock();
+                companion::write_http_startup_record(&mut output, &token)
+            })();
+            if let Err(error) = startup {
+                // If the token cannot be returned, never leave a writable listener behind.
+                let _ = server.shutdown(&broker);
+                return Err(Box::new(error));
+            }
+        }
         #[cfg(feature = "phase-c-verification")]
         {
             if std::env::var_os("MATHBOARD_PHASE_C_IPC_PROBE").is_some() {
