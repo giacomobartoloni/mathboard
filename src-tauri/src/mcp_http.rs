@@ -162,7 +162,12 @@ async fn serve(
                 let bound_host = bound_host.clone();
                 async move {
                     let enabled = app.state::<BoardRequestBroker>().mcp_status().enabled;
-                    if !admitted(request.headers(), request.uri().path(), enabled, &bound_host) {
+                    if !admitted(
+                        request.headers(),
+                        request.uri().path(),
+                        enabled,
+                        &bound_host,
+                    ) {
                         return Ok::<_, Infallible>(denied());
                     }
                     let response = service
@@ -348,7 +353,10 @@ mod tests {
         headers.remove(ORIGIN);
         headers.insert(HOST, "attacker.example".parse().unwrap());
         assert!(!admitted(&headers, "/mcp", true, &bound_host));
-        headers.insert(HOST, format!("{LOOPBACK_HOST}:{PREFERRED_PORT}").parse().unwrap());
+        headers.insert(
+            HOST,
+            format!("{LOOPBACK_HOST}:{PREFERRED_PORT}").parse().unwrap(),
+        );
         assert!(!admitted(&headers, "/mcp", true, &bound_host));
         headers.remove(HOST);
         assert!(!admitted(&headers, "/mcp", true, &bound_host));
@@ -409,8 +417,14 @@ mod tests {
         let (listener, selected) = bind_first_available(occupied).unwrap();
         assert!(selected > occupied);
         assert_eq!(listener.local_addr().unwrap().port(), selected);
-        assert_eq!(listener.local_addr().unwrap().ip().to_string(), LOOPBACK_HOST);
-        assert_eq!(endpoint_for(selected), format!("http://{LOOPBACK_HOST}:{selected}/mcp"));
+        assert_eq!(
+            listener.local_addr().unwrap().ip().to_string(),
+            LOOPBACK_HOST
+        );
+        assert_eq!(
+            endpoint_for(selected),
+            format!("http://{LOOPBACK_HOST}:{selected}/mcp")
+        );
     }
 
     #[test]
