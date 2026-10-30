@@ -23,7 +23,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 // This is a separate Tauri-only entrypoint, never the shared board Vue root.
 const byId = (id) => document.getElementById(id)
 const controls = {
-  enable: byId('enable'), refresh: byId('refresh'), close: byId('close'),
+  enable: byId('enable'), copyEndpoint: byId('copy-endpoint'), close: byId('close'),
 }
 const errorView = byId('error')
 const loadingView = byId('loading')
@@ -41,10 +41,7 @@ function render() {
   const loaded = permission !== null
   loadingView.hidden = loaded
   controlView.hidden = !loaded
-  if (!loaded) {
-    controls.refresh.disabled = busy
-    return
-  }
+  if (!loaded) return
   controls.enable.checked = pendingEnabled ?? permission.enabled
   byId('enable-state').textContent = pendingEnabled === null
     ? (permission.enabled ? 'Enabled' : 'Disabled')
@@ -52,7 +49,8 @@ function render() {
   controls.enable.disabled = busy || !permission.available
   byId('connection').hidden = !permission.enabled || !permission.available
   byId('endpoint').textContent = permission.enabled ? permission.endpoint || '' : ''
-  controls.refresh.disabled = busy
+  if (!permission.enabled) byId('copy-status').textContent = ''
+  controls.copyEndpoint.disabled = busy || !permission.enabled || !permission.available || !permission.endpoint
 }
 
 async function refresh() {
@@ -88,10 +86,38 @@ async function change(command, args = {}) {
   }
 }
 
+
+async function copyEndpoint() {
+  if (busy || !permission?.enabled || !permission.available || !permission.endpoint) return
+  const endpoint = permission.endpoint
+  byId('copy-status').textContent = ''
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable')
+    await navigator.clipboard.writeText(endpoint)
+  } catch {
+    // Native WebViews may not grant the asynchronous Clipboard API.
+    const field = document.createElement('textarea')
+    field.value = endpoint
+    field.setAttribute('readonly', '')
+    field.style.position = 'fixed'
+    field.style.opacity = '0'
+    document.body.appendChild(field)
+    field.select()
+    let copied = false
+    try { copied = document.execCommand('copy') } catch { /* Use manual copy fallback. */ } finally { field.remove() }
+    if (!copied) {
+      setError('Unable to copy the MCP URL automatically. Select the URL and copy it manually.')
+      return
+    }
+  }
+  setError(null)
+  if (permission.enabled) byId('copy-status').textContent = 'MCP URL copied to clipboard.'
+}
+
 controls.enable.addEventListener('change', () => {
   if (permission && !busy) void change('mcp_set_enabled', { enabled: controls.enable.checked })
 })
-controls.refresh.addEventListener('click', () => void refresh())
+controls.copyEndpoint.addEventListener('click', () => void copyEndpoint())
 controls.close.addEventListener('click', () => void getCurrentWindow().close())
 window.addEventListener('focus', () => void refresh())
 

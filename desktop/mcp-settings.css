@@ -45,14 +45,12 @@ button { cursor: pointer; min-height: 40px; min-width: 86px; padding: 8px 12px;
   border-radius: 7px; font: inherit; background: ButtonFace; color: ButtonText; }
 button:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
 button:disabled { opacity: .55; cursor: default; }
-.actions { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 12px; }
 .danger { border-color: #c33; }
 .note { opacity: .8; font-size: 13px; }
 footer { display: flex; justify-content: flex-end; padding-top: 20px; }
 @media (max-width: 450px) {
   .settings { padding: 16px; }
   .choice { align-items: stretch; flex-direction: column; }
-  .choice button { align-self: flex-start; }
 }
 
 .connection { padding: 12px 16px; margin-top: 16px;
@@ -91,3 +89,9 @@ footer { display: flex; justify-content: flex-end; padding-top: 20px; }
 @media (prefers-reduced-motion: reduce) {
   .switch-track, .switch-thumb { transition: none; }
 }
+
+.endpoint-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
+.endpoint-row code { flex: 1; min-width: 200px; margin-top: 0; }
+.endpoint-row button { flex: 0 0 auto; }
+.copy-status { margin: 6px 0; font-size: 13px; }
+.copy-status:empty { display: none; }

@@ -52,13 +52,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
         </label>
       </div>
       <section id="connection" class="connection" hidden aria-label="Local MCP connection">
-        <p><strong>Loopback MCP endpoint</strong>
-          <code id="endpoint"></code></p>
+        <p><strong>Loopback MCP endpoint</strong></p>
+        <div class="endpoint-row">
+          <code id="endpoint"></code>
+          <button id="copy-endpoint" type="button" aria-describedby="copy-status">Copy MCP URL</button>
+        </div>
+        <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
         <small>Use this URL in a local Streamable HTTP MCP client. No token or custom header is required.</small>
       </section>
-      <div class="actions">
-        <button id="refresh" type="button">Refresh status</button>
-      </div>
       <p class="note">MCP starts disabled unless explicitly enabled by the desktop CLI flag.
         Switching boards does not disable it. While enabled, other applications
         on this computer can connect without authentication.</p>
