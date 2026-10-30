@@ -139,7 +139,8 @@ controls.enable.addEventListener('change', () => {
   if (permission && !busy) void change('mcp_set_enabled', { enabled: controls.enable.checked })
 })
 controls.copyEndpoint.addEventListener('click', () => void copyEndpoint())
-controls.close.addEventListener('click', () => void getCurrentWindow().close())
+// Keep the native settings WebView alive: the menu can show this hidden window again.
+controls.close.addEventListener('click', () => void getCurrentWindow().hide())
 window.addEventListener('focus', () => void refresh())
 
 void refresh()

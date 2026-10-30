@@ -3,7 +3,7 @@
   "identifier": "mcp-permissions",
   "description": "Allow the native settings window to enable or disable local MCP",
   "permissions": [
-    "core:window:allow-close",
+    "core:window:allow-hide",
     "allow-mcp-permission-status",
     "allow-mcp-set-enabled"
   ],
