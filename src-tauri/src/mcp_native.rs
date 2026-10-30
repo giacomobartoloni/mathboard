@@ -17,7 +17,7 @@
 
 //! Private native D dispatcher; no IPC frame can select an arbitrary C3 method.
 
-use crate::board_bridge::{BoardReply, BoardRequestBroker, BrokerError, emit_mcp_read};
+use crate::board_bridge::{BoardReply, BoardRequestBroker, BrokerError, MCP_SCREENSHOT_TIMEOUT, emit_mcp_read};
 use crate::mcp_contract::decode_screenshot;
 use crate::mcp_ipc_protocol::{IpcCommand, IpcReply};
 use base64::Engine;
@@ -70,6 +70,12 @@ pub fn safe_board_error(code: &str) -> &'static str {
     }
 }
 
+// A timeout does not contain board data. Classify it before the expiring
+// read lease can misreport a delayed capture as revoked permission.
+fn timed_out_read(reply: &Result<BoardReply, BrokerError>) -> bool {
+    matches!(reply, Ok(BoardReply::TimedOut) | Err(BrokerError::Timeout))
+}
+
 pub fn dispatch(
     app: &tauri::AppHandle,
     broker: &BoardRequestBroker,
@@ -111,7 +117,23 @@ pub fn dispatch(
                     Ok(pending) => pending,
                     Err(err) => return error(broker_code(err)),
                 };
-            let reply = broker.await_reply(&request_id, receiver, Duration::from_secs(10));
+            let timeout = if method == "screenshot" {
+                MCP_SCREENSHOT_TIMEOUT
+            } else {
+                Duration::from_secs(10)
+            };
+            let reply = broker.await_reply(&request_id, receiver, timeout);
+            // A timed-out read contains no data; expiry alone must not be
+            // presented as a permission revocation. A real MCP Off still wins.
+            if timed_out_read(&reply) {
+                let code = if broker.mcp_status().enabled {
+                    "read_cancelled"
+                } else {
+                    "permission_denied"
+                };
+                broker.mcp_release_lease(&lease);
+                return error(code);
+            }
             // Board-changing writes may have committed before the renderer switched.
             if matches!(
                 &reply,
@@ -152,5 +174,19 @@ pub fn dispatch(
             }
             output
         }
+    }
+}
+
+#[cfg(test)]
+mod c13_tests {
+    use super::*;
+
+    #[test]
+    fn read_timeout_is_classified_before_lease_expiry() {
+        assert!(timed_out_read(&Err(BrokerError::Timeout)));
+        assert!(timed_out_read(&Ok(BoardReply::TimedOut)));
+        assert!(!timed_out_read(&Err(BrokerError::PermissionDenied)));
+        assert!(!timed_out_read(&Ok(BoardReply::Disconnected)));
+        assert!(!timed_out_read(&Ok(BoardReply::Success(serde_json::json!({})))));
     }
 }

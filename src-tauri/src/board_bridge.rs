@@ -21,6 +21,10 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+// The renderer aborts screenshot capture after 10 s. Leave time for its error
+// to reach the broker before expiring the native read lease.
+pub(crate) const MCP_SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(11);
 use tauri::{Emitter, Manager};
 
 pub const SCHEMA_VERSION: u32 = 2;
@@ -410,7 +414,11 @@ impl BoardRequestBroker {
             target,
             method,
             params,
-            Duration::from_secs(10),
+            if method == "screenshot" {
+                MCP_SCREENSHOT_TIMEOUT
+            } else {
+                Duration::from_secs(10)
+            },
             Some(grant_epoch),
         )?;
         let lease = McpReadLease {
@@ -474,7 +482,7 @@ impl BoardRequestBroker {
         if !valid_board_id(board_id) {
             return Err(BrokerError::InvalidBoardId);
         }
-        let lifetime = timeout.min(Duration::from_secs(10));
+        let lifetime = timeout.min(MCP_SCREENSHOT_TIMEOUT);
         if lifetime.is_zero() {
             return Err(BrokerError::Timeout);
         }

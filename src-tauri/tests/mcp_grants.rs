@@ -255,3 +255,19 @@ fn canvas_mutation_does_not_survive_a_board_transition() {
     assert_eq!(receiver.recv().unwrap(), BoardReply::ExecutionUnknown);
     assert!(!broker.mcp_lease_valid(&lease));
 }
+
+#[test]
+fn screenshot_lease_outlives_renderer_timeout_but_off_cancels_immediately() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    let (normal, _, normal_lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
+    let (capture, receiver, capture_lease) = broker
+        .queue_mcp_read(None, "screenshot", json!({"target":{"kind":"viewport"}}))
+        .unwrap();
+    assert!(capture.expires_at_ms >= normal.expires_at_ms + 900);
+    assert!(broker.mcp_lease_valid(&capture_lease));
+    broker.mcp_release_lease(&normal_lease);
+    broker.mcp_set_enabled(false);
+    assert_eq!(receiver.recv().unwrap(), BoardReply::Disconnected);
+    assert!(!broker.mcp_lease_valid(&capture_lease));
+}

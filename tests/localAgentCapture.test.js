@@ -213,3 +213,44 @@ test('nested rendered resources have explicit traversal and depth limits before 
   wide._objects=Array.from({length:CAPTURE_LIMITS.maxSceneNodes+1},()=>new Rect({width:1,height:1}))
   assert.throws(()=>readCaptureScene(makeControllerCanvas([wide])),e=>e.code==='capture_too_large')
 })
+
+test('C13: paint readiness finishes when background animation frames are suspended', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  let requested = 0
+  const cancelled = []
+  const environment = {
+    document: { fonts: { ready: Promise.resolve() } },
+    requestAnimationFrame: () => ++requested,
+    cancelAnimationFrame: id => cancelled.push(id),
+  }
+  const started = Date.now()
+  await waitForCapturePaint(environment, new AbortController().signal)
+  assert.equal(requested, 2)
+  assert.deepEqual(cancelled, [1, 2])
+  assert.ok(Date.now() - started < 1000, 'suspended frames must not wait for the broker deadline')
+})
+
+test('C13: paint readiness still uses live frames and honors abort', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  let requested = 0
+  const active = {
+    document: { fonts: { ready: Promise.resolve() } },
+    requestAnimationFrame: callback => { queueMicrotask(callback); return ++requested },
+    cancelAnimationFrame: () => {},
+  }
+  await waitForCapturePaint(active, new AbortController().signal)
+  assert.equal(requested, 2)
+
+  const controller = new AbortController()
+  let cancelled = 0
+  const suspended = {
+    document: { fonts: { ready: Promise.resolve() } },
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame: () => { cancelled++ },
+  }
+  const pending = waitForCapturePaint(suspended, controller.signal)
+  await Promise.resolve()
+  controller.abort()
+  await assert.rejects(pending, error => error.code === 'capture_failed')
+  assert.ok(cancelled <= 1)
+})
