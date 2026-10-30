@@ -10,34 +10,57 @@ The installed MathBoard desktop application contains a native-only MCP server. T
 
 ## Enable and connect
 
-Open the native desktop application's **Local assistants → Local MCP settings…** menu and turn **Allow local connections** **On**. This is the only product permission: it enables every currently supported MCP tool, including modifications and permanent deletion. No per-board or screenshot grants exist. MCP starts **Off** by default on every MathBoard launch, except when the user explicitly supplies `--mathboard-mcp-http`. Switching boards does not turn it off.
+Open **Local assistants → Local MCP settings…** in the installed desktop
+application and turn the **Allow local MCP connections** switch **On**.
+The one native switch enables all supported drawing, editing, screenshots
+and board-library operations, including permanent deletion. There are no
+per-board grants. MCP starts **Off** on each application launch unless
+the user explicitly supplies `--mathboard-mcp-http`.
 
-The native settings window displays:
+Configure a Streamable HTTP MCP client with this URL only:
 
-- Endpoint: `http://127.0.0.1:43179/mcp`
-- HTTP header: `Authorization: Bearer <the session token shown in settings>`
+```text
+http://127.0.0.1:43179/mcp
+```
 
-Use these values in an MCP client that supports **Streamable HTTP** and custom request headers. The endpoint is bound only to IPv4 loopback and is not remotely accessible. The token is generated anew on every **MCP On**, including Off → On without restarting MathBoard, and is **not saved**. After each activation, update the client's header and initialize a new MCP session. Do not put the token into project files, public logs, URL query parameters, or the web board.
+No Bearer token, password or custom HTTP header is required. The URL stays
+the same across launches and Off → On cycles. After each restart, the client
+must initialize a new MCP session; previously opened connections are closed.
+
+**Security tradeoff:** While MCP is enabled, any other application running
+on this computer that can connect to localhost may read, modify or delete
+local boards. Loopback does not authenticate the client process. Only enable
+this for trusted local environments. A local MCP connection also does not
+guarantee that a connected AI provider processes board data locally.
 
 ### Explicit HTTP startup from a CLI
 
-An operator may launch the **desktop application itself** with `--mathboard-mcp-http` to start with the normal native MCP switch already **On**:
+To start the ordinary GUI with MCP already enabled:
 
 ```sh
 mathboard --mathboard-mcp-http
 ```
 
-This starts the regular GUI and the same loopback HTTP transport used by the settings toggle. After the listener is bound and the broker is enabled, the process writes **one JSON line to inherited stdout**:
+The process emits one machine-readable JSON line on inherited stdout:
 
 ```json
-{"transport":"streamable-http","endpoint":"http://127.0.0.1:43179/mcp","token":"<new-random-activation-token>"}
+{"transport":"streamable-http","endpoint":"http://127.0.0.1:43179/mcp"}
 ```
 
-The client still needs an `Authorization: Bearer <token>` HTTP header; the flag does **not** configure clients, embed credentials in the process arguments, or run a headless MCP server. The token is newly generated at this activation, is also visible in the native settings window, and is never stored by MathBoard. If the port cannot be bound or the token record cannot be written and flushed, startup fails closed. After switching Off and On, the original printed token is invalid; retrieve the newly rotated token from native settings.
+The flag does not start a separate headless server, set up clients, or
+create credentials. The existing CLI output contract requires available
+stdout; failure to bind the port or emit the record shuts down and exits
+nonzero without propagating an error through Tauri's macOS setup hook.
+Installed macOS and Windows GUI launchers may not forward stdout; use
+native settings in that case. A second instance cannot reconfigure the first.
 
-Run this only from a trusted launcher that handles the token as a secret: stdout redirection, terminal transcripts, CI logs and shell history of *captured output* may disclose it. MathBoard does not intentionally send this record to stderr or system logs. **Console availability depends on the launcher:** macOS `open -a` normally does not forward the app's stdout to the calling shell, and packaged Windows GUI executables may not have an attached stdout handle. On those launch paths use the native settings window; test and document installed CLI/stdout behavior separately for each OS. Running a second application instance with this flag does not reconfigure an already running instance; a port conflict remains fail-closed.
-
-Browser `Origin` headers are deliberately rejected; this interface is for trusted desktop MCP clients, not scripts hosted on websites. Hostnames other than `127.0.0.1:43179` are rejected to reduce DNS rebinding risk. Requests require the token even while MCP is enabled; the token is connection authentication, **not a second user permission**. The HTTP port is not bound while MCP is Off. If it is already in use when switching On, the toggle fails closed. On Off, broker requests and sessions are cancelled and active HTTP sockets close before confirmation. Bytes already handed to the operating system cannot be recalled.
+The listener binds only to `127.0.0.1:43179` and only exposes `/mcp`.
+Unexpected `Host` values and browser `Origin` headers are rejected to
+reduce browser-origin and DNS rebinding exposure. These checks **do not**
+protect against a malicious local application. Request body and concurrent
+connection limits remain in place. Switching Off invalidates outstanding
+broker leases, closes RMCP sessions and stops the HTTP listener before
+confirming Off. Data already delivered to OS buffers cannot be recalled.
 
 ## Tools
 
@@ -69,7 +92,7 @@ Only **Streamable HTTP** is supported for now. The `--mathboard-mcp-stdio` argum
 
 ## Security and release status
 
-This is a **source implementation, not verified release acceptance**. It protects browser Origins, Host, local TCP bind, token admission, JSON-RPC request size and the native enable gate, and closes the HTTP runtime (including outstanding connection tasks) before acknowledging Off. Real installed-client tests must still verify response ordering for interrupted commands and screenshots. Do not call this secure for installed clients or mark Phase D complete until the output barrier and real native client/OS acceptance are verified. Earlier C2 installed-native acceptance remains owner-deferred, not passed.
+This is a **source implementation, not verified release acceptance**. It protects browser Origins, Host, local TCP bind, strict Host/Origin admission, JSON-RPC request size and the native enable gate, and closes the HTTP runtime (including outstanding connection tasks) before acknowledging Off. Real installed-client tests must still verify response ordering for interrupted commands and screenshots. Do not call this secure for installed clients or mark Phase D complete until the output barrier and real native client/OS acceptance are verified. Earlier C2 installed-native acceptance remains owner-deferred, not passed.
 
 See [PR #121](https://github.com/giacomobartoloni/mathboard/pull/121) for current implementation and CI. The application WebView carries no MCP settings or transport configuration.
 
@@ -77,9 +100,9 @@ See [PR #121](https://github.com/giacomobartoloni/mathboard/pull/121) for curren
 
 For each installed Windows, macOS and Linux build, record exact application version, OS, client configuration and MCP traces:
 
-1. While Off, verify the port is unbound. Enable MCP, initialize a Streamable HTTP client, list the tools and exercise observe, command, screenshot, board create/delete and library operations. Also launch a fresh desktop process with `--mathboard-mcp-http`; verify one valid JSON token record on inherited stdout, port binding, visible native On state, matching settings token, invalid old tokens and fail-closed port/stdout errors.
+1. While Off, verify the port is unbound. Enable MCP, initialize a Streamable HTTP client, list the tools and exercise observe, command, screenshot, board create/delete and library operations. Also launch a fresh desktop process with `--mathboard-mcp-http`; verify one valid endpoint-only JSON record on inherited stdout, port binding, visible native On state, matching settings URL and fail-closed port/stdout errors.
 2. Start concurrent long-running `tools/call` requests and screenshots using persistent HTTP clients. Switch Off: verify the toggle acknowledges only once active sockets have closed, with no further response bytes emitted by the server after acknowledgment. Previously delivered or kernel-buffered data cannot be withdrawn.
-3. Switch On again: confirm a new token and new session are required; old keep-alive connections cannot resume. Check Host/Origin/token protection, idle connections, repeated On/Off, application exit and port conflicts.
+3. Switch On again: confirm a fresh session (without changing the URL) is required; old keep-alive connections cannot resume. Check Host/Origin protection, idle connections, repeated On/Off, application exit and port conflicts.
 4. Interrupt a mutation and re-read state before retrying `execution_unknown`; do not automatically replay destructive operations.
 5. Confirm the stdio argument exits nonzero without emitting a JSON-RPC frame.
 

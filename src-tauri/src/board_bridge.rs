@@ -750,21 +750,15 @@ pub fn emit_mcp_read(
     Ok((request_id, receiver, lease))
 }
 
-/// This Tauri command discloses credentials only to the dedicated settings WebView.
+/// MCP controls and listener status are only available to the dedicated settings WebView.
 fn native_mcp_status(app: &tauri::AppHandle, broker: &BoardRequestBroker) -> serde_json::Value {
     let status = broker.mcp_status();
     let server = app.try_state::<crate::mcp_http::LocalMcpHttpServer>();
-    let token = server.as_ref().and_then(|instance| instance.token());
-    let active = status.enabled && token.is_some();
+    let active = status.enabled && server.as_ref().is_some_and(|instance| instance.is_running());
     serde_json::json!({
         "enabled": active,
         "available": server.is_some(),
         "endpoint": if active { Some(crate::mcp_http::ENDPOINT) } else { None },
-        "authorization": if active {
-            token.map(|value| format!("Bearer {value}"))
-        } else {
-            None
-        },
     })
 }
 

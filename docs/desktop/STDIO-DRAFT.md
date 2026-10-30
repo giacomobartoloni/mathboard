@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 - **Status:** Draft / deferred. This file describes a possible future transport, **not** a supported way to connect to MathBoard.
 - **Current support:** Only native **Streamable HTTP**, documented in [LOCAL-MCP.md](LOCAL-MCP.md).
 - **Existing entrypoint:** `--mathboard-mcp-stdio` intentionally prints an error to stderr and exits nonzero; it emits no MCP protocol frames.
-- **Revisit only if:** A relevant trusted local MCP client cannot use Streamable HTTP with a custom Authorization header, and there is real demand to support it.
+- **Revisit only if:** A relevant trusted local MCP client cannot use Streamable HTTP, and there is real demand to support it.
 
 ## Background: what stdio actually means
 
@@ -37,7 +37,7 @@ BoardDocumentCommandService / BoardWorkspaceService / screenshot adapter
 1. **One permission switch:** The desktop application's native MCP **On/Off** remains authoritative for both transports. Stdio must not silently enable MCP, create a second permission model, or expose a second editable board store. The explicit HTTP startup flag `--mathboard-mcp-http` is **not** a stdio flag.
 2. **Process ownership:** The client starts and usually stops its own companion. The GUI controls authorization and must not assume that closing a GUI window also terminates independently launched children.
 3. **Local IPC trust:** A future bridge must authenticate or otherwise safely establish the app/peer identity and deny cross-user callers. Existing Unix-socket code is retained as historical implementation material but no longer started in production; Windows IPC remains unsolved. Reuse audited Rust dispatch, typed contracts, bounds and board services; do not add a parallel engine.
-4. **Clean streams:** Standard output contains only MCP protocol frames, not status, logging, banner text or the HTTP bearer token. Errors/logging go to stderr. Stdio does **not** use the HTTP endpoint or header, and cannot reuse its bearer token as a substitute for IPC peer security.
+4. **Clean streams:** Standard output contains only MCP protocol frames, not status, logging or banner text. Errors/logging go to stderr. Stdio does **not** use the HTTP endpoint. IPC peer identity and authorization must be handled independently of the HTTP URL-only trust model.
 5. **Disable/revocation:** On native Off, new commands and leases are immediately invalidated. Before claiming Off complete, prove that every supported companion can no longer emit **new** protocol results from an already admitted command. Mere lease checks do not establish an output barrier; stdout already written to the OS cannot be recalled. Prefer an existing SDK/OS process shutdown mechanism over a custom `BeginEmit/FenceAck` protocol. If no minimal reliable mechanism exists, **do not enable stdio**.
 6. **Mutating calls:** If cancellation, an app switch or a disconnected companion interrupts a command that might have committed, the caller must treat the outcome as unknown and read back before retrying; a connection close is not an undo.
 7. **Resource limits:** Maintain bounded request sizes, concurrent calls and screenshot responses; fail closed when the target GUI app or its single permission gate is absent.

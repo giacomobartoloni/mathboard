@@ -46,12 +46,11 @@ pub fn ensure_http_startup_stdout() -> io::Result<()> {
     Ok(())
 }
 
-/// Emit one opt-in machine-readable connection record; never log or persist the secret.
-pub fn write_http_startup_record(output: &mut impl Write, token: &str) -> io::Result<()> {
+/// Emit one opt-in machine-readable endpoint record.
+pub fn write_http_startup_record(output: &mut impl Write) -> io::Result<()> {
     let record = serde_json::json!({
         "transport": "streamable-http",
         "endpoint": crate::mcp_http::ENDPOINT,
-        "token": token,
     });
     writeln!(output, "{record}")?;
     output.flush()
@@ -122,15 +121,14 @@ mod tests {
     }
 
     #[test]
-    fn startup_record_is_single_line_json_with_new_token_and_endpoint() {
+    fn startup_record_is_single_line_json_with_endpoint_only() {
         let mut output = Vec::new();
-        write_http_startup_record(&mut output, "fresh-secret").unwrap();
+        write_http_startup_record(&mut output).unwrap();
         let text = String::from_utf8(output).unwrap();
         assert_eq!(text.lines().count(), 1);
         let record: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
         assert_eq!(record["transport"], "streamable-http");
         assert_eq!(record["endpoint"], crate::mcp_http::ENDPOINT);
-        assert_eq!(record["token"], "fresh-secret");
-        assert!(!text.contains("Bearer "));
+        assert!(record.get("token").is_none());
     }
 }

@@ -2,82 +2,91 @@
 
 - Status: Proposed (PR #121, not yet merged)
 - Date: 2026-10-29
+- Amended: 2026-10-30 (owner-directed URL-only local setup)
 
 ## Context
 
-MathBoard exposes full supported board/document and board-library operations through
-a native-only, same-machine MCP integration. The shared Vue board must not own
-MCP permissions, credentials, or transport state. A request/lease epoch alone
-does not close already established HTTP streams or the stdout of separately
-launched stdio companion processes.
+MathBoard offers full supported board operations through a native-only,
+loopback MCP server. The shared web board must not own MCP permissions or
+transport state. A broker lease alone cannot stop an already open HTTP
+response stream.
+
+The first implementation required an activation-scoped Bearer token
+on every MCP On. The owner chose a Penpot-like local UX with a stable URL
+and no token or custom header, superseding that admission decision. This
+is an explicit change to the local security trust model.
 
 ## Decision
 
-The dedicated native settings WebView owns a single MCP On/Off control.
+The dedicated Tauri settings window owns one accessible On/Off switch.
 
-- **Off by default:** no TCP listener, active RMCP sessions or HTTP token
-  exists until native activation, unless the operator explicitly starts the
-  desktop app with `--mathboard-mcp-http`.
-- **On:** bind `127.0.0.1:43179`, initialize official `rmcp` Streamable HTTP,
-  generate an activation-scoped token and then enable broker operations.
-  Port conflicts fail closed; the only exposed endpoint is `/mcp`.
-- **Off:** first invalidate broker operations/leases; cancel the RMCP
-  `CancellationToken`; then join the transport runtime thread. Tokio drops
-  all remaining Hyper connection tasks when the runtime terminates. Only
-  acknowledge Off after the join completes. A later On constructs a new
-  listener, RMCP session manager and bearer token.
-- **Admission:** preserve loopback-only binding, exact Host, absent Origin,
-  bearer-token authentication, size and connection limits. The token is
-  client admission, not an independent user permission.
-- **Explicit CLI HTTP activation:** `--mathboard-mcp-http` uses the same
-  native On lifecycle and exposes a fresh endpoint/token record as one
-  JSON line on inherited stdout. It does not provide a headless mode,
-  configure any external client, or persist the token. Failure to bind or
-  to deliver the stdout record aborts startup and disables the listener.
-  GUI launchers are not guaranteed to expose stdout, particularly on
-  packaged Windows builds, so installed OS-specific verification is required.
-- **Stdio:** do not launch `--mathboard-mcp-stdio` until the separately
-  launched companion can terminate its response writer before native Off is
-  confirmed. The entrypoint exits nonzero. Disable the unused Unix production
-  IPC listener while this mode is deferred; Windows stdio remains unsupported.
+- **Off by default:** no listener or active RMCP sessions, except when
+  the user explicitly launches with `--mathboard-mcp-http`.
+- **On:** bind `127.0.0.1:43179`, start the official `rmcp` Streamable
+  HTTP service at `/mcp`, and enable the native broker. Binding conflicts
+  fail closed.
+- **Admission:** require native On, exact Host, absent browser Origin,
+  bounded request size and connection limits; no per-client HTTP token.
+- **Off:** invalidate pending operations/leases; cancel the RMCP
+  `CancellationToken`; join the Tokio runtime and active Hyper writers
+  before acknowledging disable. A later On creates a new session manager.
+- **CLI:** `--mathboard-mcp-http` runs the same native server and emits
+  a one-line JSON record containing only transport and endpoint. Keep the
+  existing stdout-failure rollback and clean nonzero startup exit to
+  preserve the 2026-10-30 occupied-port panic fix. Installed launcher
+  behavior remains an acceptance gate.
+- **Native UX:** implement an accessible switch with explicit state text;
+  show only the stable URL, never an authorization header.
+- **Stdio:** remain unavailable while separately launched companion
+  writers cannot be reliably stopped by the native Off boundary. Unix
+  production IPC remains disabled and Windows stdio unsupported.
 
-Use the SDK and normal OS transport lifecycle, without an additional
-`BeginEmit`/`FenceAck` application protocol unless verified interoperability
-tests establish a concrete missing guarantee.
+## Security consequences
 
-## Consequences
+While On, **any application able to reach the local loopback port may
+read, edit or delete boards**, without identifying itself to MathBoard.
+Host/Origin checks reduce browser-origin and DNS-rebinding threats, not
+malicious local processes. Native On/Off is the sole permission gate.
+Domain validation and `boards.delete`'s `confirm:true` remain intact.
+Do not bind on non-loopback interfaces or present this as a remote/cloud
+MCP authentication scheme.
 
-The listener no longer occupies the loopback port while Off, and clients
-must reconnect and reinitialize with a new token after Off/On. A potentially
-committed write interrupted by shutdown is not safe to automatically replay:
-`execution_unknown` still requires state inspection.
+This consciously trades away local client admission compared with the
+earlier Bearer model. Reconsider if stronger local isolation becomes
+a product requirement; do not claim localhost provides process identity.
 
-Joining an exited transport runtime proves its application writers have
-stopped, but cannot recall bytes already transferred into kernel buffers or
-received by clients. The native toggle must not claim to erase delivered data.
+## Lifecycle and verification
 
-The source-only Rust tests and GitHub CI are necessary but do not replace
-installed real-client acceptance of long-running calls, persistent connections,
-screenshots, client token rotation, Host/Origin rules and concurrent shutdown
-on Windows/macOS/Linux.
+Off closes admitted connections but cannot recall bytes already delivered
+to OS buffers. Clients keep the same configuration URL, but need a new
+MCP session after re-enabling. Interrupted writes may return
+`execution_unknown` and require state inspection, not automatic retries.
+
+Preserve the bounded completion receipt for same-renderer
+`boards.create/open/archive/delete` transitions and explicit CLI
+clean failure implemented at PR head `2e0ad63` on 2026-10-30.
+MCP Off and renderer replacement still revoke any outstanding receipt.
+Neither new local UX nor source CI proves installed release acceptance:
+retake the owner's macOS `boards.create` and occupied-port tests, then
+verify real native clients, Host/Origin defenses, and concurrent
+disable/response emission on supported OSes.
 
 ## Deferred stdio design
 
-See [desktop/STDIO-DRAFT.md](../desktop/STDIO-DRAFT.md) for the
-non-shipped companion design and concrete acceptance gates. It does not
-alter the HTTP authentication model or authorize a second server today.
+See [desktop/STDIO-DRAFT.md](../desktop/STDIO-DRAFT.md) for an
+unimplemented companion. Do not add an alternate board engine or
+custom output fence without verified need.
 
 ## Alternatives considered
 
-- **Leave HTTP listening while Off and check permission on each request:**
-  rejected, because existing streams can continue to emit results.
-- **Custom per-response output fencing over IPC:** deferred under YAGNI while
-  standard RMCP cancellation and transport shutdown are being verified.
-- **Keep partially supported stdio companion enabled:** rejected because a
-  separate process is not stopped by the GUI HTTP cancellation token.
+- Activation-scoped token: rejected for repeated manual configuration.
+- Persistent token: avoids rotation but retains an unnecessary credential
+  workflow under the selected local-trust model.
+- Listening while Off: rejected because open streams could emit results.
+- Partially supported stdio: rejected until reliable companion shutdown.
 
 ## Related decisions
 
-- ADR 0009: Tauri as thin desktop shell.
-- ADR 0005: document persistence and unknown-outcome implications.
+- ADR 0009: Tauri desktop shell.
+- ADR 0005: board persistence and unknown-outcome writes.
 - [PR #121](https://github.com/giacomobartoloni/mathboard/pull/121).

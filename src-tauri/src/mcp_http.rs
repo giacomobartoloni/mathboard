@@ -28,7 +28,7 @@ use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
     Request, Response, StatusCode,
     body::Incoming,
-    header::{AUTHORIZATION, HOST, HeaderMap, ORIGIN},
+    header::{HOST, HeaderMap, ORIGIN},
     service::{Service, service_fn},
 };
 use hyper_util::{rt::TokioIo, service::TowerToHyperService};
@@ -82,30 +82,13 @@ impl McpReadBackend for NativeAppBackend {
     }
 }
 
-fn same_token(provided: &str, expected: &str) -> bool {
-    let a = provided.as_bytes();
-    let b = expected.as_bytes();
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter()
-        .zip(b)
-        .fold(0u8, |diff, (left, right)| diff | (left ^ right))
-        == 0
-}
-
-/// Browser requests, DNS rebinding and unrelated local processes fail closed.
-/// The ephemeral token is available via native settings or explicit CLI stdout.
-fn admitted(headers: &HeaderMap, path: &str, token: &str, enabled: bool) -> bool {
+/// Native enablement and strict loopback Host/Origin checks form the local MCP gate.
+/// This endpoint intentionally does not authenticate other local applications.
+fn admitted(headers: &HeaderMap, path: &str, enabled: bool) -> bool {
     if !enabled || path != "/mcp" || headers.contains_key(ORIGIN) {
         return false;
     }
-    let valid_host = headers.get(HOST).and_then(|value| value.to_str().ok()) == Some(BIND_ADDRESS);
-    let bearer = headers
-        .get(AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "));
-    valid_host && bearer.is_some_and(|value| same_token(value, token))
+    headers.get(HOST).and_then(|value| value.to_str().ok()) == Some(BIND_ADDRESS)
 }
 
 fn denied() -> Response<BoxBody<Bytes, Infallible>> {
@@ -119,7 +102,6 @@ fn denied() -> Response<BoxBody<Bytes, Infallible>> {
 async fn serve(
     socket: TcpListener,
     app: tauri::AppHandle,
-    token: String,
     shutdown: CancellationToken,
 ) -> io::Result<()> {
     let listener = tokio::net::TcpListener::from_std(socket)?;
@@ -151,16 +133,14 @@ async fn serve(
         };
         let service = service.clone();
         let app = app.clone();
-        let token = token.clone();
         tokio::spawn(async move {
             let _slot = slot;
             let handler = service_fn(move |request: Request<Incoming>| {
                 let service = service.clone();
                 let app = app.clone();
-                let token = token.clone();
                 async move {
                     let enabled = app.state::<BoardRequestBroker>().mcp_status().enabled;
-                    if !admitted(request.headers(), request.uri().path(), &token, enabled) {
+                    if !admitted(request.headers(), request.uri().path(), enabled) {
                         return Ok::<_, Infallible>(denied());
                     }
                     let response = service
@@ -179,7 +159,6 @@ async fn serve(
 }
 
 struct RunningHttp {
-    token: String,
     shutdown: CancellationToken,
     worker: JoinHandle<()>,
 }
@@ -188,14 +167,8 @@ impl RunningHttp {
     pub fn start(app: tauri::AppHandle) -> io::Result<Self> {
         let listener = TcpListener::bind(BIND_ADDRESS)?;
         listener.set_nonblocking(true)?;
-        let token = format!(
-            "{}{}",
-            uuid::Uuid::new_v4().simple(),
-            uuid::Uuid::new_v4().simple()
-        );
         let shutdown = CancellationToken::new();
         let cancel = shutdown.clone();
-        let secret = token.clone();
         let (started, ready) = mpsc::sync_channel(1);
         let worker = thread::Builder::new()
             .name("mathboard-mcp-http".into())
@@ -215,7 +188,7 @@ impl RunningHttp {
                             let listener = listener?;
                             started.send(Ok(())).ok();
                             let socket = listener.into_std()?;
-                            serve(socket, app, secret, cancel).await
+                            serve(socket, app, cancel).await
                         });
                         if result.is_err() {
                             eprintln!("Local MCP HTTP service stopped.");
@@ -230,7 +203,6 @@ impl RunningHttp {
             })?;
         match ready.recv_timeout(Duration::from_secs(5)) {
             Ok(Ok(())) => Ok(Self {
-                token,
                 shutdown,
                 worker,
             }),
@@ -269,13 +241,12 @@ impl LocalMcpHttpServer {
         }
     }
 
-    pub fn token(&self) -> Option<String> {
+    pub fn is_running(&self) -> bool {
         self.running
             .lock()
             .expect("MCP HTTP lifecycle lock poisoned")
             .as_ref()
-            .filter(|running| !running.worker.is_finished())
-            .map(|running| running.token.clone())
+            .is_some_and(|running| !running.worker.is_finished())
     }
 
     pub fn set_enabled(&self, broker: &BoardRequestBroker, enabled: bool) -> io::Result<()> {
@@ -330,22 +301,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn loopback_requests_require_a_valid_token_and_no_browser_origin() {
-        let token = "0123456789abcdef0123456789abcdef";
+    fn local_gate_requires_native_enablement_exact_host_and_no_browser_origin() {
         let mut headers = HeaderMap::new();
         headers.insert(HOST, BIND_ADDRESS.parse().unwrap());
-        headers.insert(AUTHORIZATION, format!("Bearer {token}").parse().unwrap());
-        assert!(admitted(&headers, "/mcp", token, true));
-        assert!(!admitted(&headers, "/mcp", token, false));
-        assert!(!admitted(&headers, "/other", token, true));
+        assert!(admitted(&headers, "/mcp", true));
+        assert!(!admitted(&headers, "/mcp", false));
+        assert!(!admitted(&headers, "/other", true));
         headers.insert(ORIGIN, "https://malicious.example".parse().unwrap());
-        assert!(!admitted(&headers, "/mcp", token, true));
+        assert!(!admitted(&headers, "/mcp", true));
         headers.remove(ORIGIN);
         headers.insert(HOST, "attacker.example".parse().unwrap());
-        assert!(!admitted(&headers, "/mcp", token, true));
-        headers.insert(HOST, BIND_ADDRESS.parse().unwrap());
-        headers.insert(AUTHORIZATION, "Bearer wrong".parse().unwrap());
-        assert!(!admitted(&headers, "/mcp", token, true));
+        assert!(!admitted(&headers, "/mcp", true));
+        headers.remove(HOST);
+        assert!(!admitted(&headers, "/mcp", true));
     }
 
     #[test]
@@ -379,7 +347,6 @@ mod tests {
         let mut client = TcpStream::connect(address).unwrap();
         ready.recv_timeout(Duration::from_secs(2)).unwrap();
         RunningHttp {
-            token: String::new(),
             shutdown,
             worker,
         }
@@ -397,12 +364,5 @@ mod tests {
     fn occupied_port_is_rejected() {
         let owner = TcpListener::bind("127.0.0.1:0").unwrap();
         assert!(TcpListener::bind(owner.local_addr().unwrap()).is_err());
-    }
-
-    #[test]
-    fn token_check_rejects_truncated_and_wrong_equal_length_values() {
-        assert!(same_token("abc", "abc"));
-        assert!(!same_token("ab", "abc"));
-        assert!(!same_token("abz", "abc"));
     }
 }

@@ -57,18 +57,15 @@ pub fn run() {
             let broker = app.state::<board_bridge::BoardRequestBroker>();
             let server = app.state::<mcp_http::LocalMcpHttpServer>();
             let startup = (|| -> std::io::Result<()> {
-                // Refuse Windows GUI startup when stdout would silently discard the token.
+                // Preserve explicit CLI contract: fail if the endpoint record cannot be emitted.
                 companion::ensure_http_startup_stdout()?;
-                // Reuse the same transport, ephemeral token and permission gate as native On.
+                // Reuse the same native On lifecycle and local MCP transport.
                 server.set_enabled(&broker, true)?;
-                let token = server
-                    .token()
-                    .ok_or_else(|| std::io::Error::other("MCP HTTP startup token unavailable"))?;
                 let mut output = std::io::stdout().lock();
-                companion::write_http_startup_record(&mut output, &token)
+                companion::write_http_startup_record(&mut output)
             })();
             if let Err(error) = startup {
-                // If the token cannot be returned, never leave a writable listener behind.
+                // If the endpoint record cannot be delivered, do not leave a listener behind.
                 let _ = server.shutdown(&broker);
                 // Tauri panics when setup returns Err on macOS. This opt-in CLI
                 // startup must instead fail cleanly with a nonzero exit code.

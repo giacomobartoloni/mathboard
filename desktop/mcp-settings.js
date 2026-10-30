@@ -30,6 +30,7 @@ const loadingView = byId('loading')
 const controlView = byId('controls')
 let permission = null
 let busy = false
+let pendingEnabled = null
 
 function setError(message) {
   errorView.textContent = message || ''
@@ -44,12 +45,13 @@ function render() {
     controls.refresh.disabled = busy
     return
   }
-  controls.enable.textContent = permission.enabled ? 'On' : 'Off'
-  controls.enable.setAttribute('aria-pressed', String(permission.enabled))
+  controls.enable.checked = pendingEnabled ?? permission.enabled
+  byId('enable-state').textContent = pendingEnabled === null
+    ? (permission.enabled ? 'Enabled' : 'Disabled')
+    : (pendingEnabled ? 'Enabling…' : 'Disabling…')
   controls.enable.disabled = busy || !permission.available
   byId('connection').hidden = !permission.enabled || !permission.available
   byId('endpoint').textContent = permission.enabled ? permission.endpoint || '' : ''
-  byId('authorization').textContent = permission.enabled ? permission.authorization || '' : ''
   controls.refresh.disabled = busy
 }
 
@@ -71,6 +73,7 @@ async function refresh() {
 async function change(command, args = {}) {
   if (busy || !permission) return
   busy = true
+  pendingEnabled = typeof args.enabled === 'boolean' ? args.enabled : null
   setError(null)
   render()
   try {
@@ -79,13 +82,14 @@ async function change(command, args = {}) {
     setError('Local MCP is unavailable in this installation.')
     try { permission = await invoke('mcp_permission_status') } catch { /* Keep visible state. */ }
   } finally {
+    pendingEnabled = null
     busy = false
     render()
   }
 }
 
-controls.enable.addEventListener('click', () => {
-  if (permission) void change('mcp_set_enabled', { enabled: !permission.enabled })
+controls.enable.addEventListener('change', () => {
+  if (permission && !busy) void change('mcp_set_enabled', { enabled: controls.enable.checked })
 })
 controls.refresh.addEventListener('click', () => void refresh())
 controls.close.addEventListener('click', () => void getCurrentWindow().close())
