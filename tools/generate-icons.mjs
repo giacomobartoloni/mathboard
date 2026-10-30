@@ -51,13 +51,13 @@ export function pngSize(buffer) {
   }
 }
 
-function assertPng(buffer, size, fileName) {
+function assertPng(buffer, size, fileName, allowOpaque = false) {
   const {width, height, colorType} = pngSize(buffer)
   if (width !== size || height !== size) {
     throw new Error(`${fileName}: expected ${size}x${size}, got ${width}x${height}`)
   }
-  if (colorType !== 4 && colorType !== 6) {
-    throw new Error(`${fileName}: PNG must support alpha`)
+  if (colorType !== 4 && colorType !== 6 && !(allowOpaque && colorType === 2)) {
+    throw new Error(`${fileName}: unexpected PNG color type ${colorType}`)
   }
 }
 
@@ -121,7 +121,7 @@ async function renderIcon(browser, html, size, variant, fileName) {
       type: 'png',
       omitBackground: true,
     }))
-    assertPng(png, size, fileName)
+    assertPng(png, size, fileName, variant === 'apple')
 
     // iOS home-screen icons must be opaque; check all rendered pixels.
     if (variant === 'apple') {
