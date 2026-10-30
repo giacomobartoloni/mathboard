@@ -502,3 +502,36 @@ test('async batch creation rejects a gesture started during materialization', as
   assert.equal(canvas.getObjects().length, 0)
   assert.equal(history.length, 0)
 })
+
+test('explicit create ink and update ink use the same fixed-mode rule', async () => {
+  const { controller } = setup()
+  const created = await controller.create({
+    type: 'text', text: 'Colors', fill: '#9CA3AF',
+  })
+  assert.equal(created.fill, '#9CA3AF')
+  assert.equal(created.mathboardInkMode, 'fixed')
+  const updated = await controller.update(created.id, { fill: '#FF0000' })
+  assert.equal(updated.fill, '#FF0000')
+  assert.equal(updated.mathboardInkMode, 'fixed')
+  const explicitAuto = await controller.create({
+    type: 'text', text: 'Theme', fill: '#9CA3AF', mathboardInkMode: 'auto',
+  })
+  assert.equal(explicitAuto.mathboardInkMode, 'auto')
+})
+
+test('zero-size new geometry is rejected before writing history', async () => {
+  const { controller, canvas, history } = setup()
+  const invalid = [
+    { type: 'rect' }, { type: 'rect', width: 0, height: 20 },
+    { type: 'rect', width: 20, height: -1 }, { type: 'circle', radius: 0 },
+    { type: 'ellipse', rx: 12, ry: 0 },
+    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 20 }] },
+    { type: 'text', text: 'bad width', width: 0 },
+  ]
+  for (const spec of invalid) await rejectsCode(() => controller.create(spec), C.INVALID_SPEC)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  const wrapped = await controller.create({ type: 'text', text: 'a word to wrap', width: 100 })
+  assert.equal(wrapped.width, 100)
+  assert.equal(history.length, 1)
+})

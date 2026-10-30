@@ -33,4 +33,7 @@ test('MCP catalog matches the current JS read descriptors and rejects unknown fi
   assert.equal(commands.inputSchema.properties.method.enum.length, 16)
   assert.ok(commands.inputSchema.properties.method.enum.includes('boards.delete'))
   assert.ok(commands.inputSchema.properties.method.enum.includes('create'))
+  assert.equal(committed[0].inputSchema.properties.detail.default, 'summary')
+  assert.deepEqual(committed[1].inputSchema.required, ['id'])
+  assert.deepEqual(committed[2].inputSchema.required, ['target'])
 })

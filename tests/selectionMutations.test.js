@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ActiveSelection, Rect, Group, Circle, Path } from 'fabric';
+import { ActiveSelection, Rect, Group, Circle, Path, Textbox } from 'fabric';
 import { ensureMathBoardObjectId, getMathBoardObjectId } from '../src/board/ids.js';
 import { FormulaObject } from '../src/formulas/FormulaObject.js';
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js';
@@ -275,6 +275,18 @@ test('coalesced selection recolors notify each time but produce one undo step', 
   assert.equal(mutations.recolor(null), true);
   assert.equal(rectA.mathboardInkMode, 'auto');
   assert.equal(rectA.stroke, '#111111');
+});
+
+test('wrapped text recolors with an undoable selection command', () => {
+  const { canvas, history, mutations } = setup();
+  const text = new Textbox('Wrapped text', { width: 120, fill: '#010101' });
+  canvas.add(text);
+  canvas.setActiveObject(text);
+  assert.equal(mutations.recolor('#aa0000'), true);
+  assert.equal(text.fill, '#aa0000');
+  assert.equal(history.summary().length, 1);
+  history.undo();
+  assert.equal(text.fill, '#010101');
 });
 
 test('coalesced notification failure restores original entry and paint', () => {

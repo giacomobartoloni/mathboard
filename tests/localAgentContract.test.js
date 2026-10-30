@@ -127,6 +127,11 @@ test('representative accepted and rejected creation/patch inputs agree with publ
   for (const sample of [
     ...Object.values(help.examplesByType),
     { type: 'text', text: '', fontSize: 22, fontWeight: 500, originX: 0.25, underline: true },
+    { type: 'text', text: 'Wrapped words', width: 220 },
+    { type: 'text', text: 'Invalid wrap', width: 0 },
+    { type: 'rect', width: 0, height: 20 },
+    { type: 'circle', radius: 0 },
+    { type: 'ellipse', rx: 12, ry: 0 },
     { type: 'formula', latex: '\\frac{1}{2}', originY: 'bottom', fill: null },
     { type: 'group', objects: [{ type: 'group', objects: [{ type: 'formula', latex: 'x=1' }] }] },
     { type: 'rect', fill: null, strokeDashArray: [1, 2], mathboardInkMode: 'fixed' },

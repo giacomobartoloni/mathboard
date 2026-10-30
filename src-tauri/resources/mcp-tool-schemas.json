@@ -10,6 +10,14 @@
           "pattern": "^mb_[A-Za-z0-9_-]+$",
           "minLength": 4,
           "maxLength": 131
+        },
+        "detail": {
+          "enum": [
+            "summary",
+            "full"
+          ],
+          "default": "summary",
+          "description": "Summary reduces object payload; full retains all semantic fields."
         }
       },
       "required": [],
@@ -34,7 +42,6 @@
         }
       },
       "required": [
-        "boardId",
         "id"
       ],
       "additionalProperties": false
@@ -148,7 +155,6 @@
         }
       },
       "required": [
-        "boardId",
         "target"
       ],
       "additionalProperties": false

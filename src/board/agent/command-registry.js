@@ -48,9 +48,9 @@ const common = { type: string, id: { description: 'New ID is assigned.' },
   originY: { ...transformProperties.originY, default: 'top', description: 'Defaults top; explicit wins.' },
   ...styleProperties, mathboardInkMode: { enum: ['auto', 'fixed'] } }
 const typeFields = {
-  rect: { width: number, height: number, rx: number, ry: number },
-  circle: { radius: number },
-  ellipse: { rx: { type: 'number', minimum: 0 }, ry: { type: 'number', minimum: 0 } },
+  rect: { width: { type: 'number', exclusiveMinimum: 0 }, height: { type: 'number', exclusiveMinimum: 0 }, rx: number, ry: number },
+  circle: { radius: { type: 'number', exclusiveMinimum: 0 } },
+  ellipse: { rx: { type: 'number', exclusiveMinimum: 0 }, ry: { type: 'number', exclusiveMinimum: 0 } },
   polygon: { points: { type: 'array', minItems: 3, maxItems: 1000,
     items: { type: 'object', properties: { x: number, y: number }, required: ['x', 'y'] } } },
   arrow: { x1: number, y1: number, x2: number, y2: number,
@@ -58,11 +58,11 @@ const typeFields = {
     headWidth: { type: 'number', exclusiveMinimum: 0, default: 12 } },
   line: { x1: number, y1: number, x2: number, y2: number },
   path: { path: { type: 'array', description: 'Path-command data; runtime validates.', items: {} } },
-  text: { text: string, ...textProperties },
+  text: { text: string, width: { type: 'number', exclusiveMinimum: 0, description: 'Optional wrapping width; uses Fabric Textbox.' }, ...textProperties },
   formula: { latex },
   group: { objects: { type: 'array', items: { $ref: '#/$defs/createSpec' } } },
 }
-const requiredFields = { rect: [], circle: [], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2'], line: ['x1', 'y1', 'x2', 'y2'],
+const requiredFields = { rect: ['width', 'height'], circle: ['radius'], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2'], line: ['x1', 'y1', 'x2', 'y2'],
   path: ['path'], text: ['text'], formula: ['latex'], group: ['objects'] }
 const createSpec = { oneOf: BOARD_OBJECT_TYPES.map(type => {
   if (!typeFields[type]) throw new Error(`Missing local discovery schema for ${type}`)
@@ -94,10 +94,11 @@ const params = (properties, required = [], defs) => ({ type: 'object', propertie
   ...(defs ? { $defs: defs } : {}) })
 const descriptors = [
   { method: 'observe', summary: 'Read semantic objects, selection, viewport and interaction stability.', mutatesBoard: false,
-    paramsSchema: params({}), resultSchema: { type: 'object', required: ['stable', 'objects', 'selection', 'viewport'],
+    paramsSchema: params({ detail: { enum: ['summary', 'full'], default: 'full',
+      description: 'Summary reduces object payload; full retains all semantic fields.' } }), resultSchema: { type: 'object', required: ['stable', 'objects', 'selection', 'viewport'],
       properties: { stable: boolean, objects: { type: 'array', items: node }, selection: { type: 'object' },
         viewport: { type: 'object' }, boardId: { type: ['string', 'null'] }, version: { type: 'integer' } } },
-    example: { method: 'observe', params: {} }, execute: controller => controller.observe() },
+    example: { method: 'observe', params: {} }, execute: (controller, p) => controller.observe(p.detail || 'full') },
   { method: 'create', summary: 'Create one semantic object with fresh identity and one history command.', mutatesBoard: true,
     paramsSchema: params({ spec: { $ref: '#/$defs/createSpec' }, options }, ['spec'], { createSpec }), resultSchema: node,
     example: { method: 'create', params: { spec: { type: 'text', text: 'Synthetic example', left: 240, top: 160,

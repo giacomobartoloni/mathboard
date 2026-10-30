@@ -35,7 +35,7 @@ test('filled polygons preserve area paint, transformed geometry and history acro
   const nodes = await command(request, 'createMany', { specs: [
     { type: 'text', text: 'A filled right triangle', left: 200, top: 130, fontSize: 28 },
     { type: 'polygon', points, left: 240, top: 240, strokeWidth: 3, stroke: '#1565c0', fill: '#fff0aa', mathboardInkMode: 'fixed' },
-    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 80 }], left: 740, top: 230, fill: '#abcdef', stroke: '#123456' },
+    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 80 }], left: 740, top: 230, fill: '#abcdef', stroke: '#123456', mathboardInkMode: 'auto' },
     { type: 'formula', latex: 'A=\\frac{1}{2}bh', left: 240, top: 510 },
   ] })
   expect(nodes[1].points).toEqual(points)

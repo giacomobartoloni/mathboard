@@ -218,6 +218,7 @@ function validateNode(node, path, depth, seenIds, counters) {
       if (node.text.length > BOARD_TEXT_MAX_LENGTH) {
         throw new BoardDocumentError(BOARD_DOCUMENT_ERROR_CODES.TOO_LARGE)
       }
+      assertOptionalFiniteNumber(node, 'width', path)
       assertOptionalFiniteNumber(node, 'fontSize', path)
       assertOptionalString(node, 'fontFamily', path)
       assertOptionalString(node, 'fontWeight', path)

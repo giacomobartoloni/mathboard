@@ -22,6 +22,7 @@ import { validateLayoutOptions, sceneSafeArea, planLayout, unionBounds } from '.
 import { getMathBoardObjectId, ensureMathBoardObjectId, regenerateMathBoardObjectIds } from './ids.js'
 import { materializeBoardObjects, disposeMaterializedObject } from './objects/materialize.js'
 import { normalizeCreateOrigins } from './objects/normalizeCreateOrigins.js'
+import { normalizeExplicitPaint } from './objects/normalizeExplicitPaint.js'
 import { readSemanticBoardObject, toBoardDocumentNode } from './objects/serialize.js'
 import { validateCreateSpec, validateObjectPatch } from './objects/validateCreateSpec.js'
 import { TRANSFORM_KEYS } from './objects/constants.js'
@@ -192,7 +193,7 @@ export class BoardController {
     try { specs = structuredClone(specs) } catch (cause) {
       throw new BoardControllerError(C.INVALID_SPEC, 'Cannot clone object spec.', { cause })
     }
-    specs = specs.map(normalizeCreateOrigins)
+    specs = specs.map(spec => normalizeExplicitPaint(normalizeCreateOrigins(spec)))
     const objects = await this._materialize(specs)
     try {
       if (this._canvas() !== canvas || (lease && !this._lifecycle.assertCurrent(lease))) {
@@ -518,9 +519,9 @@ export class BoardController {
     ]), { type: 'modify', entries }, result, { kind: 'layout' })
   }
 
-  observe() {
+  observe(detail = 'full') {
     const canvas = this._canvas()
-    return { ...serializeBoardState({ canvas, boardObjectPolicy: this._policy, boardId: this._getBoardId() || null }),
+    return { ...serializeBoardState({ canvas, boardObjectPolicy: this._policy, boardId: this._getBoardId() || null, detail }),
       stable: this._isStable() }
   }
 }
