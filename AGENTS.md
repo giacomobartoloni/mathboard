@@ -27,8 +27,7 @@ npm run test:e2e     # build:e2e + Playwright Chromium P0 suite
 npm run test:e2e:ui  # same with Playwright UI
 npm run assert:no-e2e-hook # fail if dist/ contains E2E instrumentation markers
 npm run assert:e2e-hook  # fail if dist-e2e/ is missing the E2E canary
-npm run generate:icons # regenerate PWA PNGs from tools/icon-template.html and the derived favicon SVG
-npm run generate:favicon # generate ignored public/favicon.svg from public/icon-512x512.png
+npm run generate:icons # regenerate icon-192x192.png, icon-512x512.png, and byte-identical favicon.png from tools/icon-template.html
 npm run desktop:dev     # Run the Tauri desktop app (requires native prerequisites)
 npm run desktop:build   # Build the desktop app; see docs/desktop/DEVELOPMENT.md
 ```

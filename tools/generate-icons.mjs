@@ -134,6 +134,12 @@ async function generateIcon(browser, html, size) {
     assertIconPng(png, size, `public/icon-${size}x${size}.png`)
     await fs.writeFile(outputPath, png)
 
+    // The web favicon is the canonical 512px icon, byte for byte.
+    if (size === 512) {
+      await fs.writeFile(path.join(publicDir, 'favicon.png'), png)
+      console.log('Generated public/favicon.png from icon-512x512.png')
+    }
+
     console.log(
       `Generated public/icon-${size}x${size}.png`
     )
