@@ -301,10 +301,7 @@ impl BoardRequestBroker {
         Self::rotate_mcp_epoch_locked_preserving(state, &HashSet::new());
     }
 
-    fn rotate_mcp_epoch_locked_preserving(
-        state: &mut BrokerState,
-        preserved: &HashSet<String>,
-    ) {
+    fn rotate_mcp_epoch_locked_preserving(state: &mut BrokerState, preserved: &HashSet<String>) {
         state.mcp_grant_epoch = state.mcp_grant_epoch.wrapping_add(1);
         state.mcp_leases.retain(|id, issued| {
             if preserved.contains(id) {
@@ -317,9 +314,7 @@ impl BoardRequestBroker {
         let ids: Vec<_> = state
             .pending
             .iter()
-            .filter(|(id, pending)| {
-                pending.mcp_grant_epoch.is_some() && !preserved.contains(*id)
-            })
+            .filter(|(id, pending)| pending.mcp_grant_epoch.is_some() && !preserved.contains(*id))
             .map(|(id, _)| id.clone())
             .collect();
         for id in ids {
@@ -630,12 +625,13 @@ impl BoardRequestBroker {
             let _ = expired.sender.send(outcome);
             return Err(error);
         }
-        let completed_library_transition = state
-            .mcp_leases
-            .get(&reply.request_id)
-            .is_some_and(|issued| {
-                issued.allows_board_transition && issued.survived_board_transition
-            });
+        let completed_library_transition =
+            state
+                .mcp_leases
+                .get(&reply.request_id)
+                .is_some_and(|issued| {
+                    issued.allows_board_transition && issued.survived_board_transition
+                });
         if reply.schema_version != SCHEMA_VERSION
             || reply.app_generation != self.app_generation
             || reply.renderer_generation != pending.renderer_generation

@@ -59,7 +59,7 @@ The allowlist is the canonical MathBoard board command registry: `create`, `crea
 
 To work with a non-active board, pass its `boardId` for document operations supported by the detached board executor. Library commands use `params.boardId` where required by the shared workspace service; an outer `boardId` selects the board context for routing. No **permission** is limited to the active board, but screenshot capture still requires a live renderer, and viewport layout of an inactive board may be unavailable. These are execution limitations.
 
-After an `execution_unknown` response, re-read state before retrying a potentially committed mutation. Browser/renderer closure, explicit board switches and native app exit can cancel in-flight work.
+After an `execution_unknown` response, re-read state before retrying a potentially committed mutation. Browser/renderer closure, unrelated board switches and native app exit can cancel in-flight work. When an MCP `boards.create`, `boards.open`, `boards.archive` or `boards.delete` request itself changes the active board, its bounded completion receipt is preserved across that transition, while other old-context requests are invalidated. MCP Off and renderer replacement always revoke that receipt.
 
 ## Local stdio companion (deferred)
 

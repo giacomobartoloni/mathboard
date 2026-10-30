@@ -174,8 +174,7 @@ fn board_library_transition_preserves_only_its_own_mcp_receipt() {
     let (request, receiver, lease) = broker
         .queue_mcp_read(None, "boards.create", json!({"title": "MCP Test"}))
         .unwrap();
-    let (_, read_receiver, read_lease) =
-        broker.queue_mcp_read(None, "observe", json!({})).unwrap();
+    let (_, read_receiver, read_lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
     broker
         .renderer_state("renderer-1", 2, false, Some("mb_a"))
         .unwrap();
@@ -225,6 +224,10 @@ fn board_library_transition_cannot_outlive_mcp_off_or_renderer_replacement() {
         Err(BrokerError::UnknownRequest)
     );
 
+    // The prior transition left the renderer temporarily unavailable.
+    broker
+        .renderer_state("renderer-1", 3, true, Some("mb_a"))
+        .unwrap();
     let (_, receiver, lease) = broker
         .queue_mcp_read(None, "boards.create", json!({"title": "Other"}))
         .unwrap();
