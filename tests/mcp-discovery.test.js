@@ -24,6 +24,12 @@ test('native MCP discovery matches the executable F033 registry', () => {
     assert.deepEqual(help.methods.map(item => item.method), methods.map(item => item.method))
     assert.equal(tools.length, methods.length + 1)
     assert.equal(tools.at(-1).name, 'mathboard_help')
+    for (const tool of tools) {
+      assert.equal(tool.inputSchema.additionalProperties, false, tool.name)
+      if (tool.inputSchema.properties.options) {
+        assert.equal(tool.inputSchema.properties.options.additionalProperties, false, tool.name)
+      }
+    }
     assert.equal(help.transport, 'mcp-streamable-http')
     assert.equal(help.commandEndpoint, undefined)
     const created = tools.find(item => item.name === 'mathboard_create')

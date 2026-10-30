@@ -295,3 +295,32 @@ test('F018 read-only measure and mutating layout use explicit registry closures'
   assert.deepEqual(await executeLocalAgentCommand(controller, layout.example), { objects: [], bounds: {}, safeArea: {} })
   assert.deepEqual(calls, [['measure', 'mbobj_example'], ['layout', layout.example.params]])
 })
+
+test('C14 rejects unsupported command fields before any board mutation', () => {
+  const calls = []
+  const controller = {
+    create: () => calls.push('create'),
+    clear: () => calls.push('clear'),
+  }
+  const workspace = { delete: () => calls.push('boards.delete') }
+  const cases = [
+    { method: 'create', params: { spec: { type: 'text', text: 'Hello' }, dryRun: true } },
+    { method: 'clear', params: { bogus: 1 } },
+    { method: 'create', params: { spec: { type: 'text', text: 'Hello' }, options: { select: false, bogus: true } } },
+    { method: 'boards.delete', params: { boardId: 'mb_example', confirm: true, dryRun: true } },
+  ]
+  for (const command of cases) {
+    assert.throws(() => executeLocalAgentCommand(controller, command, null, workspace),
+      /Invalid board command parameters/)
+  }
+  assert.deepEqual(calls, [])
+})
+
+test('C14 command discovery advertises closed parameter and options objects', () => {
+  for (const descriptor of getLocalAgentHelp().methods) {
+    assert.equal(descriptor.paramsSchema.additionalProperties, false, descriptor.method)
+    if (descriptor.paramsSchema.properties.options) {
+      assert.equal(descriptor.paramsSchema.properties.options.additionalProperties, false, descriptor.method)
+    }
+  }
+})

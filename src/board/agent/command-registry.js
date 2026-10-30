@@ -86,11 +86,11 @@ const patchSchemas = {
     opacity: stylePatchProperties.opacity, mathboardInkMode: stylePatchProperties.mathboardInkMode }),
   group: objectSchema({ ...transformProperties, opacity: stylePatchProperties.opacity }),
 }
-const options = { type: 'object', properties: { select: boolean }, additionalProperties: true,
+const options = { type: 'object', properties: { select: boolean }, additionalProperties: false,
   description: 'Optional boolean selection.' }
 const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty, type: { enum: [...BOARD_OBJECT_TYPES] } },
   additionalProperties: true, description: 'Detached semantic node; formula retains LaTeX.' }
-const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: true,
+const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: false,
   ...(defs ? { $defs: defs } : {}) })
 const descriptors = [
   { method: 'observe', summary: 'Read semantic objects, selection, viewport and interaction stability.', mutatesBoard: false,
@@ -213,7 +213,16 @@ export function boardCommandMutatesBoard(method) {
 export function executeBoardCommand(controller, command, capture, workspace) {
   const entry = descriptors.find(candidate => candidate.method === command?.method)
   if (!entry) throw new Error(`Unsupported board method: ${command?.method}`)
-  return entry.execute(controller, command.params || {}, capture, workspace)
+  const params = command.params ?? {}
+  const fields = entry.paramsSchema.properties
+  if (!params || Array.isArray(params) || typeof params !== 'object'
+    || Object.keys(params).some(key => !Object.hasOwn(fields, key))
+    || ('options' in params && (!params.options || Array.isArray(params.options)
+      || typeof params.options !== 'object'
+      || Object.keys(params.options).some(key => !Object.hasOwn(fields.options.properties, key))))) {
+    throw new Error('Invalid board command parameters.')
+  }
+  return entry.execute(controller, params, capture, workspace)
 }
 
 export function getBoardCommandDescriptors() {

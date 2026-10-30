@@ -220,3 +220,24 @@ fn bridge_error_output_exposes_safe_error_code() {
         "internal_error"
     );
 }
+
+#[tokio::test]
+async fn c14_rejects_unknown_mutation_fields_before_backend_invocation() {
+    let backend = FakeBackend {
+        visible: Arc::new(Mutex::new(vec!["command"])),
+        revoke_on_read: true,
+        released: Arc::new(Mutex::new(Vec::new())),
+    };
+    let server = MathBoardMcpServer::new(backend.clone());
+    for (tool, args) in [
+        ("mathboard_create", json!({"spec":{"type":"text","text":"Hello"},"dryRun":true})),
+        ("mathboard_clear", json!({"dryRun":true})),
+        ("mathboard_boards_delete", json!({"boardId":"mb_a","confirm":true,"dryRun":true})),
+        ("mathboard_command", json!({"method":"create","params":{"spec":{"type":"text","text":"Hello"},"dryRun":true}})),
+    ] {
+        let error = server.dispatch(tool, args).await.unwrap_err();
+        assert!(format!("{error:?}").contains("Invalid tool arguments"));
+        assert_eq!(*backend.visible.lock().unwrap(), vec!["command"]);
+        assert!(backend.released.lock().unwrap().is_empty());
+    }
+}

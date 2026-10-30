@@ -269,6 +269,41 @@ fn valid_capture_shape(value: Option<&Value>) -> bool {
     }
 }
 
+/// Reject unknown command fields before a mutating request enters the broker.
+/// The generated native tool schemas come from F033; no second field allowlist.
+fn command_keys_known(operation: &str, params: &Value, direct: bool) -> bool {
+    let Some(fields) = params.as_object() else {
+        return false;
+    };
+    let Some(tool) = tool_specs()
+        .iter()
+        .find(|tool| direct_command_method(&tool.name) == Some(operation))
+    else {
+        return false;
+    };
+    let Some(properties) = tool.input_schema.get("properties").and_then(Value::as_object) else {
+        return false;
+    };
+    fields.iter().all(|(name, value)| {
+        if !direct && name == "boardId" && !operation.starts_with("boards.") {
+            return false;
+        }
+        let Some(field) = properties.get(name) else {
+            return false;
+        };
+        if name == "options" {
+            let Some(options) = value.as_object() else {
+                return false;
+            };
+            let Some(allowed) = field.get("properties").and_then(Value::as_object) else {
+                return false;
+            };
+            return options.keys().all(|key| allowed.contains_key(key));
+        }
+        true
+    })
+}
+
 pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCallError> {
     let method = match name {
         "mathboard_observe" => "observe",
@@ -291,6 +326,9 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
     }
     if method == "direct" {
         let operation = direct_command_method(name).ok_or(ToolCallError::UnknownTool)?;
+        if !command_keys_known(operation, &arguments, true) {
+            return Err(ToolCallError::InvalidArguments);
+        }
         let mut params = arguments.as_object().unwrap().clone();
         let board_id = if operation.starts_with("boards.") {
             None
@@ -376,7 +414,7 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
                 .board_id
                 .as_deref()
                 .is_some_and(|id| !valid_board_id(id))
-                || !args.params.is_object()
+                || !command_keys_known(operation, &args.params, false)
             {
                 return Err(ToolCallError::InvalidArguments);
             }

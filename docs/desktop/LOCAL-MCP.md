@@ -149,3 +149,19 @@ Green source CI is not installed-native acceptance. These tests remain a release
 Reconnect the client after upgrading to refresh cached tools. `mathboard_observe` defaults to `detail:"summary"`; request `detail:"full"` to retrieve all semantic style fields. `mathboard_measure` and `mathboard_screenshot` now accept an omitted `boardId` and target the active board.
 
 Creation with explicit `fill` or `stroke` selects fixed ink, matching update. Explicit `mathboardInkMode:"auto"` retains theme-following behavior. New text defaults to Arial. Supply a positive text `width` to create a wrapping, editable Textbox; omission retains IText. New shapes reject zero-sized rects, circles, ellipses and zero-area polygons; existing documents remain readable.
+
+## Strict mutation arguments (C14)
+
+The native MCP tool catalog rejects unrecognized command parameter names.
+Both schema-typed tools and the legacy `mathboard_command` validate
+parameter names **before** issuing a board request. For example,
+`mathboard_create` with `dryRun:true`, `mathboard_clear` with an
+extra key, and `mathboard_boards_delete` with `confirm:true` plus
+`dryRun:true` return JSON-RPC `-32602` without executing a mutation.
+Unknown keys inside `options` are rejected as well; unknown object
+properties and patch fields continue to use the existing domain validators.
+
+The advertised F033 `paramsSchema` and `options` objects are closed
+(`additionalProperties:false`), and native MCP parsing uses the
+generated schemas rather than a duplicate list of operation arguments.
+`dryRun` is **not** implemented; it must not be interpreted as a preview.

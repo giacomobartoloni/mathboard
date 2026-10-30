@@ -284,3 +284,50 @@ fn reads_default_to_current_board_and_support_compact_observation() {
     .unwrap();
     assert_eq!(screenshot.board_id(), None);
 }
+
+#[test]
+fn c14_unknown_mutation_parameters_are_rejected_before_dispatch() {
+    let invalid = [
+        ("mathboard_create", json!({"spec":{"type":"text","text":"Hi"},"dryRun":true})),
+        ("mathboard_create", json!({"spec":{"type":"text","text":"Hi"},"options":{"select":false,"bogus":1}})),
+        ("mathboard_clear", json!({"dryRun":true})),
+        ("mathboard_boards_delete", json!({"boardId":"mb_a","confirm":true,"dryRun":true})),
+        ("mathboard_command", json!({"method":"create","params":{"spec":{"type":"text","text":"Hi"},"dryRun":true}})),
+        ("mathboard_command", json!({"method":"clear","params":{"bogus":1}})),
+        ("mathboard_command", json!({"method":"boards.delete","params":{"boardId":"mb_a","confirm":true,"dryRun":true}})),
+        ("mathboard_command", json!({"method":"create","params":{"spec":{"type":"text","text":"Hi"},"options":{"unexpected":true}}})),
+    ];
+    for (tool, args) in invalid {
+        assert_eq!(
+            parse_tool_call(tool, args.clone()).err(),
+            Some(ToolCallError::InvalidArguments),
+            "{tool} accepted {args}"
+        );
+    }
+
+    // Known arguments and optional selection remain valid.
+    for (tool, args) in [
+        ("mathboard_create", json!({"spec":{"type":"text","text":"Hi"},"options":{"select":false}})),
+        ("mathboard_clear", json!({})),
+        ("mathboard_boards_delete", json!({"boardId":"mb_a","confirm":true})),
+        ("mathboard_command", json!({"method":"create","params":{"spec":{"type":"text","text":"Hi"}}})),
+        ("mathboard_command", json!({"method":"boards.delete","params":{"boardId":"mb_a","confirm":true}})),
+    ] {
+        assert!(parse_tool_call(tool, args.clone()).is_ok(), "{tool} rejected {args}");
+    }
+}
+
+#[test]
+fn c14_generated_mutation_schemas_disallow_extra_arguments() {
+    for spec in tool_specs().iter().filter(|spec| spec.name != "mathboard_command") {
+        assert_eq!(
+            spec.input_schema.get("additionalProperties"),
+            Some(&json!(false)),
+            "unexpected open schema: {}",
+            spec.name
+        );
+        if let Some(options) = spec.input_schema["properties"].get("options") {
+            assert_eq!(options["additionalProperties"], false, "{}", spec.name);
+        }
+    }
+}
