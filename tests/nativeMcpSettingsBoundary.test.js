@@ -159,3 +159,14 @@ test('native MCP surfaces and documents the selected port rather than a fixed en
   assert.match(docs, /assigned URL can change/)
   assert.match(adr, /actual.*bound port/)
 })
+
+test('native close events hide only the MCP settings window while preserving the main window', () => {
+  const rust = source('src-tauri/src/lib.rs')
+  assert.match(rust, /builder\.on_window_event\(\|window, event\|/)
+  assert.match(rust, /window\.label\(\) == mcp_settings::WINDOW_LABEL/)
+  assert.match(rust, /tauri::WindowEvent::CloseRequested \{ api, \.\. \}/)
+  assert.match(rust, /api\.prevent_close\(\)/)
+  assert.match(rust, /window\.hide\(\)/)
+  const js = source('desktop/mcp-settings.js')
+  assert.match(js, /controls\.close\.addEventListener\('click', \(\) => void getCurrentWindow\(\)\.hide\(\)\)/)
+})

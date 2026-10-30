@@ -169,6 +169,20 @@ pub fn run() {
             }
         });
 
+    // Preserve the secondary WebView across both the native close control and
+    // the in-window Close button. Closing a live WKWebView can race WebKit's
+    // asynchronous obscured-content-insets dispatch on macOS.
+    let builder = builder.on_window_event(|window, event| {
+        if window.label() == mcp_settings::WINDOW_LABEL {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                if let Err(error) = window.hide() {
+                    eprintln!("Unable to hide local MCP settings window: {error}");
+                }
+            }
+        }
+    });
+
     // App::run exits the process directly, so managed server state needs an exit hook.
     builder
         .build(tauri::generate_context!())
