@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { hasValidShapeGeometry } from '../objects/shapeGeometry.js'
+import { hasValidShapeGeometry, invalidPathField } from '../objects/shapeGeometry.js'
 
 import { BOARD_OBJECT_TYPES, STYLE_KEYS, TRANSFORM_KEYS } from '../objects/constants.js'
 
@@ -200,14 +200,16 @@ function validateNode(node, path, depth, seenIds, counters) {
       assertFiniteNumber(node.x2, `${path}.x2`)
       assertFiniteNumber(node.y2, `${path}.y2`)
       break
-    case 'path':
-      if (!Array.isArray(node.path)) {
+    case 'path': {
+      const invalidField = invalidPathField(node.path)
+      if (invalidField) {
         throw new BoardDocumentError(
           BOARD_DOCUMENT_ERROR_CODES.INVALID,
-          `Expected path array at ${path}.path.`,
+          `Invalid path at ${path}.${invalidField}.`,
         )
       }
       break
+    }
     case 'text':
       if (typeof node.text !== 'string') {
         throw new BoardDocumentError(

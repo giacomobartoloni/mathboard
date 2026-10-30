@@ -117,6 +117,45 @@ test('creation rejects invalid recursive specs before changing the canvas', asyn
   assert.equal(history.length, 0)
 })
 
+test('reject malformed paths before creating objects or history entries', async () => {
+  const { controller, canvas, history } = setup()
+  const bad = [
+    [['M', 64, '532'], ['L', 100, 200]],
+    [['M', 0, 0], ['L', 10, null]],
+    [['M', 0, 0], ['L', Infinity, 10]],
+    [['M', 0, 0], ['C', 1, 2]],
+    [['M', 0, 0], ['X', 1, 2]],
+    [['M', 0, 0], ['Z', 1]],
+    [['M', 0, 0], ['A', 10, 10, 0, 2, 0, 20, 20]],
+    [['L', 10, 10]],
+    [],
+  ]
+  for (const path of bad) {
+    await rejectsCode(() => controller.create({ type: 'path', path }), C.INVALID_SPEC)
+  }
+  await rejectsCode(() => controller.createMany([
+    { type: 'text', text: 'must not persist' },
+    { type: 'path', path: [['M', 64, '532'], ['L', 100, 200]] },
+  ]), C.INVALID_SPEC)
+  await rejectsCode(() => controller.create({
+    type: 'group', objects: [{ type: 'path', path: [['M', 0, false]] }],
+  }), C.INVALID_SPEC)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+})
+
+test('valid curve commands retain finite geometry', async () => {
+  const { controller } = setup()
+  const node = await controller.create({
+    type: 'path',
+    path: [['M', 0, 0], ['L', 10, 10], ['Q', 15, 20, 20, 10],
+      ['C', 25, 5, 30, 15, 40, 0], ['Z']],
+  })
+  assert.equal(node.type, 'path')
+  assert.ok(Number.isFinite(node.left))
+  assert.ok(Number.isFinite(node.top))
+})
+
 test('createMany commits independent objects in order with one batch history entry', async () => {
   const { controller, canvas, history } = setup()
   await controller.create(rect)

@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from './constants.js'
-import { hasValidShapeGeometry } from './shapeGeometry.js'
+import { hasValidShapeGeometry, invalidPathField } from './shapeGeometry.js'
 import { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES as C } from '../BoardControllerError.js'
 
 const TYPE_KEYS = { rect: ['width', 'height', 'rx', 'ry'], circle: ['radius'], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2', 'headLength', 'headWidth'],
@@ -89,7 +89,7 @@ export function validateCreateSpec(spec, ancestors = new Set()) {
     || ('width' in spec && (!Number.isFinite(spec.width) || spec.width <= 0)))) invalid(C.INVALID_SPEC)
   if (spec.type === 'formula' && (typeof spec.latex !== 'string' || !spec.latex.trim())) invalid(C.INVALID_SPEC)
   if (spec.type === 'line' && !['x1', 'y1', 'x2', 'y2'].every((key) => Number.isFinite(spec[key]))) invalid(C.INVALID_SPEC)
-  if (spec.type === 'path' && !Array.isArray(spec.path)) invalid(C.INVALID_SPEC)
+  if (spec.type === 'path' && invalidPathField(spec.path)) invalid(C.INVALID_SPEC)
   if (spec.type === 'group') {
     if (!Array.isArray(spec.objects)) invalid(C.INVALID_SPEC)
     ancestors.add(spec)

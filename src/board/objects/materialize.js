@@ -150,6 +150,11 @@ export async function materializeBoardObject(node, options = {}) {
         ...style,
         ...transform,
       })
+      // Finite input coordinates may still overflow Fabric's bounds calculation.
+      if (['left', 'top', 'width', 'height'].some(key => !Number.isFinite(object[key]))) {
+        disposeMaterializedObject(object)
+        throw new Error('Path bounds must be finite.')
+      }
       applyInkMetadata(object, node)
       break
     }
