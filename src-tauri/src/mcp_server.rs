@@ -278,7 +278,7 @@ fn discovery_help(method: Option<&str>) -> Option<Value> {
 impl<B: McpReadBackend> ServerHandler for MathBoardMcpServer<B> {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("mathboard", env!("CARGO_PKG_VERSION")))
+            .with_server_info(Implementation::new("mathboard", "1.11.0"))
     }
 
     fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {

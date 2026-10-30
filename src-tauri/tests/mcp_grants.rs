@@ -82,12 +82,16 @@ fn enabled_mcp_accepts_explicit_non_active_board_ids() {
     assert_eq!(request.board_id, "mb_b");
     assert_eq!(lease.board_id(), "mb_b");
     assert!(broker.mcp_lease_valid(&lease));
-    assert_eq!(
-        broker
-            .queue_mcp_read(None, "measure", json!({"id":"x"}))
-            .err(),
-        Some(BrokerError::InvalidBoardId)
-    );
+    let (active_request, _, active_lease) = broker
+        .queue_mcp_read(None, "measure", json!({"id":"x"}))
+        .unwrap();
+    assert_eq!(active_request.board_id, "mb_a");
+    broker.mcp_release_lease(&active_lease);
+    let (shot_request, _, shot_lease) = broker
+        .queue_mcp_read(None, "screenshot", json!({"target":{"kind":"viewport"}}))
+        .unwrap();
+    assert_eq!(shot_request.board_id, "mb_a");
+    broker.mcp_release_lease(&shot_lease);
 }
 
 #[test]

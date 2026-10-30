@@ -88,19 +88,20 @@ impl ToolCall {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ObserveArgs {
     board_id: Option<String>,
+    detail: Option<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MeasureArgs {
-    board_id: String,
+    board_id: Option<String>,
     id: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ScreenshotArgs {
-    board_id: String,
+    board_id: Option<String>,
     target: CaptureTarget,
     #[serde(default = "default_scale")]
     scale: f64,
@@ -317,20 +318,32 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
             {
                 return Err(ToolCallError::InvalidArguments);
             }
-            ToolCall {
-                method,
-                board_id: args.board_id,
-                params: json!({}),
-            }
-        }
-        "measure" => {
-            let args: MeasureArgs = serde_json::from_value(arguments).map_err(invalid)?;
-            if !valid_board_id(&args.board_id) || args.id.is_empty() {
+            if args
+                .detail
+                .as_deref()
+                .is_some_and(|detail| !matches!(detail, "summary" | "full"))
+            {
                 return Err(ToolCallError::InvalidArguments);
             }
             ToolCall {
                 method,
-                board_id: Some(args.board_id),
+                board_id: args.board_id,
+                params: json!({"detail": args.detail.as_deref().unwrap_or("summary")}),
+            }
+        }
+        "measure" => {
+            let args: MeasureArgs = serde_json::from_value(arguments).map_err(invalid)?;
+            if args
+                .board_id
+                .as_deref()
+                .is_some_and(|id| !valid_board_id(id))
+                || args.id.is_empty()
+            {
+                return Err(ToolCallError::InvalidArguments);
+            }
+            ToolCall {
+                method,
+                board_id: args.board_id,
                 params: json!({"id":args.id}),
             }
         }
@@ -339,7 +352,10 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
                 return Err(ToolCallError::InvalidArguments);
             }
             let args: ScreenshotArgs = serde_json::from_value(arguments).map_err(invalid)?;
-            if !valid_board_id(&args.board_id)
+            if args
+                .board_id
+                .as_deref()
+                .is_some_and(|id| !valid_board_id(id))
                 || !args.scale.is_finite()
                 || !(0.5..=3.0).contains(&args.scale)
                 || args.format != "png"
@@ -349,7 +365,7 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
             }
             ToolCall {
                 method,
-                board_id: Some(args.board_id),
+                board_id: args.board_id,
                 params: json!({"target":args.target,"scale":args.scale,"format":"png"}),
             }
         }

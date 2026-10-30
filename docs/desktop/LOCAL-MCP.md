@@ -143,3 +143,9 @@ For each installed Windows, macOS and Linux build, record exact application vers
 5. Confirm the stdio argument exits nonzero without emitting a JSON-RPC frame.
 
 Green source CI is not installed-native acceptance. These tests remain a release gate.
+
+## Agent ergonomics, MCP capability version 1.11.0
+
+Reconnect the client after upgrading to refresh cached tools. `mathboard_observe` defaults to `detail:"summary"`; request `detail:"full"` to retrieve all semantic style fields. `mathboard_measure` and `mathboard_screenshot` now accept an omitted `boardId` and target the active board.
+
+Creation with explicit `fill` or `stroke` selects fixed ink, matching update. Explicit `mathboardInkMode:"auto"` retains theme-following behavior. New text defaults to Arial. Supply a positive text `width` to create a wrapping, editable Textbox; omission retains IText. New shapes reject zero-sized rects, circles, ellipses and zero-area polygons; existing documents remain readable.

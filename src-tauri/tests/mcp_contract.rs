@@ -51,7 +51,7 @@ fn fixed_mcp_tools_reuse_the_existing_command_registry() {
     let observe = parse_tool_call("mathboard_observe", json!({})).unwrap();
     assert_eq!(observe.method(), "observe");
     assert_eq!(observe.board_id(), None);
-    assert_eq!(observe.params(), json!({}));
+    assert_eq!(observe.params(), json!({"detail":"summary"}));
     let measure =
         parse_tool_call("mathboard_measure", json!({"boardId":"mb_a","id":"obj_1"})).unwrap();
     assert_eq!(measure.method(), "measure");
@@ -117,7 +117,7 @@ fn board_target_and_unknown_fields_are_rejected_at_mcp_edge() {
         );
     }
     for args in [
-        json!({"id":"obj_1"}),
+        json!({"id":""}),
         json!({"boardId":"mb_a","id":""}),
         json!({"boardId":"mb_a","id":"obj_1","confirm":true}),
     ] {
@@ -263,4 +263,24 @@ fn direct_tools_route_through_the_existing_command_allowlist() {
         parse_tool_call("mathboard_create", json!({"boardId":"invalid!"})).err(),
         Some(ToolCallError::InvalidArguments)
     );
+}
+
+#[test]
+fn reads_default_to_current_board_and_support_compact_observation() {
+    let observe = parse_tool_call("mathboard_observe", json!({})).unwrap();
+    assert_eq!(observe.params(), json!({"detail":"summary"}));
+    let full = parse_tool_call("mathboard_observe", json!({"detail":"full"})).unwrap();
+    assert_eq!(full.params(), json!({"detail":"full"}));
+    assert_eq!(
+        parse_tool_call("mathboard_observe", json!({"detail":"unknown"})).err(),
+        Some(ToolCallError::InvalidArguments)
+    );
+    let measure = parse_tool_call("mathboard_measure", json!({"id":"mbobj_1"})).unwrap();
+    assert_eq!(measure.board_id(), None);
+    let screenshot = parse_tool_call(
+        "mathboard_screenshot",
+        json!({"target":{"kind":"viewport"}}),
+    )
+    .unwrap();
+    assert_eq!(screenshot.board_id(), None);
 }

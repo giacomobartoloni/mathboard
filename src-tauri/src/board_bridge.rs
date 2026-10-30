@@ -394,9 +394,6 @@ impl BoardRequestBroker {
         if !state.mcp_enabled {
             return Err(BrokerError::PermissionDenied);
         }
-        if matches!(method, "measure" | "screenshot") && board_id.is_none() {
-            return Err(BrokerError::InvalidBoardId);
-        }
         let active = state.active_board_id.clone().ok_or(BrokerError::NotReady)?;
         let target = board_id.unwrap_or(&active);
         if !valid_board_id(target) {
