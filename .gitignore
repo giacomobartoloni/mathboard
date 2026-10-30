@@ -23,3 +23,6 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Generated from public/icon-512x512.png; do not edit by hand
+/public/favicon.svg
