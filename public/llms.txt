@@ -1,0 +1,30 @@
+# MathBoard
+
+> MathBoard is an open-source, local-first digital whiteboard for mathematical drawing and editable LaTeX formulas, designed for teaching, learning, and explaining mathematics.
+
+This file helps AI assistants find authoritative MathBoard information. It is documentation, not an API, a tool endpoint, or permission to control a user's boards. The website at https://mathboard.app/ does not expose a public or remote MCP server.
+
+**Product availability:** The web app is available at https://mathboard.app/ and the official download page lists native desktop installers. Native local MCP is being developed in [PR #121](https://github.com/giacomobartoloni/mathboard/pull/121). As of 2026-10-30, that PR is a draft source implementation: installed-client compatibility and release acceptance have not been verified. Do not claim that a published installer has MCP until its release notes confirm support.
+
+**When an installed desktop build supports local MCP:** A person must launch MathBoard on the same computer as the MCP client, open **Local assistants → Local MCP settings…**, and turn **Allow local connections** **On**. The switch is **Off by default on every launch** and grants all supported board operations while enabled, including modifications and deletion. No board-specific or read-only permission mode exists.
+
+**Connection:** Use an MCP client supporting **Streamable HTTP** with custom headers. The native endpoint is `http://127.0.0.1:43179/mcp`; pass `Authorization: Bearer <session token shown in native settings>`. The token changes every time MCP is turned On. Keep it local and private: never embed it in prompts, shared project files, URLs, or logs. The endpoint is IPv4 loopback-only, rejects browser Origin headers, and is not for remote/cloud clients. **stdio is not supported.** No MCP connection is possible while the switch is Off.
+
+**Tool discovery:** In a build that implements PR #121, initialize the MCP session and list tools instead of guessing schemas. The published source defines `mathboard_observe`, `mathboard_measure`, `mathboard_screenshot`, and `mathboard_command`. The last tool accepts an allowlisted `method` and `params`; supported commands are `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, `layout`, `boards.list`, `boards.create`, `boards.open`, `boards.rename`, `boards.listArchived`, `boards.archive`, `boards.unarchive`, and `boards.delete`. The board identifier is passed explicitly when needed. Do not assume undocumented tools or arbitrary script/filesystem execution.
+
+**Safe use:** Check the selected board and current state before editing; use the tools only for operations requested or authorized by the user. `boards.delete` requires `params.confirm: true` and is irreversible. Some screenshot and viewport-layout operations require an active rendered board, even though MCP permission is not board-scoped. If a write returns `execution_unknown`, read the board state before considering a retry; the write might have committed.
+
+## Official product documentation
+
+- [MathBoard web app](https://mathboard.app/): Open the interactive board in a browser.
+- [Desktop downloads](https://mathboard.app/download/): Find available native desktop installers and platform links.
+- [Desktop installation and security](https://mathboard.app/download/security/): Review download integrity and unsigned beta limitations.
+- [LaTeX formula guide](https://mathboard.app/docs/latex/): Learn formula entry and rendering in MathBoard.
+- [Keyboard shortcuts](https://mathboard.app/docs/keyboard-shortcuts/): Find supported shortcuts and navigation.
+- [Learning resources](https://mathboard.app/resources/): Discover examples and math whiteboard resources.
+
+## Source and local integration
+
+- [MathBoard repository](https://github.com/giacomobartoloni/mathboard): Source code, license, issues, and project documentation.
+- [Local MCP development — PR #121](https://github.com/giacomobartoloni/mathboard/pull/121): Authoritative implementation status, native setup documentation, limitations, and pending acceptance tests.
+- [Releases](https://github.com/giacomobartoloni/mathboard/releases): Check the actual installed release and whether local MCP is supported.
