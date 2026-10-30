@@ -20,6 +20,7 @@ use app_lib::mcp_native::safe_board_error;
 #[test]
 fn untrusted_webview_error_codes_never_become_tool_visible_text() {
     assert_eq!(safe_board_error("capture_too_large"), "capture_too_large");
+    assert_eq!(safe_board_error("confirmation_required"), "invalid_tool_arguments");
     assert_eq!(
         safe_board_error("/Users/alice/private-board.json"),
         "internal_error"

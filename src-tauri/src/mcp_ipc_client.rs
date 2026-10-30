@@ -39,6 +39,7 @@ fn safe_error(code: &str) -> McpReadError {
         "permission_denied" => McpReadError::PermissionDenied,
         "board_context_required" | "board_context_changed" => McpReadError::BoardContextChanged,
         "board_busy" => McpReadError::BoardBusy,
+        "invalid_tool_arguments" => McpReadError::InvalidToolArguments,
         "execution_unknown" => McpReadError::ExecutionUnknown,
         "capture_too_large" => McpReadError::CaptureTooLarge,
         "mcp_unavailable" | "read_cancelled" => McpReadError::Unavailable,
@@ -146,6 +147,14 @@ mod tests {
         assert_eq!(
             safe_error("permission_denied"),
             McpReadError::PermissionDenied
+        );
+        assert_eq!(
+            safe_error("invalid_tool_arguments"),
+            McpReadError::InvalidToolArguments
+        );
+        assert_eq!(
+            McpReadError::InvalidToolArguments.code(),
+            "invalid_tool_arguments"
         );
     }
 }
