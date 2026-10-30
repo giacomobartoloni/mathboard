@@ -92,6 +92,16 @@ footer { display: flex; justify-content: flex-end; padding-top: 20px; }
 
 .endpoint-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
 .endpoint-row code { flex: 1; min-width: 200px; margin-top: 0; }
-.endpoint-row button { flex: 0 0 auto; }
-.copy-status { margin: 6px 0; font-size: 13px; }
-.copy-status:empty { display: none; }
+.copy-action { position: relative; display: inline-flex; flex: 0 0 auto; }
+.copy-popover {
+  position: absolute; z-index: 2; top: calc(100% + 9px); left: 50%;
+  transform: translateX(-50%); padding: 7px 10px; border-radius: 7px;
+  background: CanvasText; color: Canvas; font-size: 12px;
+  white-space: nowrap; pointer-events: none; box-shadow: 0 3px 10px #0003;
+}
+.copy-popover[hidden] { display: none; }
+.copy-popover::before {
+  content: ''; position: absolute; bottom: 100%; left: 50%;
+  transform: translateX(-50%); border: 5px solid transparent;
+  border-bottom-color: CanvasText;
+}

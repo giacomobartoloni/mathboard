@@ -55,9 +55,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
         <p><strong>Loopback MCP endpoint</strong></p>
         <div class="endpoint-row">
           <code id="endpoint"></code>
-          <button id="copy-endpoint" type="button" aria-describedby="copy-status">Copy MCP URL</button>
+          <span class="copy-action">
+            <button id="copy-endpoint" type="button" aria-describedby="copy-status">Copy MCP URL</button>
+            <span id="copy-status" class="copy-popover" role="status" aria-live="polite" hidden></span>
+          </span>
         </div>
-        <p id="copy-status" class="copy-status" role="status" aria-live="polite"></p>
         <small>Use this URL in a local Streamable HTTP MCP client. No token or custom header is required.</small>
       </section>
       <p class="note">MCP starts disabled unless explicitly enabled by the desktop CLI flag.

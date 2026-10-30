@@ -28,6 +28,9 @@ const controls = {
 const errorView = byId('error')
 const loadingView = byId('loading')
 const controlView = byId('controls')
+const copyStatus = byId('copy-status')
+const COPY_CONFIRMATION_MS = 2500
+let copyStatusTimer = null
 let permission = null
 let busy = false
 let pendingEnabled = null
@@ -35,6 +38,24 @@ let pendingEnabled = null
 function setError(message) {
   errorView.textContent = message || ''
   errorView.hidden = !message
+}
+
+function dismissCopyConfirmation() {
+  if (copyStatusTimer !== null) {
+    window.clearTimeout(copyStatusTimer)
+    copyStatusTimer = null
+  }
+  copyStatus.hidden = true
+  copyStatus.textContent = ''
+}
+
+function showCopyConfirmation() {
+  dismissCopyConfirmation()
+  copyStatus.hidden = false
+  copyStatus.textContent = 'MCP URL copied to clipboard.'
+  copyStatusTimer = window.setTimeout(() => {
+    dismissCopyConfirmation()
+  }, COPY_CONFIRMATION_MS)
 }
 
 function render() {
@@ -49,7 +70,7 @@ function render() {
   controls.enable.disabled = busy || !permission.available
   byId('connection').hidden = !permission.enabled || !permission.available
   byId('endpoint').textContent = permission.enabled ? permission.endpoint || '' : ''
-  if (!permission.enabled) byId('copy-status').textContent = ''
+  if (!permission.enabled || !permission.available || pendingEnabled === false) dismissCopyConfirmation()
   controls.copyEndpoint.disabled = busy || !permission.enabled || !permission.available || !permission.endpoint
 }
 
@@ -90,7 +111,7 @@ async function change(command, args = {}) {
 async function copyEndpoint() {
   if (busy || !permission?.enabled || !permission.available || !permission.endpoint) return
   const endpoint = permission.endpoint
-  byId('copy-status').textContent = ''
+  dismissCopyConfirmation()
   try {
     if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable')
     await navigator.clipboard.writeText(endpoint)
@@ -111,7 +132,7 @@ async function copyEndpoint() {
     }
   }
   setError(null)
-  if (permission.enabled) byId('copy-status').textContent = 'MCP URL copied to clipboard.'
+  if (permission.enabled && permission.available && !busy) showCopyConfirmation()
 }
 
 controls.enable.addEventListener('change', () => {
