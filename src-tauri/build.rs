@@ -16,6 +16,19 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 fn main() {
+    let out = std::env::var("OUT_DIR").expect("Cargo output directory");
+    let status = std::process::Command::new("node")
+        .arg("../tools/generate-mcp-discovery.mjs")
+        .arg(&out)
+        .current_dir(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+        .status().expect("Node 22 is needed to derive MCP discovery from F033");
+    assert!(status.success(), "MCP discovery generation failed");
+    println!("cargo:rerun-if-changed=../tools/generate-mcp-discovery.mjs");
+    println!("cargo:rerun-if-changed=../dev-agent/command-contract.js");
+    println!("cargo:rerun-if-changed=../src/board/agent/command-registry.js");
+    println!("cargo:rerun-if-changed=../src/board/objects/constants.js");
+    println!("cargo:rerun-if-changed=../src/board/capture/discovery.js");
+    println!("cargo:rerun-if-changed=../src/board/capture/contract.js");
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "track_desktop_analytics",

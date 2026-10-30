@@ -51,8 +51,18 @@ pub fn tool_specs() -> &'static [ToolSpec] {
     static SPECS: OnceLock<Vec<ToolSpec>> = OnceLock::new();
     SPECS
         .get_or_init(|| {
-            serde_json::from_str(include_str!("../resources/mcp-tool-schemas.json"))
-                .expect("checked MCP tool schema artifact")
+            {
+                let mut existing: Vec<ToolSpec> =
+                    serde_json::from_str(include_str!("../resources/mcp-tool-schemas.json"))
+                        .expect("checked MCP tool schema artifact");
+                let derived: Vec<ToolSpec> = serde_json::from_str(include_str!(concat!(
+                    env!("OUT_DIR"),
+                    "/mathboard-mcp-tools.json"
+                )))
+                .expect("F033-generated MCP schemas");
+                existing.extend(derived);
+                existing
+            }
         })
         .as_slice()
 }
@@ -132,6 +142,28 @@ fn command_method(value: &str) -> Option<&'static str> {
         "boards.archive" => Some("boards.archive"),
         "boards.unarchive" => Some("boards.unarchive"),
         "boards.delete" => Some("boards.delete"),
+        _ => None,
+    }
+}
+
+fn direct_command_method(name: &str) -> Option<&'static str> {
+    match name {
+        "mathboard_create" => Some("create"),
+        "mathboard_create_many" => Some("createMany"),
+        "mathboard_update" => Some("update"),
+        "mathboard_delete" => Some("delete"),
+        "mathboard_delete_many" => Some("deleteMany"),
+        "mathboard_clear" => Some("clear"),
+        "mathboard_group" => Some("group"),
+        "mathboard_layout" => Some("layout"),
+        "mathboard_boards_list" => Some("boards.list"),
+        "mathboard_boards_create" => Some("boards.create"),
+        "mathboard_boards_open" => Some("boards.open"),
+        "mathboard_boards_rename" => Some("boards.rename"),
+        "mathboard_boards_list_archived" => Some("boards.listArchived"),
+        "mathboard_boards_archive" => Some("boards.archive"),
+        "mathboard_boards_unarchive" => Some("boards.unarchive"),
+        "mathboard_boards_delete" => Some("boards.delete"),
         _ => None,
     }
 }
@@ -244,6 +276,7 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
         "mathboard_measure" => "measure",
         "mathboard_screenshot" => "screenshot",
         "mathboard_command" => "command",
+        _ if direct_command_method(name).is_some() => "direct",
         _ => return Err(ToolCallError::UnknownTool),
     };
     if !arguments.is_object()
@@ -256,6 +289,24 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
     }
     if arguments.get("boardId") == Some(&Value::Null) {
         return Err(ToolCallError::InvalidArguments);
+    }
+    if method == "direct" {
+        let operation = direct_command_method(name).ok_or(ToolCallError::UnknownTool)?;
+        let mut params = arguments.as_object().unwrap().clone();
+        let board_id = if operation.starts_with("boards.") {
+            None
+        } else {
+            match params.remove("boardId") {
+                Some(Value::String(id)) if valid_board_id(&id) => Some(id),
+                Some(_) => return Err(ToolCallError::InvalidArguments),
+                None => None,
+            }
+        };
+        return Ok(ToolCall {
+            method: "command",
+            board_id,
+            params: json!({"method":operation,"params":params}),
+        });
     }
     let invalid = |_| ToolCallError::InvalidArguments;
     let call = match method {

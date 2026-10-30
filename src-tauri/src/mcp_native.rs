@@ -47,16 +47,25 @@ pub fn safe_board_error(code: &str) -> &'static str {
     match code {
         "board_busy" => "board_busy",
         "board_context_changed" => "board_context_changed",
-        "board_not_found" | "board_archived" | "board_context_required" => "board_context_required",
+        "board_not_found" => "board_not_found",
+        "board_archived" => "board_archived",
+        "board_context_required" => "board_context_required",
+        "invalid_object_spec" => "invalid_object_spec",
+        "invalid_object_patch" => "invalid_object_patch",
+        "object_not_found" => "object_not_found",
+        "nested_object_mutation_not_supported" => "nested_object_mutation_not_supported",
+        "formula_render_failed" => "formula_render_failed",
+        "board_commit_failed" => "board_commit_failed",
         "capture_too_large" => "capture_too_large",
-        "invalid_capture_request" | "invalid_command" => "invalid_tool_arguments",
+        "invalid_capture_request" => "invalid_capture_request",
+        "invalid_command" => "invalid_tool_arguments",
         "capture_failed" | "board_not_ready" => "capture_unavailable",
         "command_timeout" => "read_cancelled",
         "execution_unknown" => "execution_unknown",
-        "board_not_archived"
-        | "confirmation_required"
-        | "invalid_board_title"
-        | "edit_in_progress" => "invalid_tool_arguments",
+        "board_not_archived" => "board_not_archived",
+        "invalid_board_title" => "invalid_board_title",
+        "edit_in_progress" => "edit_in_progress",
+        "confirmation_required" => "invalid_tool_arguments",
         _ => "internal_error",
     }
 }
