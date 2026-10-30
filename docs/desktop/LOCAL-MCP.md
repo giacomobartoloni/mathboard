@@ -94,6 +94,32 @@ To work with a non-active board, pass its `boardId` for document operations supp
 
 After an `execution_unknown` response, re-read state before retrying a potentially committed mutation. Browser/renderer closure, unrelated board switches and native app exit can cancel in-flight work. When an MCP `boards.create`, `boards.open`, `boards.archive` or `boards.delete` request itself changes the active board, its bounded completion receipt is preserved across that transition, while other old-context requests are invalidated. MCP Off and renderer replacement always revoke that receipt.
 
+## MCP agent discovery
+
+The original `mathboard_command` remains available. Native `tools/list`
+also exposes schema-typed tools for each of the 16 executable commands
+(e.g. `mathboard_create`, `mathboard_create_many`, `mathboard_boards_list`).
+Arguments are the per-method F033 registry parameters directly, without a
+nested `method`/`params` wrapper. Drawing tools may use an optional
+`boardId` to select a board; board-library tools use their documented
+`boardId` parameter. `mathboard_help` with `{}` lists commands;
+`mathboard_help` with `{"method":"create"}` returns detailed schemas,
+examples and safe error codes. These build-generated artifacts come from
+the executable F033 registry; Node 22 is required at native build time.
+
+MCP 2025-11-25 requires object-shaped `structuredContent`. Array
+results use `{"objects":[...]}` for `createMany`, `{"removed":[...]}`
+for `deleteMany` and `clear`, and `{"boards":[...]}` for
+`boards.list` / `boards.listArchived`. The `content` text preserves
+the original JSON array for existing clients.
+
+Tool failures use `isError:true` with safe JSON
+`{"code":"invalid_object_spec","message":"Invalid object specification."}`
+in both text and structured content. Native/IPC adapters allowlist these
+codes and do not forward renderer-supplied errors or local file paths.
+Unconfirmed `boards.delete` continues to report `invalid_tool_arguments`.
+Read back state before retrying any mutation whose outcome is uncertain.
+
 ## Local stdio companion (deferred)
 
 The future, explicitly **unimplemented** stdio transport is documented in [STDIO-DRAFT.md](STDIO-DRAFT.md): process ownership, IPC link to the running GUI, stdout-only protocol, Off/revocation behavior and required installed acceptance. This draft is not a supported client configuration.

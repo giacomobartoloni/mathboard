@@ -121,7 +121,7 @@ impl McpReadOutput {
                 let mut result = CallToolResult::structured(structured);
                 result.content = vec![ContentBlock::text(plain_text)];
                 result
-            },
+            }
             Self::Png(bytes) if bytes.len() <= 5 * 1024 * 1024 => {
                 CallToolResult::success(vec![ContentBlock::image(
                     base64::engine::general_purpose::STANDARD.encode(bytes),
@@ -173,13 +173,11 @@ impl<B: McpReadBackend> MathBoardMcpServer<B> {
         let visible = self.backend.visible_methods().await;
         tool_specs()
             .iter()
-            .filter(|spec| {
-                match spec.name.as_str() {
-                    "mathboard_observe" => visible.contains(&"observe"),
-                    "mathboard_measure" => visible.contains(&"measure"),
-                    "mathboard_screenshot" => visible.contains(&"screenshot"),
-                    _ => visible.contains(&"command"),
-                }
+            .filter(|spec| match spec.name.as_str() {
+                "mathboard_observe" => visible.contains(&"observe"),
+                "mathboard_measure" => visible.contains(&"measure"),
+                "mathboard_screenshot" => visible.contains(&"screenshot"),
+                _ => visible.contains(&"command"),
             })
             .map(|spec| {
                 Tool::new(
@@ -254,18 +252,26 @@ impl<B: McpReadBackend> MathBoardMcpServer<B> {
 }
 
 fn discovery_help(method: Option<&str>) -> Option<Value> {
-    let help: Value = serde_json::from_str(include_str!(concat!(env!("OUT_DIR"), "/mathboard-mcp-help.json"))).ok()?;
+    let help: Value = serde_json::from_str(include_str!(concat!(
+        env!("OUT_DIR"),
+        "/mathboard-mcp-help.json"
+    )))
+    .ok()?;
     let methods = help.get("methods")?.as_array()?;
     match method {
         Some(method) => {
             let descriptor = methods.iter().find(|entry| entry["method"] == method)?;
-            Some(json!({"schemaVersion":help["schemaVersion"],"schemaDialect":help["schemaDialect"],
+            Some(
+                json!({"schemaVersion":help["schemaVersion"],"schemaDialect":help["schemaDialect"],
                 "method":descriptor,"objectTypes":help["objectTypes"],
-                "patchSchemas":help["patchSchemas"],"examplesByType":help["examplesByType"]}))
+                "patchSchemas":help["patchSchemas"],"examplesByType":help["examplesByType"]}),
+            )
         }
-        None => Some(json!({"schemaVersion":help["schemaVersion"],"transport":help["transport"],
+        None => Some(
+            json!({"schemaVersion":help["schemaVersion"],"transport":help["transport"],
             "methods":methods.iter().map(|entry| json!({"method":entry["method"],
-                "summary":entry["summary"],"mutatesBoard":entry["mutatesBoard"]})).collect::<Vec<_>>() })),
+                "summary":entry["summary"],"mutatesBoard":entry["mutatesBoard"]})).collect::<Vec<_>>() }),
+        ),
     }
 }
 

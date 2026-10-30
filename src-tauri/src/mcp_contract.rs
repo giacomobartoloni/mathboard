@@ -51,18 +51,16 @@ pub fn tool_specs() -> &'static [ToolSpec] {
     static SPECS: OnceLock<Vec<ToolSpec>> = OnceLock::new();
     SPECS
         .get_or_init(|| {
-            {
-                let mut existing: Vec<ToolSpec> =
-                    serde_json::from_str(include_str!("../resources/mcp-tool-schemas.json"))
-                        .expect("checked MCP tool schema artifact");
-                let derived: Vec<ToolSpec> = serde_json::from_str(include_str!(concat!(
-                    env!("OUT_DIR"),
-                    "/mathboard-mcp-tools.json"
-                )))
-                .expect("F033-generated MCP schemas");
-                existing.extend(derived);
-                existing
-            }
+            let mut existing: Vec<ToolSpec> =
+                serde_json::from_str(include_str!("../resources/mcp-tool-schemas.json"))
+                    .expect("checked MCP tool schema artifact");
+            let derived: Vec<ToolSpec> = serde_json::from_str(include_str!(concat!(
+                env!("OUT_DIR"),
+                "/mathboard-mcp-tools.json"
+            )))
+            .expect("F033-generated MCP schemas");
+            existing.extend(derived);
+            existing
         })
         .as_slice()
 }

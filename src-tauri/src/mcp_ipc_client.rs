@@ -43,7 +43,9 @@ fn safe_error(code: &str) -> McpReadError {
         "invalid_object_spec" => McpReadError::Domain("invalid_object_spec"),
         "invalid_object_patch" => McpReadError::Domain("invalid_object_patch"),
         "object_not_found" => McpReadError::Domain("object_not_found"),
-        "nested_object_mutation_not_supported" => McpReadError::Domain("nested_object_mutation_not_supported"),
+        "nested_object_mutation_not_supported" => {
+            McpReadError::Domain("nested_object_mutation_not_supported")
+        }
         "formula_render_failed" => McpReadError::Domain("formula_render_failed"),
         "board_commit_failed" => McpReadError::Domain("board_commit_failed"),
         "board_not_found" => McpReadError::Domain("board_not_found"),

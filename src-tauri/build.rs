@@ -21,7 +21,8 @@ fn main() {
         .arg("../tools/generate-mcp-discovery.mjs")
         .arg(&out)
         .current_dir(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .status().expect("Node 22 is needed to derive MCP discovery from F033");
+        .status()
+        .expect("Node 22 is needed to derive MCP discovery from F033");
     assert!(status.success(), "MCP discovery generation failed");
     println!("cargo:rerun-if-changed=../tools/generate-mcp-discovery.mjs");
     println!("cargo:rerun-if-changed=../dev-agent/command-contract.js");

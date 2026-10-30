@@ -25,13 +25,27 @@ fn fixed_mcp_tools_reuse_the_existing_command_registry() {
     let catalog = tool_specs();
     assert_eq!(catalog.len(), 21);
     assert_eq!(
-        catalog[..4].iter().map(|tool| tool.name.as_str()).collect::<Vec<_>>(),
-        ["mathboard_observe", "mathboard_measure", "mathboard_screenshot", "mathboard_command"]
+        catalog[..4]
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "mathboard_observe",
+            "mathboard_measure",
+            "mathboard_screenshot",
+            "mathboard_command"
+        ]
     );
-    let create = catalog.iter().find(|tool| tool.name == "mathboard_create").unwrap();
+    let create = catalog
+        .iter()
+        .find(|tool| tool.name == "mathboard_create")
+        .unwrap();
     assert!(create.input_schema["properties"]["spec"]["$ref"].is_string());
     assert_eq!(create.input_schema["required"], json!(["spec"]));
-    let batch = catalog.iter().find(|tool| tool.name == "mathboard_create_many").unwrap();
+    let batch = catalog
+        .iter()
+        .find(|tool| tool.name == "mathboard_create_many")
+        .unwrap();
     assert_eq!(batch.input_schema["required"], json!(["specs"]));
     assert!(catalog.iter().any(|tool| tool.name == "mathboard_help"));
     let observe = parse_tool_call("mathboard_observe", json!({})).unwrap();
@@ -221,18 +235,32 @@ fn screenshot_decoder_checks_payload_and_declared_dimensions() {
 
 #[test]
 fn direct_tools_route_through_the_existing_command_allowlist() {
-    let create = parse_tool_call("mathboard_create",
-        json!({"boardId":"mb_other","spec":{"type":"text","text":"Hello"}})).unwrap();
+    let create = parse_tool_call(
+        "mathboard_create",
+        json!({"boardId":"mb_other","spec":{"type":"text","text":"Hello"}}),
+    )
+    .unwrap();
     assert_eq!(create.method(), "command");
     assert_eq!(create.board_id(), Some("mb_other"));
-    assert_eq!(create.params(), json!({"method":"create","params":{"spec":{"type":"text","text":"Hello"}}}));
-    let batch = parse_tool_call("mathboard_create_many",
-        json!({"specs":[{"type":"text","text":"Hello"}]})).unwrap();
+    assert_eq!(
+        create.params(),
+        json!({"method":"create","params":{"spec":{"type":"text","text":"Hello"}}})
+    );
+    let batch = parse_tool_call(
+        "mathboard_create_many",
+        json!({"specs":[{"type":"text","text":"Hello"}]}),
+    )
+    .unwrap();
     assert_eq!(batch.params()["method"], "createMany");
-    let deletion = parse_tool_call("mathboard_boards_delete",
-        json!({"boardId":"mb_a","confirm":true})).unwrap();
+    let deletion = parse_tool_call(
+        "mathboard_boards_delete",
+        json!({"boardId":"mb_a","confirm":true}),
+    )
+    .unwrap();
     assert_eq!(deletion.board_id(), None);
     assert_eq!(deletion.params()["params"]["confirm"], true);
-    assert_eq!(parse_tool_call("mathboard_create", json!({"boardId":"invalid!"})).err(),
-        Some(ToolCallError::InvalidArguments));
+    assert_eq!(
+        parse_tool_call("mathboard_create", json!({"boardId":"invalid!"})).err(),
+        Some(ToolCallError::InvalidArguments)
+    );
 }

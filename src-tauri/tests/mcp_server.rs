@@ -168,7 +168,10 @@ fn array_results_are_objects_with_legacy_text() {
         let original = json!([{"id":"mbobj_example"}]);
         let result = McpReadOutput::Json(original.clone()).into_result_for(Some(method));
         assert_eq!(result.structured_content.as_ref().unwrap()[key], original);
-        assert_eq!(serde_json::to_value(&result).unwrap()["content"][0]["text"], original.to_string());
+        assert_eq!(
+            serde_json::to_value(&result).unwrap()["content"][0]["text"],
+            original.to_string()
+        );
     }
 }
 
@@ -184,16 +187,36 @@ async fn command_discovery_is_visible_only_with_command_access() {
     let index = server.dispatch("mathboard_help", json!({})).await.unwrap();
     assert_eq!(index.is_error, Some(false));
     assert!(index.structured_content.as_ref().unwrap()["methods"].is_array());
-    let details = server.dispatch("mathboard_help", json!({"method":"create"})).await.unwrap();
-    assert_eq!(details.structured_content.as_ref().unwrap()["method"]["method"], "create");
+    let details = server
+        .dispatch("mathboard_help", json!({"method":"create"}))
+        .await
+        .unwrap();
+    assert_eq!(
+        details.structured_content.as_ref().unwrap()["method"]["method"],
+        "create"
+    );
     assert!(details.structured_content.as_ref().unwrap()["method"]["paramsSchema"]["properties"]["spec"].is_object());
-    assert!(server.dispatch("mathboard_help", json!({"method":"not_allowed"})).await.is_err());
+    assert!(
+        server
+            .dispatch("mathboard_help", json!({"method":"not_allowed"}))
+            .await
+            .is_err()
+    );
 }
 
 #[test]
 fn bridge_error_output_exposes_safe_error_code() {
     let result = McpReadError::Domain("invalid_object_spec").into_result();
     assert_eq!(result.is_error, Some(true));
-    assert_eq!(result.structured_content.as_ref().unwrap()["code"], "invalid_object_spec");
-    assert_eq!(McpReadError::Internal.into_result().structured_content.unwrap()["code"], "internal_error");
+    assert_eq!(
+        result.structured_content.as_ref().unwrap()["code"],
+        "invalid_object_spec"
+    );
+    assert_eq!(
+        McpReadError::Internal
+            .into_result()
+            .structured_content
+            .unwrap()["code"],
+        "internal_error"
+    );
 }

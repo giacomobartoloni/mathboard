@@ -34,12 +34,23 @@ fn untrusted_webview_error_codes_never_become_tool_visible_text() {
 #[test]
 fn expected_domain_errors_preserve_safe_codes() {
     for code in [
-        "invalid_object_spec", "invalid_object_patch", "object_not_found",
-        "board_not_found", "board_archived", "board_not_archived",
-        "invalid_board_title", "edit_in_progress",
+        "invalid_object_spec",
+        "invalid_object_patch",
+        "object_not_found",
+        "board_not_found",
+        "board_archived",
+        "board_not_archived",
+        "invalid_board_title",
+        "edit_in_progress",
     ] {
         assert_eq!(safe_board_error(code), code);
     }
-    assert_eq!(safe_board_error("confirmation_required"), "invalid_tool_arguments");
-    assert_eq!(safe_board_error("/Users/private/board.json"), "internal_error");
+    assert_eq!(
+        safe_board_error("confirmation_required"),
+        "invalid_tool_arguments"
+    );
+    assert_eq!(
+        safe_board_error("/Users/private/board.json"),
+        "internal_error"
+    );
 }
