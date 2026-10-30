@@ -57,6 +57,12 @@ pub fn write_http_startup_record(output: &mut impl Write, token: &str) -> io::Re
     output.flush()
 }
 
+/// Abort an explicitly requested HTTP startup without Tauri's setup-hook panic.
+pub fn exit_http_startup_failure(error: &io::Error) -> ! {
+    eprintln!("MathBoard MCP HTTP startup failed: {error}");
+    std::process::exit(1);
+}
+
 /// Stdio is not supported until shutdown acknowledgements can be verified.
 fn run_stdio() -> i32 {
     eprintln!("MCP stdio unavailable; use local Streamable HTTP.");

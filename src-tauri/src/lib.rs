@@ -70,7 +70,9 @@ pub fn run() {
             if let Err(error) = startup {
                 // If the token cannot be returned, never leave a writable listener behind.
                 let _ = server.shutdown(&broker);
-                return Err(Box::new(error));
+                // Tauri panics when setup returns Err on macOS. This opt-in CLI
+                // startup must instead fail cleanly with a nonzero exit code.
+                companion::exit_http_startup_failure(&error);
             }
         }
         #[cfg(feature = "phase-c-verification")]

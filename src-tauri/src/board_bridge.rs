@@ -17,7 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -55,6 +55,13 @@ const READ_ONLY_METHODS: &[&str] = &[
     "screenshot",
     "boards.list",
     "boards.listArchived",
+];
+// These library writes can replace the active board while still executing.
+const BOARD_TRANSITION_METHODS: &[&str] = &[
+    "boards.create",
+    "boards.open",
+    "boards.archive",
+    "boards.delete",
 ];
 
 fn valid_board_id(value: &str) -> bool {
@@ -155,6 +162,8 @@ struct BrokerState {
 struct IssuedMcpLease {
     lease: McpReadLease,
     deadline: Instant,
+    allows_board_transition: bool,
+    survived_board_transition: bool,
 }
 
 /** A single read admission tied to the app, renderer and permission generation. */
@@ -241,16 +250,36 @@ impl BoardRequestBroker {
             || state.active_board_id.as_deref() != active_board_id
             || !ready;
         if changed {
-            for (_, pending) in state.pending.drain() {
+            // An MCP library command can cause this transition itself. Keep only
+            // its bounded receipt; all other old-context requests are revoked.
+            // Renderer replacement is never a recoverable board transition.
+            let preserved: HashSet<String> =
+                if state.renderer_generation.as_deref() == Some(renderer_generation) {
+                    state
+                        .mcp_leases
+                        .iter()
+                        .filter(|(id, issued)| {
+                            issued.allows_board_transition && state.pending.contains_key(*id)
+                        })
+                        .map(|(id, _)| id.clone())
+                        .collect()
+                } else {
+                    HashSet::new()
+                };
+            state.pending.retain(|id, pending| {
+                if preserved.contains(id) {
+                    return true;
+                }
                 let outcome = if pending.mutates {
                     BoardReply::ExecutionUnknown
                 } else {
                     BoardReply::Disconnected
                 };
                 let _ = pending.sender.send(outcome);
-            }
+                false
+            });
             // A board switch invalidates old requests, not MCP enablement.
-            Self::rotate_mcp_epoch_locked(&mut state);
+            Self::rotate_mcp_epoch_locked_preserving(&mut state, &preserved);
         }
         state.renderer_generation = Some(renderer_generation.to_owned());
         state.board_epoch = board_epoch;
@@ -269,12 +298,28 @@ impl BoardRequestBroker {
     }
 
     fn rotate_mcp_epoch_locked(state: &mut BrokerState) {
+        Self::rotate_mcp_epoch_locked_preserving(state, &HashSet::new());
+    }
+
+    fn rotate_mcp_epoch_locked_preserving(
+        state: &mut BrokerState,
+        preserved: &HashSet<String>,
+    ) {
         state.mcp_grant_epoch = state.mcp_grant_epoch.wrapping_add(1);
-        state.mcp_leases.clear();
+        state.mcp_leases.retain(|id, issued| {
+            if preserved.contains(id) {
+                issued.survived_board_transition = true;
+                true
+            } else {
+                false
+            }
+        });
         let ids: Vec<_> = state
             .pending
             .iter()
-            .filter(|(_, pending)| pending.mcp_grant_epoch.is_some())
+            .filter(|(id, pending)| {
+                pending.mcp_grant_epoch.is_some() && !preserved.contains(*id)
+            })
             .map(|(id, _)| id.clone())
             .collect();
         for id in ids {
@@ -314,9 +359,13 @@ impl BoardRequestBroker {
         state.mcp_enabled
             && state.ready
             && self.app_generation == lease.app_generation
-            && issued.is_some_and(|entry| entry.lease == *lease && Instant::now() < entry.deadline)
-            && state.mcp_grant_epoch == lease.grant_epoch
-            && state.board_epoch == lease.board_epoch
+            && issued.is_some_and(|entry| {
+                entry.lease == *lease
+                    && Instant::now() < entry.deadline
+                    && ((state.mcp_grant_epoch == lease.grant_epoch
+                        && state.board_epoch == lease.board_epoch)
+                        || (entry.allows_board_transition && entry.survived_board_transition))
+            })
             && state.renderer_generation.as_deref() == Some(&lease.renderer_generation)
     }
 
@@ -391,6 +440,8 @@ impl BoardRequestBroker {
             IssuedMcpLease {
                 lease: lease.clone(),
                 deadline,
+                allows_board_transition: BOARD_TRANSITION_METHODS.contains(&method),
+                survived_board_transition: false,
             },
         );
         Ok((request, receiver, lease))
@@ -579,13 +630,19 @@ impl BoardRequestBroker {
             let _ = expired.sender.send(outcome);
             return Err(error);
         }
+        let completed_library_transition = state
+            .mcp_leases
+            .get(&reply.request_id)
+            .is_some_and(|issued| {
+                issued.allows_board_transition && issued.survived_board_transition
+            });
         if reply.schema_version != SCHEMA_VERSION
             || reply.app_generation != self.app_generation
             || reply.renderer_generation != pending.renderer_generation
             || reply.board_epoch != pending.board_epoch
             || reply.board_id != pending.board_id
             || state.renderer_generation.as_deref() != Some(&reply.renderer_generation)
-            || state.board_epoch != reply.board_epoch
+            || (state.board_epoch != reply.board_epoch && !completed_library_transition)
             || !state.ready
         {
             return Err(BrokerError::StaleReply);

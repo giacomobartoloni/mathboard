@@ -44,7 +44,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
     <section id="controls" hidden aria-label="Local MCP permissions">
       <div class="choice">
         <div><strong>Allow local connections</strong>
-          <small>One switch for all MCP tools. Disabled each time MathBoard starts.</small></div>
+          <small>One switch for all MCP tools. Off by default; explicit CLI startup can enable it.</small></div>
         <button id="enable" type="button">Off</button>
       </div>
       <section id="connection" class="connection" hidden aria-label="Local MCP connection">
@@ -58,7 +58,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
       <div class="actions">
         <button id="refresh" type="button">Refresh status</button>
       </div>
-      <p class="note">MCP starts disabled each time MathBoard launches.
+      <p class="note">MCP starts disabled unless explicitly enabled by the desktop CLI flag.
         Switching boards does not disable it. Only clients with the current
         session token can connect to the loopback endpoint.</p>
     </section>

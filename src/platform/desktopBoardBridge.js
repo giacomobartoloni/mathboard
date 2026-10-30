@@ -27,6 +27,7 @@ const SCHEMA_VERSION = 2
 const MAX_REPLY_BYTES = 7 * 1024 * 1024
 const MAX_COMMAND_LIFETIME_MS = 10000
 const allowed = new Set(getBoardCommandDescriptors().map(descriptor => descriptor.method))
+const BOARD_TRANSITION_METHODS = new Set(['boards.create', 'boards.open', 'boards.archive', 'boards.delete'])
 const safeCodes = new Set([
   'board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
   'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed',
@@ -123,6 +124,9 @@ export async function connectDesktopBoardBridge(getBoard, {
             capture: signal ? { screenshot: (params) => capture.screenshot(params, signal) } : capture,
             isCurrent: () => !disposed && !signal?.aborted && getBoard() === board && request.boardEpoch === lifecycle.epoch,
           })
+        // Lifecycle notifications are serialized to native before we confirm a
+        // library command whose own execution replaced the active board.
+        if (BOARD_TRANSITION_METHODS.has(request.method)) await stateQueue
         reply.ok = true
         if (mutates && Date.now() >= request.expiresAtMs) {
           reply.ok = false
@@ -158,7 +162,10 @@ export async function connectDesktopBoardBridge(getBoard, {
     if (seenRequestIds.has(payload.requestId)) return commandQueue
     seenRequestIds.add(payload.requestId)
     if (seenRequestIds.size > 256) seenRequestIds.delete(seenRequestIds.values().next().value)
-    const aborter = payload.cancellationEpoch === undefined ? null : new AbortController()
+    // These workspace commands trigger their own board-context cancellation.
+    // Native still revokes their receipts immediately on MCP Off or renderer loss.
+    const aborter = payload.cancellationEpoch === undefined || BOARD_TRANSITION_METHODS.has(payload.method)
+      ? null : new AbortController()
     if (aborter) activeCancellableRequests.set(payload.requestId,
       { aborter, epoch: payload.cancellationEpoch })
     commandQueue = commandQueue.then(() => handleRequest(payload, aborter?.signal)).catch(() => {})

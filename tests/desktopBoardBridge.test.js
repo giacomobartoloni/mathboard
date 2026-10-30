@@ -470,3 +470,55 @@ test('native board bridge routes library operations through the shared workspace
   assert.deepEqual(replies[0].result, [{ id: 'mb_active', title: 'Algebra', isActive: true }])
   disconnect()
 })
+
+test('a library create reports its result after its own lifecycle transition', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  let activeBoardId = 'mb_active'
+  let onRequest, onCancel
+  let grantEpoch = 0
+  const calls = []
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => activeBoardId,
+    getBoardWorkspace: () => ({
+      create: () => lifecycle.transition(async () => {
+        activeBoardId = 'mb_created'
+        return { id: 'mb_created', title: 'MCP Test', isActive: true }
+      }),
+    }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => {
+      if (event === 'mathboard-board-request') onRequest = handler
+      if (event === 'mathboard-board-cancel') onCancel = handler
+      return () => {}
+    },
+    invokeCommand: async (name, args) => {
+      calls.push({ name, args })
+      if (name === 'board_bridge_state') {
+        if (calls.length > 1) onCancel({ payload: ++grantEpoch })
+        return 'app-1'
+      }
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  await onRequest({ payload: {
+    requestId: 'r-board-create', appGeneration: 'app-1',
+    rendererGeneration: 'renderer-1', boardEpoch: 0, boardId: 'mb_active',
+    schemaVersion: 2, cancellationEpoch: 0, expiresAtMs: Date.now() + 10_000,
+    method: 'boards.create', params: { title: 'MCP Test' },
+  } })
+  const states = calls.filter(({ name }) => name === 'board_bridge_state')
+  assert.deepEqual(states.map(({ args }) => [args.ready, args.boardEpoch, args.activeBoardId]), [
+    [true, 0, 'mb_active'], [false, 1, 'mb_active'], [true, 2, 'mb_created'],
+  ])
+  const reply = calls.find(({ name }) => name === 'board_bridge_reply')
+  assert.equal(calls.at(-1), reply)
+  const parsed = JSON.parse(reply.args.replyJson)
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.boardEpoch, 0)
+  assert.equal(parsed.boardId, 'mb_active')
+  assert.deepEqual(parsed.result, { id: 'mb_created', title: 'MCP Test', isActive: true })
+  disconnect()
+})
