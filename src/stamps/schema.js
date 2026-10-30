@@ -208,6 +208,9 @@ function validateNode(node, path, depth) {
       if (typeof node.text !== 'string') {
         throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, `Expected text string at ${path}.text.`)
       }
+      if (node.width !== undefined && (!Number.isFinite(node.width) || node.width <= 0)) {
+        throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, `Expected positive width at ${path}.width.`)
+      }
       assertOptionalFiniteNumber(node, 'fontSize', path)
       assertOptionalString(node, 'fontFamily', path)
       assertOptionalString(node, 'fontWeight', path)

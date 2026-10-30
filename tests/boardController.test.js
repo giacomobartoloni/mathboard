@@ -535,3 +535,12 @@ test('zero-size new geometry is rejected before writing history', async () => {
   assert.equal(wrapped.width, 100)
   assert.equal(history.length, 1)
 })
+
+test('self-intersecting polygon with painted lobes is accepted', async () => {
+  const { controller } = setup()
+  const points = [{ x: 0, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }, { x: 20, y: 0 }]
+  const node = await controller.create({ type: 'polygon', points, fill: '#aa0000' })
+  assert.deepEqual(node.points, points)
+  assert.ok(controller.observe().objects[0].bounds.width > 0)
+  assert.ok(controller.observe().objects[0].bounds.height > 0)
+})

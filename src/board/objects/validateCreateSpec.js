@@ -74,13 +74,15 @@ export function validateCreateSpec(spec, ancestors = new Set()) {
   if (spec.type === 'ellipse' && (spec.rx <= 0 || spec.ry <= 0)) invalid(C.INVALID_SPEC)
   if (spec.type === 'polygon') {
     const points = spec.points
-    if (!Array.isArray(points) || points.length < 3 || !points.every(point =>
+    if (!Array.isArray(points) || points.length < 3 || !Array.from(points).every(point =>
       point && Number.isFinite(point.x) && Number.isFinite(point.y))) invalid(C.INVALID_SPEC)
-    const twiceArea = points.reduce((sum, point, index) => {
-      const next = points[(index + 1) % points.length]
-      return sum + point.x * next.y - next.x * point.y
-    }, 0)
-    if (!Number.isFinite(twiceArea) || twiceArea === 0) invalid(C.INVALID_SPEC)
+    const first = points[0]
+    const second = points.find(point => point.x !== first.x || point.y !== first.y)
+    if (!second || !points.some(point => {
+      const cross = (second.x - first.x) * (point.y - first.y)
+        - (second.y - first.y) * (point.x - first.x)
+      return Number.isFinite(cross) && cross !== 0
+    })) invalid(C.INVALID_SPEC)
   }
   if (!hasValidShapeGeometry(spec)) invalid(C.INVALID_SPEC)
   if (spec.type === 'text' && (typeof spec.text !== 'string'
