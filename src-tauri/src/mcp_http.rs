@@ -202,10 +202,7 @@ impl RunningHttp {
                 }
             })?;
         match ready.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(())) => Ok(Self {
-                shutdown,
-                worker,
-            }),
+            Ok(Ok(())) => Ok(Self { shutdown, worker }),
             Ok(Err(error)) => {
                 shutdown.cancel();
                 let _ = worker.join();
@@ -346,12 +343,7 @@ mod tests {
         });
         let mut client = TcpStream::connect(address).unwrap();
         ready.recv_timeout(Duration::from_secs(2)).unwrap();
-        RunningHttp {
-            shutdown,
-            worker,
-        }
-        .shutdown()
-        .unwrap();
+        RunningHttp { shutdown, worker }.shutdown().unwrap();
         client
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();

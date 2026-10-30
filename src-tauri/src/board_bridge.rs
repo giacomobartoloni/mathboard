@@ -754,7 +754,10 @@ pub fn emit_mcp_read(
 fn native_mcp_status(app: &tauri::AppHandle, broker: &BoardRequestBroker) -> serde_json::Value {
     let status = broker.mcp_status();
     let server = app.try_state::<crate::mcp_http::LocalMcpHttpServer>();
-    let active = status.enabled && server.as_ref().is_some_and(|instance| instance.is_running());
+    let active = status.enabled
+        && server
+            .as_ref()
+            .is_some_and(|instance| instance.is_running());
     serde_json::json!({
         "enabled": active,
         "available": server.is_some(),
