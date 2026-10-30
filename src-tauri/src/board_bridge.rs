@@ -697,7 +697,7 @@ pub fn emit_mcp_read(
     Ok((request_id, receiver, lease))
 }
 
-/// Connection material is disclosed only to the dedicated native settings WebView.
+/// This Tauri command discloses credentials only to the dedicated settings WebView.
 fn native_mcp_status(app: &tauri::AppHandle, broker: &BoardRequestBroker) -> serde_json::Value {
     let status = broker.mcp_status();
     let server = app.try_state::<crate::mcp_http::LocalMcpHttpServer>();

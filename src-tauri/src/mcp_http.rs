@@ -95,7 +95,7 @@ fn same_token(provided: &str, expected: &str) -> bool {
 }
 
 /// Browser requests, DNS rebinding and unrelated local processes fail closed.
-/// The ephemeral token is available only through the native settings window.
+/// The ephemeral token is available via native settings or explicit CLI stdout.
 fn admitted(headers: &HeaderMap, path: &str, token: &str, enabled: bool) -> bool {
     if !enabled || path != "/mcp" || headers.contains_key(ORIGIN) {
         return false;
