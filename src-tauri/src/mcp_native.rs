@@ -17,7 +17,9 @@
 
 //! Private native D dispatcher; no IPC frame can select an arbitrary C3 method.
 
-use crate::board_bridge::{BoardReply, BoardRequestBroker, BrokerError, MCP_SCREENSHOT_TIMEOUT, emit_mcp_read};
+use crate::board_bridge::{
+    BoardReply, BoardRequestBroker, BrokerError, MCP_SCREENSHOT_TIMEOUT, emit_mcp_read,
+};
 use crate::mcp_contract::decode_screenshot;
 use crate::mcp_ipc_protocol::{IpcCommand, IpcReply};
 use base64::Engine;
@@ -187,6 +189,8 @@ mod c13_tests {
         assert!(timed_out_read(&Ok(BoardReply::TimedOut)));
         assert!(!timed_out_read(&Err(BrokerError::PermissionDenied)));
         assert!(!timed_out_read(&Ok(BoardReply::Disconnected)));
-        assert!(!timed_out_read(&Ok(BoardReply::Success(serde_json::json!({})))));
+        assert!(!timed_out_read(&Ok(BoardReply::Success(
+            serde_json::json!({})
+        ))));
     }
 }
