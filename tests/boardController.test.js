@@ -117,6 +117,45 @@ test('creation rejects invalid recursive specs before changing the canvas', asyn
   assert.equal(history.length, 0)
 })
 
+test('reject malformed paths before creating objects or history entries', async () => {
+  const { controller, canvas, history } = setup()
+  const bad = [
+    [['M', 64, '532'], ['L', 100, 200]],
+    [['M', 0, 0], ['L', 10, null]],
+    [['M', 0, 0], ['L', Infinity, 10]],
+    [['M', 0, 0], ['C', 1, 2]],
+    [['M', 0, 0], ['X', 1, 2]],
+    [['M', 0, 0], ['Z', 1]],
+    [['M', 0, 0], ['A', 10, 10, 0, 2, 0, 20, 20]],
+    [['L', 10, 10]],
+    [],
+  ]
+  for (const path of bad) {
+    await rejectsCode(() => controller.create({ type: 'path', path }), C.INVALID_SPEC)
+  }
+  await rejectsCode(() => controller.createMany([
+    { type: 'text', text: 'must not persist' },
+    { type: 'path', path: [['M', 64, '532'], ['L', 100, 200]] },
+  ]), C.INVALID_SPEC)
+  await rejectsCode(() => controller.create({
+    type: 'group', objects: [{ type: 'path', path: [['M', 0, false]] }],
+  }), C.INVALID_SPEC)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+})
+
+test('valid curve commands retain finite geometry', async () => {
+  const { controller } = setup()
+  const node = await controller.create({
+    type: 'path',
+    path: [['M', 0, 0], ['L', 10, 10], ['Q', 15, 20, 20, 10],
+      ['C', 25, 5, 30, 15, 40, 0], ['Z']],
+  })
+  assert.equal(node.type, 'path')
+  assert.ok(Number.isFinite(node.left))
+  assert.ok(Number.isFinite(node.top))
+})
+
 test('createMany commits independent objects in order with one batch history entry', async () => {
   const { controller, canvas, history } = setup()
   await controller.create(rect)
@@ -501,4 +540,46 @@ test('async batch creation rejects a gesture started during materialization', as
   await rejectsCode(() => pending, C.COMMIT_FAILED)
   assert.equal(canvas.getObjects().length, 0)
   assert.equal(history.length, 0)
+})
+
+test('explicit create ink and update ink use the same fixed-mode rule', async () => {
+  const { controller } = setup()
+  const created = await controller.create({
+    type: 'text', text: 'Colors', fill: '#9CA3AF',
+  })
+  assert.equal(created.fill, '#9CA3AF')
+  assert.equal(created.mathboardInkMode, 'fixed')
+  const updated = await controller.update(created.id, { fill: '#FF0000' })
+  assert.equal(updated.fill, '#FF0000')
+  assert.equal(updated.mathboardInkMode, 'fixed')
+  const explicitAuto = await controller.create({
+    type: 'text', text: 'Theme', fill: '#9CA3AF', mathboardInkMode: 'auto',
+  })
+  assert.equal(explicitAuto.mathboardInkMode, 'auto')
+})
+
+test('zero-size new geometry is rejected before writing history', async () => {
+  const { controller, canvas, history } = setup()
+  const invalid = [
+    { type: 'rect' }, { type: 'rect', width: 0, height: 20 },
+    { type: 'rect', width: 20, height: -1 }, { type: 'circle', radius: 0 },
+    { type: 'ellipse', rx: 12, ry: 0 },
+    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 20 }] },
+    { type: 'text', text: 'bad width', width: 0 },
+  ]
+  for (const spec of invalid) await rejectsCode(() => controller.create(spec), C.INVALID_SPEC)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  const wrapped = await controller.create({ type: 'text', text: 'a word to wrap', width: 100 })
+  assert.equal(wrapped.width, 100)
+  assert.equal(history.length, 1)
+})
+
+test('self-intersecting polygon with painted lobes is accepted', async () => {
+  const { controller } = setup()
+  const points = [{ x: 0, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }, { x: 20, y: 0 }]
+  const node = await controller.create({ type: 'polygon', points, fill: '#aa0000' })
+  assert.deepEqual(node.points, points)
+  assert.ok(controller.observe().objects[0].bounds.width > 0)
+  assert.ok(controller.observe().objects[0].bounds.height > 0)
 })

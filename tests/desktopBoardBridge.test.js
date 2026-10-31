@@ -45,7 +45,7 @@ test('desktop bridge routes an addressed inactive request and echoes its board I
   }
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       calls.push({ name, args })
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -76,7 +76,7 @@ test('desktop bridge rejects absent and legacy board targets before dispatch', a
   }
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => { calls.push({ name, args }); return 'app-1' },
     captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
   })
@@ -102,7 +102,7 @@ test('oversized result after an addressed write reports uncertain outcome', asyn
   }
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       if (name === 'board_bridge_reply') replyJson = args.replyJson
       return 'app-1'
@@ -125,7 +125,7 @@ test('desktop bridge executes a correlated native observe and returns one bounde
     getBoardController: () => ({ observe: () => ({ stable: true, objects: [] }) }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       calls.push({ name, args })
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -175,7 +175,7 @@ test('desktop bridge never executes a stale or excluded board command', async ()
     getBoardController: () => ({ create: () => { creations += 1 } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       calls.push({ name, args })
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -187,7 +187,7 @@ test('desktop bridge never executes a stale or excluded board command', async ()
     boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, expiresAtMs: Date.now() + 10_000,
     params: { spec: { type: 'rect' } } }
   await onRequest({ payload: { ...envelope, method: 'create' } })
-  await onRequest({ payload: { ...envelope, requestId: 'r-2', boardEpoch: 2, method: 'boards.list' } })
+  await onRequest({ payload: { ...envelope, requestId: 'r-2', boardEpoch: 2, method: 'boards.hidden' } })
 
   assert.equal(creations, 0)
   const replies = calls.filter(call => call.name === 'board_bridge_reply')
@@ -221,7 +221,7 @@ test('a repeated native request ID never executes a write twice', async () => {
     getBoardController: () => ({ create: () => { creates += 1; return { id: 'new', type: 'rect' } } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -248,7 +248,7 @@ test('an expired queued request is rejected before any board mutation', async ()
     getBoardController: () => ({ create: () => { creations += 1; return { id: 'new', type: 'rect' } } }) })
   const disconnect = await connectDesktopBoardBridge(() => board, {
     rendererGeneration: 'renderer-1',
-    subscribe: async (_event, handler) => { onRequest = handler; return () => {} },
+    subscribe: async (event, handler) => { if (event === 'mathboard-board-request') onRequest = handler; return () => {} },
     invokeCommand: async (name, args) => {
       if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
       return name === 'board_bridge_state' ? 'app-1' : undefined
@@ -261,5 +261,264 @@ test('an expired queued request is rejected before any board mutation', async ()
 
   assert.equal(creations, 0)
   assert.equal(replies[0].error.code, 'command_timeout')
+  disconnect()
+})
+
+test('native cancellation epoch aborts an active read and suppresses its reply', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const handlers = new Map()
+  const replies = []
+  let finishRead
+  let enteredRead
+  const entered = new Promise(resolve => { enteredRead = resolve })
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: (_request, context) => {
+      enteredRead(context)
+      return new Promise(resolve => { finishRead = resolve })
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => { handlers.set(event, handler); return () => handlers.delete(event) },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(args.replyJson)
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {} }),
+  })
+  const request = { requestId: 'mcp-1', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, expiresAtMs: Date.now() + 10_000,
+    method: 'observe', params: {}, cancellationEpoch: 1 }
+  const handling = handlers.get('mathboard-board-request')({ payload: request })
+  const context = await entered
+  handlers.get('mathboard-board-cancel')({ payload: 1 })
+  assert.equal(context.signal.aborted, false)
+  handlers.get('mathboard-board-cancel')({ payload: 2 })
+  assert.equal(context.signal.aborted, true)
+  finishRead({ boardId: 'mb_active', objects: [] })
+  await handling
+  assert.equal(replies.length, 0)
+  await handlers.get('mathboard-board-request')({ payload: { ...request, requestId: 'stale' } })
+  assert.equal(replies.length, 0)
+  disconnect()
+})
+
+test('an earlier cancellation event does not abort a request admitted in a newer epoch', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const handlers = new Map()
+  const replies = []
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: async (_request, context) => {
+      assert.equal(context.signal.aborted, false)
+      return { boardId: 'mb_active', objects: [] }
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => { handlers.set(event, handler); return () => handlers.delete(event) },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {} }),
+  })
+  handlers.get('mathboard-board-cancel')({ payload: 2 })
+  await handlers.get('mathboard-board-request')({ payload: {
+    requestId: 'new-epoch', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2, expiresAtMs: Date.now() + 10_000,
+    method: 'observe', params: {}, cancellationEpoch: 2,
+  } })
+  assert.equal(replies.length, 1)
+  disconnect()
+})
+
+test('generic cancellation works for non-MCP native requests and never cancels plain requests', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const handlers = new Map()
+  const replies = []
+  const entered = []
+  const pending = []
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: (_request, context) => {
+      entered.push(context)
+      return new Promise(resolve => { pending.push(resolve) })
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => { handlers.set(event, handler); return () => {} },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {} }),
+  })
+  const base = { appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2,
+    expiresAtMs: Date.now() + 10_000, method: 'observe', params: {} }
+  const first = handlers.get('mathboard-board-request')({
+    payload: { ...base, requestId: 'generic-1', cancellationEpoch: 3 },
+  })
+  // Wait for the queued command to enter its handler.
+  while (!entered.length) await Promise.resolve()
+  assert.equal(entered[0].signal.aborted, false)
+  handlers.get('mathboard-board-cancel')({ payload: 4 })
+  assert.equal(entered[0].signal.aborted, true)
+  pending[0]({ objects: ['discard-me'] })
+  await first
+  assert.equal(replies.length, 0)
+
+  // An ordinary internal command carries no cancellation epoch and is unaffected.
+  const second = handlers.get('mathboard-board-request')({
+    payload: { ...base, requestId: 'ordinary-2' },
+  })
+  while (entered.length < 2) await Promise.resolve()
+  assert.equal(entered[1].signal, undefined)
+  handlers.get('mathboard-board-cancel')({ payload: 5 })
+  pending[1]({ stable: true })
+  await second
+  assert.equal(replies.length, 1)
+  assert.equal(replies[0].requestId, 'ordinary-2')
+
+  // Malformed, stale and legacy-MCP-marked requests cannot bypass the generic epoch fence.
+  await handlers.get('mathboard-board-request')({
+    payload: { ...base, requestId: 'invalid-epoch', cancellationEpoch: -1 },
+  })
+  await handlers.get('mathboard-board-request')({
+    payload: { ...base, requestId: 'stale-epoch', cancellationEpoch: 3 },
+  })
+  assert.equal(entered.length, 2)
+  assert.equal(replies.length, 1)
+  disconnect()
+})
+
+test('native cancellation ignores malformed events and applies to queued requests on disposal', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const handlers = new Map()
+  const seen = []
+  let finish
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardDocumentCommands: () => ({ executeOnBoard: (_request, context) => {
+      seen.push(context.signal)
+      return new Promise(resolve => { finish = resolve })
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => { handlers.set(event, handler); return () => {} },
+    invokeCommand: async () => 'app-1',
+    captureFactory: () => ({ attach() {}, dispose() {} }),
+  })
+  const handle = handlers.get('mathboard-board-request')({ payload: {
+    requestId: 'native-one', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2,
+    expiresAtMs: Date.now() + 10_000, method: 'observe', params: {}, cancellationEpoch: 0,
+  } })
+  while (!seen.length) await Promise.resolve()
+  handlers.get('mathboard-board-cancel')({ payload: -1 })
+  handlers.get('mathboard-board-cancel')({ payload: '2' })
+  handlers.get('mathboard-board-cancel')({ payload: 0 })
+  assert.equal(seen[0].aborted, false)
+  disconnect()
+  assert.equal(seen[0].aborted, true)
+  finish({ stable: true })
+  await handle
+})
+
+test('native board bridge routes library operations through the shared workspace contract', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const replies = []
+  let onRequest
+  const board = {
+    _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardWorkspace: () => ({
+      list: async () => [{ id: 'mb_active', title: 'Algebra', isActive: true }],
+    }),
+    getBoardDocumentCommands: () => ({ executeOnBoard: () => {
+      throw new Error('Library commands must not use the document executor')
+    } }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => {
+      if (event === 'mathboard-board-request') onRequest = handler
+      return () => {}
+    },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  await onRequest({ payload: {
+    requestId: 'library-list', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2,
+    expiresAtMs: Date.now() + 10_000, method: 'boards.list', params: {},
+  } })
+  assert.equal(replies.length, 1)
+  assert.equal(replies[0].ok, true)
+  assert.deepEqual(replies[0].result, [{ id: 'mb_active', title: 'Algebra', isActive: true }])
+  disconnect()
+})
+
+test('a library create reports its result after its own lifecycle transition', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  let activeBoardId = 'mb_active'
+  let onRequest, onCancel
+  let grantEpoch = 0
+  const calls = []
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => activeBoardId,
+    getBoardWorkspace: () => ({
+      create: () => lifecycle.transition(async () => {
+        activeBoardId = 'mb_created'
+        return { id: 'mb_created', title: 'MCP Test', isActive: true }
+      }),
+    }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => {
+      if (event === 'mathboard-board-request') onRequest = handler
+      if (event === 'mathboard-board-cancel') onCancel = handler
+      return () => {}
+    },
+    invokeCommand: async (name, args) => {
+      calls.push({ name, args })
+      if (name === 'board_bridge_state') {
+        if (calls.length > 1) onCancel({ payload: ++grantEpoch })
+        return 'app-1'
+      }
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  await onRequest({ payload: {
+    requestId: 'r-board-create', appGeneration: 'app-1',
+    rendererGeneration: 'renderer-1', boardEpoch: 0, boardId: 'mb_active',
+    schemaVersion: 2, cancellationEpoch: 0, expiresAtMs: Date.now() + 10_000,
+    method: 'boards.create', params: { title: 'MCP Test' },
+  } })
+  const states = calls.filter(({ name }) => name === 'board_bridge_state')
+  assert.deepEqual(states.map(({ args }) => [args.ready, args.boardEpoch, args.activeBoardId]), [
+    [true, 0, 'mb_active'], [false, 1, 'mb_active'], [true, 2, 'mb_created'],
+  ])
+  const reply = calls.find(({ name }) => name === 'board_bridge_reply')
+  assert.equal(calls.at(-1), reply)
+  const parsed = JSON.parse(reply.args.replyJson)
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.boardEpoch, 0)
+  assert.equal(parsed.boardId, 'mb_active')
+  assert.deepEqual(parsed.result, { id: 'mb_created', title: 'MCP Test', isActive: true })
   disconnect()
 })

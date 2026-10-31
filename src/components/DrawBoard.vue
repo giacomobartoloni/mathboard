@@ -109,7 +109,7 @@ import { geometryControls, lineGeometryAdapter, isGeometryHandleTransform } from
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
 const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
 // Objects whose board ink lives on "fill".
-const FILL_INK_TYPES = ["IText", "Text"];
+const FILL_INK_TYPES = ["IText", "Text", "Textbox"];
 
 // Constants
 const CANVAS_EVENTS = [

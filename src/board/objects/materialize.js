@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { Rect, Circle, Ellipse, Polygon, Line, Path, IText, Group } from 'fabric'
+import { Rect, Circle, Ellipse, Polygon, Line, Path, IText, Textbox, Group } from 'fabric'
 import { ArrowObject } from './ArrowObject.js'
 import { ensureMathBoardObjectId } from '../ids.js'
 import { STYLE_KEYS, TEXT_KEYS, TRANSFORM_KEYS } from './constants.js'
@@ -150,16 +150,19 @@ export async function materializeBoardObject(node, options = {}) {
         ...style,
         ...transform,
       })
+      // Finite input coordinates may still overflow Fabric's bounds calculation.
+      if (['left', 'top', 'width', 'height'].some(key => !Number.isFinite(object[key]))) {
+        disposeMaterializedObject(object)
+        throw new Error('Path bounds must be finite.')
+      }
       applyInkMetadata(object, node)
       break
     }
     case 'text': {
       const textProps = pickDefined(node, TEXT_KEYS)
-      object = new IText(node.text, {
-        ...style,
-        ...transform,
-        ...textProps,
-      })
+      const props = { ...style, ...transform, fontFamily: 'Arial', ...textProps }
+      object = node.width === undefined ? new IText(node.text, props)
+        : new Textbox(node.text, { ...props, width: node.width })
       applyInkMetadata(object, node)
       break
     }

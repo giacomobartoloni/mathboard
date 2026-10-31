@@ -510,6 +510,11 @@ export class BoardPersistenceService {
   }
 
   deleteBoard(boardId, options = {}) {
+    // Reject unconfirmed deletion before an active-board lifecycle transition.
+    if (options.confirm !== true) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED,
+        'Permanent deletion requires explicit confirmation.')
+    }
     return boardId === this.boardId
       ? this._withTransition(token => this._deleteBoard(boardId, options, token))
       : this._deleteBoard(boardId, options, null)

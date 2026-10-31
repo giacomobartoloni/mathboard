@@ -31,7 +31,7 @@ import { snapshotObject, applySnapshot } from "../../history/commandLog.js";
  * categorical effects only after history accepts a command.
  */
 const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
-const FILL_INK_TYPES = ["IText", "Text"];
+const FILL_INK_TYPES = ["IText", "Text", "Textbox"];
 
 export class SelectionMutations {
   constructor({ getCanvas, history, boardObjectPolicy, getDefaultInk, onCommittedOperation = () => {}, lifecycle = null }) {

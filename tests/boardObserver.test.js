@@ -87,3 +87,17 @@ test('ActiveSelection observation returns member IDs and canvas-plane bounds wit
   assert.deepEqual(members.map((o) => ({ left: o.left, top: o.top })), before)
   assert.equal(canvas.getActiveObject(), selection)
 })
+
+test('summary observation keeps identity and bounds without verbose style fields', () => {
+  const object = new Rect({ left: 10, top: 20, width: 30, height: 40, fill: '#BADA55' })
+  ensureMathBoardObjectId(object, 'mbobj_summary')
+  const canvas = makeControllerCanvas([object])
+  const full = serializeBoardState({ canvas, boardObjectPolicy: policy })
+  const summary = serializeBoardState({ canvas, boardObjectPolicy: policy, detail: 'summary' })
+  assert.equal(summary.objects[0].id, 'mbobj_summary')
+  assert.deepEqual(summary.objects[0].bounds, full.objects[0].bounds)
+  assert.equal(summary.objects[0].type, 'rect')
+  assert.equal(summary.objects[0].fill, undefined)
+  assert.equal(full.objects[0].fill, '#BADA55')
+  assert.ok(JSON.stringify(summary).length < JSON.stringify(full).length)
+})

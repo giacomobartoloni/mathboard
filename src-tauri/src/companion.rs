@@ -15,8 +15,64 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::ffi::{OsStr, OsString};
+use std::io::{self, Write};
+
+pub const HTTP_STARTUP_FLAG: &str = "--mathboard-mcp-http";
+
+fn is_http_startup(args: impl IntoIterator<Item = OsString>) -> bool {
+    let mut args = args.into_iter();
+    args.next().as_deref() == Some(OsStr::new(HTTP_STARTUP_FLAG)) && args.next().is_none()
+}
+
+/// The flag is an explicit one-launch exception to MathBoard's default-Off policy.
+pub fn http_startup_requested() -> bool {
+    is_http_startup(std::env::args_os().skip(1))
+}
+
+/// Windows GUI applications can silently discard writes when stdout is absent.
+pub fn ensure_http_startup_stdout() -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        let handle = io::stdout().as_raw_handle();
+        if handle.is_null() || handle as isize == -1 {
+            return Err(io::Error::new(
+                io::ErrorKind::NotConnected,
+                "MCP HTTP startup requires an inherited stdout handle",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Emit one opt-in machine-readable endpoint record.
+pub fn write_http_startup_record(output: &mut impl Write, endpoint: &str) -> io::Result<()> {
+    let record = serde_json::json!({
+        "transport": "streamable-http",
+        "endpoint": endpoint,
+    });
+    writeln!(output, "{record}")?;
+    output.flush()
+}
+
+/// Abort an explicitly requested HTTP startup without Tauri's setup-hook panic.
+pub fn exit_http_startup_failure(error: &io::Error) -> ! {
+    eprintln!("MathBoard MCP HTTP startup failed: {error}");
+    std::process::exit(1);
+}
+
+/// Stdio is not supported until shutdown acknowledgements can be verified.
+fn run_stdio() -> i32 {
+    eprintln!("MCP stdio unavailable; use local Streamable HTTP.");
+    1
+}
+
 /** Dispatches companion-only modes before Tauri initializes its GUI. */
 pub fn run_from_args() -> Option<i32> {
+    if http_startup_requested() {
+        return None;
+    }
     let mut args = std::env::args_os().skip(1);
     let first = args.next()?;
     let Some(flag) = first.to_str() else {
@@ -27,6 +83,7 @@ pub fn run_from_args() -> Option<i32> {
             println!("mathboard-companion 1");
             Some(0)
         }
+        "--mathboard-mcp-stdio" if args.next().is_none() => Some(run_stdio()),
         #[cfg(feature = "phase-c-verification")]
         "--mathboard-companion-ping" if args.next().is_none() => match crate::ipc_probe::ping() {
             Ok(()) => {
@@ -38,10 +95,41 @@ pub fn run_from_args() -> Option<i32> {
                 Some(1)
             }
         },
-        flag if flag.starts_with("--mathboard-companion-") => {
+        flag if flag.starts_with("--mathboard-companion-")
+            || flag.starts_with("--mathboard-mcp-") =>
+        {
             eprintln!("Invalid MathBoard companion mode or arguments.");
             Some(2)
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http_startup_requires_one_exact_flag() {
+        assert!(is_http_startup([OsString::from(HTTP_STARTUP_FLAG)]));
+        assert!(!is_http_startup(Vec::<OsString>::new()));
+        assert!(!is_http_startup([OsString::from("--mathboard-mcp-stdio")]));
+        assert!(!is_http_startup([
+            OsString::from(HTTP_STARTUP_FLAG),
+            OsString::from("--unexpected"),
+        ]));
+    }
+
+    #[test]
+    fn startup_record_is_single_line_json_with_endpoint_only() {
+        let mut output = Vec::new();
+        let endpoint = "http://127.0.0.1:43180/mcp";
+        write_http_startup_record(&mut output, endpoint).unwrap();
+        let text = String::from_utf8(output).unwrap();
+        assert_eq!(text.lines().count(), 1);
+        let record: serde_json::Value = serde_json::from_str(text.trim()).unwrap();
+        assert_eq!(record["transport"], "streamable-http");
+        assert_eq!(record["endpoint"], endpoint);
+        assert!(record.get("token").is_none());
     }
 }

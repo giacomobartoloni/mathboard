@@ -51,6 +51,16 @@ test('applyExplicitInk accepts Fabric class types and isType', () => {
   assert.equal(byIsType.fill, '#d32f2f')
 })
 
+test('wrapped text uses fill for palette and theme ink', () => {
+  const text = { type: 'Textbox', fill: '#010101', mathboardInkMode: 'fixed' }
+  assert.equal(paletteColorFromObject(text), '#010101')
+  assert.equal(applyExplicitInk(text, '#aa0000'), true)
+  assert.equal(text.fill, '#aa0000')
+  assert.equal(applyAutoInk(text, '#eeeeee'), true)
+  assert.equal(text.fill, '#eeeeee')
+  assert.equal(text.mathboardInkMode, 'auto')
+})
+
 test('applyExplicitInk recolors a selected stroke, shape, or text and locks it', () => {
   const path = { type: 'path', stroke: '#000000', fill: null, mathboardInkMode: 'auto' }
   assert.equal(applyExplicitInk(path, '#D32F2F'), true)

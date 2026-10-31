@@ -17,16 +17,21 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, mpsc};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::Emitter;
+
+// The renderer aborts screenshot capture after 10 s. Leave time for its error
+// to reach the broker before expiring the native read lease.
+pub(crate) const MCP_SCREENSHOT_TIMEOUT: Duration = Duration::from_secs(11);
+use tauri::{Emitter, Manager};
 
 pub const SCHEMA_VERSION: u32 = 2;
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_REPLY_BYTES: usize = 7 * 1024 * 1024;
 const MAX_PENDING: usize = 16;
+const MAX_MCP_LEASES: usize = 64;
 const METHODS: &[&str] = &[
     "observe",
     "measure",
@@ -39,8 +44,29 @@ const METHODS: &[&str] = &[
     "clear",
     "group",
     "layout",
+    "boards.list",
+    "boards.create",
+    "boards.open",
+    "boards.rename",
+    "boards.listArchived",
+    "boards.archive",
+    "boards.unarchive",
+    "boards.delete",
 ];
-const READ_ONLY_METHODS: &[&str] = &["observe", "measure", "screenshot"];
+const READ_ONLY_METHODS: &[&str] = &[
+    "observe",
+    "measure",
+    "screenshot",
+    "boards.list",
+    "boards.listArchived",
+];
+// These library writes can replace the active board while still executing.
+const BOARD_TRANSITION_METHODS: &[&str] = &[
+    "boards.create",
+    "boards.open",
+    "boards.archive",
+    "boards.delete",
+];
 
 fn valid_board_id(value: &str) -> bool {
     value.len() > 3
@@ -64,6 +90,8 @@ pub enum BrokerError {
     Timeout,
     InvalidBoardId,
     ExecutionUnknown,
+    PermissionDenied,
+    BoardContextChanged,
 }
 
 #[derive(Debug, PartialEq)]
@@ -87,6 +115,9 @@ pub struct OutboundRequest {
     pub expires_at_ms: u64,
     pub method: String,
     pub params: Value,
+    /// Optional native cancellation generation. MCP grants remain private broker state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cancellation_epoch: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -117,6 +148,7 @@ struct Pending {
     mutates: bool,
     deadline: Instant,
     sender: mpsc::Sender<BoardReply>,
+    mcp_grant_epoch: Option<u64>,
 }
 
 #[derive(Default)]
@@ -126,6 +158,42 @@ struct BrokerState {
     active_board_id: Option<String>,
     ready: bool,
     pending: HashMap<String, Pending>,
+    mcp_enabled: bool,
+    mcp_grant_epoch: u64,
+    mcp_leases: HashMap<String, IssuedMcpLease>,
+}
+
+struct IssuedMcpLease {
+    lease: McpReadLease,
+    deadline: Instant,
+    allows_board_transition: bool,
+    survived_board_transition: bool,
+}
+
+/** A single read admission tied to the app, renderer and permission generation. */
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct McpReadLease {
+    app_generation: String,
+    request_id: String,
+    expires_at_ms: u64,
+    grant_epoch: u64,
+    board_epoch: u64,
+    renderer_generation: String,
+    board_id: String,
+}
+
+impl McpReadLease {
+    pub fn board_id(&self) -> &str {
+        &self.board_id
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpPermissionStatus {
+    pub enabled: bool,
+    pub grant_epoch: u64,
 }
 
 /** A one-shot, bounded request registry. It never executes a board operation. */
@@ -186,14 +254,36 @@ impl BoardRequestBroker {
             || state.active_board_id.as_deref() != active_board_id
             || !ready;
         if changed {
-            for (_, pending) in state.pending.drain() {
+            // An MCP library command can cause this transition itself. Keep only
+            // its bounded receipt; all other old-context requests are revoked.
+            // Renderer replacement is never a recoverable board transition.
+            let preserved: HashSet<String> =
+                if state.renderer_generation.as_deref() == Some(renderer_generation) {
+                    state
+                        .mcp_leases
+                        .iter()
+                        .filter(|(id, issued)| {
+                            issued.allows_board_transition && state.pending.contains_key(*id)
+                        })
+                        .map(|(id, _)| id.clone())
+                        .collect()
+                } else {
+                    HashSet::new()
+                };
+            state.pending.retain(|id, pending| {
+                if preserved.contains(id) {
+                    return true;
+                }
                 let outcome = if pending.mutates {
                     BoardReply::ExecutionUnknown
                 } else {
                     BoardReply::Disconnected
                 };
                 let _ = pending.sender.send(outcome);
-            }
+                false
+            });
+            // A board switch invalidates old requests, not MCP enablement.
+            Self::rotate_mcp_epoch_locked_preserving(&mut state, &preserved);
         }
         state.renderer_generation = Some(renderer_generation.to_owned());
         state.board_epoch = board_epoch;
@@ -209,6 +299,152 @@ impl BoardRequestBroker {
         } else {
             None
         }
+    }
+
+    fn rotate_mcp_epoch_locked(state: &mut BrokerState) {
+        Self::rotate_mcp_epoch_locked_preserving(state, &HashSet::new());
+    }
+
+    fn rotate_mcp_epoch_locked_preserving(state: &mut BrokerState, preserved: &HashSet<String>) {
+        state.mcp_grant_epoch = state.mcp_grant_epoch.wrapping_add(1);
+        state.mcp_leases.retain(|id, issued| {
+            if preserved.contains(id) {
+                issued.survived_board_transition = true;
+                true
+            } else {
+                false
+            }
+        });
+        let ids: Vec<_> = state
+            .pending
+            .iter()
+            .filter(|(id, pending)| pending.mcp_grant_epoch.is_some() && !preserved.contains(*id))
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in ids {
+            if let Some(pending) = state.pending.remove(&id) {
+                let _ = pending.sender.send(BoardReply::Disconnected);
+            }
+        }
+    }
+
+    pub fn mcp_status(&self) -> McpPermissionStatus {
+        let state = self.state.lock().expect("board broker lock poisoned");
+        McpPermissionStatus {
+            enabled: state.mcp_enabled,
+            grant_epoch: state.mcp_grant_epoch,
+        }
+    }
+
+    pub fn mcp_visible_methods(&self) -> Vec<&'static str> {
+        let state = self.state.lock().expect("board broker lock poisoned");
+        if !state.mcp_enabled {
+            return Vec::new();
+        }
+        vec!["observe", "measure", "screenshot", "command"]
+    }
+
+    pub fn mcp_set_enabled(&self, enabled: bool) {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        if state.mcp_enabled != enabled {
+            Self::rotate_mcp_epoch_locked(&mut state);
+            state.mcp_enabled = enabled;
+        }
+    }
+
+    pub fn mcp_lease_valid(&self, lease: &McpReadLease) -> bool {
+        let state = self.state.lock().expect("board broker lock poisoned");
+        let issued = state.mcp_leases.get(&lease.request_id);
+        state.mcp_enabled
+            && state.ready
+            && self.app_generation == lease.app_generation
+            && issued.is_some_and(|entry| {
+                entry.lease == *lease
+                    && Instant::now() < entry.deadline
+                    && ((state.mcp_grant_epoch == lease.grant_epoch
+                        && state.board_epoch == lease.board_epoch)
+                        || (entry.allows_board_transition && entry.survived_board_transition))
+            })
+            && state.renderer_generation.as_deref() == Some(&lease.renderer_generation)
+    }
+
+    pub fn mcp_release_lease(&self, lease: &McpReadLease) {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        if state
+            .mcp_leases
+            .get(&lease.request_id)
+            .is_some_and(|entry| entry.lease == *lease)
+        {
+            state.mcp_leases.remove(&lease.request_id);
+        }
+    }
+
+    pub fn queue_mcp_read(
+        &self,
+        board_id: Option<&str>,
+        method: &str,
+        params: Value,
+    ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>, McpReadLease), BrokerError> {
+        if !METHODS.contains(&method) {
+            return Err(BrokerError::UnsupportedMethod);
+        }
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        state
+            .mcp_leases
+            .retain(|_, issued| Instant::now() < issued.deadline);
+        if state.mcp_leases.len() >= MAX_MCP_LEASES {
+            return Err(BrokerError::Busy);
+        }
+        if !state.mcp_enabled {
+            return Err(BrokerError::PermissionDenied);
+        }
+        let active = state.active_board_id.clone().ok_or(BrokerError::NotReady)?;
+        let target = board_id.unwrap_or(&active);
+        if !valid_board_id(target) {
+            return Err(BrokerError::InvalidBoardId);
+        }
+        let grant_epoch = state.mcp_grant_epoch;
+        let board_epoch = state.board_epoch;
+        let renderer_generation = state
+            .renderer_generation
+            .clone()
+            .ok_or(BrokerError::NotReady)?;
+        let (request, receiver) = self.queue_locked(
+            &mut state,
+            target,
+            method,
+            params,
+            if method == "screenshot" {
+                MCP_SCREENSHOT_TIMEOUT
+            } else {
+                Duration::from_secs(10)
+            },
+            Some(grant_epoch),
+        )?;
+        let lease = McpReadLease {
+            app_generation: self.app_generation.clone(),
+            request_id: request.request_id.clone(),
+            expires_at_ms: request.expires_at_ms,
+            grant_epoch,
+            board_epoch,
+            renderer_generation,
+            board_id: target.to_owned(),
+        };
+        let deadline = state
+            .pending
+            .get(&request.request_id)
+            .expect("new request missing")
+            .deadline;
+        state.mcp_leases.insert(
+            request.request_id.clone(),
+            IssuedMcpLease {
+                lease: lease.clone(),
+                deadline,
+                allows_board_transition: BOARD_TRANSITION_METHODS.contains(&method),
+                survived_board_transition: false,
+            },
+        );
+        Ok((request, receiver, lease))
     }
 
     pub fn queue(
@@ -227,17 +463,29 @@ impl BoardRequestBroker {
         params: Value,
         timeout: Duration,
     ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>), BrokerError> {
+        let mut state = self.state.lock().expect("board broker lock poisoned");
+        self.queue_locked(&mut state, board_id, method, params, timeout, None)
+    }
+
+    fn queue_locked(
+        &self,
+        state: &mut BrokerState,
+        board_id: &str,
+        method: &str,
+        params: Value,
+        timeout: Duration,
+        mcp_grant_epoch: Option<u64>,
+    ) -> Result<(OutboundRequest, mpsc::Receiver<BoardReply>), BrokerError> {
         if !METHODS.contains(&method) {
             return Err(BrokerError::UnsupportedMethod);
         }
         if !valid_board_id(board_id) {
             return Err(BrokerError::InvalidBoardId);
         }
-        let lifetime = timeout.min(Duration::from_secs(10));
+        let lifetime = timeout.min(MCP_SCREENSHOT_TIMEOUT);
         if lifetime.is_zero() {
             return Err(BrokerError::Timeout);
         }
-        let mut state = self.state.lock().expect("board broker lock poisoned");
         if !state.ready {
             return Err(BrokerError::NotReady);
         }
@@ -267,6 +515,7 @@ impl BoardRequestBroker {
                 + lifetime.as_millis() as u64,
             method: method.to_owned(),
             params,
+            cancellation_epoch: mcp_grant_epoch,
         };
         if serde_json::to_vec(&request)
             .map_err(|_| BrokerError::RequestTooLarge)?
@@ -285,6 +534,7 @@ impl BoardRequestBroker {
                 mutates: !READ_ONLY_METHODS.contains(&method),
                 deadline,
                 sender,
+                mcp_grant_epoch,
             },
         );
         Ok((request, receiver))
@@ -380,13 +630,20 @@ impl BoardRequestBroker {
             let _ = expired.sender.send(outcome);
             return Err(error);
         }
+        let completed_library_transition =
+            state
+                .mcp_leases
+                .get(&reply.request_id)
+                .is_some_and(|issued| {
+                    issued.allows_board_transition && issued.survived_board_transition
+                });
         if reply.schema_version != SCHEMA_VERSION
             || reply.app_generation != self.app_generation
             || reply.renderer_generation != pending.renderer_generation
             || reply.board_epoch != pending.board_epoch
             || reply.board_id != pending.board_id
             || state.renderer_generation.as_deref() != Some(&reply.renderer_generation)
-            || state.board_epoch != reply.board_epoch
+            || (state.board_epoch != reply.board_epoch && !completed_library_transition)
             || !state.ready
         {
             return Err(BrokerError::StaleReply);
@@ -427,6 +684,7 @@ pub(crate) fn board_bridge_state(
     if webview.label() != "main" {
         return Err("Board bridge unavailable".into());
     }
+    let previous_epoch = broker.mcp_status().grant_epoch;
     broker
         .renderer_state(
             &renderer_generation,
@@ -435,6 +693,10 @@ pub(crate) fn board_bridge_state(
             active_board_id.as_deref(),
         )
         .map_err(|_| "Invalid board bridge state".to_string())?;
+    let status = broker.mcp_status();
+    if status.grant_epoch != previous_epoch {
+        let _ = webview.emit("mathboard-board-cancel", status.grant_epoch);
+    }
     Ok(broker.app_generation().to_owned())
 }
 
@@ -470,4 +732,74 @@ pub fn emit_request(
         return Err(BrokerError::NotReady);
     }
     Ok((request_id, receiver))
+}
+
+/** The MCP path admits one of three reads and its grant in the same broker lock. */
+pub fn emit_mcp_read(
+    app: &tauri::AppHandle,
+    broker: &BoardRequestBroker,
+    board_id: Option<&str>,
+    method: &str,
+    params: Value,
+) -> Result<(String, mpsc::Receiver<BoardReply>, McpReadLease), BrokerError> {
+    let (request, receiver, lease) = broker.queue_mcp_read(board_id, method, params)?;
+    let request_id = request.request_id.clone();
+    if app
+        .emit_to("main", "mathboard-board-request", request)
+        .is_err()
+    {
+        broker.cancel(&request_id);
+        broker.mcp_release_lease(&lease);
+        return Err(BrokerError::NotReady);
+    }
+    Ok((request_id, receiver, lease))
+}
+
+/// MCP controls and listener status are only available to the dedicated settings WebView.
+fn native_mcp_status(app: &tauri::AppHandle, broker: &BoardRequestBroker) -> serde_json::Value {
+    let status = broker.mcp_status();
+    let server = app.try_state::<crate::mcp_http::LocalMcpHttpServer>();
+    let endpoint = server.as_ref().and_then(|instance| instance.endpoint());
+    let active = status.enabled && endpoint.is_some();
+    serde_json::json!({
+        "enabled": active,
+        "available": server.is_some(),
+        "endpoint": if active { endpoint } else { None },
+    })
+}
+
+#[tauri::command]
+pub(crate) fn mcp_permission_status(
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+    broker: tauri::State<'_, BoardRequestBroker>,
+) -> Result<serde_json::Value, String> {
+    if webview.label() != crate::mcp_settings::WINDOW_LABEL {
+        return Err("MCP controls unavailable".into());
+    }
+    Ok(native_mcp_status(&app, &broker))
+}
+
+#[tauri::command]
+pub(crate) fn mcp_set_enabled(
+    webview: tauri::Webview,
+    app: tauri::AppHandle,
+    broker: tauri::State<'_, BoardRequestBroker>,
+    enabled: bool,
+) -> Result<serde_json::Value, String> {
+    if webview.label() != crate::mcp_settings::WINDOW_LABEL {
+        return Err("MCP controls unavailable".into());
+    }
+    let server = app
+        .try_state::<crate::mcp_http::LocalMcpHttpServer>()
+        .ok_or("Local MCP HTTP server unavailable")?;
+    let previous_epoch = broker.mcp_status().grant_epoch;
+    server
+        .set_enabled(&broker, enabled)
+        .map_err(|error| format!("Local MCP transport lifecycle failed: {error}"))?;
+    let status = broker.mcp_status();
+    if status.grant_epoch != previous_epoch {
+        let _ = app.emit_to("main", "mathboard-board-cancel", status.grant_epoch);
+    }
+    Ok(native_mcp_status(&app, &broker))
 }

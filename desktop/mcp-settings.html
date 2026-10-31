@@ -1,0 +1,72 @@
+<!doctype html>
+<!--
+MathBoard
+
+Copyright (C) 2026 Giacomo Bartoloni
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>Local assistants — MathBoard</title>
+  <link rel="stylesheet" href="./mcp-settings.css">
+  <script type="module" src="./mcp-settings.js"></script>
+</head>
+<body>
+  <main class="settings">
+    <header>
+      <p class="eyebrow">DESKTOP SETTINGS</p>
+      <h1>Local assistants</h1>
+      <p>Enable or disable local MCP access to MathBoard.</p>
+    </header>
+    <section class="privacy" aria-label="Data sharing notice">
+      <strong>Before allowing access</strong>
+      <p>When MCP is enabled, local assistants may access board content and screenshots.
+        Local assistants can also edit or delete boards.
+        Local transport does not guarantee local processing by an AI provider.</p>
+    </section>
+    <p id="error" role="alert" class="error" hidden></p>
+    <p id="loading" role="status">Reading native permissions…</p>
+    <section id="controls" hidden aria-label="Local MCP permissions">
+      <div class="choice">
+        <div><strong id="enable-label">Allow local MCP connections</strong>
+          <small id="enable-description">When enabled, apps on this computer can read, edit and delete local boards. Off by default; explicit CLI startup can enable it.</small></div>
+        <label class="switch-control" for="enable">
+          <input id="enable" type="checkbox" role="switch" aria-labelledby="enable-label" aria-describedby="enable-description enable-state">
+          <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+          <span id="enable-state" class="switch-state">Disabled</span>
+        </label>
+      </div>
+      <section id="connection" class="connection" hidden aria-label="Local MCP connection">
+        <p><strong>Loopback MCP endpoint</strong></p>
+        <div class="endpoint-row">
+          <code id="endpoint"></code>
+          <span class="copy-action">
+            <button id="copy-endpoint" type="button" aria-describedby="copy-status">Copy MCP URL</button>
+            <span id="copy-status" class="copy-popover" role="status" aria-live="polite" hidden></span>
+          </span>
+        </div>
+        <small>Copy the currently active URL into your local Streamable HTTP MCP client. If the preferred port is occupied, MathBoard automatically uses the next available port. No token or custom header is required.</small>
+      </section>
+      <p class="note">MCP starts disabled unless explicitly enabled by the desktop CLI flag.
+        Switching boards does not disable it. While enabled, other applications
+        on this computer can connect without authentication.</p>
+    </section>
+    <footer><button id="close" type="button">Close</button></footer>
+  </main>
+</body>
+</html>

@@ -127,6 +127,11 @@ test('representative accepted and rejected creation/patch inputs agree with publ
   for (const sample of [
     ...Object.values(help.examplesByType),
     { type: 'text', text: '', fontSize: 22, fontWeight: 500, originX: 0.25, underline: true },
+    { type: 'text', text: 'Wrapped words', width: 220 },
+    { type: 'text', text: 'Invalid wrap', width: 0 },
+    { type: 'rect', width: 0, height: 20 },
+    { type: 'circle', radius: 0 },
+    { type: 'ellipse', rx: 12, ry: 0 },
     { type: 'formula', latex: '\\frac{1}{2}', originY: 'bottom', fill: null },
     { type: 'group', objects: [{ type: 'group', objects: [{ type: 'formula', latex: 'x=1' }] }] },
     { type: 'rect', fill: null, strokeDashArray: [1, 2], mathboardInkMode: 'fixed' },
@@ -289,4 +294,33 @@ test('F018 read-only measure and mutating layout use explicit registry closures'
   assert.equal((await executeLocalAgentCommand(controller, measure.example)).id, 'mbobj_example')
   assert.deepEqual(await executeLocalAgentCommand(controller, layout.example), { objects: [], bounds: {}, safeArea: {} })
   assert.deepEqual(calls, [['measure', 'mbobj_example'], ['layout', layout.example.params]])
+})
+
+test('C14 rejects unsupported command fields before any board mutation', () => {
+  const calls = []
+  const controller = {
+    create: () => calls.push('create'),
+    clear: () => calls.push('clear'),
+  }
+  const workspace = { delete: () => calls.push('boards.delete') }
+  const cases = [
+    { method: 'create', params: { spec: { type: 'text', text: 'Hello' }, dryRun: true } },
+    { method: 'clear', params: { bogus: 1 } },
+    { method: 'create', params: { spec: { type: 'text', text: 'Hello' }, options: { select: false, bogus: true } } },
+    { method: 'boards.delete', params: { boardId: 'mb_example', confirm: true, dryRun: true } },
+  ]
+  for (const command of cases) {
+    assert.throws(() => executeLocalAgentCommand(controller, command, null, workspace),
+      /Invalid board command parameters/)
+  }
+  assert.deepEqual(calls, [])
+})
+
+test('C14 command discovery advertises closed parameter and options objects', () => {
+  for (const descriptor of getLocalAgentHelp().methods) {
+    assert.equal(descriptor.paramsSchema.additionalProperties, false, descriptor.method)
+    if (descriptor.paramsSchema.properties.options) {
+      assert.equal(descriptor.paramsSchema.properties.options.additionalProperties, false, descriptor.method)
+    }
+  }
 })

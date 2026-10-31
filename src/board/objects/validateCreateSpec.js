@@ -18,11 +18,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from './constants.js'
-import { hasValidShapeGeometry } from './shapeGeometry.js'
+import { hasValidShapeGeometry, invalidPathField } from './shapeGeometry.js'
 import { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES as C } from '../BoardControllerError.js'
 
 const TYPE_KEYS = { rect: ['width', 'height', 'rx', 'ry'], circle: ['radius'], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2', 'headLength', 'headWidth'],
-  line: ['x1', 'y1', 'x2', 'y2'], path: ['path'], text: ['text', ...TEXT_KEYS],
+  line: ['x1', 'y1', 'x2', 'y2'], path: ['path'], text: ['text', 'width', ...TEXT_KEYS],
   formula: ['latex'], group: ['objects'] }
 
 const NUMERIC_TRANSFORMS = TRANSFORM_KEYS.filter((key) => !['flipX', 'flipY', 'originX', 'originY'].includes(key))
@@ -66,11 +66,30 @@ export function validateCreateSpec(spec, ancestors = new Set()) {
     && (!Array.isArray(spec.strokeDashArray) || !Array.from(spec.strokeDashArray).every(Number.isFinite))) invalid(C.INVALID_SPEC)
   if ('mathboardInkMode' in spec && !['auto', 'fixed'].includes(spec.mathboardInkMode)) invalid(C.INVALID_SPEC)
   validateValues(spec, C.INVALID_SPEC)
+  // New objects must have paintable geometry. Historical documents keep their
+  // own permissive loader so legacy zero-sized nodes remain readable.
+  if (spec.type === 'rect' && (!Number.isFinite(spec.width) || spec.width <= 0
+    || !Number.isFinite(spec.height) || spec.height <= 0)) invalid(C.INVALID_SPEC)
+  if (spec.type === 'circle' && (!Number.isFinite(spec.radius) || spec.radius <= 0)) invalid(C.INVALID_SPEC)
+  if (spec.type === 'ellipse' && (spec.rx <= 0 || spec.ry <= 0)) invalid(C.INVALID_SPEC)
+  if (spec.type === 'polygon') {
+    const points = spec.points
+    if (!Array.isArray(points) || points.length < 3 || !Array.from(points).every(point =>
+      point && Number.isFinite(point.x) && Number.isFinite(point.y))) invalid(C.INVALID_SPEC)
+    const first = points[0]
+    const second = points.find(point => point.x !== first.x || point.y !== first.y)
+    if (!second || !points.some(point => {
+      const cross = (second.x - first.x) * (point.y - first.y)
+        - (second.y - first.y) * (point.x - first.x)
+      return Number.isFinite(cross) && cross !== 0
+    })) invalid(C.INVALID_SPEC)
+  }
   if (!hasValidShapeGeometry(spec)) invalid(C.INVALID_SPEC)
-  if (spec.type === 'text' && typeof spec.text !== 'string') invalid(C.INVALID_SPEC)
+  if (spec.type === 'text' && (typeof spec.text !== 'string'
+    || ('width' in spec && (!Number.isFinite(spec.width) || spec.width <= 0)))) invalid(C.INVALID_SPEC)
   if (spec.type === 'formula' && (typeof spec.latex !== 'string' || !spec.latex.trim())) invalid(C.INVALID_SPEC)
   if (spec.type === 'line' && !['x1', 'y1', 'x2', 'y2'].every((key) => Number.isFinite(spec[key]))) invalid(C.INVALID_SPEC)
-  if (spec.type === 'path' && !Array.isArray(spec.path)) invalid(C.INVALID_SPEC)
+  if (spec.type === 'path' && invalidPathField(spec.path)) invalid(C.INVALID_SPEC)
   if (spec.type === 'group') {
     if (!Array.isArray(spec.objects)) invalid(C.INVALID_SPEC)
     ancestors.add(spec)

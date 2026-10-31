@@ -50,11 +50,23 @@ export async function waitForCapturePaint(environment,signal) {
       .finally(()=>signal.removeEventListener('abort',abort))
   })
   assertNotAborted(signal)
+  // A backgrounded WebView may stop producing rAF callbacks indefinitely.
+  // Capture renders onto a separate StaticCanvas, so do not block on window paint.
   for(let frame=0;frame<2;frame++) {
     await new Promise((resolve,reject)=>{
-      const abort=()=>{environment.cancelAnimationFrame(id);reject(captureError('capture_failed','Capture paint deadline exceeded.'))}
-      const id=environment.requestAnimationFrame(()=>{signal.removeEventListener('abort',abort);resolve()})
+      let settled=false, timer, id
+      const finish=(callback)=>{
+        if(settled) return
+        settled=true
+        signal.removeEventListener('abort',abort)
+        clearTimeout(timer)
+        if(id!==undefined) environment.cancelAnimationFrame(id)
+        callback()
+      }
+      const abort=()=>finish(()=>reject(captureError('capture_failed','Capture paint deadline exceeded.')))
       signal.addEventListener('abort',abort,{once:true})
+      id=environment.requestAnimationFrame(()=>finish(resolve))
+      timer=setTimeout(()=>finish(resolve),100)
     })
     assertNotAborted(signal)
   }
@@ -179,13 +191,16 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
   return {
     attach(){attach()},
     beginMutation(){pendingMutations++;return ()=>{pendingMutations--}},
-    async screenshot(params) {
+    async screenshot(params, externalSignal) {
       if(disposed) throw captureError('capture_failed','Capture adapter is closed.')
+      if(externalSignal?.aborted) throw captureError('capture_failed','Capture was cancelled.')
       const request=validateCaptureRequest(params)
       if(active>=CAPTURE_LIMITS.maxConcurrentCaptures) throw captureError('capture_failed','Capture concurrency limit reached.')
       active++
       const aborter=new AbortController()
       aborters.add(aborter)
+      const cancel=()=>aborter.abort()
+      externalSignal?.addEventListener('abort',cancel,{once:true})
       let timer
       try {
         return await Promise.race([render(request,aborter.signal),new Promise((_,reject)=>{
@@ -194,7 +209,7 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
       } catch(error) {
         if(['invalid_capture_request','board_not_ready','object_not_found','capture_too_large','capture_failed'].includes(error?.code)) throw error
         throw captureError('capture_failed','Unable to capture the local board.')
-      } finally {clearTimeout(timer);aborter.abort();aborters.delete(aborter);active--}
+      } finally {clearTimeout(timer);externalSignal?.removeEventListener('abort',cancel);aborter.abort();aborters.delete(aborter);active--}
     },
     dispose(){
       if(disposed) return

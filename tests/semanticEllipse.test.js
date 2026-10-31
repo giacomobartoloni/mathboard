@@ -71,7 +71,8 @@ test('ellipse rejects missing, negative and nonfinite radii before mutation', as
   }
   assert.deepEqual(controller.getObjects(), [])
   assert.equal(history.length, 0)
-  assert.equal((await controller.create({ ...spec, rx: 0, ry: 0 })).rx, 0)
+  await assert.rejects(() => controller.create({ ...spec, rx: 0, ry: 0 }),
+    (error) => error.code === 'invalid_object_spec')
 })
 
 test('ellipse in a transformed selection preserves scene bounds and radii across move and delete Undo payloads', async () => {

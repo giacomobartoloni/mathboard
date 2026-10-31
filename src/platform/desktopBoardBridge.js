@@ -20,21 +20,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { createVisualCaptureAdapter } from '../board/capture/visual-capture.js'
-import { boardCommandMutatesBoard } from '../board/agent/command-registry.js'
-import { getDesktopBoardMethods } from '../board/agent/desktop-commands.js'
+import { boardCommandMutatesBoard, executeBoardCommand, getBoardCommandDescriptors } from '../board/agent/command-registry.js'
 import { validateBoardId } from '../board/BoardDocumentCommandService.js'
 
 const SCHEMA_VERSION = 2
 const MAX_REPLY_BYTES = 7 * 1024 * 1024
 const MAX_COMMAND_LIFETIME_MS = 10000
-const allowed = new Set(getDesktopBoardMethods())
+const allowed = new Set(getBoardCommandDescriptors().map(descriptor => descriptor.method))
+const BOARD_TRANSITION_METHODS = new Set(['boards.create', 'boards.open', 'boards.archive', 'boards.delete'])
 const safeCodes = new Set([
   'board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
   'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed',
   'invalid_capture_request', 'capture_too_large', 'capture_failed',
   'invalid_board_id', 'board_conflict', 'board_not_found', 'board_archived',
   'board_context_changed', 'board_context_required', 'command_timeout',
-  'execution_unknown', 'board_busy',
+  'execution_unknown', 'board_busy', 'board_not_archived', 'confirmation_required',
+  'invalid_board_title', 'edit_in_progress',
 ])
 
 function safeError(error) {
@@ -53,6 +54,8 @@ function validEnvelope(request, appGeneration, rendererGeneration) {
     && request.boardEpoch >= 0
     && Number.isSafeInteger(request.expiresAtMs)
     && request.expiresAtMs <= Date.now() + MAX_COMMAND_LIFETIME_MS + 1000
+    && (request.cancellationEpoch === undefined
+      || (Number.isSafeInteger(request.cancellationEpoch) && request.cancellationEpoch >= 0))
     && request.params && Object.getPrototypeOf(request.params) === Object.prototype
 }
 
@@ -73,6 +76,9 @@ export async function connectDesktopBoardBridge(getBoard, {
   let stateQueue = Promise.resolve()
   let commandQueue = Promise.resolve()
   const seenRequestIds = new Set()
+  // Epochs are native transport cancellation tokens, not board-domain permissions.
+  const activeCancellableRequests = new Map()
+  let minimumCancellationEpoch = 0
 
   const publishState = (ready, epoch) => {
     const activeBoardId = board.getBoardId?.() || null
@@ -91,15 +97,15 @@ export async function connectDesktopBoardBridge(getBoard, {
   const unsubscribeLifecycle = lifecycle.subscribe((ready, epoch) => {
     void publishState(ready, epoch).catch(() => {})
   })
-  const handleRequest = async (request) => {
-    if (disposed || !validEnvelope(request, appGeneration, rendererGeneration)) return
+  const handleRequest = async (request, signal) => {
+    if (disposed || signal?.aborted || !validEnvelope(request, appGeneration, rendererGeneration)) return
     const reply = { requestId: request.requestId, appGeneration,
       rendererGeneration, boardEpoch: request.boardEpoch, boardId: request.boardId,
       schemaVersion: SCHEMA_VERSION }
     if (!allowed.has(request.method)) {
       reply.ok = false
       reply.error = { code: 'invalid_command', message: 'Unsupported board command.' }
-    } else if (Date.now() >= request.expiresAtMs) {
+    } else if (signal?.aborted || Date.now() >= request.expiresAtMs) {
       reply.ok = false
       reply.error = { code: 'command_timeout', message: 'Board command expired before execution.' }
     } else if (getBoard() !== board || !lifecycle.isReady() || request.boardEpoch !== lifecycle.epoch) {
@@ -110,11 +116,17 @@ export async function connectDesktopBoardBridge(getBoard, {
       const finish = mutates && request.boardId === board.getBoardId()
         ? capture.beginMutation() : () => {}
       try {
-        reply.result = await board.getBoardDocumentCommands().executeOnBoard(request, {
-          expiresAtMs: request.expiresAtMs,
-          capture,
-          isCurrent: () => !disposed && getBoard() === board && request.boardEpoch === lifecycle.epoch,
-        })
+        reply.result = request.method.startsWith('boards.')
+          ? await executeBoardCommand(null, request, null, board.getBoardWorkspace())
+          : await board.getBoardDocumentCommands().executeOnBoard(request, {
+            expiresAtMs: request.expiresAtMs,
+            signal,
+            capture: signal ? { screenshot: (params) => capture.screenshot(params, signal) } : capture,
+            isCurrent: () => !disposed && !signal?.aborted && getBoard() === board && request.boardEpoch === lifecycle.epoch,
+          })
+        // Lifecycle notifications are serialized to native before we confirm a
+        // library command whose own execution replaced the active board.
+        if (BOARD_TRANSITION_METHODS.has(request.method)) await stateQueue
         reply.ok = true
         if (mutates && Date.now() >= request.expiresAtMs) {
           reply.ok = false
@@ -128,7 +140,7 @@ export async function connectDesktopBoardBridge(getBoard, {
         finish()
       }
     }
-    if (disposed) return
+    if (disposed || signal?.aborted) return
     let replyJson = JSON.stringify(reply)
     if (new TextEncoder().encode(replyJson).length > MAX_REPLY_BYTES) {
       const possibleWrite = boardCommandMutatesBoard(request.method) && reply.ok
@@ -145,21 +157,38 @@ export async function connectDesktopBoardBridge(getBoard, {
   }
   const onRequest = ({ payload }) => {
     if (!validEnvelope(payload, appGeneration, rendererGeneration)) return commandQueue
+    if (payload.cancellationEpoch !== undefined
+      && payload.cancellationEpoch < minimumCancellationEpoch) return commandQueue
     if (seenRequestIds.has(payload.requestId)) return commandQueue
     seenRequestIds.add(payload.requestId)
     if (seenRequestIds.size > 256) seenRequestIds.delete(seenRequestIds.values().next().value)
-    commandQueue = commandQueue.then(() => handleRequest(payload)).catch(() => {})
+    // These workspace commands trigger their own board-context cancellation.
+    // Native still revokes their receipts immediately on MCP Off or renderer loss.
+    const aborter = payload.cancellationEpoch === undefined || BOARD_TRANSITION_METHODS.has(payload.method)
+      ? null : new AbortController()
+    if (aborter) activeCancellableRequests.set(payload.requestId,
+      { aborter, epoch: payload.cancellationEpoch })
+    commandQueue = commandQueue.then(() => handleRequest(payload, aborter?.signal)).catch(() => {})
+      .finally(() => activeCancellableRequests.delete(payload.requestId))
     return commandQueue
   }
 
-  let unlisten
+  let unlisten, unlistenCancellation
   try {
     unlisten = await subscribe('mathboard-board-request', onRequest)
+    unlistenCancellation = await subscribe('mathboard-board-cancel', ({ payload }) => {
+      if (!Number.isSafeInteger(payload) || payload < 0 || payload < minimumCancellationEpoch) return
+      minimumCancellationEpoch = payload
+      for (const { aborter, epoch } of activeCancellableRequests.values()) {
+        if (epoch < payload) aborter.abort()
+      }
+    })
     await publishState(lifecycle.isReady(), lifecycle.epoch)
   } catch (error) {
     disposed = true
     unsubscribeLifecycle()
     unlisten?.()
+    unlistenCancellation?.()
     capture.dispose()
     throw error
   }
@@ -169,6 +198,8 @@ export async function connectDesktopBoardBridge(getBoard, {
     disposed = true
     unsubscribeLifecycle()
     unlisten()
+    unlistenCancellation()
+    for (const { aborter } of activeCancellableRequests.values()) aborter.abort()
     capture.dispose()
     void invokeCommand('board_bridge_state', {
       rendererGeneration, boardEpoch: lifecycle.epoch, activeBoardId: board.getBoardId?.() || null,

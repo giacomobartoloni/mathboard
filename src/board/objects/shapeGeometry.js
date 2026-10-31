@@ -17,6 +17,38 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+// Accepted SVG path command arities; lowercase commands are relative.
+const PATH_ARITY = Object.freeze({
+  M: 2, L: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, T: 2, A: 7, Z: 0,
+})
+
+/** Locate the first malformed path field without coercing its coordinates. */
+export function invalidPathField(path) {
+  if (!Array.isArray(path) || !path.length) return 'path'
+  for (const [index, segment] of path.entries()) {
+    if (!Array.isArray(segment) || typeof segment[0] !== 'string') return `path[${index}]`
+    const command = segment[0].toUpperCase()
+    const arity = PATH_ARITY[command]
+    if (segment[0].length !== 1 || arity === undefined
+      || (index === 0 && command !== 'M')) return `path[${index}][0]`
+    if (segment.length !== arity + 1) return `path[${index}]`
+    for (let i = 1; i < segment.length; i++) {
+      if (typeof segment[i] !== 'number' || !Number.isFinite(segment[i])) {
+        return `path[${index}][${i}]`
+      }
+    }
+    if (command === 'A') {
+      for (const i of [1, 2]) {
+        if (segment[i] < 0) return `path[${index}][${i}]`
+      }
+      for (const i of [4, 5]) {
+        if (segment[i] !== 0 && segment[i] !== 1) return `path[${index}][${i}]`
+      }
+    }
+  }
+  return null
+}
+
 /** Shared geometry checks at create, document and Stamp boundaries. */
 export function hasValidShapeGeometry(node) {
   if (node.type === 'ellipse') {
