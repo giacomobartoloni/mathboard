@@ -226,3 +226,93 @@ test('D12: switching boards waits for a pending IndexedDB save', async t => {
     unblockSave()
   }
 })
+
+test('D12: edits during an in-flight save prevent switching until the newer snapshot is durable', async t => {
+  const context = fixture()
+  t.after(() => context.persistence.dispose())
+  const lesson = await composeLesson(context)
+  const baseline = await context.execute(lesson.lesson.id, 'observe')
+  assert.equal(baseline.objects.length, 25)
+
+  const originalUpdate = context.repository.updateIfRevisionMatches.bind(context.repository)
+  let releaseSave
+  const blockedSave = new Promise(resolve => { releaseSave = resolve })
+  let signalSaveStarted
+  const saveStarted = new Promise(resolve => { signalSaveStarted = resolve })
+  let held = false
+  context.repository.updateIfRevisionMatches = async (...args) => {
+    if (!held && args[0] === lesson.lesson.id) {
+      held = true
+      signalSaveStarted()
+      await blockedSave
+    }
+    return originalUpdate(...args)
+  }
+
+  try {
+    // The first flush snapshots 25 objects, then waits before committing to IndexedDB.
+    const saving = context.persistence.flush()
+    await saveStarted
+    await context.execute(lesson.lesson.id, 'update', {
+      id: lesson.verificationIds[0], patch: { left: 910 },
+    })
+    const marker = await context.execute(lesson.lesson.id, 'create', {
+      spec: { type: 'rect', left: 940, top: 500, width: 18, height: 12 },
+    })
+    const latest = await context.execute(lesson.lesson.id, 'observe')
+    assert.equal(latest.objects.length, 26)
+    assert.equal(latest.revision, baseline.revision)
+    assert.deepEqual(
+      lesson.verificationIds.map(id => latest.objects.find(node => node.id === id)?.left),
+      [910, 820, 820],
+    )
+    assert.equal(latest.objects.find(node => node.id === marker.id)?.left, 940)
+    const latestState = lessonState(latest, lesson.verificationIds, lesson.curveId)
+
+    // A transition may not install another board while the first snapshot is stale.
+    const switching = context.workspace.create({ title: 'Second board' }).then(
+      board => ({ board }),
+      error => ({ error }),
+    )
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(context.persistence.boardId, lesson.lesson.id)
+
+    releaseSave()
+    await saving
+    const outcome = await switching
+    assert.match(outcome.error?.message ?? '', /Current board must be saved before switching boards/)
+    assert.equal(context.persistence.boardId, lesson.lesson.id)
+    assert.equal(context.persistence.status.state, 'dirty')
+
+    const firstSaved = await context.repository.get(lesson.lesson.id)
+    assert.equal(firstSaved.revision, baseline.revision + 1)
+    assert.equal(firstSaved.document.objects.length, 25)
+    assert.equal(firstSaved.document.objects.find(node => node.id === lesson.verificationIds[0])?.left, 820)
+    assert.ok(!firstSaved.document.objects.some(node => node.id === marker.id))
+    const stillLive = await context.execute(lesson.lesson.id, 'observe')
+    assert.equal(stillLive.revision, firstSaved.revision)
+    assert.deepEqual(lessonState(stillLive, lesson.verificationIds, lesson.curveId), latestState)
+
+    // The second flush writes both late edits; retrying the board switch is now safe.
+    await context.persistence.flush()
+    const finalSaved = await context.repository.get(lesson.lesson.id)
+    assert.equal(finalSaved.revision, firstSaved.revision + 1)
+    assert.equal(finalSaved.document.objects.length, 26)
+    assert.equal(finalSaved.document.objects.find(node => node.id === marker.id)?.left, 940)
+    assert.equal(finalSaved.document.objects.find(node => node.id === lesson.verificationIds[0])?.left, 910)
+
+    const second = await context.workspace.create({ title: 'Second board' })
+    assert.equal(context.persistence.boardId, second.id)
+    const inactive = await context.execute(lesson.lesson.id, 'observe')
+    assert.equal(inactive.revision, finalSaved.revision)
+    assert.deepEqual(lessonState(inactive, lesson.verificationIds, lesson.curveId), latestState)
+    assert.equal(inactive.objects.find(node => node.id === marker.id)?.left, 940)
+
+    await context.workspace.open({ boardId: lesson.lesson.id })
+    const reopened = await context.execute(lesson.lesson.id, 'observe')
+    assert.deepEqual(lessonState(reopened, lesson.verificationIds, lesson.curveId), latestState)
+    assert.equal(reopened.objects.find(node => node.id === marker.id)?.left, 940)
+  } finally {
+    releaseSave()
+  }
+})
