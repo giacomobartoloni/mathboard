@@ -37,7 +37,8 @@ fn roundtrip(request: Value) -> Result<IpcReply, McpReadError> {
 fn safe_error(code: &str) -> McpReadError {
     match code {
         "permission_denied" => McpReadError::PermissionDenied,
-        "board_context_required" | "board_context_changed" => McpReadError::BoardContextChanged,
+        "board_context_required" => McpReadError::BoardContextRequired,
+        "board_context_changed" => McpReadError::BoardContextChanged,
         "board_busy" => McpReadError::BoardBusy,
         "invalid_tool_arguments" => McpReadError::InvalidToolArguments,
         "invalid_object_spec" => McpReadError::Domain("invalid_object_spec"),
@@ -157,6 +158,28 @@ impl McpReadBackend for LocalAppBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ipc_board_context_errors_keep_distinct_retry_semantics() {
+        for (wire_code, expected) in [
+            ("board_context_required", McpReadError::BoardContextRequired),
+            ("board_context_changed", McpReadError::BoardContextChanged),
+        ] {
+            let error = read_reply_result(IpcReply::Error {
+                code: wire_code.to_owned(),
+            })
+            .err()
+            .expect("IPC error must not become a successful read");
+            assert_eq!(error, expected);
+            assert_eq!(error.code(), wire_code);
+            let response = error.into_result();
+            assert_eq!(response.is_error, Some(true));
+            assert_eq!(
+                response.structured_content.as_ref().unwrap()["code"],
+                wire_code
+            );
+        }
+    }
+
     #[test]
     fn unknown_error_text_is_never_forwarded() {
         assert_eq!(safe_error("/home/alice/secret"), McpReadError::Internal);
