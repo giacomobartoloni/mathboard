@@ -41,7 +41,7 @@ function makeCanvas() {
   return canvas
 }
 
-function fixture() {
+function fixture({ idleDebounceMs = 60_000, maxWaitMs = 60_000 } = {}) {
   const canvas = makeCanvas()
   const lifecycle = new BoardLifecycle()
   const policy = new BoardObjectPolicy()
@@ -67,9 +67,9 @@ function fixture() {
       removeItem: key => session.delete(key),
     },
     lifecycle,
-    // Keep autosave pending until a transition explicitly flushes the board.
-    idleDebounceMs: 60_000,
-    maxWaitMs: 60_000,
+    // Transition tests use long timers; the autosave test uses a shorter debounce.
+    idleDebounceMs,
+    maxWaitMs,
   })
   const makeController = (commitGuard = () => {}, buildFormula = async () => null) => new BoardController({
     getCanvas: () => canvas,
@@ -315,4 +315,62 @@ test('D12: edits during an in-flight save prevent switching until the newer snap
   } finally {
     releaseSave()
   }
+})
+
+test('D12: active addressed mutations mark the board dirty and autosave the latest objects', async t => {
+  const context = fixture({ idleDebounceMs: 300, maxWaitMs: 2_000 })
+  t.after(() => context.persistence.dispose())
+  const board = await context.workspace.create({ title: 'Autosave tracking' })
+  const initialRevision = (await context.repository.get(board.id)).revision
+  let expectedVersion = context.persistence.changeVersion
+
+  const mutate = async (method, params) => {
+    const result = await context.execute(board.id, method, params)
+    expectedVersion += 1
+    assert.equal(context.persistence.changeVersion, expectedVersion,
+      method + ' must register a document change')
+    assert.equal(context.persistence.status.state, 'dirty',
+      method + ' must mark the board dirty for autosave')
+    return result
+  }
+
+  const nodes = await mutate('createMany', { specs: [
+    ...Array.from({ length: 3 }, (_, i) => ({
+      type: 'text', text: 'Verification ' + (i + 1), left: 420, top: 150 + 32 * i,
+    })),
+    { type: 'rect', width: 20, height: 15, left: 100, top: 100 },
+  ] })
+  assert.equal(nodes.length, 4)
+  for (const node of nodes.slice(0, 3)) {
+    await mutate('update', { id: node.id, patch: { left: 820 } })
+  }
+  const curve = await mutate('create', {
+    spec: { type: 'path', path: [
+      ['M', 64, 532], ['L', 101.5, 565.25], ['Q', 140, 580, 176.5, 532],
+    ] },
+  })
+  assert.equal(expectedVersion, 5)
+
+  const observed = await context.execute(board.id, 'observe')
+  assert.equal(observed.objects.length, 5)
+  assert.equal(context.persistence.changeVersion, expectedVersion)
+
+  // Do not flush explicitly or switch boards: autosave must persist the edits.
+  const deadline = Date.now() + 5_000
+  while (context.persistence.status.state !== 'clean' && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+  assert.equal(context.persistence.status.state, 'clean',
+    'autosave must finish without an explicit flush or board transition')
+  const saved = await context.repository.get(board.id)
+  assert.ok(saved.revision > initialRevision)
+  assert.equal(saved.revision, context.persistence.revision)
+  assert.deepEqual(saved.document.objects.map(node => node.id),
+    observed.objects.map(node => node.id))
+  assert.deepEqual(
+    nodes.slice(0, 3).map(node => saved.document.objects.find(item => item.id === node.id)?.left),
+    [820, 820, 820],
+  )
+  assert.deepEqual(saved.document.objects.find(node => node.id === curve.id)?.path,
+    observed.objects.find(node => node.id === curve.id)?.path)
 })
