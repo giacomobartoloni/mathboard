@@ -69,7 +69,7 @@ export class BoardDocumentCommandService {
     getActiveController, getActiveRevision = () => null,
     buildFormula, createCanvas = defaultCanvas,
     prepareCreatedObject = () => {}, prepareUpdatedObject = () => {},
-    now = () => new Date().toISOString() }) {
+    onCommittedOperation = () => {}, now = () => new Date().toISOString() }) {
     this._repository = repository
     this._policy = boardObjectPolicy
     this._lifecycle = lifecycle
@@ -80,6 +80,7 @@ export class BoardDocumentCommandService {
     this._createCanvas = createCanvas
     this._prepareCreatedObject = prepareCreatedObject
     this._prepareUpdatedObject = prepareUpdatedObject
+    this._onCommittedOperation = onCommittedOperation
     this._now = now
     this._activeRenders = 0
   }
@@ -121,6 +122,7 @@ export class BoardDocumentCommandService {
     const boardId = validateBoardId(request?.boardId)
     const method = request?.method
     if (!allowed.has(method)) throw new BoardTargetError('invalid_command')
+    const interactionChannel = context.interactionChannel === 'mcp' ? 'mcp' : 'local_agent'
     const expiresAtMs = context.expiresAtMs
     if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= 0
       || expiresAtMs > Date.now() + MAX_REQUEST_LIFETIME_MS + 1000) {
@@ -150,7 +152,7 @@ export class BoardDocumentCommandService {
         throw new BoardTargetError('board_conflict')
       }
       const result = await executeDesktopBoardCommand(this._getActiveController(guard,
-        spec => this._renderFormula(spec, guard, context, expiresAtMs)), request,
+        spec => this._renderFormula(spec, guard, context, expiresAtMs), interactionChannel), request,
         context.capture)
       try { guard() } catch (error) {
         if (boardCommandMutatesBoard(method)) throw new BoardTargetError('execution_unknown')
@@ -163,6 +165,7 @@ export class BoardDocumentCommandService {
     const canvas = this._createCanvas()
     const owned = new Set()
     const history = []
+    let committedEffect = null
     try {
       const materialized = await materializeBoardDocument(record.document, {
         buildFormula: spec => this._renderFormula(spec, guard, context, expiresAtMs),
@@ -181,6 +184,7 @@ export class BoardDocumentCommandService {
         isMutationStable: () => true,
         getBoardId: () => boardId,
         commitGuard: guard,
+        onCommittedOperation: effect => { committedEffect = effect },
       })
       let result = await executeDesktopBoardCommand(controller, request)
       for (const entry of history) {
@@ -207,6 +211,11 @@ export class BoardDocumentCommandService {
         if (current.archivedAt || current.trashedAt) throw new BoardTargetError('board_archived')
         return { ...current, document, kind: 'saved', updatedAt }
       })
+      if (committedEffect) {
+        try { this._onCommittedOperation(committedEffect, interactionChannel) } catch {
+          // Analytics cannot undo a committed document.
+        }
+      }
       try { guard() } catch { throw new BoardTargetError('execution_unknown') }
       return result
     } finally {

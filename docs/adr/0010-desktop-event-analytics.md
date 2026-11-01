@@ -59,3 +59,21 @@ generic errors and do not change editor results.
   collection outside the approved behavior.
 - Send desktop pageviews. The desktop experience does not have the web pageview
   lifecycle, and this phase needs only semantic events.
+
+## Local MCP provenance (2026-11-01)
+
+The native MCP-to-WebView bridge assigns the internal `mcp` interaction
+channel. MCP tool parameters cannot select it. Active board commands reuse the
+BoardController committed-operation callback; detached commands notify the
+same analytics owner only after a successful IndexedDB revision compare-and-swap.
+Rejected, failed and no-op commands emit no event. Analytics failure cannot
+affect the result of a committed mutation.
+
+Only the existing `object_created`, `object_deleted` and `formula_edited`
+events may additionally carry `interaction_channel: mcp`. The native allowlist
+rejects other provenance values and unknown fields. Existing UI/local-agent
+payloads remain unchanged and MCP does not advance human engagement/milestones.
+Group, layout, update and board-library commands do not yet have dedicated
+provider events; extending that taxonomy requires a separate product/privacy
+decision. No board content, ID, title, coordinates or prompt is transmitted.
+The established DNT, drop-on-failure and no-retry rules remain unchanged.

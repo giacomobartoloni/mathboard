@@ -46,6 +46,7 @@ async function fixture() {
   const lifecycle = new BoardLifecycle()
   let currentId = activeId
   let disposed = 0
+  const effects = []
   const service = new BoardDocumentCommandService({
     repository,
     boardObjectPolicy: new BoardObjectPolicy(),
@@ -58,8 +59,9 @@ async function fixture() {
       return canvas
     },
     buildFormula: async spec => new FormulaObject([new Path('M 0 0 L 20 20')], { ...spec, latex: spec.latex }),
+    onCommittedOperation: (effect, interactionChannel) => effects.push({ effect, interactionChannel }),
   })
-  return { repository, activeId, targetId, visible, lifecycle, service,
+  return { repository, activeId, targetId, visible, lifecycle, service, effects,
     setCurrentId: id => { currentId = id }, disposed: () => disposed }
 }
 
@@ -262,4 +264,68 @@ test('unresponsive formula rendering releases the detached canvas at the deadlin
   resolveFormula(late)
   await new Promise(resolve => setImmediate(resolve))
   assert.equal(lateDisposed, true)
+})
+
+
+test('native MCP channel comes from trusted context, not model command fields', async () => {
+  const { activeId, service } = await fixture()
+  const channels = []
+  service._getActiveController = (_guard, _buildFormula, channel) => {
+    channels.push(channel)
+    return { observe: () => ({ objects: [] }) }
+  }
+  await service.executeOnBoard({ boardId: activeId, method: 'observe', params: {},
+    interactionChannel: 'mcp' }, { expiresAtMs: Date.now() + 10000 })
+  await service.executeOnBoard({ boardId: activeId, method: 'observe', params: {} },
+    { expiresAtMs: Date.now() + 10000, interactionChannel: 'mcp' })
+  assert.deepEqual(channels, ['local_agent', 'mcp'])
+})
+
+test('detached MCP analytics fires once after CAS, not at temporary canvas commit', async () => {
+  const { repository, targetId, service, effects } = await fixture()
+  const update = repository.updateIfRevisionMatches.bind(repository)
+  let release
+  repository.updateIfRevisionMatches = (...args) => new Promise(resolve => {
+    release = () => resolve(update(...args))
+  })
+  const pending = service.executeOnBoard({ boardId: targetId, method: 'createMany', params: {
+    specs: [
+      { type: 'rect', width: 10, height: 10 },
+      { type: 'rect', width: 20, height: 20 },
+    ],
+  } }, { expiresAtMs: Date.now() + 10000, interactionChannel: 'mcp' })
+  while (!release) await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(effects, [])
+  release()
+  const created = await pending
+  assert.equal(created.length, 2)
+  assert.equal((await repository.get(targetId)).document.objects.length, 2)
+  assert.deepEqual(effects, [{ effect: {
+    kind: 'create', objectKinds: ['shape', 'shape'],
+  }, interactionChannel: 'mcp' }])
+})
+
+test('detached no-ops, invalid writes and CAS conflicts produce no analytics', async () => {
+  const { repository, targetId, service, effects } = await fixture()
+  const context = { expiresAtMs: Date.now() + 10000, interactionChannel: 'mcp' }
+  await service.executeOnBoard({ boardId: targetId, method: 'clear', params: {} }, context)
+  await assert.rejects(() => service.executeOnBoard({ boardId: targetId, method: 'create',
+    params: { spec: { type: 'unknown', width: 10 } } }, context))
+  assert.deepEqual(effects, [])
+  repository.updateIfRevisionMatches = () => {
+    throw Object.assign(new Error('conflict'), { code: 'board_conflict' })
+  }
+  await assert.rejects(() => service.executeOnBoard({ boardId: targetId, method: 'create',
+    params: { spec: { type: 'rect', width: 10, height: 10 } } }, context),
+  { code: 'board_conflict' })
+  assert.deepEqual(effects, [])
+})
+
+test('failed analytics never changes the successful detached persistence outcome', async () => {
+  const { repository, targetId, service } = await fixture()
+  service._onCommittedOperation = () => { throw new Error('offline') }
+  const created = await service.executeOnBoard({ boardId: targetId, method: 'create',
+    params: { spec: { type: 'rect', width: 10, height: 10 } } },
+  { expiresAtMs: Date.now() + 10000, interactionChannel: 'mcp' })
+  assert.equal((await repository.get(targetId)).document.objects[0].id, created.id)
 })

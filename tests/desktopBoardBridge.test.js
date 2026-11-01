@@ -36,10 +36,12 @@ test('desktop bridge routes an addressed inactive request and echoes its board I
   let onRequest
   const calls = []
   const routed = []
+  const contexts = []
   const board = { _boardLifecycle: lifecycle, sessionReady: true,
     getBoardId: () => 'mb_active',
-    getBoardDocumentCommands: () => ({ executeOnBoard: async command => {
+    getBoardDocumentCommands: () => ({ executeOnBoard: async (command, context) => {
       routed.push(command)
+      contexts.push(context)
       return { boardId: command.boardId, objects: [] }
     } }),
   }
@@ -58,6 +60,8 @@ test('desktop bridge routes an addressed inactive request and echoes its board I
     expiresAtMs: Date.now() + 10000, method: 'observe', params: {} } })
   assert.equal(routed.length, 1)
   assert.equal(routed[0].boardId, 'mb_other')
+  assert.equal(contexts[0].interactionChannel, 'mcp')
+  assert.equal(routed[0].interactionChannel, undefined)
   const reply = JSON.parse(calls.find(call => call.name === 'board_bridge_reply').args.replyJson)
   assert.equal(reply.boardId, 'mb_other')
   assert.equal(reply.schemaVersion, 2)

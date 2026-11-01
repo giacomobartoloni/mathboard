@@ -273,13 +273,16 @@ export default {
         lifecycle: this._boardLifecycle,
         getActiveBoardId: () => this.getBoardId(),
         getActiveRevision: () => this._persistence?.revision ?? null,
-        getActiveController: (guard, buildFormula) => this._ensureBoardController('local_agent', guard, buildFormula),
+        getActiveController: (guard, buildFormula, interactionChannel) =>
+          this._ensureBoardController(interactionChannel, guard, buildFormula),
         buildFormula: (spec) => buildFormulaFromSemanticSpec(spec, {
           defaultInk: this.boardThemeConfig.defaultInk,
           render: (args) => this._formulaRenderer.render(args),
         }),
         prepareCreatedObject: (object) => this._applyBoardDefaultInkToObjectTree(object),
         prepareUpdatedObject: (object) => this._syncObjectAutoInk(object, this.boardThemeConfig),
+        onCommittedOperation: (effect, interactionChannel) =>
+          this._boardAnalytics.record(effect, { interactionChannel }),
       });
       return this._documentCommands;
     },

@@ -133,3 +133,22 @@ test('only UI commits advance the injected 5/20/50 human action milestones', () 
     { name: 'object_created', metadata: { object_type: 'path' } },
   ])
 })
+
+
+test('MCP provenance is categorical on existing events and excludes all board content', () => {
+  const { analytics, calls } = setup()
+  analytics.record({ kind: 'create', objectKinds: ['formula'], latex: 'private' }, { interactionChannel: 'mcp' })
+  analytics.record({ kind: 'delete', objectKinds: ['text', 'path'], boardId: 'private' }, { interactionChannel: 'mcp' })
+  analytics.record({ kind: 'formula_edit', latex: 'private' }, { interactionChannel: 'mcp' })
+  analytics.record({ kind: 'update', text: 'private' }, { interactionChannel: 'mcp' })
+  assert.equal(calls.length, 3)
+  assert.deepEqual(calls[0], ['event', 'object_created',
+    { object_type: 'formula', interaction_channel: 'mcp' }])
+  assert.deepEqual(calls[1], ['event', 'object_deleted', {
+    selection_count: 2, object_type: 'mixed', path_count: 1, shape_count: 0,
+    text_count: 1, formula_count: 0, group_count: 0, unknown_count: 0,
+    interaction_channel: 'mcp',
+  }])
+  assert.deepEqual(calls[2], ['event', 'formula_edited', { interaction_channel: 'mcp' }])
+  assert.doesNotMatch(JSON.stringify(calls), /private/)
+})
