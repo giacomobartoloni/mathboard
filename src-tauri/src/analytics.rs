@@ -108,8 +108,11 @@ fn valid_creation(metadata: &Map<String, Value>) -> bool {
         "stamp",
         "stamp_template",
     ];
-    fields(metadata, &["object_type", "shape", "interaction_channel"], &["object_type"])
-        && valid_mcp_channel(metadata)
+    fields(
+        metadata,
+        &["object_type", "shape", "interaction_channel"],
+        &["object_type"],
+    ) && valid_mcp_channel(metadata)
         && category(metadata, "object_type", TYPES)
         && match metadata.get("shape") {
             None => true,
