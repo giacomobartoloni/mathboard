@@ -88,7 +88,9 @@ test('untrusted fields and values cannot escape into provider metadata', () => {
     { interactionChannel: 'mcp', secret: 'private-text' })
   analytics.record({ kind: 'undo', commandType: 'private-text' }, { interactionChannel: 'mcp' })
   analytics.record({ kind: 'create', objectKinds: ['text'] }, { interactionChannel: 'untrusted' })
-  assert.deepEqual(calls, [['event', 'object_created', { object_type: 'unknown' }]])
+  assert.deepEqual(calls, [['event', 'object_created', {
+    object_type: 'unknown', interaction_channel: 'mcp',
+  }]])
 })
 
 test('a failing analytics dependency cannot interrupt the editor operation', () => {
