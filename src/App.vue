@@ -941,13 +941,14 @@ body {
 
 .logo {
   font-family: 'Satisfy', cursive;
-  font-size: normal;
-  
+  font-size: 24px;
+  line-height: normal;
+
   color: whitesmoke;
   background-color: rgb(61, 61, 61);
-  border-radius: 5px;
-  padding: 5px 10px ;
-  border: tan 3px solid;
+  border-radius: 8px;
+  padding: 8px 15px;
+  border: tan 4px solid;
 
     position: absolute;
     z-index: 10;
@@ -958,8 +959,7 @@ body {
     -ms-flex-direction: row;
     flex-direction: row;
     z-index: 200;
-    transform: scale(1.5);
-    transform-origin: top left;
+    /* Render Satisfy at its final size instead of scaling a composited layer. */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
                 0 2px 4px rgba(0, 0, 0, 0.1);
 
@@ -1078,10 +1078,7 @@ body {
   .board-topbar .logo {
     position: static;
     flex: 0 0 auto;
-    transform: none;
-    font-size: 24px;
-    padding: 8px 15px;
-    border-width: 4px;
+    border-radius: 5px;
     white-space: nowrap;
   }
   .board-library-trigger {
