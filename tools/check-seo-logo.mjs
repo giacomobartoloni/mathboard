@@ -68,12 +68,12 @@ const APP_HTML = `<!doctype html>
     /* Copied verbatim from src/App.vue .logo */
     .logo {
       font-family: 'Satisfy', cursive;
-      font-size: normal;
+      font-size: 24px;
       color: whitesmoke;
       background-color: rgb(61, 61, 61);
-      border-radius: 5px;
-      padding: 5px 10px ;
-      border: tan 3px solid;
+      border-radius: 8px;
+      padding: 8px 15px;
+      border: tan 4px solid;
       position: absolute;
       z-index: 10;
       left: 40px;
@@ -83,8 +83,6 @@ const APP_HTML = `<!doctype html>
       -ms-flex-direction: row;
       flex-direction: row;
       z-index: 200;
-      transform: scale(1.5);
-      transform-origin: top left;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
                   0 2px 4px rgba(0, 0, 0, 0.1);
     }
@@ -185,7 +183,7 @@ function valuesMatch(appVal, seoVal, prop) {
     return normalizeShadow(appVal) === normalizeShadow(seoVal)
   }
   if (prop === 'transform') {
-    // matrix equivalence for scale(1.5)
+    // Matrix equivalence for any future transform changes.
     const parse = (v) => {
       const m = v.match(/matrix\(([^)]+)\)/)
       if (!m) return v
@@ -226,6 +224,12 @@ async function main() {
     }
     if (!seo.fontFamily.includes('Satisfy')) {
       failures.push(`seo font not Satisfy: ${seo.fontFamily}`)
+    }
+
+    for (const logo of [app, seo]) {
+      if (logo.values.fontSize !== '24px' || logo.values.transform !== 'none') {
+        failures.push(`logo must render natively at 24px without transform: font=${logo.values.fontSize}, transform=${logo.values.transform}`)
+      }
     }
 
     for (const prop of COMPARE_PROPS) {
