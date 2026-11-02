@@ -329,3 +329,15 @@ test('failed analytics never changes the successful detached persistence outcome
   { expiresAtMs: Date.now() + 10000, interactionChannel: 'mcp' })
   assert.equal((await repository.get(targetId)).document.objects[0].id, created.id)
 })
+
+
+// The internal durability policy must never become an advertised or accepted command parameter.
+test('durability policy is absent from public board command discovery and rejected in params', async () => {
+  const { getBoardCommandDescriptors } = await import('../src/board/agent/command-registry.js')
+  assert.equal(JSON.stringify(getBoardCommandDescriptors()).includes('awaitPersistence'), false)
+  const { repository, targetId, service } = await fixture()
+  await assert.rejects(service.executeOnBoard({ boardId: targetId, method: 'create',
+    params: { spec: { type: 'rect', width: 10, height: 10 }, awaitPersistence: true } },
+  { expiresAtMs: Date.now() + 10_000, awaitPersistence: true }), /Invalid board command parameters/)
+  assert.equal((await repository.get(targetId)).revision, 1)
+})

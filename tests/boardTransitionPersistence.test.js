@@ -89,13 +89,16 @@ function fixture({ idleDebounceMs = 60_000, maxWaitMs = 60_000 } = {}) {
     lifecycle,
     getActiveBoardId: () => persistence.boardId,
     getActiveRevision: () => persistence.revision,
+    getActiveChangeVersion: () => persistence.changeVersion,
+    getActiveCommitSequence: () => history.committedSequence(),
+    flushActiveThrough: version => persistence.flushThrough(version),
     getActiveController: makeController,
     buildFormula: async () => null,
     createCanvas: makeCanvas,
   })
-  const execute = (boardId, method, params = {}) => commands.executeOnBoard(
+  const execute = (boardId, method, params = {}, context = {}) => commands.executeOnBoard(
     { boardId, method, params },
-    { expiresAtMs: Date.now() + 10_000 },
+    { expiresAtMs: Date.now() + 10_000, ...context },
   )
   return { repository, persistence, history, workspace, execute }
 }
@@ -373,4 +376,147 @@ test('D12: active addressed mutations mark the board dirty and autosave the late
   )
   assert.deepEqual(saved.document.objects.find(node => node.id === curve.id)?.path,
     observed.objects.find(node => node.id === curve.id)?.path)
+})
+
+
+// An acknowledged native MCP active mutation must wait for the IndexedDB transaction.
+test('D12: trusted awaited mutation returns only after IndexedDB commits its snapshot', async t => {
+  const context = fixture()
+  t.after(() => context.persistence.dispose())
+  const board = await context.workspace.create({ title: 'Awaited MCP write' })
+  const save = context.repository.updateIfRevisionMatches.bind(context.repository)
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  let started
+  const entered = new Promise(resolve => { started = resolve })
+  context.repository.updateIfRevisionMatches = async (...args) => {
+    started()
+    await held
+    return save(...args)
+  }
+
+  let settled = false
+  const creating = context.execute(board.id, 'create', {
+    spec: { type: 'rect', width: 20, height: 10 },
+  }, { awaitPersistence: true }).then(result => { settled = true; return result })
+  try {
+    await entered
+    assert.equal(settled, false)
+    assert.equal((await context.repository.get(board.id)).revision, 1)
+  } finally {
+    release()
+  }
+  const created = await creating
+  const persisted = await context.repository.get(board.id)
+  assert.equal(settled, true)
+  assert.equal(persisted.revision, 2)
+  assert.deepEqual(persisted.document.objects.map(node => node.id), [created.id])
+  assert.equal(context.persistence.status.state, 'clean')
+  assert.equal(context.persistence._persistedChangeVersion, context.persistence.changeVersion)
+})
+
+test('D12: awaited mutation waits past an older in-flight autosave', async t => {
+  const context = fixture()
+  t.after(() => context.persistence.dispose())
+  const board = await context.workspace.create({ title: 'Overlapping saves' })
+  const first = await context.execute(board.id, 'create', {
+    spec: { type: 'rect', width: 20, height: 20 },
+  })
+  const actual = context.repository.updateIfRevisionMatches.bind(context.repository)
+  const release = []
+  const entered = []
+  const waitingFor = []
+  for (let i = 0; i < 2; i += 1) {
+    waitingFor.push(new Promise(resolve => { entered.push(resolve) }))
+  }
+  context.repository.updateIfRevisionMatches = async (...args) => {
+    const index = release.length
+    let allow
+    const gate = new Promise(resolve => { allow = resolve })
+    release.push(allow)
+    if (index < entered.length) entered[index]()
+    await gate
+    return actual(...args)
+  }
+  const initialSave = context.persistence.flush()
+  await waitingFor[0]
+  let settled = false
+  const secondWrite = context.execute(board.id, 'create', {
+    spec: { type: 'rect', width: 30, height: 30 },
+  }, { awaitPersistence: true }).then(result => { settled = true; return result })
+  try {
+    release[0]()
+    await initialSave
+    await waitingFor[1]
+    const firstSnapshot = await context.repository.get(board.id)
+    assert.deepEqual(firstSnapshot.document.objects.map(node => node.id), [first.id])
+    assert.equal(settled, false)
+  } finally {
+    release[0]?.()
+    // Release any subsequent save even if an assertion fails.
+    if (release[1]) release[1]()
+  }
+  const second = await secondWrite
+  const saved = await context.repository.get(board.id)
+  assert.deepEqual(saved.document.objects.map(node => node.id), [first.id, second.id])
+  assert.equal(saved.revision, 3)
+  assert.equal(settled, true)
+})
+
+test('D12: all five awaited MCP lesson mutations persist before acknowledgement and survive reopen', async t => {
+  const context = fixture()
+  t.after(() => context.persistence.dispose())
+  const durable = { ...context,
+    execute: (boardId, method, params) => context.execute(boardId, method, params, { awaitPersistence: true }),
+  }
+  const lesson = await composeLesson(durable)
+  const live = await context.execute(lesson.lesson.id, 'observe')
+  const record = await context.repository.get(lesson.lesson.id)
+  assert.equal(record.revision, 6)
+  assert.equal(record.document.objects.length, 25)
+  assert.deepEqual(record.document.objects.map(node => node.id), live.objects.map(node => node.id))
+  assert.deepEqual(lesson.verificationIds.map(id =>
+    record.document.objects.find(node => node.id === id)?.left), [820, 820, 820])
+  assert.ok(record.document.objects.find(node => node.id === lesson.curveId)?.path)
+  const before = { revision: record.revision, state: lessonState(live, lesson.verificationIds, lesson.curveId) }
+  const next = await context.workspace.create({ title: 'Second board' })
+  await context.workspace.open({ boardId: lesson.lesson.id })
+  const reopened = await context.execute(lesson.lesson.id, 'observe')
+  assert.deepEqual(lessonState(reopened, lesson.verificationIds, lesson.curveId), before.state)
+  assert.equal(next.id !== lesson.lesson.id, true)
+})
+
+test('D12: failed awaited save never reports success for a committed canvas mutation', async t => {
+  const context = fixture()
+  t.after(() => context.persistence.dispose())
+  const board = await context.workspace.create({ title: 'Save failure' })
+  context.repository.updateIfRevisionMatches = async () => { throw new Error('simulated IndexedDB failure') }
+  await assert.rejects(context.execute(board.id, 'create', {
+    spec: { type: 'rect', width: 20, height: 10 },
+  }, { awaitPersistence: true }), { code: 'execution_unknown' })
+  assert.equal(context.history.summary().length, 1)
+  assert.equal(context.persistence.status.state, 'error')
+  assert.deepEqual((await context.repository.get(board.id)).document.objects, [])
+})
+
+test('D12: missing dirty notification is an unknown MCP result, not a false durable ack', async t => {
+  const context = fixture()
+  t.after(() => context.persistence.dispose())
+  const board = await context.workspace.create({ title: 'Notification gap' })
+  context.history._onDocumentChanged = () => {}
+  await assert.rejects(context.execute(board.id, 'create', {
+    spec: { type: 'rect', width: 20, height: 10 },
+  }, { awaitPersistence: true }), { code: 'execution_unknown' })
+  assert.equal(context.history.summary().length, 1)
+  assert.deepEqual((await context.repository.get(board.id)).document.objects, [])
+})
+
+test('D12: awaited no-op does not force a save or revision', async t => {
+  const context = fixture()
+  t.after(() => context.persistence.dispose())
+  const board = await context.workspace.create({ title: 'Empty no-op' })
+  const result = await context.execute(board.id, 'clear', {}, { awaitPersistence: true })
+  assert.deepEqual(result, [])
+  assert.equal(context.persistence.changeVersion, 0)
+  assert.equal((await context.repository.get(board.id)).revision, 1)
 })
