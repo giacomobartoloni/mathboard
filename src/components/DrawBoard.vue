@@ -273,6 +273,8 @@ export default {
         lifecycle: this._boardLifecycle,
         getActiveBoardId: () => this.getBoardId(),
         getActiveRevision: () => this._persistence?.revision ?? null,
+        getActiveChangeVersion: () => this._persistence?.changeVersion ?? null,
+        flushActiveThrough: version => this._ensurePersistenceService().flushThrough(version),
         getActiveController: (guard, buildFormula, interactionChannel) =>
           this._ensureBoardController(interactionChannel, guard, buildFormula),
         buildFormula: (spec) => buildFormulaFromSemanticSpec(spec, {

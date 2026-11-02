@@ -110,6 +110,7 @@ export class BoardPersistenceService {
     this.revision = null
     this.title = 'Untitled board'
     this.changeVersion = 0
+    this._persistedChangeVersion = 0
     this._idleTimer = null
     this._maxTimer = null
     this._savePromise = null
@@ -272,6 +273,7 @@ export class BoardPersistenceService {
         })
         assertSavingBoard()
         this.revision = boardRevision(record)
+        this._persistedChangeVersion = savingVersion
 
         if (this.changeVersion === savingVersion) {
           this._setStatus({
@@ -305,6 +307,36 @@ export class BoardPersistenceService {
     return this._savePromise
   }
 
+  /**
+   * Await an IndexedDB commit containing at least targetChangeVersion.
+   * An already-running save may contain an older canvas snapshot.
+   */
+  async flushThrough(targetChangeVersion) {
+    if (!Number.isSafeInteger(targetChangeVersion) || targetChangeVersion < 0
+      || targetChangeVersion > this.changeVersion || !this.boardId) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+        'Cannot confirm the requested board change.')
+    }
+    const boardId = this.boardId
+    while (this._persistedChangeVersion < targetChangeVersion) {
+      if (this.boardId !== boardId) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'Active board changed before persistence completed.')
+      }
+      await this.flush()
+      if (this._persistedChangeVersion < targetChangeVersion
+        && this.status.state !== SAVE_STATES.DIRTY) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'The requested board change has not been persisted.')
+      }
+    }
+    if (this.boardId !== boardId) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+        'Active board changed before persistence completed.')
+    }
+    return this.revision
+  }
+
   /** Save the still-visible dirty canvas under a new ID after a CAS conflict. */
   recoverConflictAsCopy() {
     return this._withTransition(async token => {
@@ -321,6 +353,7 @@ export class BoardPersistenceService {
       this.revision = record.revision
       this.title = record.title
       this.changeVersion = 0
+      this._persistedChangeVersion = 0
       this._conflicted = false
       this._writeActiveBoardId(record.id)
       this._setStatus({ state: SAVE_STATES.CLEAN, error: null, errorCode: null,
@@ -388,6 +421,7 @@ export class BoardPersistenceService {
     this._conflicted = false
     this.title = record.title
     this.changeVersion = 0
+    this._persistedChangeVersion = 0
     this._writeActiveBoardId(record.id)
     this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: record.updatedAt, error: null })
     this._reportActiveBoard()
@@ -610,6 +644,7 @@ export class BoardPersistenceService {
     this._conflicted = false
     this.title = record.title || record.document.title || 'Untitled board'
     this.changeVersion = 0
+    this._persistedChangeVersion = 0
     this._writeActiveBoardId(record.id)
     if (this._readRecoveryBoardId() === record.id) {
       this._writeRecoveryBoardId(null)
@@ -654,6 +689,7 @@ export class BoardPersistenceService {
     this._conflicted = false
     this.title = record.title
     this.changeVersion = 0
+    this._persistedChangeVersion = 0
     this._writeActiveBoardId(record.id)
     this._setStatus({
       state: SAVE_STATES.CLEAN,

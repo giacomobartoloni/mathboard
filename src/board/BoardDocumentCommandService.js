@@ -67,6 +67,7 @@ function collectObject(owned, object) {
 export class BoardDocumentCommandService {
   constructor({ repository, boardObjectPolicy, lifecycle, getActiveBoardId,
     getActiveController, getActiveRevision = () => null,
+    getActiveChangeVersion = () => null, flushActiveThrough = async () => {},
     buildFormula, createCanvas = defaultCanvas,
     prepareCreatedObject = () => {}, prepareUpdatedObject = () => {},
     onCommittedOperation = () => {}, now = () => new Date().toISOString() }) {
@@ -76,6 +77,8 @@ export class BoardDocumentCommandService {
     this._getActiveBoardId = getActiveBoardId
     this._getActiveController = getActiveController
     this._getActiveRevision = getActiveRevision
+    this._getActiveChangeVersion = getActiveChangeVersion
+    this._flushActiveThrough = flushActiveThrough
     this._buildFormula = buildFormula
     this._createCanvas = createCanvas
     this._prepareCreatedObject = prepareCreatedObject
@@ -151,9 +154,25 @@ export class BoardDocumentCommandService {
       if (loadedRevision !== null && record.revision !== loadedRevision) {
         throw new BoardTargetError('board_conflict')
       }
+      const waitForPersistence = context.awaitPersistence === true && boardCommandMutatesBoard(method)
+      const beforeVersion = waitForPersistence ? this._getActiveChangeVersion() : null
       const result = await executeDesktopBoardCommand(this._getActiveController(guard,
         spec => this._renderFormula(spec, guard, context, expiresAtMs), interactionChannel), request,
         context.capture)
+      if (waitForPersistence) {
+        try {
+          const committedVersion = this._getActiveChangeVersion()
+          if (!Number.isSafeInteger(beforeVersion) || !Number.isSafeInteger(committedVersion)
+            || committedVersion < beforeVersion) throw new Error('Missing active board version.')
+          if (committedVersion > beforeVersion) {
+            guard()
+            await this._flushActiveThrough(committedVersion)
+          }
+        } catch {
+          // The canvas mutation may already be committed. Never imply rollback.
+          throw new BoardTargetError('execution_unknown')
+        }
+      }
       try { guard() } catch (error) {
         if (boardCommandMutatesBoard(method)) throw new BoardTargetError('execution_unknown')
         throw error

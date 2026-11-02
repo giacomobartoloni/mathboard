@@ -121,6 +121,7 @@ export async function connectDesktopBoardBridge(getBoard, {
           : await board.getBoardDocumentCommands().executeOnBoard(request, {
             expiresAtMs: request.expiresAtMs,
             interactionChannel: 'mcp',
+            awaitPersistence: true,
             signal,
             capture: signal ? { screenshot: (params) => capture.screenshot(params, signal) } : capture,
             isCurrent: () => !disposed && !signal?.aborted && getBoard() === board && request.boardEpoch === lifecycle.epoch,
