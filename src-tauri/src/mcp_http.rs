@@ -31,7 +31,7 @@ use hyper::{
     header::{HOST, HeaderMap, ORIGIN},
     service::{Service, service_fn},
 };
-use hyper_util::{rt::TokioIo, service::TowerToHyperService};
+use hyper_util::{rt::{TokioIo, TokioTimer}, service::TowerToHyperService};
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -43,7 +43,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 
 const LOOPBACK_HOST: &str = "127.0.0.1";
@@ -69,6 +69,14 @@ fn bind_first_available(start_port: u16) -> io::Result<(TcpListener, u16)> {
 }
 const MAX_HTTP_BODY: usize = 64 * 1024;
 const MAX_CONNECTIONS: usize = 16;
+const HTTP_HEADER_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn http1_builder(timeout: Duration) -> hyper::server::conn::http1::Builder {
+    let mut builder = hyper::server::conn::http1::Builder::new();
+    builder.timer(TokioTimer::new());
+    builder.header_read_timeout(timeout);
+    builder
+}
 
 #[derive(Clone)]
 struct NativeAppBackend(tauri::AppHandle);
@@ -177,7 +185,7 @@ async fn serve(
                     Ok::<_, Infallible>(response)
                 }
             });
-            let _ = hyper::server::conn::http1::Builder::new()
+            let _ = http1_builder(HTTP_HEADER_TIMEOUT)
                 .serve_connection(TokioIo::new(stream), handler)
                 .await;
         });
@@ -296,8 +304,17 @@ impl LocalMcpHttpServer {
             .lock()
             .expect("MCP HTTP lifecycle lock poisoned");
         if !enabled {
-            // Off is not confirmed until the runtime drops all HTTP writers.
+            // Revoke queued work before waiting for HTTP writers to stop.
+            let old_epoch = broker.mcp_status().grant_epoch;
             broker.mcp_set_enabled(false);
+            let epoch = broker.mcp_status().grant_epoch;
+            if old_epoch != epoch {
+                // A write already dispatched to IndexedDB may have an unknown outcome.
+                let _ = self.app.emit_to(
+                    "main", "mathboard-board-cancel",
+                    serde_json::json!({"epoch": epoch, "revokeAll": true}),
+                );
+            }
             if let Some(worker) = running.take() {
                 worker.shutdown()?;
             }
@@ -403,8 +420,63 @@ mod tests {
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();
         let mut buf = [0u8; 1];
-        assert!(matches!(client.read(&mut buf), Ok(0) | Err(_)));
+        match client.read(&mut buf) {
+            Ok(0) => {}
+            Err(error) if matches!(error.kind(), io::ErrorKind::ConnectionReset
+                | io::ErrorKind::ConnectionAborted | io::ErrorKind::BrokenPipe) => {}
+            outcome => panic!("Expected EOF or peer reset, got {outcome:?}"),
+        }
         assert!(TcpStream::connect(address).is_err());
+    }
+
+    #[test]
+    fn idle_headers_expire_and_healthy_clients_regain_all_connection_slots() {
+        use std::io::{Read, Write};
+        use std::net::TcpStream;
+        use std::time::Instant;
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2).enable_all().build().unwrap();
+        runtime.block_on(async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let slots = Arc::new(tokio::sync::Semaphore::new(MAX_CONNECTIONS));
+            let free = slots.clone();
+            let task = tokio::spawn(async move {
+                loop {
+                    let (stream, _) = listener.accept().await.unwrap();
+                    let Ok(permit) = free.clone().try_acquire_owned() else { continue };
+                    tokio::spawn(async move {
+                        let _permit = permit;
+                        let handler = service_fn(|_: Request<Incoming>| async {
+                            Ok::<_, Infallible>(Response::new(Full::new(Bytes::from_static(b"ok"))))
+                        });
+                        let _ = http1_builder(Duration::from_millis(300))
+                            .serve_connection(TokioIo::new(stream), handler).await;
+                    });
+                }
+            });
+            let idle: Vec<_> = (0..MAX_CONNECTIONS)
+                .map(|_| TcpStream::connect(addr).unwrap()).collect();
+            let until = Instant::now() + Duration::from_secs(2);
+            while slots.available_permits() != 0 && Instant::now() < until {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert_eq!(slots.available_permits(), 0);
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            assert_eq!(slots.available_permits(), MAX_CONNECTIONS);
+            let response = tokio::task::spawn_blocking(move || {
+                let mut socket = TcpStream::connect(addr).unwrap();
+                socket.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                socket.write_all(b"GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").unwrap();
+                let mut text = String::new();
+                socket.read_to_string(&mut text).unwrap();
+                text
+            }).await.unwrap();
+            assert!(response.contains("200 OK") && response.ends_with("ok"));
+            drop(idle);
+            task.abort();
+        });
     }
 
     #[test]

@@ -414,3 +414,45 @@ test('omitted titles are generated and persisted while explicit names are preser
   assert.equal(service.title, generated.title)
   service.dispose()
 })
+
+test('MCP Off rejects queued board-library writes before dispatch', async () => {
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let ran = false
+  const workspace = new BoardWorkspaceService({
+    listBoards: async () => gate,
+    renameBoard: async () => { ran = true; return { id: 'mb_synthetic' } },
+  })
+  const busy = workspace.list()
+  const controller = new AbortController()
+  const queued = workspace.rename({ boardId: 'mb_synthetic', title: 'No write' },
+    { signal: controller.signal })
+  controller.abort()
+  release([])
+  await busy
+  await assert.rejects(queued, { code: 'execution_unknown' })
+  assert.equal(ran, false)
+})
+
+test('MCP Off during in-flight storage returns unknown without promising rollback', async () => {
+  let started, release
+  const entered = new Promise(resolve => { started = resolve })
+  const gate = new Promise(resolve => { release = resolve })
+  let finished = false
+  const workspace = new BoardWorkspaceService({
+    renameBoard: async () => {
+      started()
+      await gate
+      finished = true
+      return { id: 'mb_synthetic', title: 'Updated' }
+    },
+  })
+  const controller = new AbortController()
+  const writing = workspace.rename({ boardId: 'mb_synthetic', title: 'Updated' },
+    { signal: controller.signal })
+  await entered
+  controller.abort()
+  release()
+  await assert.rejects(writing, { code: 'execution_unknown' })
+  assert.equal(finished, true)
+})

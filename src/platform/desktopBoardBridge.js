@@ -117,7 +117,7 @@ export async function connectDesktopBoardBridge(getBoard, {
         ? capture.beginMutation() : () => {}
       try {
         reply.result = request.method.startsWith('boards.')
-          ? await executeBoardCommand(null, request, null, board.getBoardWorkspace())
+          ? await executeBoardCommand(null, request, null, board.getBoardWorkspace(), signal)
           : await board.getBoardDocumentCommands().executeOnBoard(request, {
             expiresAtMs: request.expiresAtMs,
             interactionChannel: 'mcp',
@@ -164,12 +164,11 @@ export async function connectDesktopBoardBridge(getBoard, {
     if (seenRequestIds.has(payload.requestId)) return commandQueue
     seenRequestIds.add(payload.requestId)
     if (seenRequestIds.size > 256) seenRequestIds.delete(seenRequestIds.values().next().value)
-    // These workspace commands trigger their own board-context cancellation.
-    // Native still revokes their receipts immediately on MCP Off or renderer loss.
-    const aborter = payload.cancellationEpoch === undefined || BOARD_TRANSITION_METHODS.has(payload.method)
-      ? null : new AbortController()
+    // Own board transitions retain their receipt; native MCP Off revokes every request.
+    const aborter = payload.cancellationEpoch === undefined ? null : new AbortController()
     if (aborter) activeCancellableRequests.set(payload.requestId,
-      { aborter, epoch: payload.cancellationEpoch })
+      { aborter, epoch: payload.cancellationEpoch,
+        transition: BOARD_TRANSITION_METHODS.has(payload.method) })
     commandQueue = commandQueue.then(() => handleRequest(payload, aborter?.signal)).catch(() => {})
       .finally(() => activeCancellableRequests.delete(payload.requestId))
     return commandQueue
@@ -179,10 +178,12 @@ export async function connectDesktopBoardBridge(getBoard, {
   try {
     unlisten = await subscribe('mathboard-board-request', onRequest)
     unlistenCancellation = await subscribe('mathboard-board-cancel', ({ payload }) => {
-      if (!Number.isSafeInteger(payload) || payload < 0 || payload < minimumCancellationEpoch) return
-      minimumCancellationEpoch = payload
-      for (const { aborter, epoch } of activeCancellableRequests.values()) {
-        if (epoch < payload) aborter.abort()
+      const revokeAll = payload?.revokeAll === true
+      const epoch = revokeAll ? payload.epoch : payload
+      if (!Number.isSafeInteger(epoch) || epoch < 0 || epoch < minimumCancellationEpoch) return
+      minimumCancellationEpoch = epoch
+      for (const request of activeCancellableRequests.values()) {
+        if (request.epoch < epoch && (revokeAll || !request.transition)) request.aborter.abort()
       }
     })
     await publishState(lifecycle.isReady(), lifecycle.epoch)

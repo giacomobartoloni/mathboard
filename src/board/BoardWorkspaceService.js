@@ -27,8 +27,16 @@ export class BoardWorkspaceService {
     this._pending = Promise.resolve()
   }
 
-  _run(operation) {
-    const result = this._pending.then(operation)
+  _run(operation, { signal } = {}) {
+    const unknown = () => Object.assign(new Error('Board outcome requires readback.'), {
+      code: 'execution_unknown',
+    })
+    const result = this._pending.then(async () => {
+      if (signal?.aborted) throw unknown() // Revoked queued work must not begin.
+      const value = await operation()
+      if (signal?.aborted) throw unknown() // In-flight storage may still have committed.
+      return value
+    })
     this._pending = result.then(() => {}, () => {})
     return result
   }
@@ -44,36 +52,36 @@ export class BoardWorkspaceService {
     }
   }
 
-  list() {
-    return this._run(() => this._persistence.listBoards())
+  list({ signal } = {}) {
+    return this._run(() => this._persistence.listBoards(), { signal })
   }
 
-  create({ title } = {}) {
-    return this._run(async () => this._summary(await this._persistence.createNewBoard(title)))
+  create({ title } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.createNewBoard(title)), { signal })
   }
 
-  open({ boardId } = {}) {
-    return this._run(async () => this._summary(await this._persistence.openBoard(boardId)))
+  open({ boardId } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.openBoard(boardId)), { signal })
   }
 
-  rename({ boardId, title } = {}) {
-    return this._run(async () => this._summary(await this._persistence.renameBoard(boardId, title)))
+  rename({ boardId, title } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.renameBoard(boardId, title)), { signal })
   }
 
-  listArchived() {
-    return this._run(() => this._persistence.listArchivedBoards())
+  listArchived({ signal } = {}) {
+    return this._run(() => this._persistence.listArchivedBoards(), { signal })
   }
 
-  archive({ boardId } = {}) {
-    return this._run(async () => this._summary(await this._persistence.archiveBoard(boardId)))
+  archive({ boardId } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.archiveBoard(boardId)), { signal })
   }
 
-  unarchive({ boardId } = {}) {
-    return this._run(async () => this._summary(await this._persistence.unarchiveBoard(boardId)))
+  unarchive({ boardId } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.unarchiveBoard(boardId)), { signal })
   }
 
-  delete({ boardId, confirm } = {}) {
-    return this._run(() => this._persistence.deleteBoard(boardId, { confirm }))
+  delete({ boardId, confirm } = {}, { signal } = {}) {
+    return this._run(() => this._persistence.deleteBoard(boardId, { confirm }), { signal })
   }
 
 }

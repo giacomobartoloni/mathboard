@@ -163,42 +163,42 @@ const descriptors = [
     paramsSchema: params({}),
     resultSchema: { type: 'array', items: { type: 'object', required: ['id', 'title', 'isActive'] } },
     example: { method: 'boards.list', params: {} },
-    execute: (_controller, _p, _capture, workspace) => workspace.list() },
+    execute: (_controller, _p, _capture, workspace, signal) => workspace.list({ signal }) },
   { method: 'boards.create', summary: 'Create and activate a local board, saved automatically; omitted title gets a math-inspired random name.', mutatesBoard: true,
     paramsSchema: params({ title: { type: 'string', minLength: 1, maxLength: 120 } }),
     resultSchema: { type: 'object', required: ['id', 'title', 'isActive'] },
     example: { method: 'boards.create', params: { title: 'Algebra' } },
-    execute: (_controller, p, _capture, workspace) => workspace.create(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.create(p, { signal }) },
   { method: 'boards.open', summary: 'Open an unarchived local board; resets in-memory history.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty }, ['boardId']),
     resultSchema: { type: 'object', required: ['id', 'title', 'isActive'] },
     example: { method: 'boards.open', params: { boardId: 'mb_example' } },
-    execute: (_controller, p, _capture, workspace) => workspace.open(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.open(p, { signal }) },
   { method: 'boards.rename', summary: 'Rename a local board and its semantic document.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty, title: { type: 'string', minLength: 1, maxLength: 120 } }, ['boardId', 'title']),
     resultSchema: { type: 'object', required: ['id', 'title'] },
     example: { method: 'boards.rename', params: { boardId: 'mb_example', title: 'Geometry' } },
-    execute: (_controller, p, _capture, workspace) => workspace.rename(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.rename(p, { signal }) },
   { method: 'boards.listArchived', summary: 'List archived board metadata without documents.', mutatesBoard: false,
     paramsSchema: params({}),
     resultSchema: { type: 'array', items: { type: 'object', required: ['id', 'title', 'archivedAt'] } },
     example: { method: 'boards.listArchived', params: {} },
-    execute: (_controller, _p, _capture, workspace) => workspace.listArchived() },
+    execute: (_controller, _p, _capture, workspace, signal) => workspace.listArchived({ signal }) },
   { method: 'boards.archive', summary: 'Hide a board without deleting data; new active board if needed.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty }, ['boardId']),
     resultSchema: { type: 'object', required: ['id', 'archivedAt'] },
     example: { method: 'boards.archive', params: { boardId: 'mb_example' } },
-    execute: (_controller, p, _capture, workspace) => workspace.archive(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.archive(p, { signal }) },
   { method: 'boards.unarchive', summary: 'Return a preserved archived board to the library.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty }, ['boardId']),
     resultSchema: { type: 'object', required: ['id', 'title'] },
     example: { method: 'boards.unarchive', params: { boardId: 'mb_example' } },
-    execute: (_controller, p, _capture, workspace) => workspace.unarchive(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.unarchive(p, { signal }) },
   { method: 'boards.delete', summary: 'Permanently delete one board locally. Irreversible; explicit confirm:true required.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty, confirm: { type: 'boolean', const: true } }, ['boardId', 'confirm']),
     resultSchema: { type: 'object', required: ['id', 'deleted'] },
     example: { method: 'boards.delete', params: { boardId: 'mb_example', confirm: true } },
-    execute: (_controller, p, _capture, workspace) => workspace.delete(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.delete(p, { signal }) },
 ]
 
 export function hasBoardCommandMethod(method) {
@@ -210,7 +210,7 @@ export function boardCommandMutatesBoard(method) {
   return descriptors.find(entry => entry.method === method)?.mutatesBoard ?? false
 }
 
-export function executeBoardCommand(controller, command, capture, workspace) {
+export function executeBoardCommand(controller, command, capture, workspace, signal) {
   const entry = descriptors.find(candidate => candidate.method === command?.method)
   if (!entry) throw new Error(`Unsupported board method: ${command?.method}`)
   const params = command.params ?? {}
@@ -222,7 +222,7 @@ export function executeBoardCommand(controller, command, capture, workspace) {
       || Object.keys(params.options).some(key => !Object.hasOwn(fields.options.properties, key))))) {
     throw new Error('Invalid board command parameters.')
   }
-  return entry.execute(controller, params, capture, workspace)
+  return entry.execute(controller, params, capture, workspace, signal)
 }
 
 export function getBoardCommandDescriptors() {

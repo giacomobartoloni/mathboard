@@ -793,13 +793,9 @@ pub(crate) fn mcp_set_enabled(
     let server = app
         .try_state::<crate::mcp_http::LocalMcpHttpServer>()
         .ok_or("Local MCP HTTP server unavailable")?;
-    let previous_epoch = broker.mcp_status().grant_epoch;
+    // Off emits the cancellation event before it waits for HTTP shutdown.
     server
         .set_enabled(&broker, enabled)
         .map_err(|error| format!("Local MCP transport lifecycle failed: {error}"))?;
-    let status = broker.mcp_status();
-    if status.grant_epoch != previous_epoch {
-        let _ = app.emit_to("main", "mathboard-board-cancel", status.grant_epoch);
-    }
     Ok(native_mcp_status(&app, &broker))
 }
