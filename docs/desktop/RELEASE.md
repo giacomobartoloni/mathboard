@@ -200,3 +200,14 @@ does not consume signing secrets.
 Automatic updates are deferred. Before adding an updater, define signing-key custody,
 artifact hosting, channels, rollback behavior, and compatibility policy in a separate
 decision.
+
+## Update discovery (notification only)
+
+Desktop builds can query published GitHub Releases from the native host and show
+a non-blocking About/toolbar notice when a newer eligible build exists.
+This is a **discovery-only** feature, not the Tauri updater: nothing is downloaded,
+installed, or restarted, and no signing identity is added. The existing unsigned
+public beta security warnings and mandatory per-platform QA gates still apply.
+
+See [Update discovery](UPDATE_DISCOVERY.md) for the eligibility contract, supported
+platforms, tests, offline behavior and explicit future-updater boundary.

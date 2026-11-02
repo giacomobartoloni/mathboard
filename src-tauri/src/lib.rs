@@ -16,6 +16,7 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 mod analytics;
+mod desktop_updates;
 pub mod board_bridge;
 pub mod companion;
 pub mod mcp_contract;
@@ -43,6 +44,7 @@ pub fn run() {
         ))
         .invoke_handler(tauri::generate_handler![
             analytics::track_desktop_analytics,
+            desktop_updates::check_desktop_update,
             board_bridge::board_bridge_state,
             board_bridge::board_bridge_reply,
             board_bridge::mcp_permission_status,

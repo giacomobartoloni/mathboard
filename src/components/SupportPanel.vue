@@ -29,6 +29,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <font-awesome-icon :icon="['fas', 'info-circle']" />
       <span class="about-label">About</span>
     </button>
+    <button
+      v-if="updateNoticeVisible && !showAbout"
+      type="button"
+      class="update-available-button"
+      aria-label="MathBoard update available"
+      @click="openAbout"
+    >
+      Update available
+    </button>
     
 
     <!-- About Modal -->
@@ -37,6 +46,44 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <button class="close-button" @click="showAbout = false">✕</button>
         <h2>MathBoard</h2>
         <p class="version">Version {{ version }}</p>
+
+        <section v-if="desktopRuntime" class="updates-section" aria-labelledby="software-updates-title">
+          <h3 id="software-updates-title">Software updates</h3>
+          <p v-if="updateStatus.state === 'checking'" role="status">Checking GitHub Releases…</p>
+          <p v-else-if="updateStatus.state === 'available'" role="status">
+            MathBoard {{ updateStatus.latestVersion }} is available.
+            You are using {{ updateStatus.installedVersion }}.
+          </p>
+          <p v-else-if="updateStatus.state === 'up-to-date'" role="status">
+            No newer published version was found.
+          </p>
+          <p v-else-if="updateStatus.state === 'error'" role="status">
+            {{ updateStatus.message }}
+          </p>
+          <p v-else role="status">Check for a newer desktop release.</p>
+          <div class="updates-actions">
+            <button type="button" :disabled="updateStatus.state === 'checking'" @click="checkForUpdates">
+              {{ updateStatus.state === 'checking' ? 'Checking…' : 'Check for updates' }}
+            </button>
+            <button
+              v-if="updateStatus.state === 'available'"
+              type="button"
+              @click="onExternalLink(updateStatus.releaseUrl)"
+            >
+              View release on GitHub
+            </button>
+            <button
+              v-if="updateNoticeVisible"
+              type="button"
+              @click="dismissUpdateNotice"
+            >
+              Dismiss notice
+            </button>
+          </div>
+          <p class="updates-disclaimer">
+            Download and install manually. Desktop beta installers are unsigned.
+          </p>
+        </section>
         
         <div class="about-text">
           <p>
@@ -131,11 +178,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import packageInfo from '../../package.json'
 import { openExternalUrl } from '../platform/externalLinks'
 import { publicSitePageUrl } from '../platform/siteLinks'
 import { isDesktopRuntime } from '../platform/runtime'
+import { createDesktopUpdateDiscovery } from '../platform/desktopUpdates'
 import { SHORTCUT_HELP } from '../config/shortcuts.js'
 import { trackEvent } from '../analytics'
 import { ANALYTICS_EVENTS } from '../analytics/events.js'
@@ -145,9 +193,34 @@ export default {
   setup() {
     const showAbout = ref(false)
     const shortcutsExpanded = ref(false)
-    const version = packageInfo.version
+    const version = ref(packageInfo.version)
     const shortcutHelp = SHORTCUT_HELP
     const desktopRuntime = isDesktopRuntime()
+    const updateStatus = ref({ state: 'idle' })
+    const dismissedVersion = ref(null)
+    const updateNoticeVisible = computed(() => desktopRuntime
+      && updateStatus.value.state === 'available'
+      && updateStatus.value.latestVersion !== dismissedVersion.value)
+
+    let updateDiscovery = null
+    let unsubscribeUpdates = null
+    onMounted(() => {
+      if (!desktopRuntime) return
+      updateDiscovery = createDesktopUpdateDiscovery()
+      unsubscribeUpdates = updateDiscovery.subscribe((status) => {
+        updateStatus.value = status
+        if (status.installedVersion) version.value = status.installedVersion
+      })
+      updateDiscovery.start()
+    })
+    onBeforeUnmount(() => {
+      unsubscribeUpdates?.()
+      updateDiscovery?.dispose()
+    })
+    const checkForUpdates = () => { void updateDiscovery?.check() }
+    const dismissUpdateNotice = () => {
+      dismissedVersion.value = updateStatus.value.latestVersion
+    }
 
     const onExternalLink = async (url) => {
       try {
@@ -174,6 +247,11 @@ export default {
       showAbout,
       shortcutsExpanded,
       version,
+      desktopRuntime,
+      updateStatus,
+      updateNoticeVisible,
+      checkForUpdates,
+      dismissUpdateNotice,
       shortcutHelp,
       onExternalLink,
       onSiteLink,
@@ -201,6 +279,67 @@ export default {
 }
 
 .support-panel.about-open { z-index: 10000; }
+
+.update-available-button {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.update-available-button:focus-visible {
+  outline: 2px solid var(--selected-bg);
+  outline-offset: 2px;
+}
+
+.updates-section {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.updates-section h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.updates-section p {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.updates-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.updates-actions button {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.updates-actions button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.updates-section .updates-disclaimer {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 
 .about-button {
   background: none;
