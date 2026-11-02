@@ -16,9 +16,9 @@
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 mod analytics;
-mod desktop_updates;
 pub mod board_bridge;
 pub mod companion;
+mod desktop_updates;
 pub mod mcp_contract;
 mod mcp_http;
 pub mod mcp_ipc_client;

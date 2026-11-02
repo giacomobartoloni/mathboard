@@ -102,7 +102,10 @@ fn newest_release<'a>(
             }
             let expected = platform.expected_assets(version);
             if expected.is_empty()
-                || !release.assets.iter().any(|asset| asset.name == "SHA256SUMS.txt")
+                || !release
+                    .assets
+                    .iter()
+                    .any(|asset| asset.name == "SHA256SUMS.txt")
                 || !release
                     .assets
                     .iter()
@@ -161,7 +164,10 @@ pub async fn check_desktop_update(
         .map_err(|_| "Could not initialize the update check")?;
     let response = client
         .get(RELEASES_API)
-        .header(reqwest::header::USER_AGENT, "MathBoard-Desktop-Update-Discovery")
+        .header(
+            reqwest::header::USER_AGENT,
+            "MathBoard-Desktop-Update-Discovery",
+        )
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .send()
         .await
@@ -208,12 +214,32 @@ mod tests {
     #[test]
     fn ignores_drafts_invalid_tags_missing_assets_and_downgrades() {
         let releases = vec![
-            release("v9.0.0", true, false, &["MathBoard_9.0.0_aarch64.dmg", "SHA256SUMS.txt"]),
+            release(
+                "v9.0.0",
+                true,
+                false,
+                &["MathBoard_9.0.0_aarch64.dmg", "SHA256SUMS.txt"],
+            ),
             release("desktop-v3.0.0-rc.1", false, true, &["SHA256SUMS.txt"]),
-            release("v2.4.0", false, true, &["MathBoard_2.4.0_x64.dmg", "SHA256SUMS.txt"]),
+            release(
+                "v2.4.0",
+                false,
+                true,
+                &["MathBoard_2.4.0_x64.dmg", "SHA256SUMS.txt"],
+            ),
             release("v2.3.0", false, true, &["MathBoard_2.3.0_aarch64.dmg"]),
-            release("v2.2.0", false, true, &["MathBoard_2.2.0_aarch64.dmg", "SHA256SUMS.txt"]),
-            release("v2.0.0", false, true, &["MathBoard_2.0.0_aarch64.dmg", "SHA256SUMS.txt"]),
+            release(
+                "v2.2.0",
+                false,
+                true,
+                &["MathBoard_2.2.0_aarch64.dmg", "SHA256SUMS.txt"],
+            ),
+            release(
+                "v2.0.0",
+                false,
+                true,
+                &["MathBoard_2.0.0_aarch64.dmg", "SHA256SUMS.txt"],
+            ),
         ];
         let update = select_update(&releases, "2.1.0", Platform::MacArm64);
         assert_eq!(update.latest_version.as_deref(), Some("2.2.0"));
@@ -221,17 +247,34 @@ mod tests {
             update.release_url.as_deref(),
             Some("https://github.com/giacomobartoloni/mathboard/releases/tag/v2.2.0")
         );
-        assert!(select_update(&releases, "2.2.0", Platform::MacArm64)
-            .latest_version
-            .is_none());
+        assert!(
+            select_update(&releases, "2.2.0", Platform::MacArm64)
+                .latest_version
+                .is_none()
+        );
     }
 
     #[test]
     fn picks_highest_published_version_not_api_order() {
         let releases = vec![
-            release("v1.9.0", false, true, &["MathBoard_1.9.0_amd64.deb", "SHA256SUMS.txt"]),
-            release("v1.11.0", false, true, &["MathBoard_1.11.0_amd64.AppImage", "SHA256SUMS.txt"]),
-            release("v1.10.0", false, true, &["MathBoard_1.10.0_amd64.deb", "SHA256SUMS.txt"]),
+            release(
+                "v1.9.0",
+                false,
+                true,
+                &["MathBoard_1.9.0_amd64.deb", "SHA256SUMS.txt"],
+            ),
+            release(
+                "v1.11.0",
+                false,
+                true,
+                &["MathBoard_1.11.0_amd64.AppImage", "SHA256SUMS.txt"],
+            ),
+            release(
+                "v1.10.0",
+                false,
+                true,
+                &["MathBoard_1.10.0_amd64.deb", "SHA256SUMS.txt"],
+            ),
         ];
         assert_eq!(
             select_update(&releases, "1.8.0", Platform::LinuxX64)
@@ -239,9 +282,11 @@ mod tests {
                 .as_deref(),
             Some("1.11.0")
         );
-        assert!(select_update(&releases, "1.11.0", Platform::LinuxX64)
-            .latest_version
-            .is_none());
+        assert!(
+            select_update(&releases, "1.11.0", Platform::LinuxX64)
+                .latest_version
+                .is_none()
+        );
     }
 
     #[test]
@@ -252,9 +297,11 @@ mod tests {
             true,
             &["MathBoard_1.12.0_amd64.AppImage", "SHA256SUMS.txt"],
         )];
-        assert!(select_update(&releases, "1.11.0", Platform::WindowsX64)
-            .latest_version
-            .is_none());
+        assert!(
+            select_update(&releases, "1.11.0", Platform::WindowsX64)
+                .latest_version
+                .is_none()
+        );
         assert!(main_webview("main"));
         assert!(!main_webview("mcp-settings"));
     }
