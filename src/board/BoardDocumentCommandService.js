@@ -67,7 +67,8 @@ function collectObject(owned, object) {
 export class BoardDocumentCommandService {
   constructor({ repository, boardObjectPolicy, lifecycle, getActiveBoardId,
     getActiveController, getActiveRevision = () => null,
-    getActiveChangeVersion = () => null, flushActiveThrough = async () => {},
+    getActiveChangeVersion = () => null, getActiveCommitSequence = () => null,
+    flushActiveThrough = async () => {},
     buildFormula, createCanvas = defaultCanvas,
     prepareCreatedObject = () => {}, prepareUpdatedObject = () => {},
     onCommittedOperation = () => {}, now = () => new Date().toISOString() }) {
@@ -78,6 +79,7 @@ export class BoardDocumentCommandService {
     this._getActiveController = getActiveController
     this._getActiveRevision = getActiveRevision
     this._getActiveChangeVersion = getActiveChangeVersion
+    this._getActiveCommitSequence = getActiveCommitSequence
     this._flushActiveThrough = flushActiveThrough
     this._buildFormula = buildFormula
     this._createCanvas = createCanvas
@@ -156,14 +158,20 @@ export class BoardDocumentCommandService {
       }
       const waitForPersistence = context.awaitPersistence === true && boardCommandMutatesBoard(method)
       const beforeVersion = waitForPersistence ? this._getActiveChangeVersion() : null
+      const beforeCommit = waitForPersistence ? this._getActiveCommitSequence() : null
       const result = await executeDesktopBoardCommand(this._getActiveController(guard,
         spec => this._renderFormula(spec, guard, context, expiresAtMs), interactionChannel), request,
         context.capture)
       if (waitForPersistence) {
         try {
           const committedVersion = this._getActiveChangeVersion()
+          const committedSequence = this._getActiveCommitSequence()
           if (!Number.isSafeInteger(beforeVersion) || !Number.isSafeInteger(committedVersion)
-            || committedVersion < beforeVersion) throw new Error('Missing active board version.')
+            || !Number.isSafeInteger(beforeCommit) || !Number.isSafeInteger(committedSequence)
+            || committedVersion < beforeVersion || committedSequence < beforeCommit
+            || (committedSequence > beforeCommit && committedVersion === beforeVersion)) {
+            throw new Error('Active board change was not tracked for persistence.')
+          }
           if (committedVersion > beforeVersion) {
             guard()
             await this._flushActiveThrough(committedVersion)

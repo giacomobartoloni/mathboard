@@ -274,6 +274,7 @@ export default {
         getActiveBoardId: () => this.getBoardId(),
         getActiveRevision: () => this._persistence?.revision ?? null,
         getActiveChangeVersion: () => this._persistence?.changeVersion ?? null,
+        getActiveCommitSequence: () => this._boardHistory.committedSequence(),
         flushActiveThrough: version => this._ensurePersistenceService().flushThrough(version),
         getActiveController: (guard, buildFormula, interactionChannel) =>
           this._ensureBoardController(interactionChannel, guard, buildFormula),
