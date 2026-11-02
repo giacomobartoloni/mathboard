@@ -23,34 +23,55 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 // This is a separate Tauri-only entrypoint, never the shared board Vue root.
 const byId = (id) => document.getElementById(id)
 const controls = {
-  enable: byId('enable'), refresh: byId('refresh'), close: byId('close'),
+  enable: byId('enable'), copyEndpoint: byId('copy-endpoint'), close: byId('close'),
 }
 const errorView = byId('error')
 const loadingView = byId('loading')
 const controlView = byId('controls')
+const copyStatus = byId('copy-status')
+const COPY_CONFIRMATION_MS = 2500
+let copyStatusTimer = null
 let permission = null
 let busy = false
+let pendingEnabled = null
 
 function setError(message) {
   errorView.textContent = message || ''
   errorView.hidden = !message
 }
 
+function dismissCopyConfirmation() {
+  if (copyStatusTimer !== null) {
+    window.clearTimeout(copyStatusTimer)
+    copyStatusTimer = null
+  }
+  copyStatus.hidden = true
+  copyStatus.textContent = ''
+}
+
+function showCopyConfirmation() {
+  dismissCopyConfirmation()
+  copyStatus.hidden = false
+  copyStatus.textContent = 'MCP URL copied to clipboard.'
+  copyStatusTimer = window.setTimeout(() => {
+    dismissCopyConfirmation()
+  }, COPY_CONFIRMATION_MS)
+}
+
 function render() {
   const loaded = permission !== null
   loadingView.hidden = loaded
   controlView.hidden = !loaded
-  if (!loaded) {
-    controls.refresh.disabled = busy
-    return
-  }
-  controls.enable.textContent = permission.enabled ? 'On' : 'Off'
-  controls.enable.setAttribute('aria-pressed', String(permission.enabled))
+  if (!loaded) return
+  controls.enable.checked = pendingEnabled ?? permission.enabled
+  byId('enable-state').textContent = pendingEnabled === null
+    ? (permission.enabled ? 'Enabled' : 'Disabled')
+    : (pendingEnabled ? 'Enabling…' : 'Disabling…')
   controls.enable.disabled = busy || !permission.available
   byId('connection').hidden = !permission.enabled || !permission.available
   byId('endpoint').textContent = permission.enabled ? permission.endpoint || '' : ''
-  byId('authorization').textContent = permission.enabled ? permission.authorization || '' : ''
-  controls.refresh.disabled = busy
+  if (!permission.enabled || !permission.available || pendingEnabled === false) dismissCopyConfirmation()
+  controls.copyEndpoint.disabled = busy || !permission.enabled || !permission.available || !permission.endpoint
 }
 
 async function refresh() {
@@ -71,6 +92,7 @@ async function refresh() {
 async function change(command, args = {}) {
   if (busy || !permission) return
   busy = true
+  pendingEnabled = typeof args.enabled === 'boolean' ? args.enabled : null
   setError(null)
   render()
   try {
@@ -79,16 +101,46 @@ async function change(command, args = {}) {
     setError('Local MCP is unavailable in this installation.')
     try { permission = await invoke('mcp_permission_status') } catch { /* Keep visible state. */ }
   } finally {
+    pendingEnabled = null
     busy = false
     render()
   }
 }
 
-controls.enable.addEventListener('click', () => {
-  if (permission) void change('mcp_set_enabled', { enabled: !permission.enabled })
+
+async function copyEndpoint() {
+  if (busy || !permission?.enabled || !permission.available || !permission.endpoint) return
+  const endpoint = permission.endpoint
+  dismissCopyConfirmation()
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable')
+    await navigator.clipboard.writeText(endpoint)
+  } catch {
+    // Native WebViews may not grant the asynchronous Clipboard API.
+    const field = document.createElement('textarea')
+    field.value = endpoint
+    field.setAttribute('readonly', '')
+    field.style.position = 'fixed'
+    field.style.opacity = '0'
+    document.body.appendChild(field)
+    field.select()
+    let copied = false
+    try { copied = document.execCommand('copy') } catch { /* Use manual copy fallback. */ } finally { field.remove() }
+    if (!copied) {
+      setError('Unable to copy the MCP URL automatically. Select the URL and copy it manually.')
+      return
+    }
+  }
+  setError(null)
+  if (permission.enabled && permission.available && !busy) showCopyConfirmation()
+}
+
+controls.enable.addEventListener('change', () => {
+  if (permission && !busy) void change('mcp_set_enabled', { enabled: controls.enable.checked })
 })
-controls.refresh.addEventListener('click', () => void refresh())
-controls.close.addEventListener('click', () => void getCurrentWindow().close())
+controls.copyEndpoint.addEventListener('click', () => void copyEndpoint())
+// Keep the native settings WebView alive: the menu can show this hidden window again.
+controls.close.addEventListener('click', () => void getCurrentWindow().hide())
 window.addEventListener('focus', () => void refresh())
 
 void refresh()

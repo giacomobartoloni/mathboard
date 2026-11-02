@@ -43,7 +43,7 @@ fn versioned_ipc_accepts_only_catalog_and_three_read_calls() {
     );
     for value in [
         json!({"version":2,"operation":"catalog"}),
-        json!({"version":1,"operation":"read","name":"mathboard_create","arguments":{}}),
+        json!({"version":1,"operation":"read","name":"mathboard_not_supported","arguments":{}}),
         json!({"version":1,"operation":"read","name":"mathboard_observe","arguments":{"method":"clear"}}),
         json!({"version":1,"operation":"catalog","name":"mathboard_observe"}),
         json!({"version":1,"operation":"catalog","name":null,"arguments":null,"lease":null}),

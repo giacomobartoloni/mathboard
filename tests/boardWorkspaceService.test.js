@@ -21,8 +21,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { BoardPersistenceService, BOARD_PERSISTENCE_ERROR_CODES } from '../src/board/persistence/BoardPersistenceService.js'
 import { BoardWorkspaceService } from '../src/board/BoardWorkspaceService.js'
+import { BoardLifecycle } from '../src/board/BoardLifecycle.js'
 
-function fixture({ onActiveBoardChanged } = {}) {
+function fixture({ onActiveBoardChanged, lifecycle } = {}) {
   const records = new Map()
   const repository = {
     fail: false,
@@ -75,6 +76,7 @@ function fixture({ onActiveBoardChanged } = {}) {
     },
     now: () => '2026-10-23T12:00:00Z',
     onActiveBoardChanged,
+    lifecycle,
   })
   const workspace = new BoardWorkspaceService(service)
   return { workspace, repository, service, records, session }
@@ -329,6 +331,25 @@ test('legacy scratch and trashed metadata remain recoverable without migration l
   service.dispose()
 })
 
+test('unconfirmed active-board delete preserves lifecycle and stored data', async () => {
+  const lifecycle = new BoardLifecycle()
+  const { workspace, records, service } = fixture({ lifecycle })
+  const active = await workspace.create({ title: 'Preserved board' })
+  const epoch = lifecycle.epoch
+
+  await assert.rejects(() => workspace.delete({ boardId: active.id }),
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED)
+  await assert.rejects(() => workspace.delete({ boardId: active.id, confirm: false }),
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED)
+
+  assert.equal(lifecycle.epoch, epoch)
+  assert.equal(lifecycle.isReady(), true)
+  assert.equal(service.boardId, active.id)
+  assert.equal(records.has(active.id), true)
+  assert.deepEqual((await workspace.list()).map(board => board.id), [active.id])
+  service.dispose()
+})
+
 test('permanent delete requires confirmation and is not recoverable', async () => {
   const { workspace, records, service } = fixture()
   const first = await workspace.create({ title: 'To delete' })
@@ -392,4 +413,46 @@ test('omitted titles are generated and persisted while explicit names are preser
   await workspace.open({ boardId: generated.id })
   assert.equal(service.title, generated.title)
   service.dispose()
+})
+
+test('MCP Off rejects queued board-library writes before dispatch', async () => {
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let ran = false
+  const workspace = new BoardWorkspaceService({
+    listBoards: async () => gate,
+    renameBoard: async () => { ran = true; return { id: 'mb_synthetic' } },
+  })
+  const busy = workspace.list()
+  const controller = new AbortController()
+  const queued = workspace.rename({ boardId: 'mb_synthetic', title: 'No write' },
+    { signal: controller.signal })
+  controller.abort()
+  release([])
+  await busy
+  await assert.rejects(queued, { code: 'execution_unknown' })
+  assert.equal(ran, false)
+})
+
+test('MCP Off during in-flight storage returns unknown without promising rollback', async () => {
+  let started, release
+  const entered = new Promise(resolve => { started = resolve })
+  const gate = new Promise(resolve => { release = resolve })
+  let finished = false
+  const workspace = new BoardWorkspaceService({
+    renameBoard: async () => {
+      started()
+      await gate
+      finished = true
+      return { id: 'mb_synthetic', title: 'Updated' }
+    },
+  })
+  const controller = new AbortController()
+  const writing = workspace.rename({ boardId: 'mb_synthetic', title: 'Updated' },
+    { signal: controller.signal })
+  await entered
+  controller.abort()
+  release()
+  await assert.rejects(writing, { code: 'execution_unknown' })
+  assert.equal(finished, true)
 })

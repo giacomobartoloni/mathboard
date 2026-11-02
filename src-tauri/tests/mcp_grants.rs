@@ -82,12 +82,16 @@ fn enabled_mcp_accepts_explicit_non_active_board_ids() {
     assert_eq!(request.board_id, "mb_b");
     assert_eq!(lease.board_id(), "mb_b");
     assert!(broker.mcp_lease_valid(&lease));
-    assert_eq!(
-        broker
-            .queue_mcp_read(None, "measure", json!({"id":"x"}))
-            .err(),
-        Some(BrokerError::InvalidBoardId)
-    );
+    let (active_request, _, active_lease) = broker
+        .queue_mcp_read(None, "measure", json!({"id":"x"}))
+        .unwrap();
+    assert_eq!(active_request.board_id, "mb_a");
+    broker.mcp_release_lease(&active_lease);
+    let (shot_request, _, shot_lease) = broker
+        .queue_mcp_read(None, "screenshot", json!({"target":{"kind":"viewport"}}))
+        .unwrap();
+    assert_eq!(shot_request.board_id, "mb_a");
+    broker.mcp_release_lease(&shot_lease);
 }
 
 #[test]
@@ -165,4 +169,105 @@ fn renderer_reload_keeps_mcp_enabled_but_invalidates_old_receipt() {
         .unwrap();
     assert!(broker.mcp_status().enabled);
     assert!(!broker.mcp_lease_valid(&lease));
+}
+
+#[test]
+fn board_library_transition_preserves_only_its_own_mcp_receipt() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    let (request, receiver, lease) = broker
+        .queue_mcp_read(None, "boards.create", json!({"title": "MCP Test"}))
+        .unwrap();
+    let (_, read_receiver, read_lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
+    broker
+        .renderer_state("renderer-1", 2, false, Some("mb_a"))
+        .unwrap();
+    assert_eq!(read_receiver.recv().unwrap(), BoardReply::Disconnected);
+    assert!(!broker.mcp_lease_valid(&read_lease));
+    assert!(!broker.mcp_lease_valid(&lease));
+    broker
+        .renderer_state("renderer-1", 3, true, Some("mb_new"))
+        .unwrap();
+    let result = json!({"id": "mb_new", "title": "MCP Test", "isActive": true});
+    broker
+        .accept_reply_json(
+            &json!({"requestId": request.request_id, "appGeneration": "app-1",
+                "rendererGeneration": "renderer-1", "boardEpoch": 1, "boardId": "mb_a",
+                "schemaVersion": 2, "ok": true, "result": result})
+            .to_string(),
+        )
+        .unwrap();
+    assert_eq!(receiver.recv().unwrap(), BoardReply::Success(result));
+    assert!(broker.mcp_lease_valid(&lease));
+    broker.mcp_release_lease(&lease);
+    assert!(!broker.mcp_lease_valid(&lease));
+}
+
+#[test]
+fn board_library_transition_cannot_outlive_mcp_off_or_renderer_replacement() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    let (request, receiver, lease) = broker
+        .queue_mcp_read(None, "boards.open", json!({"boardId": "mb_b"}))
+        .unwrap();
+    broker
+        .renderer_state("renderer-1", 2, false, Some("mb_a"))
+        .unwrap();
+    broker.mcp_set_enabled(false);
+    assert_eq!(receiver.recv().unwrap(), BoardReply::Disconnected);
+    assert!(!broker.mcp_lease_valid(&lease));
+    broker.mcp_set_enabled(true);
+    assert!(!broker.mcp_lease_valid(&lease));
+    assert_eq!(
+        broker.accept_reply_json(
+            &json!({"requestId": request.request_id, "appGeneration": "app-1",
+                "rendererGeneration": "renderer-1", "boardEpoch": 1, "boardId": "mb_a",
+                "schemaVersion": 2, "ok": true, "result": {}})
+            .to_string(),
+        ),
+        Err(BrokerError::UnknownRequest)
+    );
+
+    // The prior transition left the renderer temporarily unavailable.
+    broker
+        .renderer_state("renderer-1", 3, true, Some("mb_a"))
+        .unwrap();
+    let (_, receiver, lease) = broker
+        .queue_mcp_read(None, "boards.create", json!({"title": "Other"}))
+        .unwrap();
+    broker
+        .renderer_state("renderer-2", 0, true, Some("mb_a"))
+        .unwrap();
+    assert_eq!(receiver.recv().unwrap(), BoardReply::ExecutionUnknown);
+    assert!(!broker.mcp_lease_valid(&lease));
+}
+
+#[test]
+fn canvas_mutation_does_not_survive_a_board_transition() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    let (_, receiver, lease) = broker
+        .queue_mcp_read(None, "create", json!({"spec": {"type": "text"}}))
+        .unwrap();
+    broker
+        .renderer_state("renderer-1", 2, false, Some("mb_a"))
+        .unwrap();
+    assert_eq!(receiver.recv().unwrap(), BoardReply::ExecutionUnknown);
+    assert!(!broker.mcp_lease_valid(&lease));
+}
+
+#[test]
+fn screenshot_lease_outlives_renderer_timeout_but_off_cancels_immediately() {
+    let broker = ready();
+    broker.mcp_set_enabled(true);
+    let (normal, _, normal_lease) = broker.queue_mcp_read(None, "observe", json!({})).unwrap();
+    let (capture, receiver, capture_lease) = broker
+        .queue_mcp_read(None, "screenshot", json!({"target":{"kind":"viewport"}}))
+        .unwrap();
+    assert!(capture.expires_at_ms >= normal.expires_at_ms + 900);
+    assert!(broker.mcp_lease_valid(&capture_lease));
+    broker.mcp_release_lease(&normal_lease);
+    broker.mcp_set_enabled(false);
+    assert_eq!(receiver.recv().unwrap(), BoardReply::Disconnected);
+    assert!(!broker.mcp_lease_valid(&capture_lease));
 }

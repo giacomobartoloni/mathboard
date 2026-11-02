@@ -36,10 +36,12 @@ test('desktop bridge routes an addressed inactive request and echoes its board I
   let onRequest
   const calls = []
   const routed = []
+  const contexts = []
   const board = { _boardLifecycle: lifecycle, sessionReady: true,
     getBoardId: () => 'mb_active',
-    getBoardDocumentCommands: () => ({ executeOnBoard: async command => {
+    getBoardDocumentCommands: () => ({ executeOnBoard: async (command, context) => {
       routed.push(command)
+      contexts.push(context)
       return { boardId: command.boardId, objects: [] }
     } }),
   }
@@ -58,6 +60,10 @@ test('desktop bridge routes an addressed inactive request and echoes its board I
     expiresAtMs: Date.now() + 10000, method: 'observe', params: {} } })
   assert.equal(routed.length, 1)
   assert.equal(routed[0].boardId, 'mb_other')
+  assert.equal(contexts[0].interactionChannel, 'mcp')
+  assert.equal(contexts[0].awaitPersistence, true)
+  assert.equal(routed[0].interactionChannel, undefined)
+  assert.equal(routed[0].awaitPersistence, undefined)
   const reply = JSON.parse(calls.find(call => call.name === 'board_bridge_reply').args.replyJson)
   assert.equal(reply.boardId, 'mb_other')
   assert.equal(reply.schemaVersion, 2)
@@ -468,5 +474,99 @@ test('native board bridge routes library operations through the shared workspace
   assert.equal(replies.length, 1)
   assert.equal(replies[0].ok, true)
   assert.deepEqual(replies[0].result, [{ id: 'mb_active', title: 'Algebra', isActive: true }])
+  disconnect()
+})
+
+test('a library create reports its result after its own lifecycle transition', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  let activeBoardId = 'mb_active'
+  let onRequest, onCancel
+  let grantEpoch = 0
+  const calls = []
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => activeBoardId,
+    getBoardWorkspace: () => ({
+      create: () => lifecycle.transition(async () => {
+        activeBoardId = 'mb_created'
+        return { id: 'mb_created', title: 'MCP Test', isActive: true }
+      }),
+    }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => {
+      if (event === 'mathboard-board-request') onRequest = handler
+      if (event === 'mathboard-board-cancel') onCancel = handler
+      return () => {}
+    },
+    invokeCommand: async (name, args) => {
+      calls.push({ name, args })
+      if (name === 'board_bridge_state') {
+        if (calls.length > 1) onCancel({ payload: ++grantEpoch })
+        return 'app-1'
+      }
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  await onRequest({ payload: {
+    requestId: 'r-board-create', appGeneration: 'app-1',
+    rendererGeneration: 'renderer-1', boardEpoch: 0, boardId: 'mb_active',
+    schemaVersion: 2, cancellationEpoch: 0, expiresAtMs: Date.now() + 10_000,
+    method: 'boards.create', params: { title: 'MCP Test' },
+  } })
+  const states = calls.filter(({ name }) => name === 'board_bridge_state')
+  assert.deepEqual(states.map(({ args }) => [args.ready, args.boardEpoch, args.activeBoardId]), [
+    [true, 0, 'mb_active'], [false, 1, 'mb_active'], [true, 2, 'mb_created'],
+  ])
+  const reply = calls.find(({ name }) => name === 'board_bridge_reply')
+  assert.equal(calls.at(-1), reply)
+  const parsed = JSON.parse(reply.args.replyJson)
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.boardEpoch, 0)
+  assert.equal(parsed.boardId, 'mb_active')
+  assert.deepEqual(parsed.result, { id: 'mb_created', title: 'MCP Test', isActive: true })
+  disconnect()
+})
+
+test('native Off revokes a pending board transition without losing its normal context-change receipt', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const handlers = new Map()
+  const replies = []
+  let finish
+  let admittedSignal
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardWorkspace: () => ({
+      create: (_args, { signal } = {}) => {
+        admittedSignal = signal
+        return new Promise(resolve => { finish = resolve })
+      },
+    }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => { handlers.set(event, handler); return () => {} },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  const pending = handlers.get('mathboard-board-request')({ payload: {
+    requestId: 'off-transition', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2,
+    expiresAtMs: Date.now() + 10_000, cancellationEpoch: 0,
+    method: 'boards.create', params: { title: 'Synthetic' },
+  } })
+  while (!admittedSignal) await Promise.resolve()
+  handlers.get('mathboard-board-cancel')({ payload: 1 })
+  assert.equal(admittedSignal.aborted, false, 'ordinary board transition preserves own receipt')
+  handlers.get('mathboard-board-cancel')({ payload: { epoch: 2, revokeAll: true } })
+  assert.equal(admittedSignal.aborted, true, 'Off revokes pending transition')
+  finish({ id: 'mb_created', title: 'Synthetic', isActive: true })
+  await pending
+  assert.equal(replies.length, 0, 'revoked transition cannot report success after Off')
   disconnect()
 })

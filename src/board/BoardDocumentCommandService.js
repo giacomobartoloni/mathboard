@@ -67,19 +67,25 @@ function collectObject(owned, object) {
 export class BoardDocumentCommandService {
   constructor({ repository, boardObjectPolicy, lifecycle, getActiveBoardId,
     getActiveController, getActiveRevision = () => null,
+    getActiveChangeVersion = () => null, getActiveCommitSequence = () => null,
+    flushActiveThrough = async () => {},
     buildFormula, createCanvas = defaultCanvas,
     prepareCreatedObject = () => {}, prepareUpdatedObject = () => {},
-    now = () => new Date().toISOString() }) {
+    onCommittedOperation = () => {}, now = () => new Date().toISOString() }) {
     this._repository = repository
     this._policy = boardObjectPolicy
     this._lifecycle = lifecycle
     this._getActiveBoardId = getActiveBoardId
     this._getActiveController = getActiveController
     this._getActiveRevision = getActiveRevision
+    this._getActiveChangeVersion = getActiveChangeVersion
+    this._getActiveCommitSequence = getActiveCommitSequence
+    this._flushActiveThrough = flushActiveThrough
     this._buildFormula = buildFormula
     this._createCanvas = createCanvas
     this._prepareCreatedObject = prepareCreatedObject
     this._prepareUpdatedObject = prepareUpdatedObject
+    this._onCommittedOperation = onCommittedOperation
     this._now = now
     this._activeRenders = 0
   }
@@ -111,6 +117,23 @@ export class BoardDocumentCommandService {
     }
   }
 
+  async _awaitActivePersistence(version, context, expiresAtMs) {
+    let timer
+    let onAbort
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new BoardTargetError('command_timeout')),
+        Math.max(0, expiresAtMs - Date.now()))
+      onAbort = () => reject(new BoardTargetError('command_timeout'))
+      context.signal?.addEventListener?.('abort', onAbort, { once: true })
+    })
+    try {
+      await Promise.race([this._flushActiveThrough(version), deadline])
+    } finally {
+      clearTimeout(timer)
+      context.signal?.removeEventListener?.('abort', onAbort)
+    }
+  }
+
   async executeOnBoard(command, trustedContext = {}) {
     const context = Object.freeze({ ...trustedContext })
     let request
@@ -121,6 +144,7 @@ export class BoardDocumentCommandService {
     const boardId = validateBoardId(request?.boardId)
     const method = request?.method
     if (!allowed.has(method)) throw new BoardTargetError('invalid_command')
+    const interactionChannel = context.interactionChannel === 'mcp' ? 'mcp' : 'local_agent'
     const expiresAtMs = context.expiresAtMs
     if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs <= 0
       || expiresAtMs > Date.now() + MAX_REQUEST_LIFETIME_MS + 1000) {
@@ -149,9 +173,31 @@ export class BoardDocumentCommandService {
       if (loadedRevision !== null && record.revision !== loadedRevision) {
         throw new BoardTargetError('board_conflict')
       }
+      const waitForPersistence = context.awaitPersistence === true && boardCommandMutatesBoard(method)
+      const beforeVersion = waitForPersistence ? this._getActiveChangeVersion() : null
+      const beforeCommit = waitForPersistence ? this._getActiveCommitSequence() : null
       const result = await executeDesktopBoardCommand(this._getActiveController(guard,
-        spec => this._renderFormula(spec, guard, context, expiresAtMs)), request,
+        spec => this._renderFormula(spec, guard, context, expiresAtMs), interactionChannel), request,
         context.capture)
+      if (waitForPersistence) {
+        try {
+          const committedVersion = this._getActiveChangeVersion()
+          const committedSequence = this._getActiveCommitSequence()
+          if (!Number.isSafeInteger(beforeVersion) || !Number.isSafeInteger(committedVersion)
+            || !Number.isSafeInteger(beforeCommit) || !Number.isSafeInteger(committedSequence)
+            || committedVersion < beforeVersion || committedSequence < beforeCommit
+            || (committedSequence > beforeCommit && committedVersion === beforeVersion)) {
+            throw new Error('Active board change was not tracked for persistence.')
+          }
+          if (committedVersion > beforeVersion) {
+            guard()
+            await this._awaitActivePersistence(committedVersion, context, expiresAtMs)
+          }
+        } catch {
+          // The canvas mutation may already be committed. Never imply rollback.
+          throw new BoardTargetError('execution_unknown')
+        }
+      }
       try { guard() } catch (error) {
         if (boardCommandMutatesBoard(method)) throw new BoardTargetError('execution_unknown')
         throw error
@@ -163,6 +209,7 @@ export class BoardDocumentCommandService {
     const canvas = this._createCanvas()
     const owned = new Set()
     const history = []
+    let committedEffect = null
     try {
       const materialized = await materializeBoardDocument(record.document, {
         buildFormula: spec => this._renderFormula(spec, guard, context, expiresAtMs),
@@ -181,6 +228,7 @@ export class BoardDocumentCommandService {
         isMutationStable: () => true,
         getBoardId: () => boardId,
         commitGuard: guard,
+        onCommittedOperation: effect => { committedEffect = effect },
       })
       let result = await executeDesktopBoardCommand(controller, request)
       for (const entry of history) {
@@ -207,6 +255,11 @@ export class BoardDocumentCommandService {
         if (current.archivedAt || current.trashedAt) throw new BoardTargetError('board_archived')
         return { ...current, document, kind: 'saved', updatedAt }
       })
+      if (committedEffect) {
+        try { this._onCommittedOperation(committedEffect, interactionChannel) } catch {
+          // Analytics cannot undo a committed document.
+        }
+      }
       try { guard() } catch { throw new BoardTargetError('execution_unknown') }
       return result
     } finally {

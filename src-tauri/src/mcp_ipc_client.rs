@@ -37,11 +37,29 @@ fn roundtrip(request: Value) -> Result<IpcReply, McpReadError> {
 fn safe_error(code: &str) -> McpReadError {
     match code {
         "permission_denied" => McpReadError::PermissionDenied,
-        "board_context_required" | "board_context_changed" => McpReadError::BoardContextChanged,
+        "board_context_required" => McpReadError::BoardContextRequired,
+        "board_context_changed" => McpReadError::BoardContextChanged,
         "board_busy" => McpReadError::BoardBusy,
+        "invalid_tool_arguments" => McpReadError::InvalidToolArguments,
+        "invalid_object_spec" => McpReadError::Domain("invalid_object_spec"),
+        "invalid_object_patch" => McpReadError::Domain("invalid_object_patch"),
+        "object_not_found" => McpReadError::Domain("object_not_found"),
+        "nested_object_mutation_not_supported" => {
+            McpReadError::Domain("nested_object_mutation_not_supported")
+        }
+        "formula_render_failed" => McpReadError::Domain("formula_render_failed"),
+        "board_commit_failed" => McpReadError::Domain("board_commit_failed"),
+        "board_not_found" => McpReadError::Domain("board_not_found"),
+        "board_archived" => McpReadError::Domain("board_archived"),
+        "board_not_archived" => McpReadError::Domain("board_not_archived"),
+        "invalid_board_title" => McpReadError::Domain("invalid_board_title"),
+        "edit_in_progress" => McpReadError::Domain("edit_in_progress"),
+        "invalid_capture_request" => McpReadError::Domain("invalid_capture_request"),
         "execution_unknown" => McpReadError::ExecutionUnknown,
         "capture_too_large" => McpReadError::CaptureTooLarge,
-        "mcp_unavailable" | "read_cancelled" => McpReadError::Unavailable,
+        "mcp_unavailable" => McpReadError::Unavailable,
+        "read_cancelled" => McpReadError::Domain("read_cancelled"),
+        "capture_unavailable" => McpReadError::Domain("capture_unavailable"),
         _ => McpReadError::Internal,
     }
 }
@@ -141,11 +159,49 @@ impl McpReadBackend for LocalAppBackend {
 mod tests {
     use super::*;
     #[test]
+    fn ipc_board_context_errors_keep_distinct_retry_semantics() {
+        for (wire_code, expected) in [
+            ("board_context_required", McpReadError::BoardContextRequired),
+            ("board_context_changed", McpReadError::BoardContextChanged),
+        ] {
+            let error = read_reply_result(IpcReply::Error {
+                code: wire_code.to_owned(),
+            })
+            .err()
+            .expect("IPC error must not become a successful read");
+            assert_eq!(error, expected);
+            assert_eq!(error.code(), wire_code);
+            let response = error.into_result();
+            assert_eq!(response.is_error, Some(true));
+            assert_eq!(
+                response.structured_content.as_ref().unwrap()["code"],
+                wire_code
+            );
+        }
+    }
+
+    #[test]
     fn unknown_error_text_is_never_forwarded() {
         assert_eq!(safe_error("/home/alice/secret"), McpReadError::Internal);
         assert_eq!(
             safe_error("permission_denied"),
             McpReadError::PermissionDenied
+        );
+        assert_eq!(
+            safe_error("invalid_tool_arguments"),
+            McpReadError::InvalidToolArguments
+        );
+        assert_eq!(
+            safe_error("read_cancelled"),
+            McpReadError::Domain("read_cancelled")
+        );
+        assert_eq!(
+            safe_error("capture_unavailable"),
+            McpReadError::Domain("capture_unavailable")
+        );
+        assert_eq!(
+            McpReadError::InvalidToolArguments.code(),
+            "invalid_tool_arguments"
         );
     }
 }

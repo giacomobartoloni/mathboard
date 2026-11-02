@@ -50,11 +50,23 @@ export async function waitForCapturePaint(environment,signal) {
       .finally(()=>signal.removeEventListener('abort',abort))
   })
   assertNotAborted(signal)
+  // A backgrounded WebView may stop producing rAF callbacks indefinitely.
+  // Capture renders onto a separate StaticCanvas, so do not block on window paint.
   for(let frame=0;frame<2;frame++) {
     await new Promise((resolve,reject)=>{
-      const abort=()=>{environment.cancelAnimationFrame(id);reject(captureError('capture_failed','Capture paint deadline exceeded.'))}
-      const id=environment.requestAnimationFrame(()=>{signal.removeEventListener('abort',abort);resolve()})
+      let settled=false, timer, id
+      const finish=(callback)=>{
+        if(settled) return
+        settled=true
+        signal.removeEventListener('abort',abort)
+        clearTimeout(timer)
+        if(id!==undefined) environment.cancelAnimationFrame(id)
+        callback()
+      }
+      const abort=()=>finish(()=>reject(captureError('capture_failed','Capture paint deadline exceeded.')))
       signal.addEventListener('abort',abort,{once:true})
+      id=environment.requestAnimationFrame(()=>finish(resolve))
+      timer=setTimeout(()=>finish(resolve),100)
     })
     assertNotAborted(signal)
   }

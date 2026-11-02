@@ -17,7 +17,9 @@
 
 //! Private native D dispatcher; no IPC frame can select an arbitrary C3 method.
 
-use crate::board_bridge::{BoardReply, BoardRequestBroker, BrokerError, emit_mcp_read};
+use crate::board_bridge::{
+    BoardReply, BoardRequestBroker, BrokerError, MCP_SCREENSHOT_TIMEOUT, emit_mcp_read,
+};
 use crate::mcp_contract::decode_screenshot;
 use crate::mcp_ipc_protocol::{IpcCommand, IpcReply};
 use base64::Engine;
@@ -47,18 +49,33 @@ pub fn safe_board_error(code: &str) -> &'static str {
     match code {
         "board_busy" => "board_busy",
         "board_context_changed" => "board_context_changed",
-        "board_not_found" | "board_archived" | "board_context_required" => "board_context_required",
+        "board_not_found" => "board_not_found",
+        "board_archived" => "board_archived",
+        "board_context_required" => "board_context_required",
+        "invalid_object_spec" => "invalid_object_spec",
+        "invalid_object_patch" => "invalid_object_patch",
+        "object_not_found" => "object_not_found",
+        "nested_object_mutation_not_supported" => "nested_object_mutation_not_supported",
+        "formula_render_failed" => "formula_render_failed",
+        "board_commit_failed" => "board_commit_failed",
         "capture_too_large" => "capture_too_large",
-        "invalid_capture_request" | "invalid_command" => "invalid_tool_arguments",
+        "invalid_capture_request" => "invalid_capture_request",
+        "invalid_command" => "invalid_tool_arguments",
         "capture_failed" | "board_not_ready" => "capture_unavailable",
         "command_timeout" => "read_cancelled",
         "execution_unknown" => "execution_unknown",
-        "board_not_archived"
-        | "confirmation_required"
-        | "invalid_board_title"
-        | "edit_in_progress" => "invalid_tool_arguments",
+        "board_not_archived" => "board_not_archived",
+        "invalid_board_title" => "invalid_board_title",
+        "edit_in_progress" => "edit_in_progress",
+        "confirmation_required" => "invalid_tool_arguments",
         _ => "internal_error",
     }
+}
+
+// A timeout does not contain board data. Classify it before the expiring
+// read lease can misreport a delayed capture as revoked permission.
+fn timed_out_read(reply: &Result<BoardReply, BrokerError>) -> bool {
+    matches!(reply, Ok(BoardReply::TimedOut) | Err(BrokerError::Timeout))
 }
 
 pub fn dispatch(
@@ -102,7 +119,23 @@ pub fn dispatch(
                     Ok(pending) => pending,
                     Err(err) => return error(broker_code(err)),
                 };
-            let reply = broker.await_reply(&request_id, receiver, Duration::from_secs(10));
+            let timeout = if method == "screenshot" {
+                MCP_SCREENSHOT_TIMEOUT
+            } else {
+                Duration::from_secs(10)
+            };
+            let reply = broker.await_reply(&request_id, receiver, timeout);
+            // A timed-out read contains no data; expiry alone must not be
+            // presented as a permission revocation. A real MCP Off still wins.
+            if timed_out_read(&reply) {
+                let code = if broker.mcp_status().enabled {
+                    "read_cancelled"
+                } else {
+                    "permission_denied"
+                };
+                broker.mcp_release_lease(&lease);
+                return error(code);
+            }
             // Board-changing writes may have committed before the renderer switched.
             if matches!(
                 &reply,
@@ -143,5 +176,21 @@ pub fn dispatch(
             }
             output
         }
+    }
+}
+
+#[cfg(test)]
+mod c13_tests {
+    use super::*;
+
+    #[test]
+    fn read_timeout_is_classified_before_lease_expiry() {
+        assert!(timed_out_read(&Err(BrokerError::Timeout)));
+        assert!(timed_out_read(&Ok(BoardReply::TimedOut)));
+        assert!(!timed_out_read(&Err(BrokerError::PermissionDenied)));
+        assert!(!timed_out_read(&Ok(BoardReply::Disconnected)));
+        assert!(!timed_out_read(&Ok(BoardReply::Success(
+            serde_json::json!({})
+        ))));
     }
 }

@@ -33,7 +33,8 @@ export function generateMcpToolSchemas() {
     if (!descriptor || descriptor.mutatesBoard) throw new Error(`Invalid MCP read method: ${method}`)
     const inputSchema = structuredClone(descriptor.paramsSchema)
     inputSchema.properties = { boardId: structuredClone(boardId), ...inputSchema.properties }
-    inputSchema.required = method === 'observe' ? [] : ['boardId', ...inputSchema.required]
+    inputSchema.required = [...inputSchema.required]
+    if (method === 'observe') inputSchema.properties.detail.default = 'summary'
     inputSchema.additionalProperties = false
     return { name: `mathboard_${method}`, description: descriptor.summary, inputSchema }
   }), {

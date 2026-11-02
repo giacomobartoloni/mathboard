@@ -100,7 +100,11 @@ export function createBoardOperationAnalytics({ trackEvent, trackBoardEngaged, r
       safeCall(trackBoardEngaged)
       safeCall(recordProductAction)
     }
-    if (eventName) safeCall(trackEvent, eventName, metadata)
+    if (eventName) {
+      // Only the native bridge supplies MCP provenance, never model-supplied parameters.
+      if (interactionChannel === 'mcp') metadata = { ...metadata, interaction_channel: 'mcp' }
+      safeCall(trackEvent, eventName, metadata)
+    }
     return true
   }
 

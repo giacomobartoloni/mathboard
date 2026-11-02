@@ -24,6 +24,7 @@
     "assert:no-e2e-hook": "node tools/assert-no-e2e-hook.mjs",
     "assert:e2e-hook": "node tools/assert-e2e-hook.mjs",
     "generate:icons": "node tools/generate-icons.mjs",
+    "generate:favicons": "node tools/generate-icons.mjs --favicons-only",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",

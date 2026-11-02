@@ -35,6 +35,7 @@ mod native_smoke;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let enable_http_at_start = companion::http_startup_requested();
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(board_bridge::BoardRequestBroker::new(
@@ -48,10 +49,32 @@ pub fn run() {
             board_bridge::mcp_set_enabled,
         ]);
 
-    let builder = builder.setup(|app| {
+    let builder = builder.setup(move |app| {
         use tauri::Manager;
-        // No MCP socket is bound before native user activation.
+        // Unless explicitly requested by the CLI, no socket is bound at startup.
         app.manage(mcp_http::LocalMcpHttpServer::new(app.handle().clone()));
+        if enable_http_at_start {
+            let broker = app.state::<board_bridge::BoardRequestBroker>();
+            let server = app.state::<mcp_http::LocalMcpHttpServer>();
+            let startup = (|| -> std::io::Result<()> {
+                // Preserve explicit CLI contract: fail if the endpoint record cannot be emitted.
+                companion::ensure_http_startup_stdout()?;
+                // Reuse the same native On lifecycle and local MCP transport.
+                server.set_enabled(&broker, true)?;
+                let endpoint = server.endpoint().ok_or_else(|| {
+                    std::io::Error::other("MCP HTTP listener unavailable after startup")
+                })?;
+                let mut output = std::io::stdout().lock();
+                companion::write_http_startup_record(&mut output, &endpoint)
+            })();
+            if let Err(error) = startup {
+                // If the endpoint record cannot be delivered, do not leave a listener behind.
+                let _ = server.shutdown(&broker);
+                // Tauri panics when setup returns Err on macOS. This opt-in CLI
+                // startup must instead fail cleanly with a nonzero exit code.
+                companion::exit_http_startup_failure(&error);
+            }
+        }
         #[cfg(feature = "phase-c-verification")]
         {
             if std::env::var_os("MATHBOARD_PHASE_C_IPC_PROBE").is_some() {
@@ -145,6 +168,20 @@ pub fn run() {
                 }
             }
         });
+
+    // Preserve the secondary WebView across both the native close control and
+    // the in-window Close button. Closing a live WKWebView can race WebKit's
+    // asynchronous obscured-content-insets dispatch on macOS.
+    let builder = builder.on_window_event(|window, event| {
+        if window.label() == mcp_settings::WINDOW_LABEL {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                if let Err(error) = window.hide() {
+                    eprintln!("Unable to hide local MCP settings window: {error}");
+                }
+            }
+        }
+    });
 
     // App::run exits the process directly, so managed server state needs an exit hook.
     builder

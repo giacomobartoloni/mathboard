@@ -48,9 +48,9 @@ const common = { type: string, id: { description: 'New ID is assigned.' },
   originY: { ...transformProperties.originY, default: 'top', description: 'Defaults top; explicit wins.' },
   ...styleProperties, mathboardInkMode: { enum: ['auto', 'fixed'] } }
 const typeFields = {
-  rect: { width: number, height: number, rx: number, ry: number },
-  circle: { radius: number },
-  ellipse: { rx: { type: 'number', minimum: 0 }, ry: { type: 'number', minimum: 0 } },
+  rect: { width: { type: 'number', exclusiveMinimum: 0 }, height: { type: 'number', exclusiveMinimum: 0 }, rx: number, ry: number },
+  circle: { radius: { type: 'number', exclusiveMinimum: 0 } },
+  ellipse: { rx: { type: 'number', exclusiveMinimum: 0 }, ry: { type: 'number', exclusiveMinimum: 0 } },
   polygon: { points: { type: 'array', minItems: 3, maxItems: 1000,
     items: { type: 'object', properties: { x: number, y: number }, required: ['x', 'y'] } } },
   arrow: { x1: number, y1: number, x2: number, y2: number,
@@ -58,11 +58,11 @@ const typeFields = {
     headWidth: { type: 'number', exclusiveMinimum: 0, default: 12 } },
   line: { x1: number, y1: number, x2: number, y2: number },
   path: { path: { type: 'array', description: 'Path-command data; runtime validates.', items: {} } },
-  text: { text: string, ...textProperties },
+  text: { text: string, width: { type: 'number', exclusiveMinimum: 0, description: 'Optional wrapping width; uses Fabric Textbox.' }, ...textProperties },
   formula: { latex },
   group: { objects: { type: 'array', items: { $ref: '#/$defs/createSpec' } } },
 }
-const requiredFields = { rect: [], circle: [], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2'], line: ['x1', 'y1', 'x2', 'y2'],
+const requiredFields = { rect: ['width', 'height'], circle: ['radius'], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2'], line: ['x1', 'y1', 'x2', 'y2'],
   path: ['path'], text: ['text'], formula: ['latex'], group: ['objects'] }
 const createSpec = { oneOf: BOARD_OBJECT_TYPES.map(type => {
   if (!typeFields[type]) throw new Error(`Missing local discovery schema for ${type}`)
@@ -86,18 +86,19 @@ const patchSchemas = {
     opacity: stylePatchProperties.opacity, mathboardInkMode: stylePatchProperties.mathboardInkMode }),
   group: objectSchema({ ...transformProperties, opacity: stylePatchProperties.opacity }),
 }
-const options = { type: 'object', properties: { select: boolean }, additionalProperties: true,
+const options = { type: 'object', properties: { select: boolean }, additionalProperties: false,
   description: 'Optional boolean selection.' }
 const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty, type: { enum: [...BOARD_OBJECT_TYPES] } },
   additionalProperties: true, description: 'Detached semantic node; formula retains LaTeX.' }
-const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: true,
+const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: false,
   ...(defs ? { $defs: defs } : {}) })
 const descriptors = [
   { method: 'observe', summary: 'Read semantic objects, selection, viewport and interaction stability.', mutatesBoard: false,
-    paramsSchema: params({}), resultSchema: { type: 'object', required: ['stable', 'objects', 'selection', 'viewport'],
+    paramsSchema: params({ detail: { enum: ['summary', 'full'], default: 'full',
+      description: 'Summary reduces object payload; full retains all semantic fields.' } }), resultSchema: { type: 'object', required: ['stable', 'objects', 'selection', 'viewport'],
       properties: { stable: boolean, objects: { type: 'array', items: node }, selection: { type: 'object' },
         viewport: { type: 'object' }, boardId: { type: ['string', 'null'] }, version: { type: 'integer' } } },
-    example: { method: 'observe', params: {} }, execute: controller => controller.observe() },
+    example: { method: 'observe', params: {} }, execute: (controller, p) => controller.observe(p.detail || 'full') },
   { method: 'create', summary: 'Create one semantic object with fresh identity and one history command.', mutatesBoard: true,
     paramsSchema: params({ spec: { $ref: '#/$defs/createSpec' }, options }, ['spec'], { createSpec }), resultSchema: node,
     example: { method: 'create', params: { spec: { type: 'text', text: 'Synthetic example', left: 240, top: 160,
@@ -162,42 +163,42 @@ const descriptors = [
     paramsSchema: params({}),
     resultSchema: { type: 'array', items: { type: 'object', required: ['id', 'title', 'isActive'] } },
     example: { method: 'boards.list', params: {} },
-    execute: (_controller, _p, _capture, workspace) => workspace.list() },
+    execute: (_controller, _p, _capture, workspace, signal) => workspace.list({ signal }) },
   { method: 'boards.create', summary: 'Create and activate a local board, saved automatically; omitted title gets a math-inspired random name.', mutatesBoard: true,
     paramsSchema: params({ title: { type: 'string', minLength: 1, maxLength: 120 } }),
     resultSchema: { type: 'object', required: ['id', 'title', 'isActive'] },
     example: { method: 'boards.create', params: { title: 'Algebra' } },
-    execute: (_controller, p, _capture, workspace) => workspace.create(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.create(p, { signal }) },
   { method: 'boards.open', summary: 'Open an unarchived local board; resets in-memory history.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty }, ['boardId']),
     resultSchema: { type: 'object', required: ['id', 'title', 'isActive'] },
     example: { method: 'boards.open', params: { boardId: 'mb_example' } },
-    execute: (_controller, p, _capture, workspace) => workspace.open(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.open(p, { signal }) },
   { method: 'boards.rename', summary: 'Rename a local board and its semantic document.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty, title: { type: 'string', minLength: 1, maxLength: 120 } }, ['boardId', 'title']),
     resultSchema: { type: 'object', required: ['id', 'title'] },
     example: { method: 'boards.rename', params: { boardId: 'mb_example', title: 'Geometry' } },
-    execute: (_controller, p, _capture, workspace) => workspace.rename(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.rename(p, { signal }) },
   { method: 'boards.listArchived', summary: 'List archived board metadata without documents.', mutatesBoard: false,
     paramsSchema: params({}),
     resultSchema: { type: 'array', items: { type: 'object', required: ['id', 'title', 'archivedAt'] } },
     example: { method: 'boards.listArchived', params: {} },
-    execute: (_controller, _p, _capture, workspace) => workspace.listArchived() },
+    execute: (_controller, _p, _capture, workspace, signal) => workspace.listArchived({ signal }) },
   { method: 'boards.archive', summary: 'Hide a board without deleting data; new active board if needed.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty }, ['boardId']),
     resultSchema: { type: 'object', required: ['id', 'archivedAt'] },
     example: { method: 'boards.archive', params: { boardId: 'mb_example' } },
-    execute: (_controller, p, _capture, workspace) => workspace.archive(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.archive(p, { signal }) },
   { method: 'boards.unarchive', summary: 'Return a preserved archived board to the library.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty }, ['boardId']),
     resultSchema: { type: 'object', required: ['id', 'title'] },
     example: { method: 'boards.unarchive', params: { boardId: 'mb_example' } },
-    execute: (_controller, p, _capture, workspace) => workspace.unarchive(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.unarchive(p, { signal }) },
   { method: 'boards.delete', summary: 'Permanently delete one board locally. Irreversible; explicit confirm:true required.', mutatesBoard: true,
     paramsSchema: params({ boardId: nonempty, confirm: { type: 'boolean', const: true } }, ['boardId', 'confirm']),
     resultSchema: { type: 'object', required: ['id', 'deleted'] },
     example: { method: 'boards.delete', params: { boardId: 'mb_example', confirm: true } },
-    execute: (_controller, p, _capture, workspace) => workspace.delete(p) },
+    execute: (_controller, p, _capture, workspace, signal) => workspace.delete(p, { signal }) },
 ]
 
 export function hasBoardCommandMethod(method) {
@@ -209,10 +210,19 @@ export function boardCommandMutatesBoard(method) {
   return descriptors.find(entry => entry.method === method)?.mutatesBoard ?? false
 }
 
-export function executeBoardCommand(controller, command, capture, workspace) {
+export function executeBoardCommand(controller, command, capture, workspace, signal) {
   const entry = descriptors.find(candidate => candidate.method === command?.method)
   if (!entry) throw new Error(`Unsupported board method: ${command?.method}`)
-  return entry.execute(controller, command.params || {}, capture, workspace)
+  const params = command.params ?? {}
+  const fields = entry.paramsSchema.properties
+  if (!params || Array.isArray(params) || typeof params !== 'object'
+    || Object.keys(params).some(key => !Object.hasOwn(fields, key))
+    || ('options' in params && (!params.options || Array.isArray(params.options)
+      || typeof params.options !== 'object'
+      || Object.keys(params.options).some(key => !Object.hasOwn(fields.options.properties, key))))) {
+    throw new Error('Invalid board command parameters.')
+  }
+  return entry.execute(controller, params, capture, workspace, signal)
 }
 
 export function getBoardCommandDescriptors() {

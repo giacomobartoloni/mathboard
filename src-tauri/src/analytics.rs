@@ -91,6 +91,11 @@ fn count(metadata: &Map<String, Value>, key: &str, minimum: u64, maximum: u64) -
         .filter(|value| (minimum..=maximum).contains(value))
 }
 
+fn valid_mcp_channel(metadata: &Map<String, Value>) -> bool {
+    !metadata.contains_key("interaction_channel")
+        || category(metadata, "interaction_channel", &["mcp"])
+}
+
 fn valid_creation(metadata: &Map<String, Value>) -> bool {
     const TYPES: &[&str] = &[
         "path",
@@ -103,7 +108,11 @@ fn valid_creation(metadata: &Map<String, Value>) -> bool {
         "stamp",
         "stamp_template",
     ];
-    fields(metadata, &["object_type", "shape"], &["object_type"])
+    fields(
+        metadata,
+        &["object_type", "shape", "interaction_channel"],
+        &["object_type"],
+    ) && valid_mcp_channel(metadata)
         && category(metadata, "object_type", TYPES)
         && match metadata.get("shape") {
             None => true,
@@ -133,7 +142,9 @@ fn valid_deletion(metadata: &Map<String, Value>) -> bool {
         "group_count",
         "unknown_count",
     ];
-    if !fields(metadata, REQUIRED, REQUIRED) {
+    let mut allowed = REQUIRED.to_vec();
+    allowed.push("interaction_channel");
+    if !fields(metadata, &allowed, REQUIRED) || !valid_mcp_channel(metadata) {
         return false;
     }
     let Some(selection_count) = count(metadata, "selection_count", 1, 10_000) else {
@@ -216,6 +227,9 @@ fn validate_event(name: &str, metadata: &Map<String, Value>) -> Result<(), &'sta
                     ],
                 )
         }
+        "formula_edited" => {
+            fields(metadata, &["interaction_channel"], &[]) && valid_mcp_channel(metadata)
+        }
         "theme_changed" => {
             fields(metadata, &["theme"], &["theme"])
                 && category(metadata, "theme", &["light", "dark", "chalkboard"])
@@ -231,7 +245,6 @@ fn validate_event(name: &str, metadata: &Map<String, Value>) -> Result<(), &'sta
         | "text_edit_started"
         | "text_edited"
         | "formula_tool_selected"
-        | "formula_edited"
         | "stamp_share_created"
         | "stamp_share_copied"
         | "stamp_share_opened"
@@ -315,6 +328,33 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn mcp_provenance_accepts_only_the_fixed_channel_and_existing_event_fields() {
+        let creation = metadata(json!({
+            "object_type": "formula", "interaction_channel": "mcp"
+        }));
+        assert!(validate_event("object_created", &creation).is_ok());
+        let deletion = metadata(json!({
+            "object_type": "path", "selection_count": 1,
+            "path_count": 1, "shape_count": 0, "text_count": 0,
+            "formula_count": 0, "group_count": 0, "unknown_count": 0,
+            "interaction_channel": "mcp"
+        }));
+        assert!(validate_event("object_deleted", &deletion).is_ok());
+        let edit = metadata(json!({ "interaction_channel": "mcp" }));
+        assert!(validate_event("formula_edited", &edit).is_ok());
+        for value in ["ui", "local_agent", "client_provided"] {
+            let invalid = metadata(json!({
+                "object_type": "text", "interaction_channel": value
+            }));
+            assert!(validate_event("object_created", &invalid).is_err());
+        }
+        let leaked = metadata(json!({
+            "interaction_channel": "mcp", "latex": "secret"
+        }));
+        assert!(validate_event("formula_edited", &leaked).is_err());
     }
 
     #[test]

@@ -51,8 +51,16 @@ pub fn tool_specs() -> &'static [ToolSpec] {
     static SPECS: OnceLock<Vec<ToolSpec>> = OnceLock::new();
     SPECS
         .get_or_init(|| {
-            serde_json::from_str(include_str!("../resources/mcp-tool-schemas.json"))
-                .expect("checked MCP tool schema artifact")
+            let mut existing: Vec<ToolSpec> =
+                serde_json::from_str(include_str!("../resources/mcp-tool-schemas.json"))
+                    .expect("checked MCP tool schema artifact");
+            let derived: Vec<ToolSpec> = serde_json::from_str(include_str!(concat!(
+                env!("OUT_DIR"),
+                "/mathboard-mcp-tools.json"
+            )))
+            .expect("F033-generated MCP schemas");
+            existing.extend(derived);
+            existing
         })
         .as_slice()
 }
@@ -80,19 +88,20 @@ impl ToolCall {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ObserveArgs {
     board_id: Option<String>,
+    detail: Option<String>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MeasureArgs {
-    board_id: String,
+    board_id: Option<String>,
     id: String,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ScreenshotArgs {
-    board_id: String,
+    board_id: Option<String>,
     target: CaptureTarget,
     #[serde(default = "default_scale")]
     scale: f64,
@@ -132,6 +141,28 @@ fn command_method(value: &str) -> Option<&'static str> {
         "boards.archive" => Some("boards.archive"),
         "boards.unarchive" => Some("boards.unarchive"),
         "boards.delete" => Some("boards.delete"),
+        _ => None,
+    }
+}
+
+fn direct_command_method(name: &str) -> Option<&'static str> {
+    match name {
+        "mathboard_create" => Some("create"),
+        "mathboard_create_many" => Some("createMany"),
+        "mathboard_update" => Some("update"),
+        "mathboard_delete" => Some("delete"),
+        "mathboard_delete_many" => Some("deleteMany"),
+        "mathboard_clear" => Some("clear"),
+        "mathboard_group" => Some("group"),
+        "mathboard_layout" => Some("layout"),
+        "mathboard_boards_list" => Some("boards.list"),
+        "mathboard_boards_create" => Some("boards.create"),
+        "mathboard_boards_open" => Some("boards.open"),
+        "mathboard_boards_rename" => Some("boards.rename"),
+        "mathboard_boards_list_archived" => Some("boards.listArchived"),
+        "mathboard_boards_archive" => Some("boards.archive"),
+        "mathboard_boards_unarchive" => Some("boards.unarchive"),
+        "mathboard_boards_delete" => Some("boards.delete"),
         _ => None,
     }
 }
@@ -238,12 +269,52 @@ fn valid_capture_shape(value: Option<&Value>) -> bool {
     }
 }
 
+/// Reject unknown command fields before a mutating request enters the broker.
+/// The generated native tool schemas come from F033; no second field allowlist.
+fn command_keys_known(operation: &str, params: &Value, direct: bool) -> bool {
+    let Some(fields) = params.as_object() else {
+        return false;
+    };
+    let Some(tool) = tool_specs()
+        .iter()
+        .find(|tool| direct_command_method(&tool.name) == Some(operation))
+    else {
+        return false;
+    };
+    let Some(properties) = tool
+        .input_schema
+        .get("properties")
+        .and_then(Value::as_object)
+    else {
+        return false;
+    };
+    fields.iter().all(|(name, value)| {
+        if !direct && name == "boardId" && !operation.starts_with("boards.") {
+            return false;
+        }
+        let Some(field) = properties.get(name) else {
+            return false;
+        };
+        if name == "options" {
+            let Some(options) = value.as_object() else {
+                return false;
+            };
+            let Some(allowed) = field.get("properties").and_then(Value::as_object) else {
+                return false;
+            };
+            return options.keys().all(|key| allowed.contains_key(key));
+        }
+        true
+    })
+}
+
 pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCallError> {
     let method = match name {
         "mathboard_observe" => "observe",
         "mathboard_measure" => "measure",
         "mathboard_screenshot" => "screenshot",
         "mathboard_command" => "command",
+        _ if direct_command_method(name).is_some() => "direct",
         _ => return Err(ToolCallError::UnknownTool),
     };
     if !arguments.is_object()
@@ -257,6 +328,27 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
     if arguments.get("boardId") == Some(&Value::Null) {
         return Err(ToolCallError::InvalidArguments);
     }
+    if method == "direct" {
+        let operation = direct_command_method(name).ok_or(ToolCallError::UnknownTool)?;
+        if !command_keys_known(operation, &arguments, true) {
+            return Err(ToolCallError::InvalidArguments);
+        }
+        let mut params = arguments.as_object().unwrap().clone();
+        let board_id = if operation.starts_with("boards.") {
+            None
+        } else {
+            match params.remove("boardId") {
+                Some(Value::String(id)) if valid_board_id(&id) => Some(id),
+                Some(_) => return Err(ToolCallError::InvalidArguments),
+                None => None,
+            }
+        };
+        return Ok(ToolCall {
+            method: "command",
+            board_id,
+            params: json!({"method":operation,"params":params}),
+        });
+    }
     let invalid = |_| ToolCallError::InvalidArguments;
     let call = match method {
         "observe" => {
@@ -268,20 +360,32 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
             {
                 return Err(ToolCallError::InvalidArguments);
             }
-            ToolCall {
-                method,
-                board_id: args.board_id,
-                params: json!({}),
-            }
-        }
-        "measure" => {
-            let args: MeasureArgs = serde_json::from_value(arguments).map_err(invalid)?;
-            if !valid_board_id(&args.board_id) || args.id.is_empty() {
+            if args
+                .detail
+                .as_deref()
+                .is_some_and(|detail| !matches!(detail, "summary" | "full"))
+            {
                 return Err(ToolCallError::InvalidArguments);
             }
             ToolCall {
                 method,
-                board_id: Some(args.board_id),
+                board_id: args.board_id,
+                params: json!({"detail": args.detail.as_deref().unwrap_or("summary")}),
+            }
+        }
+        "measure" => {
+            let args: MeasureArgs = serde_json::from_value(arguments).map_err(invalid)?;
+            if args
+                .board_id
+                .as_deref()
+                .is_some_and(|id| !valid_board_id(id))
+                || args.id.is_empty()
+            {
+                return Err(ToolCallError::InvalidArguments);
+            }
+            ToolCall {
+                method,
+                board_id: args.board_id,
                 params: json!({"id":args.id}),
             }
         }
@@ -290,7 +394,10 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
                 return Err(ToolCallError::InvalidArguments);
             }
             let args: ScreenshotArgs = serde_json::from_value(arguments).map_err(invalid)?;
-            if !valid_board_id(&args.board_id)
+            if args
+                .board_id
+                .as_deref()
+                .is_some_and(|id| !valid_board_id(id))
                 || !args.scale.is_finite()
                 || !(0.5..=3.0).contains(&args.scale)
                 || args.format != "png"
@@ -300,7 +407,7 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
             }
             ToolCall {
                 method,
-                board_id: Some(args.board_id),
+                board_id: args.board_id,
                 params: json!({"target":args.target,"scale":args.scale,"format":"png"}),
             }
         }
@@ -311,7 +418,7 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
                 .board_id
                 .as_deref()
                 .is_some_and(|id| !valid_board_id(id))
-                || !args.params.is_object()
+                || !command_keys_known(operation, &args.params, false)
             {
                 return Err(ToolCallError::InvalidArguments);
             }

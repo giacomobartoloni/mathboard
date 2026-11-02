@@ -109,7 +109,7 @@ import { geometryControls, lineGeometryAdapter, isGeometryHandleTransform } from
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
 const STROKE_INK_TYPES = ["Path", "Rect", "Circle", "Line"];
 // Objects whose board ink lives on "fill".
-const FILL_INK_TYPES = ["IText", "Text"];
+const FILL_INK_TYPES = ["IText", "Text", "Textbox"];
 
 // Constants
 const CANVAS_EVENTS = [
@@ -273,13 +273,19 @@ export default {
         lifecycle: this._boardLifecycle,
         getActiveBoardId: () => this.getBoardId(),
         getActiveRevision: () => this._persistence?.revision ?? null,
-        getActiveController: (guard, buildFormula) => this._ensureBoardController('local_agent', guard, buildFormula),
+        getActiveChangeVersion: () => this._persistence?.changeVersion ?? null,
+        getActiveCommitSequence: () => this._boardHistory.committedSequence(),
+        flushActiveThrough: version => this._ensurePersistenceService().flushThrough(version),
+        getActiveController: (guard, buildFormula, interactionChannel) =>
+          this._ensureBoardController(interactionChannel, guard, buildFormula),
         buildFormula: (spec) => buildFormulaFromSemanticSpec(spec, {
           defaultInk: this.boardThemeConfig.defaultInk,
           render: (args) => this._formulaRenderer.render(args),
         }),
         prepareCreatedObject: (object) => this._applyBoardDefaultInkToObjectTree(object),
         prepareUpdatedObject: (object) => this._syncObjectAutoInk(object, this.boardThemeConfig),
+        onCommittedOperation: (effect, interactionChannel) =>
+          this._boardAnalytics.record(effect, { interactionChannel }),
       });
       return this._documentCommands;
     },

@@ -28,10 +28,13 @@ use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
     Request, Response, StatusCode,
     body::Incoming,
-    header::{AUTHORIZATION, HOST, HeaderMap, ORIGIN},
+    header::{HOST, HeaderMap, ORIGIN},
     service::{Service, service_fn},
 };
-use hyper_util::{rt::TokioIo, service::TowerToHyperService};
+use hyper_util::{
+    rt::{TokioIo, TokioTimer},
+    service::TowerToHyperService,
+};
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -43,13 +46,40 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio_util::sync::CancellationToken;
 
-const BIND_ADDRESS: &str = "127.0.0.1:43179";
-pub const ENDPOINT: &str = "http://127.0.0.1:43179/mcp";
+const LOOPBACK_HOST: &str = "127.0.0.1";
+pub const PREFERRED_PORT: u16 = 43179;
+
+fn endpoint_for(port: u16) -> String {
+    format!("http://{LOOPBACK_HOST}:{port}/mcp")
+}
+
+/// Keep the successful bound socket; checking and then rebinding would race.
+fn bind_first_available(start_port: u16) -> io::Result<(TcpListener, u16)> {
+    for port in start_port..=u16::MAX {
+        match TcpListener::bind((LOOPBACK_HOST, port)) {
+            Ok(listener) => return Ok((listener, port)),
+            Err(error) if error.kind() == io::ErrorKind::AddrInUse => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(io::Error::new(
+        io::ErrorKind::AddrInUse,
+        "No available loopback MCP HTTP port at or above the preferred port",
+    ))
+}
 const MAX_HTTP_BODY: usize = 64 * 1024;
 const MAX_CONNECTIONS: usize = 16;
+const HTTP_HEADER_TIMEOUT: Duration = Duration::from_secs(5);
+
+fn http1_builder(timeout: Duration) -> hyper::server::conn::http1::Builder {
+    let mut builder = hyper::server::conn::http1::Builder::new();
+    builder.timer(TokioTimer::new());
+    builder.header_read_timeout(timeout);
+    builder
+}
 
 #[derive(Clone)]
 struct NativeAppBackend(tauri::AppHandle);
@@ -82,30 +112,13 @@ impl McpReadBackend for NativeAppBackend {
     }
 }
 
-fn same_token(provided: &str, expected: &str) -> bool {
-    let a = provided.as_bytes();
-    let b = expected.as_bytes();
-    if a.len() != b.len() {
-        return false;
-    }
-    a.iter()
-        .zip(b)
-        .fold(0u8, |diff, (left, right)| diff | (left ^ right))
-        == 0
-}
-
-/// Browser requests, DNS rebinding and unrelated local processes fail closed.
-/// The ephemeral token is available only through the native settings window.
-fn admitted(headers: &HeaderMap, path: &str, token: &str, enabled: bool) -> bool {
+/// Native enablement and strict loopback Host/Origin checks form the local MCP gate.
+/// This endpoint intentionally does not authenticate other local applications.
+fn admitted(headers: &HeaderMap, path: &str, enabled: bool, bound_host: &str) -> bool {
     if !enabled || path != "/mcp" || headers.contains_key(ORIGIN) {
         return false;
     }
-    let valid_host = headers.get(HOST).and_then(|value| value.to_str().ok()) == Some(BIND_ADDRESS);
-    let bearer = headers
-        .get(AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|value| value.strip_prefix("Bearer "));
-    valid_host && bearer.is_some_and(|value| same_token(value, token))
+    headers.get(HOST).and_then(|value| value.to_str().ok()) == Some(bound_host)
 }
 
 fn denied() -> Response<BoxBody<Bytes, Infallible>> {
@@ -119,12 +132,12 @@ fn denied() -> Response<BoxBody<Bytes, Infallible>> {
 async fn serve(
     socket: TcpListener,
     app: tauri::AppHandle,
-    token: String,
     shutdown: CancellationToken,
+    bound_host: String,
 ) -> io::Result<()> {
     let listener = tokio::net::TcpListener::from_std(socket)?;
     let settings = StreamableHttpServerConfig::default()
-        .with_allowed_hosts([BIND_ADDRESS])
+        .with_allowed_hosts([bound_host.clone()])
         .enforce_origin_validation()
         .with_max_request_body_bytes(MAX_HTTP_BODY)
         .with_json_response(true)
@@ -151,16 +164,21 @@ async fn serve(
         };
         let service = service.clone();
         let app = app.clone();
-        let token = token.clone();
+        let bound_host = bound_host.clone();
         tokio::spawn(async move {
             let _slot = slot;
             let handler = service_fn(move |request: Request<Incoming>| {
                 let service = service.clone();
                 let app = app.clone();
-                let token = token.clone();
+                let bound_host = bound_host.clone();
                 async move {
                     let enabled = app.state::<BoardRequestBroker>().mcp_status().enabled;
-                    if !admitted(request.headers(), request.uri().path(), &token, enabled) {
+                    if !admitted(
+                        request.headers(),
+                        request.uri().path(),
+                        enabled,
+                        &bound_host,
+                    ) {
                         return Ok::<_, Infallible>(denied());
                     }
                     let response = service
@@ -170,7 +188,7 @@ async fn serve(
                     Ok::<_, Infallible>(response)
                 }
             });
-            let _ = hyper::server::conn::http1::Builder::new()
+            let _ = http1_builder(HTTP_HEADER_TIMEOUT)
                 .serve_connection(TokioIo::new(stream), handler)
                 .await;
         });
@@ -179,23 +197,18 @@ async fn serve(
 }
 
 struct RunningHttp {
-    token: String,
     shutdown: CancellationToken,
     worker: JoinHandle<()>,
+    port: u16,
 }
 
 impl RunningHttp {
     pub fn start(app: tauri::AppHandle) -> io::Result<Self> {
-        let listener = TcpListener::bind(BIND_ADDRESS)?;
+        let (listener, port) = bind_first_available(PREFERRED_PORT)?;
         listener.set_nonblocking(true)?;
-        let token = format!(
-            "{}{}",
-            uuid::Uuid::new_v4().simple(),
-            uuid::Uuid::new_v4().simple()
-        );
+        let bound_host = format!("{LOOPBACK_HOST}:{port}");
         let shutdown = CancellationToken::new();
         let cancel = shutdown.clone();
-        let secret = token.clone();
         let (started, ready) = mpsc::sync_channel(1);
         let worker = thread::Builder::new()
             .name("mathboard-mcp-http".into())
@@ -215,7 +228,7 @@ impl RunningHttp {
                             let listener = listener?;
                             started.send(Ok(())).ok();
                             let socket = listener.into_std()?;
-                            serve(socket, app, secret, cancel).await
+                            serve(socket, app, cancel, bound_host).await
                         });
                         if result.is_err() {
                             eprintln!("Local MCP HTTP service stopped.");
@@ -230,9 +243,9 @@ impl RunningHttp {
             })?;
         match ready.recv_timeout(Duration::from_secs(5)) {
             Ok(Ok(())) => Ok(Self {
-                token,
                 shutdown,
                 worker,
+                port,
             }),
             Ok(Err(error)) => {
                 shutdown.cancel();
@@ -269,13 +282,22 @@ impl LocalMcpHttpServer {
         }
     }
 
-    pub fn token(&self) -> Option<String> {
+    pub fn is_running(&self) -> bool {
+        self.running
+            .lock()
+            .expect("MCP HTTP lifecycle lock poisoned")
+            .as_ref()
+            .is_some_and(|running| !running.worker.is_finished())
+    }
+
+    /// Report exactly the URL of the running listener, never a preferred-port guess.
+    pub fn endpoint(&self) -> Option<String> {
         self.running
             .lock()
             .expect("MCP HTTP lifecycle lock poisoned")
             .as_ref()
             .filter(|running| !running.worker.is_finished())
-            .map(|running| running.token.clone())
+            .map(|running| endpoint_for(running.port))
     }
 
     pub fn set_enabled(&self, broker: &BoardRequestBroker, enabled: bool) -> io::Result<()> {
@@ -285,8 +307,18 @@ impl LocalMcpHttpServer {
             .lock()
             .expect("MCP HTTP lifecycle lock poisoned");
         if !enabled {
-            // Off is not confirmed until the runtime drops all HTTP writers.
+            // Revoke queued work before waiting for HTTP writers to stop.
+            let old_epoch = broker.mcp_status().grant_epoch;
             broker.mcp_set_enabled(false);
+            let epoch = broker.mcp_status().grant_epoch;
+            if old_epoch != epoch {
+                // A write already dispatched to IndexedDB may have an unknown outcome.
+                let _ = self.app.emit_to(
+                    "main",
+                    "mathboard-board-cancel",
+                    serde_json::json!({"epoch": epoch, "revokeAll": true}),
+                );
+            }
             if let Some(worker) = running.take() {
                 worker.shutdown()?;
             }
@@ -303,7 +335,7 @@ impl LocalMcpHttpServer {
             }
         }
         if running.is_none() {
-            // Bind only when requested. A port conflict fails closed.
+            // Bind only when requested, falling forward on occupied local ports.
             *running = Some(RunningHttp::start(self.app.clone())?);
         }
         broker.mcp_set_enabled(true);
@@ -330,27 +362,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn loopback_requests_require_a_valid_token_and_no_browser_origin() {
-        let token = "0123456789abcdef0123456789abcdef";
+    fn local_gate_requires_native_enablement_exact_host_and_no_browser_origin() {
         let mut headers = HeaderMap::new();
-        headers.insert(HOST, BIND_ADDRESS.parse().unwrap());
-        headers.insert(AUTHORIZATION, format!("Bearer {token}").parse().unwrap());
-        assert!(admitted(&headers, "/mcp", token, true));
-        assert!(!admitted(&headers, "/mcp", token, false));
-        assert!(!admitted(&headers, "/other", token, true));
+        let bound_host = format!("{LOOPBACK_HOST}:{}", PREFERRED_PORT + 1);
+        headers.insert(HOST, bound_host.parse().unwrap());
+        assert!(admitted(&headers, "/mcp", true, &bound_host));
+        assert!(!admitted(&headers, "/mcp", false, &bound_host));
+        assert!(!admitted(&headers, "/other", true, &bound_host));
         headers.insert(ORIGIN, "https://malicious.example".parse().unwrap());
-        assert!(!admitted(&headers, "/mcp", token, true));
+        assert!(!admitted(&headers, "/mcp", true, &bound_host));
         headers.remove(ORIGIN);
         headers.insert(HOST, "attacker.example".parse().unwrap());
-        assert!(!admitted(&headers, "/mcp", token, true));
-        headers.insert(HOST, BIND_ADDRESS.parse().unwrap());
-        headers.insert(AUTHORIZATION, "Bearer wrong".parse().unwrap());
-        assert!(!admitted(&headers, "/mcp", token, true));
+        assert!(!admitted(&headers, "/mcp", true, &bound_host));
+        headers.insert(
+            HOST,
+            format!("{LOOPBACK_HOST}:{PREFERRED_PORT}").parse().unwrap(),
+        );
+        assert!(!admitted(&headers, "/mcp", true, &bound_host));
+        headers.remove(HOST);
+        assert!(!admitted(&headers, "/mcp", true, &bound_host));
     }
 
     #[test]
-    fn stopping_runtime_closes_an_already_accepted_connection() {
-        use std::io::Read;
+    fn stopping_runtime_closes_a_real_hyper_keep_alive_connection() {
+        use std::io::{Read, Write};
         use std::net::TcpStream;
 
         let socket = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -368,20 +403,44 @@ mod tests {
                 let listener = tokio::net::TcpListener::from_std(socket).unwrap();
                 let (stream, _) = listener.accept().await.unwrap();
                 tokio::spawn(async move {
-                    let _stream = stream;
-                    std::future::pending::<()>().await;
+                    let handler = service_fn(|_: Request<Incoming>| async {
+                        Ok::<_, Infallible>(Response::new(Full::new(Bytes::from_static(b"ok"))))
+                    });
+                    let _ = http1_builder(HTTP_HEADER_TIMEOUT)
+                        .serve_connection(TokioIo::new(stream), handler)
+                        .await;
                 });
                 started.send(()).unwrap();
                 cancel.cancelled().await;
             });
-            // The active connection task is aborted when this runtime drops.
+            // Dropping the runtime also drops active Hyper response writers.
         });
         let mut client = TcpStream::connect(address).unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        client
+            .write_all(b"GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            .unwrap();
         ready.recv_timeout(Duration::from_secs(2)).unwrap();
+        let mut reply = Vec::new();
+        loop {
+            let mut chunk = [0u8; 512];
+            let size = client.read(&mut chunk).unwrap();
+            assert!(size > 0, "HTTP handler closed before responding");
+            reply.extend_from_slice(&chunk[..size]);
+            if let Some(end) = reply.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                if reply.len() >= end + 4 + 2 {
+                    break;
+                }
+            }
+        }
+        assert!(String::from_utf8_lossy(&reply).contains("200 OK"));
+        assert!(reply.ends_with(b"ok"));
         RunningHttp {
-            token: String::new(),
             shutdown,
             worker,
+            port: address.port(),
         }
         .shutdown()
         .unwrap();
@@ -389,20 +448,109 @@ mod tests {
             .set_read_timeout(Some(Duration::from_secs(2)))
             .unwrap();
         let mut buf = [0u8; 1];
-        assert!(matches!(client.read(&mut buf), Ok(0) | Err(_)));
+        match client.read(&mut buf) {
+            Ok(0) => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::ConnectionReset
+                        | io::ErrorKind::ConnectionAborted
+                        | io::ErrorKind::BrokenPipe
+                ) => {}
+            outcome => panic!("Expected EOF or peer reset, got {outcome:?}"),
+        }
         assert!(TcpStream::connect(address).is_err());
     }
 
     #[test]
-    fn occupied_port_is_rejected() {
-        let owner = TcpListener::bind("127.0.0.1:0").unwrap();
-        assert!(TcpListener::bind(owner.local_addr().unwrap()).is_err());
+    fn idle_headers_expire_and_healthy_clients_regain_all_connection_slots() {
+        use std::io::{Read, Write};
+        use std::net::TcpStream;
+        use std::time::Instant;
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let slots = Arc::new(tokio::sync::Semaphore::new(MAX_CONNECTIONS));
+            let free = slots.clone();
+            let task = tokio::spawn(async move {
+                loop {
+                    let (stream, _) = listener.accept().await.unwrap();
+                    let Ok(permit) = free.clone().try_acquire_owned() else {
+                        continue;
+                    };
+                    tokio::spawn(async move {
+                        let _permit = permit;
+                        let handler = service_fn(|_: Request<Incoming>| async {
+                            Ok::<_, Infallible>(Response::new(Full::new(Bytes::from_static(b"ok"))))
+                        });
+                        let _ = http1_builder(Duration::from_millis(300))
+                            .serve_connection(TokioIo::new(stream), handler)
+                            .await;
+                    });
+                }
+            });
+            let idle: Vec<_> = (0..MAX_CONNECTIONS)
+                .map(|_| TcpStream::connect(addr).unwrap())
+                .collect();
+            let until = Instant::now() + Duration::from_secs(2);
+            while slots.available_permits() != 0 && Instant::now() < until {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert_eq!(slots.available_permits(), 0);
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            assert_eq!(slots.available_permits(), MAX_CONNECTIONS);
+            let response = tokio::task::spawn_blocking(move || {
+                let mut socket = TcpStream::connect(addr).unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                socket
+                    .write_all(b"GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+                    .unwrap();
+                let mut text = String::new();
+                socket.read_to_string(&mut text).unwrap();
+                text
+            })
+            .await
+            .unwrap();
+            assert!(response.contains("200 OK") && response.ends_with("ok"));
+            drop(idle);
+            task.abort();
+        });
     }
 
     #[test]
-    fn token_check_rejects_truncated_and_wrong_equal_length_values() {
-        assert!(same_token("abc", "abc"));
-        assert!(!same_token("ab", "abc"));
-        assert!(!same_token("abz", "abc"));
+    fn occupied_port_uses_next_available_loopback_port() {
+        let owner = TcpListener::bind("127.0.0.1:0").unwrap();
+        let occupied = owner.local_addr().unwrap().port();
+        if occupied == u16::MAX {
+            return;
+        }
+        let (listener, selected) = bind_first_available(occupied).unwrap();
+        assert!(selected > occupied);
+        assert_eq!(listener.local_addr().unwrap().port(), selected);
+        assert_eq!(
+            listener.local_addr().unwrap().ip().to_string(),
+            LOOPBACK_HOST
+        );
+        assert_eq!(
+            endpoint_for(selected),
+            format!("http://{LOOPBACK_HOST}:{selected}/mcp")
+        );
+    }
+
+    #[test]
+    fn occupied_last_port_fails_closed() {
+        if let Ok(owner) = TcpListener::bind((LOOPBACK_HOST, u16::MAX)) {
+            let error = bind_first_available(u16::MAX).unwrap_err();
+            assert_eq!(error.kind(), io::ErrorKind::AddrInUse);
+            drop(owner);
+        }
     }
 }

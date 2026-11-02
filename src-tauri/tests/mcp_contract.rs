@@ -22,8 +22,10 @@ use serde_json::json;
 
 #[test]
 fn fixed_mcp_tools_reuse_the_existing_command_registry() {
+    let catalog = tool_specs();
+    assert_eq!(catalog.len(), 21);
     assert_eq!(
-        tool_specs()
+        catalog[..4]
             .iter()
             .map(|tool| tool.name.as_str())
             .collect::<Vec<_>>(),
@@ -34,17 +36,29 @@ fn fixed_mcp_tools_reuse_the_existing_command_registry() {
             "mathboard_command"
         ]
     );
+    let create = catalog
+        .iter()
+        .find(|tool| tool.name == "mathboard_create")
+        .unwrap();
+    assert!(create.input_schema["properties"]["spec"]["$ref"].is_string());
+    assert_eq!(create.input_schema["required"], json!(["spec"]));
+    let batch = catalog
+        .iter()
+        .find(|tool| tool.name == "mathboard_create_many")
+        .unwrap();
+    assert_eq!(batch.input_schema["required"], json!(["specs"]));
+    assert!(catalog.iter().any(|tool| tool.name == "mathboard_help"));
     let observe = parse_tool_call("mathboard_observe", json!({})).unwrap();
     assert_eq!(observe.method(), "observe");
     assert_eq!(observe.board_id(), None);
-    assert_eq!(observe.params(), json!({}));
+    assert_eq!(observe.params(), json!({"detail":"summary"}));
     let measure =
         parse_tool_call("mathboard_measure", json!({"boardId":"mb_a","id":"obj_1"})).unwrap();
     assert_eq!(measure.method(), "measure");
     assert_eq!(measure.board_id(), Some("mb_a"));
     assert_eq!(measure.params(), json!({"id":"obj_1"}));
     for name in [
-        "mathboard_create",
+        "mathboard_arbitrary_exec",
         "boards.list",
         "observe",
         "mathboard_help",
@@ -103,7 +117,7 @@ fn board_target_and_unknown_fields_are_rejected_at_mcp_edge() {
         );
     }
     for args in [
-        json!({"id":"obj_1"}),
+        json!({"id":""}),
         json!({"boardId":"mb_a","id":""}),
         json!({"boardId":"mb_a","id":"obj_1","confirm":true}),
     ] {
@@ -217,4 +231,142 @@ fn screenshot_decoder_checks_payload_and_declared_dimensions() {
         decode_screenshot(&wrong, "mb_a").err(),
         Some(ScreenshotError::InvalidImage)
     );
+}
+
+#[test]
+fn direct_tools_route_through_the_existing_command_allowlist() {
+    let create = parse_tool_call(
+        "mathboard_create",
+        json!({"boardId":"mb_other","spec":{"type":"text","text":"Hello"}}),
+    )
+    .unwrap();
+    assert_eq!(create.method(), "command");
+    assert_eq!(create.board_id(), Some("mb_other"));
+    assert_eq!(
+        create.params(),
+        json!({"method":"create","params":{"spec":{"type":"text","text":"Hello"}}})
+    );
+    let batch = parse_tool_call(
+        "mathboard_create_many",
+        json!({"specs":[{"type":"text","text":"Hello"}]}),
+    )
+    .unwrap();
+    assert_eq!(batch.params()["method"], "createMany");
+    let deletion = parse_tool_call(
+        "mathboard_boards_delete",
+        json!({"boardId":"mb_a","confirm":true}),
+    )
+    .unwrap();
+    assert_eq!(deletion.board_id(), None);
+    assert_eq!(deletion.params()["params"]["confirm"], true);
+    assert_eq!(
+        parse_tool_call("mathboard_create", json!({"boardId":"invalid!"})).err(),
+        Some(ToolCallError::InvalidArguments)
+    );
+}
+
+#[test]
+fn reads_default_to_current_board_and_support_compact_observation() {
+    let observe = parse_tool_call("mathboard_observe", json!({})).unwrap();
+    assert_eq!(observe.params(), json!({"detail":"summary"}));
+    let full = parse_tool_call("mathboard_observe", json!({"detail":"full"})).unwrap();
+    assert_eq!(full.params(), json!({"detail":"full"}));
+    assert_eq!(
+        parse_tool_call("mathboard_observe", json!({"detail":"unknown"})).err(),
+        Some(ToolCallError::InvalidArguments)
+    );
+    let measure = parse_tool_call("mathboard_measure", json!({"id":"mbobj_1"})).unwrap();
+    assert_eq!(measure.board_id(), None);
+    let screenshot = parse_tool_call(
+        "mathboard_screenshot",
+        json!({"target":{"kind":"viewport"}}),
+    )
+    .unwrap();
+    assert_eq!(screenshot.board_id(), None);
+}
+
+#[test]
+fn c14_unknown_mutation_parameters_are_rejected_before_dispatch() {
+    let invalid = [
+        (
+            "mathboard_create",
+            json!({"spec":{"type":"text","text":"Hi"},"dryRun":true}),
+        ),
+        (
+            "mathboard_create",
+            json!({"spec":{"type":"text","text":"Hi"},"options":{"select":false,"bogus":1}}),
+        ),
+        ("mathboard_clear", json!({"dryRun":true})),
+        (
+            "mathboard_boards_delete",
+            json!({"boardId":"mb_a","confirm":true,"dryRun":true}),
+        ),
+        (
+            "mathboard_command",
+            json!({"method":"create","params":{"spec":{"type":"text","text":"Hi"},"dryRun":true}}),
+        ),
+        (
+            "mathboard_command",
+            json!({"method":"clear","params":{"bogus":1}}),
+        ),
+        (
+            "mathboard_command",
+            json!({"method":"boards.delete","params":{"boardId":"mb_a","confirm":true,"dryRun":true}}),
+        ),
+        (
+            "mathboard_command",
+            json!({"method":"create","params":{"spec":{"type":"text","text":"Hi"},"options":{"unexpected":true}}}),
+        ),
+    ];
+    for (tool, args) in invalid {
+        assert_eq!(
+            parse_tool_call(tool, args.clone()).err(),
+            Some(ToolCallError::InvalidArguments),
+            "{tool} accepted {args}"
+        );
+    }
+
+    // Known arguments and optional selection remain valid.
+    for (tool, args) in [
+        (
+            "mathboard_create",
+            json!({"spec":{"type":"text","text":"Hi"},"options":{"select":false}}),
+        ),
+        ("mathboard_clear", json!({})),
+        (
+            "mathboard_boards_delete",
+            json!({"boardId":"mb_a","confirm":true}),
+        ),
+        (
+            "mathboard_command",
+            json!({"method":"create","params":{"spec":{"type":"text","text":"Hi"}}}),
+        ),
+        (
+            "mathboard_command",
+            json!({"method":"boards.delete","params":{"boardId":"mb_a","confirm":true}}),
+        ),
+    ] {
+        assert!(
+            parse_tool_call(tool, args.clone()).is_ok(),
+            "{tool} rejected {args}"
+        );
+    }
+}
+
+#[test]
+fn c14_generated_mutation_schemas_disallow_extra_arguments() {
+    for spec in tool_specs()
+        .iter()
+        .filter(|spec| spec.name != "mathboard_command")
+    {
+        assert_eq!(
+            spec.input_schema.get("additionalProperties"),
+            Some(&json!(false)),
+            "unexpected open schema: {}",
+            spec.name
+        );
+        if let Some(options) = spec.input_schema["properties"].get("options") {
+            assert_eq!(options["additionalProperties"], false, "{}", spec.name);
+        }
+    }
 }
