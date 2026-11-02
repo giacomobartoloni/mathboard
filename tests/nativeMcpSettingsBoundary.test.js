@@ -173,3 +173,12 @@ test('native close events hide only the MCP settings window while preserving the
   const js = source('desktop/mcp-settings.js')
   assert.match(js, /controls\.close\.addEventListener\('click', \(\) => void getCurrentWindow\(\)\.hide\(\)\)/)
 })
+
+test('native MCP Off signals the board before waiting on HTTP writer shutdown', () => {
+  const transport = source('src-tauri/src/mcp_http.rs')
+  const start = transport.indexOf('if !enabled {')
+  const off = transport.indexOf('broker.mcp_set_enabled(false);', start)
+  const event = transport.indexOf('"revokeAll": true', off)
+  const stop = transport.indexOf('worker.shutdown()?;', off)
+  assert.ok(start >= 0 && off > start && event > off && stop > event)
+})

@@ -528,3 +528,45 @@ test('a library create reports its result after its own lifecycle transition', a
   assert.deepEqual(parsed.result, { id: 'mb_created', title: 'MCP Test', isActive: true })
   disconnect()
 })
+
+test('native Off revokes a pending board transition without losing its normal context-change receipt', async () => {
+  const { connectDesktopBoardBridge } = await import('../src/platform/desktopBoardBridge.js')
+  const lifecycle = new BoardLifecycle()
+  const handlers = new Map()
+  const replies = []
+  let finish
+  let admittedSignal
+  const board = { _boardLifecycle: lifecycle, sessionReady: true,
+    getBoardId: () => 'mb_active',
+    getBoardWorkspace: () => ({
+      create: (_args, { signal } = {}) => {
+        admittedSignal = signal
+        return new Promise(resolve => { finish = resolve })
+      },
+    }),
+  }
+  const disconnect = await connectDesktopBoardBridge(() => board, {
+    rendererGeneration: 'renderer-1',
+    subscribe: async (event, handler) => { handlers.set(event, handler); return () => {} },
+    invokeCommand: async (name, args) => {
+      if (name === 'board_bridge_reply') replies.push(JSON.parse(args.replyJson))
+      return name === 'board_bridge_state' ? 'app-1' : undefined
+    },
+    captureFactory: () => ({ attach() {}, dispose() {}, beginMutation: () => () => {} }),
+  })
+  const pending = handlers.get('mathboard-board-request')({ payload: {
+    requestId: 'off-transition', appGeneration: 'app-1', rendererGeneration: 'renderer-1',
+    boardEpoch: 0, boardId: 'mb_active', schemaVersion: 2,
+    expiresAtMs: Date.now() + 10_000, cancellationEpoch: 0,
+    method: 'boards.create', params: { title: 'Synthetic' },
+  } })
+  while (!admittedSignal) await Promise.resolve()
+  handlers.get('mathboard-board-cancel')({ payload: 1 })
+  assert.equal(admittedSignal.aborted, false, 'ordinary board transition preserves own receipt')
+  handlers.get('mathboard-board-cancel')({ payload: { epoch: 2, revokeAll: true } })
+  assert.equal(admittedSignal.aborted, true, 'Off revokes pending transition')
+  finish({ id: 'mb_created', title: 'Synthetic', isActive: true })
+  await pending
+  assert.equal(replies.length, 0, 'revoked transition cannot report success after Off')
+  disconnect()
+})

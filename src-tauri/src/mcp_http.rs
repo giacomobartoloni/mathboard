@@ -380,8 +380,8 @@ mod tests {
     }
 
     #[test]
-    fn stopping_runtime_closes_an_already_accepted_connection() {
-        use std::io::Read;
+    fn stopping_runtime_closes_a_real_hyper_keep_alive_connection() {
+        use std::io::{Read, Write};
         use std::net::TcpStream;
 
         let socket = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -399,16 +399,33 @@ mod tests {
                 let listener = tokio::net::TcpListener::from_std(socket).unwrap();
                 let (stream, _) = listener.accept().await.unwrap();
                 tokio::spawn(async move {
-                    let _stream = stream;
-                    std::future::pending::<()>().await;
+                    let handler = service_fn(|_: Request<Incoming>| async {
+                        Ok::<_, Infallible>(Response::new(Full::new(Bytes::from_static(b"ok"))))
+                    });
+                    let _ = http1_builder(HTTP_HEADER_TIMEOUT)
+                        .serve_connection(TokioIo::new(stream), handler).await;
                 });
                 started.send(()).unwrap();
                 cancel.cancelled().await;
             });
-            // The active connection task is aborted when this runtime drops.
+            // Dropping the runtime also drops active Hyper response writers.
         });
         let mut client = TcpStream::connect(address).unwrap();
+        client.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+        client.write_all(b"GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
         ready.recv_timeout(Duration::from_secs(2)).unwrap();
+        let mut reply = Vec::new();
+        loop {
+            let mut chunk = [0u8; 512];
+            let size = client.read(&mut chunk).unwrap();
+            assert!(size > 0, "HTTP handler closed before responding");
+            reply.extend_from_slice(&chunk[..size]);
+            if let Some(end) = reply.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                if reply.len() >= end + 4 + 2 { break; }
+            }
+        }
+        assert!(String::from_utf8_lossy(&reply).contains("200 OK"));
+        assert!(reply.ends_with(b"ok"));
         RunningHttp {
             shutdown,
             worker,
