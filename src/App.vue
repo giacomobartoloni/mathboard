@@ -882,6 +882,7 @@ export default {
       onZoomIn,
       onZoomOut,
       onResetZoom,
+      updateZoomLevel,
       uiTheme,
       boardTheme,
       selectedColor,
