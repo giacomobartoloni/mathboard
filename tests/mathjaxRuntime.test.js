@@ -81,8 +81,8 @@ test('MathJaxRuntime renders boldsymbol as bold glyphs instead of an undefined c
   for (const [normalLatex, boldLatex] of pairs) {
     const normalSvg = await runtime.renderSvg(normalLatex)
     const boldSvg = await runtime.renderSvg(boldLatex)
-    const normalWidth = Number(normalSvg.match(/<svg[^>]*\\bwidth="([\\d.]+)"/)?.[1])
-    const boldWidth = Number(boldSvg.match(/<svg[^>]*\\bwidth="([\\d.]+)"/)?.[1])
+    const normalWidth = Number(normalSvg.match(/<svg[^>]*\bwidth="([\d.]+)"/)?.[1])
+    const boldWidth = Number(boldSvg.match(/<svg[^>]*\bwidth="([\d.]+)"/)?.[1])
 
     assert.ok(normalWidth > 0 && boldWidth > 0)
     assert.ok(boldWidth < normalWidth * 2, `Unexpected extra content in ${boldLatex}`)
