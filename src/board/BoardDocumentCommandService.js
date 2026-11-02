@@ -117,6 +117,23 @@ export class BoardDocumentCommandService {
     }
   }
 
+  async _awaitActivePersistence(version, context, expiresAtMs) {
+    let timer
+    let onAbort
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new BoardTargetError('command_timeout')),
+        Math.max(0, expiresAtMs - Date.now()))
+      onAbort = () => reject(new BoardTargetError('command_timeout'))
+      context.signal?.addEventListener?.('abort', onAbort, { once: true })
+    })
+    try {
+      await Promise.race([this._flushActiveThrough(version), deadline])
+    } finally {
+      clearTimeout(timer)
+      context.signal?.removeEventListener?.('abort', onAbort)
+    }
+  }
+
   async executeOnBoard(command, trustedContext = {}) {
     const context = Object.freeze({ ...trustedContext })
     let request
@@ -174,7 +191,7 @@ export class BoardDocumentCommandService {
           }
           if (committedVersion > beforeVersion) {
             guard()
-            await this._flushActiveThrough(committedVersion)
+            await this._awaitActivePersistence(committedVersion, context, expiresAtMs)
           }
         } catch {
           // The canvas mutation may already be committed. Never imply rollback.

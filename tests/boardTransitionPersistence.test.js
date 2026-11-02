@@ -520,3 +520,33 @@ test('D12: awaited no-op does not force a save or revision', async t => {
   assert.equal(context.persistence.changeVersion, 0)
   assert.equal((await context.repository.get(board.id)).revision, 1)
 })
+
+
+test('D12: timed-out awaited persistence reports unknown while IndexedDB may still commit', async t => {
+  const context = fixture()
+  t.after(() => context.persistence.dispose())
+  const board = await context.workspace.create({ title: 'MCP deadline' })
+  const actual = context.repository.updateIfRevisionMatches.bind(context.repository)
+  let release
+  const held = new Promise(resolve => { release = resolve })
+  let entered
+  const started = new Promise(resolve => { entered = resolve })
+  context.repository.updateIfRevisionMatches = async (...args) => {
+    entered()
+    await held
+    return actual(...args)
+  }
+  const creation = context.execute(board.id, 'create', {
+    spec: { type: 'rect', width: 20, height: 20 },
+  }, { awaitPersistence: true, expiresAtMs: Date.now() + 300 })
+  try {
+    await started
+    await assert.rejects(creation, { code: 'execution_unknown' })
+    assert.equal(context.history.summary().length, 1)
+  } finally {
+    release()
+  }
+  // The already-started transaction can still persist; clients must read back.
+  await context.persistence.flushThrough(context.persistence.changeVersion)
+  assert.equal((await context.repository.get(board.id)).document.objects.length, 1)
+})

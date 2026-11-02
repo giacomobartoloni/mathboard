@@ -323,6 +323,10 @@ export class BoardPersistenceService {
         throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
           'Active board changed before persistence completed.')
       }
+      if (!this._savePromise && !this._isDocumentStable()) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'Current board is not stable enough to persist.')
+      }
       await this.flush()
       if (this._persistedChangeVersion < targetChangeVersion
         && this.status.state !== SAVE_STATES.DIRTY) {
