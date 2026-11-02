@@ -1295,8 +1295,8 @@ export default {
     },
     onWheelZoom(event) {
       if (!this.sessionReady || !this.canvas) return;
-      // Use the native wheel event from the board root instead of relying on
-      // Fabric's synthetic mouse:wheel dispatch (not fired in Chromium E2E).
+      // Capture native wheel events on the board root, preventing page scroll
+      // while zooming. Fabric owns the canvas viewport transform.
       event.preventDefault();
       event.stopPropagation();
       const currentZoom = this.canvas.getZoom();
