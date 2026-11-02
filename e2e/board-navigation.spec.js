@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { test, expect } from '@playwright/test'
 import { gotoBoard } from './fixtures.js'
-import { canvasBox } from './helpers/canvas.js'
+import { canvasBox, getBoardState } from './helpers/canvas.js'
 
 test('Space temporarily pans and restores the previously selected tool', async ({ page }) => {
   await gotoBoard(page)
@@ -45,11 +45,26 @@ test('wheel zooms at the cursor and updates the zoom indicator', async ({ page }
   await page.mouse.move(canvas.x + 380, canvas.y + 220)
   const zoom = page.getByRole('button', { name: /Reset zoom to 100%/ })
   await expect(zoom).toHaveText('100%')
+  const before = await getBoardState(page)
   await page.mouse.wheel(0, -250)
+  await expect.poll(async () => (await getBoardState(page)).zoom).toBeGreaterThan(1)
   await expect.poll(async () => {
     const label = await page.locator('.zoom-button.reset').textContent()
     return Number.parseInt(label, 10)
   }).toBeGreaterThan(100)
+
+  // The scene point under the cursor should not move as zoom changes.
+  const after = await getBoardState(page)
+  const localX = 380
+  const localY = 220
+  const beforeX = (localX - before.viewportTransform[4]) / before.zoom
+  const beforeY = (localY - before.viewportTransform[5]) / before.zoom
+  const afterX = (localX - after.viewportTransform[4]) / after.zoom
+  const afterY = (localY - after.viewportTransform[5]) / after.zoom
+  expect(afterX).toBeCloseTo(beforeX, 2)
+  expect(afterY).toBeCloseTo(beforeY, 2)
+
   await page.mouse.wheel(0, 250)
+  await expect.poll(async () => (await getBoardState(page)).zoom).toBeCloseTo(1, 4)
   await expect(page.locator('.zoom-button.reset')).toHaveText('100%')
 })
