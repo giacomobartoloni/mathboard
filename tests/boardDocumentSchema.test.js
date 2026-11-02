@@ -9,6 +9,31 @@ import {
   validateBoardDocument,
 } from '../src/board/persistence/schema.js'
 
+test('document paths reject non-numeric coordinates and invalid SVG commands', () => {
+  const malformed = [
+    { path: [['M', 64, '532']], field: 'objects[0].path[0][2]' },
+    { path: [['M', 0, 0], ['C', 1, 2]], field: 'objects[0].path[1]' },
+    { path: [['M', 0, 0], ['A', 10, 10, 0, 0, 2, 10, 10]], field: 'objects[0].path[1][5]' },
+  ]
+  for (const { path, field } of malformed) {
+    assert.throws(
+      () => validateBoardDocument({
+        ...createEmptyBoardDocument(),
+        objects: [{ id: 'mbobj_path', type: 'path', path }],
+      }),
+      (error) => error instanceof BoardDocumentError
+        && error.code === BOARD_DOCUMENT_ERROR_CODES.INVALID
+        && error.message.includes(field),
+    )
+  }
+  const valid = {
+    ...createEmptyBoardDocument(),
+    objects: [{ id: 'mbobj_path', type: 'path',
+      path: [['M', 0, 0], ['A', 10, 10, 0, 0, 1, 20, 20], ['Z']] }],
+  }
+  assert.equal(validateBoardDocument(valid), valid)
+})
+
 test('empty board is valid', () => {
   const doc = createEmptyBoardDocument()
   assert.equal(doc.format, BOARD_DOCUMENT_FORMAT)

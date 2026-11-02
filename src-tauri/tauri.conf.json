@@ -26,7 +26,8 @@
       "capabilities": [
         "main",
         "desktop-analytics",
-        "board-bridge"
+        "board-bridge",
+        "mcp-permissions"
       ],
       "csp": {
         "default-src": "'self'",

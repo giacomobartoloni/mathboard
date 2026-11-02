@@ -27,7 +27,7 @@ const boardObjectPolicy = new BoardObjectPolicy()
 // Fabric 7 class type is PascalCase; the deprecated instance getter is lowercase.
 const STROKE_INK_TYPES = ['path', 'Path', 'rect', 'Rect', 'circle', 'Circle', 'line', 'Line']
 // Objects whose board ink lives on "fill".
-const FILL_INK_TYPES = ['i-text', 'IText', 'text', 'Text']
+const FILL_INK_TYPES = ['i-text', 'IText', 'text', 'Text', 'textbox', 'Textbox']
 
 function isInkType(object, types) {
   if (typeof object.isType === 'function') return object.isType(...types)

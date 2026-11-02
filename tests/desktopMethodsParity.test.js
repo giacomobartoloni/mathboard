@@ -21,6 +21,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { getDesktopBoardMethods } from '../src/board/agent/desktop-commands.js'
+import { getBoardCommandDescriptors } from '../src/board/agent/command-registry.js'
 
 test('Rust and JavaScript desktop bridge allowlists agree exactly', () => {
   const source = readFileSync(new URL('../src-tauri/src/board_bridge.rs', import.meta.url), 'utf8')
@@ -29,8 +30,11 @@ test('Rust and JavaScript desktop bridge allowlists agree exactly', () => {
   const nativeMethods = [...methods.matchAll(/"([^"]+)"/g)].map(match => match[1])
   const browserMethods = getDesktopBoardMethods()
 
-  assert.equal(nativeMethods.length, 11)
+  const registryMethods = getBoardCommandDescriptors().map(descriptor => descriptor.method)
+  assert.equal(nativeMethods.length, registryMethods.length)
   assert.equal(new Set(nativeMethods).size, nativeMethods.length)
-  assert.deepEqual([...nativeMethods].sort(), [...browserMethods].sort())
+  assert.deepEqual([...nativeMethods].sort(), [...registryMethods].sort())
+  assert.deepEqual(nativeMethods.filter(method => !method.startsWith('boards.')).sort(),
+    [...browserMethods].sort())
   assert.equal(browserMethods.some(method => method.startsWith('boards.')), false)
 })

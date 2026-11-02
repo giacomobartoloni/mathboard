@@ -42,7 +42,7 @@ test('semantic ellipses render a Venn diagram, retain history and persist across
   const nodes = await command(request, 'createMany', { specs: [
     { type: 'ellipse', rx: 140, ry: 95, left: 200, top: 220, fill: '#cce5ff', stroke: '#1565c0', mathboardInkMode: 'fixed', opacity: 0.65 },
     { type: 'ellipse', rx: 140, ry: 95, left: 380, top: 220, fill: '#ffccdd', stroke: '#ad1457', mathboardInkMode: 'fixed', opacity: 0.65 },
-    { type: 'ellipse', rx: 45, ry: 80, left: 750, top: 210, fill: null, stroke: '#123456' },
+    { type: 'ellipse', rx: 45, ry: 80, left: 750, top: 210, fill: null, stroke: '#123456', mathboardInkMode: 'auto' },
     { type: 'text', text: 'Venn diagram: A and B', left: 200, top: 150, fontSize: 26 },
   ] })
   expect(nodes[0]).toMatchObject({ type: 'ellipse', rx: 140, ry: 95, fill: '#cce5ff' })

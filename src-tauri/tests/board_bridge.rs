@@ -193,13 +193,15 @@ fn stale_epoch_reply_cannot_complete_a_request_and_state_change_cancels_it() {
 }
 
 #[test]
-fn library_methods_and_oversized_requests_are_rejected() {
+fn known_library_methods_and_oversized_requests_are_checked() {
     let broker = BoardRequestBroker::new("app-1");
     broker
         .renderer_state("renderer-1", 4, true, Some("mb_active"))
         .unwrap();
+    let (library, _) = broker.queue("mb_active", "boards.list", json!({})).unwrap();
+    assert_eq!(library.method, "boards.list");
     assert_eq!(
-        broker.queue("mb_active", "boards.list", json!({})).err(),
+        broker.queue("mb_active", "boards.invalid", json!({})).err(),
         Some(BrokerError::UnsupportedMethod)
     );
     let oversized = "x".repeat(70_000);
