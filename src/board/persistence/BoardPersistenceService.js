@@ -18,13 +18,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { serializeBoardDocument } from './serializeBoardDocument.js'
-import { replaceBoardFromDocument } from './replaceBoardFromDocument.js'
+import { replaceBoardFromDocument, BoardReplacementRollbackError,
+  BoardReplacementCommitError } from './replaceBoardFromDocument.js'
 import { createEmptyBoardDocument } from './schema.js'
 import { generateBoardName } from '../names/generateBoardName.js'
 import {
   BOARD_RECORD_KINDS,
   createBoardId,
   createBoardRecord,
+  boardRevision,
 } from '../../storage/local/IndexedDbBoardRepository.js'
 
 export const ACTIVE_BOARD_ID_KEY = 'mathboard.activeBoardId'
@@ -37,6 +39,7 @@ export const BOARD_PERSISTENCE_ERROR_CODES = Object.freeze({
   BOARD_ARCHIVED: 'board_archived',
   BOARD_NOT_ARCHIVED: 'board_not_archived',
   CONFIRMATION_REQUIRED: 'confirmation_required',
+  BOARD_CONFLICT: 'board_conflict',
 })
 
 export class BoardPersistenceError extends Error {
@@ -84,6 +87,8 @@ export class BoardPersistenceService {
     idleDebounceMs = IDLE_DEBOUNCE_MS,
     maxWaitMs = MAX_WAIT_MS,
     onActiveBoardChanged = () => {},
+    onStatusChanged = () => {},
+    lifecycle = null,
   }) {
     this._repository = repository
     this._boardObjectPolicy = boardObjectPolicy
@@ -96,25 +101,32 @@ export class BoardPersistenceService {
     this._sessionStorage = sessionStorage
     this._now = now
     this._onActiveBoardChanged = onActiveBoardChanged
+    this._onStatusChanged = onStatusChanged
+    this._lifecycle = lifecycle
     this._idleDebounceMs = idleDebounceMs
     this._maxWaitMs = maxWaitMs
 
     this.boardId = null
+    this.revision = null
     this.title = 'Untitled board'
     this.changeVersion = 0
+    this._persistedChangeVersion = 0
     this._idleTimer = null
     this._maxTimer = null
     this._savePromise = null
+    this._conflicted = false
     this.status = {
       state: SAVE_STATES.CLEAN,
       lastSavedAt: null,
       error: null,
+      errorCode: null,
       recoveryFailure: null,
     }
   }
 
   _setStatus(patch) {
     this.status = { ...this.status, ...patch }
+    this._onStatusChanged(this.status)
   }
 
   _reportActiveBoard() {
@@ -163,6 +175,10 @@ export class BoardPersistenceService {
 
   notifyDocumentChanged() {
     this.changeVersion += 1
+    if (this._conflicted) {
+      this._setStatus({ state: SAVE_STATES.ERROR })
+      return
+    }
     this._setStatus({ state: SAVE_STATES.DIRTY, error: null })
     this._scheduleSave()
   }
@@ -193,6 +209,17 @@ export class BoardPersistenceService {
     this._clearTimers()
   }
 
+  _withTransition(operation) {
+    return this._lifecycle ? this._lifecycle.transition(operation) : operation(null)
+  }
+
+  _assertTransition(token) {
+    if (this._lifecycle && !this._lifecycle.assertTransition(token)) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+        'Board transition was interrupted.')
+    }
+  }
+
   serializeCurrent() {
     const canvas = this._getCanvas()
     return serializeBoardDocument({
@@ -204,6 +231,10 @@ export class BoardPersistenceService {
 
   async flush() {
     if (this._savePromise) return this._savePromise
+    if (this._conflicted) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_CONFLICT,
+        'Board changed in another tab. Save a copy before reloading.')
+    }
     if (this.status.state === SAVE_STATES.CLEAN) {
       return null
     }
@@ -216,37 +247,40 @@ export class BoardPersistenceService {
 
     this._clearTimers()
     const savingVersion = this.changeVersion
+    const savingBoardId = this.boardId
+    const savingRevision = this.revision ?? 0
     this._setStatus({ state: SAVE_STATES.SAVING, error: null })
 
     this._savePromise = (async () => {
       try {
+        const assertSavingBoard = () => {
+          if (this.boardId !== savingBoardId) {
+            throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+              'Active board changed while saving.')
+          }
+        }
         const document = this.serializeCurrent()
-        const existing = await this._repository.get(this.boardId)
-        if (!existing) {
-          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND,
-            'This board was deleted from local storage; changes cannot be saved.')
-        }
-        if (existing.archivedAt || existing.trashedAt) {
-          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED,
-            'This board was archived in another tab; unarchive it before editing.')
-        }
         const now = this._now()
         const kind = BOARD_RECORD_KINDS.SAVED
-        const record = createBoardRecord({
-          id: this.boardId,
-          kind,
-          title: document.title,
-          document,
-          createdAt: existing?.createdAt || now,
-          updatedAt: now,
+        assertSavingBoard()
+        const record = await this._repository.updateIfRevisionMatches(savingBoardId, savingRevision, existing => {
+          assertSavingBoard()
+          if (existing.archivedAt || existing.trashedAt) {
+            throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED,
+              'This board was archived in another tab; unarchive it before editing.')
+          }
+          return { ...existing, kind, title: document.title, document, updatedAt: now }
         })
-        await this._repository.put(record)
+        assertSavingBoard()
+        this.revision = boardRevision(record)
+        this._persistedChangeVersion = savingVersion
 
         if (this.changeVersion === savingVersion) {
           this._setStatus({
             state: SAVE_STATES.CLEAN,
             lastSavedAt: now,
             error: null,
+            errorCode: null,
           })
         } else {
           this._setStatus({ state: SAVE_STATES.DIRTY })
@@ -254,10 +288,16 @@ export class BoardPersistenceService {
         }
         return record
       } catch (error) {
-        this._setStatus({
-          state: SAVE_STATES.ERROR,
-          error: error?.message || String(error),
-        })
+        if (this.boardId === savingBoardId) {
+          if ([BOARD_PERSISTENCE_ERROR_CODES.BOARD_CONFLICT,
+            BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND,
+            BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED].includes(error?.code)) this._conflicted = true
+          this._setStatus({
+            state: SAVE_STATES.ERROR,
+            error: error?.message || String(error),
+            errorCode: error?.code || null,
+          })
+        }
         throw error
       } finally {
         this._savePromise = null
@@ -267,7 +307,68 @@ export class BoardPersistenceService {
     return this._savePromise
   }
 
-  async _flushBeforeTransition() {
+  /**
+   * Await an IndexedDB commit containing at least targetChangeVersion.
+   * An already-running save may contain an older canvas snapshot.
+   */
+  async flushThrough(targetChangeVersion) {
+    if (!Number.isSafeInteger(targetChangeVersion) || targetChangeVersion < 0
+      || targetChangeVersion > this.changeVersion || !this.boardId) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+        'Cannot confirm the requested board change.')
+    }
+    const boardId = this.boardId
+    while (this._persistedChangeVersion < targetChangeVersion) {
+      if (this.boardId !== boardId) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'Active board changed before persistence completed.')
+      }
+      if (!this._savePromise && !this._isDocumentStable()) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'Current board is not stable enough to persist.')
+      }
+      await this.flush()
+      if (this._persistedChangeVersion < targetChangeVersion
+        && this.status.state !== SAVE_STATES.DIRTY) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'The requested board change has not been persisted.')
+      }
+    }
+    if (this.boardId !== boardId) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+        'Active board changed before persistence completed.')
+    }
+    return this.revision
+  }
+
+  /** Save the still-visible dirty canvas under a new ID after a CAS conflict. */
+  recoverConflictAsCopy() {
+    return this._withTransition(async token => {
+      if (!this._conflicted || !this.boardId || !this._isDocumentStable()) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'A stable conflicted board is required for recovery.')
+      }
+      const document = this.serializeCurrent()
+      document.title = `${this.title.slice(0, 103)} (Recovered copy)`
+      const record = createBoardRecord({ title: document.title, document })
+      await this._repository.create(record)
+      if (token) this._assertTransition(token)
+      this.boardId = record.id
+      this.revision = record.revision
+      this.title = record.title
+      this.changeVersion = 0
+      this._persistedChangeVersion = 0
+      this._conflicted = false
+      this._writeActiveBoardId(record.id)
+      this._setStatus({ state: SAVE_STATES.CLEAN, error: null, errorCode: null,
+        lastSavedAt: record.updatedAt })
+      this._reportActiveBoard()
+      return record
+    })
+  }
+
+  async _flushBeforeTransition(token) {
+    if (token) this._assertTransition(token)
     if (!this._isDocumentStable()) {
       throw new BoardPersistenceError(
         BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
@@ -276,14 +377,19 @@ export class BoardPersistenceService {
     }
     if (!this.boardId) return
     await this.flush()
+    if (token) this._assertTransition(token)
     if (this.status.state !== SAVE_STATES.CLEAN) {
       throw new Error('Current board must be saved before switching boards.')
     }
   }
 
-  async createNewBoard(title) {
+  createNewBoard(title) {
+    return this._withTransition(token => this._createNewBoard(title, token))
+  }
+
+  async _createNewBoard(title, token) {
     title = normalizeBoardTitle(title === undefined ? generateBoardName() : title)
-    await this._flushBeforeTransition()
+    await this._flushBeforeTransition(token)
     const canvas = this._getCanvas()
     const document = createEmptyBoardDocument(title)
     const record = createBoardRecord({
@@ -293,23 +399,33 @@ export class BoardPersistenceService {
       document,
     })
 
-    await this._repository.put(record)
-
-    if (typeof canvas?.discardActiveObject === 'function') {
-      canvas.discardActiveObject()
-    }
-    this._suspendHistory?.(true)
+    await this._repository.create(record)
     try {
-      canvas.getObjects().slice().forEach((object) => canvas.remove(object))
-    } finally {
-      this._suspendHistory?.(false)
+      if (token) this._assertTransition(token)
+      await replaceBoardFromDocument({
+        canvas,
+        document,
+        buildFormula: this._buildFormula,
+        resetHistory: this._resetHistory,
+        suspendHistory: this._suspendHistory,
+        beforeInstall: () => { if (token) this._assertTransition(token) },
+      })
+    } catch (error) {
+      if (error instanceof BoardReplacementRollbackError || error instanceof BoardReplacementCommitError) {
+        this._lifecycle?.dispose()
+      }
+      try { await this._repository.deleteIfRevisionMatches(record.id, record.revision) } catch (cleanupError) {
+        console.error('Could not remove an unactivated board record.', cleanupError)
+      }
+      throw error
     }
-    this._resetHistory?.()
-    canvas?.requestRenderAll?.()
 
     this.boardId = record.id
+    this.revision = record.revision
+    this._conflicted = false
     this.title = record.title
     this.changeVersion = 0
+    this._persistedChangeVersion = 0
     this._writeActiveBoardId(record.id)
     this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: record.updatedAt, error: null })
     this._reportActiveBoard()
@@ -349,21 +465,22 @@ export class BoardPersistenceService {
    * (updatedAt descending). Validate and open the preferred candidate first;
    * create a blank board only when no other unarchived board exists.
    */
-  async _selectReplacementForActiveBoard(boardId) {
+  async _selectReplacementForActiveBoard(boardId, token) {
     if (boardId !== this.boardId) return null
-    await this._flushBeforeTransition()
+    await this._flushBeforeTransition(token)
+    const departedRevision = this.revision ?? 0
     const remaining = (await this.listBoards()).find(board => board.id !== boardId)
     if (remaining) {
-      await this.openBoard(remaining.id)
-      return { createdReplacementId: null }
+      await this._openBoard(remaining.id, token)
+      return { createdReplacementId: null, departedRevision }
     }
-    const replacement = await this.createNewBoard()
-    return { createdReplacementId: replacement.id }
+    const replacement = await this._createNewBoard(undefined, token)
+    return { createdReplacementId: replacement.id, departedRevision }
   }
 
-  async _restorePreviousBoardOnFailure(boardId, transition) {
+  async _restorePreviousBoardOnFailure(boardId, transition, token) {
     try {
-      await this.openBoard(boardId)
+      await this._openBoard(boardId, token)
     } catch (error) {
       // Keep the fallback if restoring the former active board fails.
       console.error('Could not restore the previous active board:', error)
@@ -372,14 +489,20 @@ export class BoardPersistenceService {
     if (!transition?.createdReplacementId) return
     try {
       // Undo the extra blank record created before the failed mutation.
-      await this._repository.delete(transition.createdReplacementId)
+      await this._repository.deleteIfRevisionMatches(transition.createdReplacementId, 1)
     } catch (error) {
       // Best effort: preserve the original archive/delete failure.
       console.error('Could not remove the temporary replacement board:', error)
     }
   }
 
-  async archiveBoard(boardId) {
+  archiveBoard(boardId) {
+    return boardId === this.boardId
+      ? this._withTransition(token => this._archiveBoard(boardId, token))
+      : this._archiveBoard(boardId, null)
+  }
+
+  async _archiveBoard(boardId, token) {
     let record = await this._repository.get(boardId)
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
@@ -387,19 +510,21 @@ export class BoardPersistenceService {
     if (this._isArchived(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Board is already archived.')
     }
-    const transition = await this._selectReplacementForActiveBoard(boardId)
+    const transition = await this._selectReplacementForActiveBoard(boardId, token)
     try {
-      // The flush may have updated the board document before switching away.
-      if (transition) record = await this._repository.get(boardId)
       if (!record?.document) {
         throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
       }
-      const archived = { ...record, archivedAt: this._now() }
-      delete archived.trashedAt
-      await this._repository.put(archived)
+      const archived = await this._repository.updateIfRevisionMatches(boardId,
+        transition?.departedRevision ?? boardRevision(record), current => {
+        if (this._isArchived(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Board is already archived.')
+        const next = { ...current, archivedAt: this._now() }
+        delete next.trashedAt
+        return next
+        })
       return archived
     } catch (error) {
-      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition)
+      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition, token)
       throw error
     }
   }
@@ -412,14 +537,28 @@ export class BoardPersistenceService {
     if (!this._isArchived(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_ARCHIVED, 'Board is not archived.')
     }
-    const restored = { ...record }
-    delete restored.archivedAt
-    delete restored.trashedAt
-    await this._repository.put(restored)
+    const restored = await this._repository.updateIfRevisionMatches(boardId, boardRevision(record), current => {
+      if (!this._isArchived(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_ARCHIVED, 'Board is not archived.')
+      const next = { ...current }
+      delete next.archivedAt
+      delete next.trashedAt
+      return next
+    })
     return restored
   }
 
-  async deleteBoard(boardId, { confirm = false } = {}) {
+  deleteBoard(boardId, options = {}) {
+    // Reject unconfirmed deletion before an active-board lifecycle transition.
+    if (options.confirm !== true) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED,
+        'Permanent deletion requires explicit confirmation.')
+    }
+    return boardId === this.boardId
+      ? this._withTransition(token => this._deleteBoard(boardId, options, token))
+      : this._deleteBoard(boardId, options, null)
+  }
+
+  async _deleteBoard(boardId, { confirm = false } = {}, token) {
     if (confirm !== true) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED,
         'Permanent deletion requires explicit confirmation.')
@@ -428,11 +567,11 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    const transition = await this._selectReplacementForActiveBoard(boardId)
+    const transition = await this._selectReplacementForActiveBoard(boardId, token)
     try {
-      await this._repository.delete(boardId)
+      await this._repository.deleteIfRevisionMatches(boardId, transition?.departedRevision ?? boardRevision(record))
     } catch (error) {
-      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition)
+      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition, token)
       throw error
     }
     if (this._readRecoveryBoardId() === boardId) this._writeRecoveryBoardId(null)
@@ -442,6 +581,7 @@ export class BoardPersistenceService {
   async renameBoard(boardId, title) {
     title = normalizeBoardTitle(title)
     if (boardId === this.boardId) await this._flushBeforeTransition()
+    const renamingVersion = this.changeVersion
     const record = await this._repository.get(boardId)
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
@@ -450,20 +590,32 @@ export class BoardPersistenceService {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before renaming it.')
     }
     if (record.title === title && record.document.title === title) return record
+    if (boardId === this.boardId && boardRevision(record) !== (this.revision ?? 0)) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_CONFLICT, 'Board changed in another writer.')
+    }
     const updatedAt = this._now()
-    const renamed = { ...record, title, document: { ...record.document, title }, updatedAt }
-    await this._repository.put(renamed)
+    const renamed = await this._repository.updateIfRevisionMatches(boardId, boardRevision(record), current => {
+      if (this._isArchived(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before renaming it.')
+      return { ...current, title, document: { ...current.document, title }, updatedAt }
+    })
     if (boardId === this.boardId) {
+      this.revision = renamed.revision
       this.title = title
-      this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: updatedAt, error: null })
+      this._setStatus({ state: this.changeVersion === renamingVersion ? SAVE_STATES.CLEAN : SAVE_STATES.DIRTY,
+        lastSavedAt: updatedAt, error: null })
       this._reportActiveBoard()
     }
     return renamed
   }
 
-  async openBoard(boardId) {
-    await this._flushBeforeTransition()
+  openBoard(boardId) {
+    return this._withTransition(token => this._openBoard(boardId, token))
+  }
+
+  async _openBoard(boardId, token) {
+    await this._flushBeforeTransition(token)
     const record = await this._repository.get(boardId)
+    if (token) this._assertTransition(token)
     if (!record?.document) {
       throw new BoardPersistenceError(
         BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND,
@@ -475,17 +627,28 @@ export class BoardPersistenceService {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before opening it.')
     }
 
-    await replaceBoardFromDocument({
-      canvas: this._getCanvas(),
-      document: record.document,
-      buildFormula: this._buildFormula,
-      resetHistory: this._resetHistory,
-      suspendHistory: this._suspendHistory,
-    })
+    try {
+      await replaceBoardFromDocument({
+        canvas: this._getCanvas(),
+        document: record.document,
+        buildFormula: this._buildFormula,
+        resetHistory: this._resetHistory,
+        suspendHistory: this._suspendHistory,
+        beforeInstall: () => { if (token) this._assertTransition(token) },
+      })
+    } catch (error) {
+      if (error instanceof BoardReplacementRollbackError || error instanceof BoardReplacementCommitError) {
+        this._lifecycle?.dispose()
+      }
+      throw error
+    }
 
     this.boardId = record.id
+    this.revision = boardRevision(record)
+    this._conflicted = false
     this.title = record.title || record.document.title || 'Untitled board'
     this.changeVersion = 0
+    this._persistedChangeVersion = 0
     this._writeActiveBoardId(record.id)
     if (this._readRecoveryBoardId() === record.id) {
       this._writeRecoveryBoardId(null)
@@ -504,7 +667,11 @@ export class BoardPersistenceService {
    * Attach persistence to the current canvas contents as a new local board
    * (e.g. after Stamp URL bootstrap). Does not clear the canvas.
    */
-  async adoptCurrentCanvasAsNewBoard() {
+  adoptCurrentCanvasAsNewBoard() {
+    return this._withTransition(token => this._adoptCurrentCanvasAsNewBoard(token))
+  }
+
+  async _adoptCurrentCanvasAsNewBoard(token) {
     if (!this._isDocumentStable()) {
       throw new BoardPersistenceError(
         BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
@@ -519,10 +686,14 @@ export class BoardPersistenceService {
       title: document.title,
       document,
     })
-    await this._repository.put(record)
+    await this._repository.create(record)
+    if (token) this._assertTransition(token)
     this.boardId = record.id
+    this.revision = record.revision
+    this._conflicted = false
     this.title = record.title
     this.changeVersion = 0
+    this._persistedChangeVersion = 0
     this._writeActiveBoardId(record.id)
     this._setStatus({
       state: SAVE_STATES.CLEAN,

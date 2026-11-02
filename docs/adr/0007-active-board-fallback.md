@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-10-24
-- Supersedes: ADR 0006, decision 7 (always create a blank board)
+- Supersedes: `0006-board-library-lifecycle.md`, decision 7 (always create a blank board)
 
 ## Context
 

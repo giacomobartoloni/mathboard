@@ -20,8 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { ActiveSelection, Group } from 'fabric'
 import { validateLayoutOptions, sceneSafeArea, planLayout, unionBounds } from './layout/planLayout.js'
 import { getMathBoardObjectId, ensureMathBoardObjectId, regenerateMathBoardObjectIds } from './ids.js'
-import { materializeBoardObjects } from './objects/materialize.js'
+import { materializeBoardObjects, disposeMaterializedObject } from './objects/materialize.js'
 import { normalizeCreateOrigins } from './objects/normalizeCreateOrigins.js'
+import { normalizeExplicitPaint } from './objects/normalizeExplicitPaint.js'
 import { readSemanticBoardObject, toBoardDocumentNode } from './objects/serialize.js'
 import { validateCreateSpec, validateObjectPatch } from './objects/validateCreateSpec.js'
 import { TRANSFORM_KEYS } from './objects/constants.js'
@@ -45,6 +46,8 @@ export class BoardController {
   constructor({ getCanvas, boardObjectPolicy, buildFormula, pushHistoryCommand,
     runWithoutHistory = (fn) => fn(), prepareCreatedObject = () => {},
     afterMutation = () => {}, prepareUpdatedObject = () => {}, getBoardId = () => null, isMutationStable,
+    onCommittedOperation = () => {}, lifecycle = null,
+    commitGuard = () => {},
     getLayoutSafeArea = (canvas) => ({ left: 0, top: 0, width: canvas.getWidth(), height: canvas.getHeight() }) }) {
     if (typeof isMutationStable !== 'function') throw new TypeError('isMutationStable must be a function.')
     this._getCanvas = getCanvas
@@ -58,6 +61,9 @@ export class BoardController {
     this._getBoardId = getBoardId
     this._isMutationStable = isMutationStable
     this._getLayoutSafeArea = getLayoutSafeArea
+    this._onCommittedOperation = onCommittedOperation
+    this._lifecycle = lifecycle
+    this._commitGuard = commitGuard
   }
 
   _canvas() {
@@ -89,18 +95,21 @@ export class BoardController {
     try {
       return await materializeBoardObjects(specs, {
         restoreIds: false,
+        beforeNode: () => this._commitGuard(),
         buildFormula: async (spec) => {
           try {
             const formula = await this._buildFormula(spec)
             if (!formula) throw new Error('Formula render failed.')
             return formula
           } catch (cause) {
+            if (['command_timeout', 'board_context_changed', 'board_busy'].includes(cause?.code)) throw cause
             throw new BoardControllerError(C.FORMULA_RENDER_FAILED, 'Formula render failed.', { cause })
           }
         },
       })
     } catch (cause) {
       if (cause instanceof BoardControllerError) throw cause
+      if (['command_timeout', 'board_context_changed', 'board_busy'].includes(cause?.code)) throw cause
       throw new BoardControllerError(C.INVALID_SPEC, 'Cannot materialize object spec.', { cause })
     }
   }
@@ -118,7 +127,12 @@ export class BoardController {
     return Boolean(this._isMutationStable())
   }
 
-  _assertCanMutate() {
+  _assertCanMutate(lease) {
+    this._commitGuard()
+    if (this._lifecycle && (!this._lifecycle.isReady()
+      || (lease && !this._lifecycle.assertCurrent(lease)))) {
+      throw new BoardControllerError(C.NOT_READY, 'Board changed before the mutation could commit.')
+    }
     if (!this._isStable()) {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Finish the current board gesture before a programmable mutation.')
     }
@@ -132,16 +146,20 @@ export class BoardController {
     if (errors.length) throw new globalThis.AggregateError(errors, 'Board rollback encountered errors.')
   }
 
-  _commit(canvas, change, rollback, command, readResult) {
-    this._assertCanMutate()
+  _commit(canvas, change, rollback, command, readResult, effect, lease) {
+    this._assertCanMutate(lease)
     const previous = canvas.renderOnAddRemove
     canvas.renderOnAddRemove = false
     let result
+    let committed = false
     try {
       this._runWithoutHistory(change)
       result = readResult()
       const entry = typeof command === 'function' ? command() : command
-      if (entry) this._pushHistoryCommand(entry)
+      if (entry) {
+        if (this._pushHistoryCommand(entry) === false) throw new Error('History command declined.')
+        committed = true
+      }
     } catch (cause) {
       try {
         this._runWithoutHistory(rollback)
@@ -151,10 +169,17 @@ export class BoardController {
       throw new BoardControllerError(C.COMMIT_FAILED, 'Board mutation could not be committed.', { cause })
     } finally {
       canvas.renderOnAddRemove = previous
-      canvas.requestRenderAll()
+      try { canvas.requestRenderAll() } catch (error) {
+        console.error('Board refresh failed.', error)
+      }
     }
     try { this._afterMutation() } catch (error) {
       console.error('Board mutation committed, but post-commit refresh failed.', error)
+    }
+    if (committed && effect) {
+      try { this._onCommittedOperation(effect) } catch (error) {
+        console.error('Board analytics callback failed.', error)
+      }
     }
     return result
   }
@@ -162,29 +187,38 @@ export class BoardController {
   async _create(specs, options, batch) {
     const canvas = this._canvas()
     this._assertCanMutate()
+    const lease = this._lifecycle?.capture()
     if (!Array.isArray(specs) || !specs.length) throw new BoardControllerError(C.INVALID_SPEC, 'Expected a non-empty array of specs.')
     specs.forEach((spec) => validateCreateSpec(spec))
     try { specs = structuredClone(specs) } catch (cause) {
       throw new BoardControllerError(C.INVALID_SPEC, 'Cannot clone object spec.', { cause })
     }
-    specs = specs.map(normalizeCreateOrigins)
+    specs = specs.map(spec => normalizeExplicitPaint(normalizeCreateOrigins(spec)))
     const objects = await this._materialize(specs)
-    if (this._canvas() !== canvas) throw new BoardControllerError(C.NOT_READY, 'Board canvas changed during materialization.')
-    regenerateMathBoardObjectIds(objects, { boardObjectPolicy: this._policy })
-    objects.forEach((object, index) => this._prepareCreatedObject(object, specs[index]))
-    const start = canvas.getObjects().length
-    const entries = objects.map((object, offset) => ({ object, index: start + offset }))
-    const command = batch ? { type: 'batch-add', entries } : { type: 'add', ...entries[0] }
-    return this._commit(canvas, () => {
-      entries.forEach(({ object, index }) => {
-        canvas.insertAt(index, object)
-        if (!canvas.getObjects().includes(object)) throw new Error('Object was not inserted.')
-      })
-      if (options.select === true) this._select(canvas, objects)
-    }, () => this._rollback([
-      () => { if (objects.some((object) => this._selectionContains(canvas, object))) canvas.discardActiveObject() },
-      ...objects.map((object) => () => canvas.remove(object)),
-    ]), command, () => objects.map((object) => this._read(object)))
+    try {
+      if (this._canvas() !== canvas || (lease && !this._lifecycle.assertCurrent(lease))) {
+        throw new BoardControllerError(C.NOT_READY, 'Board changed during materialization.')
+      }
+      regenerateMathBoardObjectIds(objects, { boardObjectPolicy: this._policy })
+      objects.forEach((object, index) => this._prepareCreatedObject(object, specs[index]))
+      const start = canvas.getObjects().length
+      const entries = objects.map((object, offset) => ({ object, index: start + offset }))
+      const command = batch ? { type: 'batch-add', entries } : { type: 'add', ...entries[0] }
+      return this._commit(canvas, () => {
+        entries.forEach(({ object, index }) => {
+          canvas.insertAt(index, object)
+          if (!canvas.getObjects().includes(object)) throw new Error('Object was not inserted.')
+        })
+        if (options.select === true) this._select(canvas, objects)
+      }, () => this._rollback([
+        () => { if (objects.some((object) => this._selectionContains(canvas, object))) canvas.discardActiveObject() },
+        ...objects.map((object) => () => canvas.remove(object)),
+      ]), command, () => objects.map((object) => this._read(object)),
+      { kind: 'create', objectKinds: objects.map((object) => this._policy.kindOf(object)) }, lease)
+    } catch (error) {
+      objects.filter(object => !canvas.getObjects().includes(object)).forEach(object => disposeMaterializedObject(object))
+      throw error
+    }
   }
 
   async create(spec, options = {}) {
@@ -229,42 +263,54 @@ export class BoardController {
       after = snapshotObject(object)
     }, () => applySnapshot(object, before), () => snapshotsEqual(before, after) ? null : {
       type: 'modify', entries: [{ object, before, after }],
-    }, () => this._read(object))
+    }, () => this._read(object), { kind: 'update' })
   }
 
   async _replaceFormula(canvas, existing, patch, options) {
+    const lease = this._lifecycle?.capture()
     const [next] = await this._materialize([{ ...this._read(existing), ...patch }])
-    if (this._canvas() !== canvas || !canvas.getObjects().includes(existing)) {
-      throw new BoardControllerError(C.COMMIT_FAILED, 'Formula changed while rendering.')
+    let committed = false
+    try {
+      if (this._canvas() !== canvas || (lease && !this._lifecycle.assertCurrent(lease))) {
+        throw new BoardControllerError(C.NOT_READY, 'Board changed while rendering.')
+      }
+      if (!canvas.getObjects().includes(existing)) {
+        throw new BoardControllerError(C.COMMIT_FAILED, 'Formula changed while rendering.')
+      }
+      this._assertCanMutate()
+      // Re-read the transform after rendering: a human may have moved the retained object meanwhile.
+      const current = this._read(existing)
+      const transform = {}
+      for (const key of [...TRANSFORM_KEYS, 'opacity']) {
+        if (key in current) transform[key] = current[key]
+        if (key in patch) transform[key] = patch[key]
+      }
+      next.set(transform)
+      next.setCoords()
+      ensureMathBoardObjectId(next, getMathBoardObjectId(existing))
+      this._prepareCreatedObject(next, { ...current, ...patch })
+      if (snapshotsEqual(current, this._read(next))) return current
+      const selected = this._selectionContains(canvas, existing)
+      if (this._policy.isActiveSelection(existing.group)) canvas.discardActiveObject()
+      const index = canvas.getObjects().indexOf(existing)
+      const result = this._commit(canvas, () => {
+        if (selected) canvas.discardActiveObject()
+        canvas.remove(existing)
+        canvas.insertAt(index, next)
+        if (canvas.getObjects().includes(existing) || !canvas.getObjects().includes(next)) throw new Error('Formula replacement failed.')
+        if (selected || options.select === true) canvas.setActiveObject(next)
+      }, () => this._rollback([
+        () => { if (this._selectionContains(canvas, next)) canvas.discardActiveObject() },
+        () => canvas.remove(next),
+        () => { if (!canvas.getObjects().includes(existing)) canvas.insertAt(index, existing) },
+        () => { if (selected) canvas.setActiveObject(existing) },
+      ]), { type: 'replace', index, removed: existing, added: next }, () => this._read(next),
+      { kind: 'formula_edit' }, lease)
+      committed = true
+      return result
+    } finally {
+      if (!committed && !canvas.getObjects().includes(next)) disposeMaterializedObject(next)
     }
-    this._assertCanMutate()
-    // Re-read the transform after rendering: a human may have moved the retained object meanwhile.
-    const current = this._read(existing)
-    const transform = {}
-    for (const key of [...TRANSFORM_KEYS, 'opacity']) {
-      if (key in current) transform[key] = current[key]
-      if (key in patch) transform[key] = patch[key]
-    }
-    next.set(transform)
-    next.setCoords()
-    ensureMathBoardObjectId(next, getMathBoardObjectId(existing))
-    this._prepareCreatedObject(next, { ...current, ...patch })
-    if (snapshotsEqual(current, this._read(next))) return current
-    const selected = this._selectionContains(canvas, existing)
-    if (this._policy.isActiveSelection(existing.group)) canvas.discardActiveObject()
-    const index = canvas.getObjects().indexOf(existing)
-    return this._commit(canvas, () => {
-      if (selected) canvas.discardActiveObject()
-      canvas.remove(existing)
-      canvas.insertAt(index, next)
-      if (canvas.getObjects().includes(existing) || !canvas.getObjects().includes(next)) throw new Error('Formula replacement failed.')
-      if (selected || options.select === true) canvas.setActiveObject(next)
-    }, () => this._rollback([
-      () => { if (this._selectionContains(canvas, next)) canvas.discardActiveObject() },
-      () => canvas.remove(next),
-      () => { if (!canvas.getObjects().includes(existing)) canvas.insertAt(index, existing) },
-      () => { if (selected) canvas.setActiveObject(existing) },
-    ]), { type: 'replace', index, removed: existing, added: next }, () => this._read(next))
   }
 
   async group(ids, options = {}) {
@@ -322,7 +368,8 @@ export class BoardController {
         }
         if (active) canvas.setActiveObject(active)
       },
-    ]), () => ({ type: 'group', group, index, members }), () => this._read(group))
+    ]), () => ({ type: 'group', group, index, members }), () => this._read(group),
+    { kind: 'group' })
   }
 
   async delete(id) {
@@ -337,7 +384,8 @@ export class BoardController {
       if (canvas.getObjects().includes(object)) throw new Error('Object was not removed.')
     }, () => {
       if (!canvas.getObjects().includes(object)) canvas.insertAt(index, object)
-    }, { type: 'delete', entries: [{ object, index }] }, () => node)
+    }, { type: 'delete', entries: [{ object, index }] }, () => node,
+    { kind: 'delete', objectKinds: [this._policy.kindOf(object)] })
   }
 
   async deleteMany(ids) {
@@ -393,7 +441,8 @@ export class BoardController {
         }
         canvas.setActiveObject(active)
       },
-    ]), { type: 'delete', entries }, () => nodes)
+    ]), { type: 'delete', entries }, () => nodes,
+    { kind: 'delete', objectKinds: entries.map(({ object }) => this._policy.kindOf(object)) })
   }
 
   measure(id) {
@@ -467,12 +516,12 @@ export class BoardController {
         }
         canvas.setActiveObject(active)
       },
-    ]), { type: 'modify', entries }, result)
+    ]), { type: 'modify', entries }, result, { kind: 'layout' })
   }
 
-  observe() {
+  observe(detail = 'full') {
     const canvas = this._canvas()
-    return { ...serializeBoardState({ canvas, boardObjectPolicy: this._policy, boardId: this._getBoardId() || null }),
+    return { ...serializeBoardState({ canvas, boardObjectPolicy: this._policy, boardId: this._getBoardId() || null, detail }),
       stable: this._isStable() }
   }
 }

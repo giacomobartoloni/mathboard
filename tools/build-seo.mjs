@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url'
 
 import resources from '../seo/pages/resources.mjs'
 import mathWhiteboard from '../seo/pages/math-whiteboard.mjs'
+import graphLinearFunction from '../seo/pages/graph-linear-function.mjs'
 import latexWhiteboard from '../seo/pages/latex-whiteboard.mjs'
 import openSource from '../seo/pages/open-source-math-whiteboard.mjs'
 import shortcuts from '../seo/pages/keyboard-shortcuts.mjs'
@@ -55,6 +56,7 @@ const require = createRequire(import.meta.url)
 const pages = [
   resources,
   mathWhiteboard,
+  graphLinearFunction,
   latexWhiteboard,
   openSource,
   shortcuts,

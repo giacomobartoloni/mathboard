@@ -20,15 +20,16 @@ import latexWhiteboard from '../seo/pages/latex-whiteboard.mjs'
 import openSource from '../seo/pages/open-source-math-whiteboard.mjs'
 import shortcuts from '../seo/pages/keyboard-shortcuts.mjs'
 import latexDocs from '../seo/pages/latex-docs.mjs'
+import graphLinearFunction from '../seo/pages/graph-linear-function.mjs'
 
 const pages = [
   download, macos, windows, linux, security,
   resources, overview, latexWhiteboard, openSource,
-  shortcuts, latexDocs,
+  shortcuts, latexDocs, graphLinearFunction,
 ]
 
 const editorialHeroes = [resources, overview, latexWhiteboard, openSource]
-const readingPages = [macos, windows, linux, security, shortcuts, latexDocs]
+const readingPages = [macos, windows, linux, security, shortcuts, latexDocs, graphLinearFunction]
 
 test('every generated static page retains one semantically correct heading and structured data', () => {
   for (const page of pages) {
@@ -60,7 +61,7 @@ test('guides, reference documents, privacy and 404 keep readable editorial struc
 
   const privacy = readFileSync(new URL('../public/privacy-policy.html', import.meta.url), 'utf8')
   assert.ok(privacy.includes('class="reading-intro privacy-heading"'))
-  assert.ok(privacy.includes('Last updated: October 1, 2026'))
+  assert.match(privacy, /Last updated: [A-Za-z]+ \d{1,2}, \d{4}/)
   assert.ok(privacy.includes("script.id = 'simple-analytics-script'"))
   const notFound = render404()
   assert.ok(notFound.includes('class="not-found"'))

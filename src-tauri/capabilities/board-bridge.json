@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "board-bridge",
+  "description": "Allow correlated internal board bridge responses from the main MathBoard WebView",
+  "webviews": ["main"],
+  "permissions": [
+    "allow-board-bridge-state",
+    "allow-board-bridge-reply"
+  ]
+}

@@ -23,6 +23,10 @@ import { Rect } from 'fabric'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js'
 import { ensureMathBoardObjectId } from '../src/board/ids.js'
+import { BoardLifecycle } from '../src/board/BoardLifecycle.js'
+import { indexedDB as fakeIndexedDB } from 'fake-indexeddb'
+import { openMathBoardDb } from '../src/storage/local/indexedDb.js'
+import { IndexedDbBoardRepository, createBoardRecord } from '../src/storage/local/IndexedDbBoardRepository.js'
 import {
   BoardPersistenceService,
   BOARD_PERSISTENCE_ERROR_CODES,
@@ -36,6 +40,7 @@ function makeCanvas(objects = []) {
   const list = objects.slice()
   return {
     getObjects: () => list.slice(),
+    add: (object) => { list.push(object) },
     remove: (object) => {
       const index = list.indexOf(object)
       if (index >= 0) list.splice(index, 1)
@@ -52,35 +57,51 @@ function makeRepository(records = new Map()) {
     async get(id) {
       return records.get(id) || null
     },
-    async put(record) {
+    async create(record) {
       this.puts.push(record)
       records.set(record.id, record)
+      return record
+    },
+    async updateIfRevisionMatches(id, expectedRevision, build) {
+      const current = records.get(id)
+      if (!current) throw Object.assign(new Error('Board missing'), { code: 'board_not_found' })
+      if ((current.revision ?? 0) !== expectedRevision) throw Object.assign(new Error('Board conflict'), { code: 'board_conflict' })
+      const next = build(current)
+      if (next === null) return current
+      const record = { ...next, revision: expectedRevision + 1 }
+      this.puts.push(record)
+      records.set(id, record)
       return record
     },
     async list() {
       return [...records.values()]
     },
-    async delete(id) {
+    async deleteIfRevisionMatches(id, expectedRevision) {
+      const current = records.get(id)
+      if (!current) throw Object.assign(new Error('Board missing'), { code: 'board_not_found' })
+      if ((current.revision ?? 0) !== expectedRevision) throw Object.assign(new Error('Board conflict'), { code: 'board_conflict' })
       this.deletes.push(id)
       records.delete(id)
     },
   }
 }
 
-function makeService({ canvas = makeCanvas(), repository = makeRepository(), isDocumentStable } = {}) {
+function makeService({ canvas = makeCanvas(), repository = makeRepository(), isDocumentStable, lifecycle,
+  resetHistory = () => {}, suspendHistory = () => {} } = {}) {
   return new BoardPersistenceService({
     repository,
     boardObjectPolicy: new BoardObjectPolicy(),
     getCanvas: () => canvas,
     buildFormula: async () => null,
-    resetHistory: () => {},
-    suspendHistory: () => {},
+    resetHistory,
+    suspendHistory,
     getTitle: () => 'Board',
     sessionStorage: new MapStorage(),
     now: () => '2026-10-08T00:00:00.000Z',
     idleDebounceMs: 60000,
     maxWaitMs: 60000,
     isDocumentStable,
+    lifecycle,
   })
 }
 
@@ -101,6 +122,79 @@ class MapStorage {
     this.values.delete(key)
   }
 }
+
+test('active autosave preserves dirty canvas after another repository changes its revision', async () => {
+  const openDb = () => openMathBoardDb(fakeIndexedDB)
+  const repository = new IndexedDbBoardRepository({ openDb })
+  const otherTab = new IndexedDbBoardRepository({ openDb })
+  const boardId = `mb_${globalThis.crypto.randomUUID()}`
+  await repository.create(createBoardRecord({ id: boardId, title: 'Board',
+    document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }))
+  const canvas = makeCanvas()
+  const service = makeService({ canvas, repository })
+  await service.openBoard(boardId)
+  const rect = new Rect({ width: 10, height: 10 })
+  ensureMathBoardObjectId(rect, 'mbobj_unsaved')
+  canvas.add(rect)
+  service.notifyDocumentChanged()
+  await otherTab.updateIfRevisionMatches(boardId, 1, current => ({ ...current, title: 'Other tab' }))
+
+  await assert.rejects(() => service.flush(), { code: 'board_conflict' })
+  assert.equal(service.status.state, SAVE_STATES.ERROR)
+  assert.deepEqual(canvas.getObjects(), [rect])
+  assert.equal((await repository.get(boardId)).title, 'Other tab')
+  const recovered = await service.recoverConflictAsCopy()
+  assert.notEqual(recovered.id, boardId)
+  assert.equal(service.boardId, recovered.id)
+  assert.equal(service.status.state, SAVE_STATES.CLEAN)
+  assert.deepEqual(recovered.document.objects.map(object => object.id), ['mbobj_unsaved'])
+  assert.equal((await repository.get(boardId)).title, 'Other tab')
+  service.dispose()
+})
+
+test('deleted active record offers a recoverable copy of unsaved canvas edits', async () => {
+  const openDb = () => openMathBoardDb(fakeIndexedDB)
+  const repository = new IndexedDbBoardRepository({ openDb })
+  const otherTab = new IndexedDbBoardRepository({ openDb })
+  const boardId = `mb_${globalThis.crypto.randomUUID()}`
+  await repository.create(createBoardRecord({ id: boardId, title: 'Board',
+    document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }))
+  const canvas = makeCanvas()
+  const service = makeService({ canvas, repository })
+  await service.openBoard(boardId)
+  const rect = new Rect({ width: 10, height: 10 })
+  ensureMathBoardObjectId(rect, 'mbobj_unsaved')
+  canvas.add(rect)
+  service.notifyDocumentChanged()
+  await otherTab.deleteIfRevisionMatches(boardId, 1)
+  await assert.rejects(() => service.flush(), { code: 'board_not_found' })
+  assert.equal(service.status.errorCode, 'board_not_found')
+  const recovered = await service.recoverConflictAsCopy()
+  assert.notEqual(recovered.id, boardId)
+  assert.deepEqual(recovered.document.objects.map(object => object.id), ['mbobj_unsaved'])
+  assert.equal(service.status.state, SAVE_STATES.CLEAN)
+  service.dispose()
+})
+
+test('active rename does not clear a document edit made during its storage commit', async () => {
+  const records = new Map([['mb_rename', { id: 'mb_rename', title: 'Before', revision: 1,
+    document: { format: 'mathboard-board', version: 1, title: 'Before', objects: [] } }]])
+  const repository = makeRepository(records)
+  const service = makeService({ repository })
+  await service.openBoard('mb_rename')
+  const update = repository.updateIfRevisionMatches.bind(repository)
+  let release
+  repository.updateIfRevisionMatches = (...args) => new Promise(resolve => {
+    release = () => resolve(update(...args))
+  })
+  const pending = service.renameBoard('mb_rename', 'After')
+  await new Promise(resolve => setImmediate(resolve))
+  service.notifyDocumentChanged()
+  release()
+  await pending
+  assert.equal(service.status.state, SAVE_STATES.DIRTY)
+  service.dispose()
+})
 
 test('flush defers an unstable document until it becomes committed', async () => {
   const rect = new Rect({ width: 10, height: 10 })
@@ -127,6 +221,31 @@ test('flush defers an unstable document until it becomes committed', async () =>
   service.dispose()
 })
 
+test('a delayed flush cannot save or update status for a different active board', async () => {
+  const rect = new Rect({ width: 10, height: 10 })
+  ensureMathBoardObjectId(rect, 'mbobj_rect')
+  const repository = makeRepository(new Map([['mb_a', { id: 'mb_a', kind: 'saved', title: 'Board',
+    document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }]]))
+  let finishRead
+  const update = repository.updateIfRevisionMatches.bind(repository)
+  repository.updateIfRevisionMatches = (...args) => new Promise(resolve => {
+    finishRead = () => resolve(update(...args))
+  })
+  const service = makeService({ canvas: makeCanvas([rect]), repository })
+  service.boardId = 'mb_a'
+  service.notifyDocumentChanged()
+  const pending = service.flush()
+  await new Promise(resolve => setImmediate(resolve))
+  service.boardId = 'mb_b'
+  service.status = { ...service.status, state: SAVE_STATES.CLEAN }
+  finishRead()
+
+  await assert.rejects(pending, /Active board changed while saving/)
+  assert.equal(repository.puts.length, 0)
+  assert.equal(service.status.state, SAVE_STATES.CLEAN)
+  service.dispose()
+})
+
 test('failed flush blocks opening another board and preserves the current canvas', async () => {
   const current = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(current, 'mbobj_current')
@@ -136,7 +255,7 @@ test('failed flush blocks opening another board and preserves the current canvas
     title: 'Target',
     document: { format: 'mathboard-board', version: 1, title: 'Target', objects: [] },
   }]]))
-  repository.put = async () => {
+  repository.updateIfRevisionMatches = async () => {
     throw new Error('disk full')
   }
   const service = makeService({ canvas, repository })
@@ -149,12 +268,122 @@ test('failed flush blocks opening another board and preserves the current canvas
   service.dispose()
 })
 
+test('opening a board blocks new work before reading storage and invalidates the previous lease', async () => {
+  const lifecycle = new BoardLifecycle()
+  const old = lifecycle.capture()
+  const document = { format: 'mathboard-board', version: 1, title: 'Target', objects: [] }
+  let finishRead
+  const repository = makeRepository()
+  repository.get = async id => id === 'mb_target'
+    ? new Promise(resolve => { finishRead = () => resolve({ id, title: 'Target', document }) })
+    : null
+  const service = makeService({ repository, lifecycle })
+  service.boardId = 'mb_current'
+  const pending = service.openBoard('mb_target')
+
+  assert.equal(lifecycle.isReady(), false)
+  assert.equal(lifecycle.assertCurrent(old), false)
+  await new Promise(resolve => setImmediate(resolve))
+  finishRead()
+  await pending
+  assert.equal(service.boardId, 'mb_target')
+  assert.equal(lifecycle.isReady(), true)
+  assert.equal(lifecycle.assertCurrent(old), false)
+  service.dispose()
+})
+
+test('an unrecoverable canvas replacement leaves the board lifecycle closed', async () => {
+  const lifecycle = new BoardLifecycle()
+  const keep = new Rect({ width: 10, height: 10 })
+  const canvas = makeCanvas([keep])
+  canvas.add = () => { throw new Error('canvas cannot restore') }
+  const document = { format: 'mathboard-board', version: 1, title: 'Target',
+    objects: [{ id: 'mbobj_new', type: 'rect', width: 12, height: 8 }] }
+  const repository = makeRepository(new Map([['mb_target', { id: 'mb_target', title: 'Target', document }]]))
+  const service = makeService({ canvas, repository, lifecycle })
+
+  await assert.rejects(() => service.openBoard('mb_target'), /replacement and rollback failed/)
+  assert.equal(lifecycle.isReady(), false)
+  service.dispose()
+})
+
+test('failed new-board canvas installation preserves the active board and objects', async () => {
+  const lifecycle = new BoardLifecycle()
+  const first = new Rect({ width: 10, height: 10 })
+  const second = new Rect({ width: 20, height: 20 })
+  const canvas = makeCanvas([first, second])
+  const remove = canvas.remove
+  let calls = 0
+  canvas.remove = object => {
+    calls += 1
+    if (calls === 2) throw new Error('canvas removal failed')
+    remove(object)
+  }
+  const repository = makeRepository(new Map([['mb_current', {
+    id: 'mb_current', kind: 'saved', title: 'Current',
+    document: { format: 'mathboard-board', version: 1, title: 'Current', objects: [] },
+  }]]))
+  const service = makeService({ canvas, repository, lifecycle })
+  service.boardId = 'mb_current'
+
+  await assert.rejects(() => service.createNewBoard('Next'), /canvas removal failed/)
+  assert.equal(service.boardId, 'mb_current')
+  assert.deepEqual(canvas.getObjects(), [first, second])
+  assert.equal((await repository.list()).length, 1)
+  assert.equal(lifecycle.isReady(), true)
+  service.dispose()
+})
+
+test('a failed repaint after replacement keeps the new board identity and a usable lifecycle', async () => {
+  const lifecycle = new BoardLifecycle()
+  const canvas = makeCanvas([new Rect({ width: 10, height: 10 })])
+  canvas.requestRenderAll = () => { throw new Error('paint failed') }
+  const document = { format: 'mathboard-board', version: 1, title: 'B', objects: [] }
+  const repository = makeRepository(new Map([['mb_b', { id: 'mb_b', title: 'B', document }]]))
+  const service = makeService({ canvas, repository, lifecycle })
+  service.boardId = 'mb_a'
+
+  await service.openBoard('mb_b')
+  assert.equal(service.boardId, 'mb_b')
+  assert.deepEqual(canvas.getObjects(), [])
+  assert.equal(lifecycle.isReady(), true)
+  service.dispose()
+})
+
+test('failed history reset after canvas replacement fails closed', async () => {
+  const lifecycle = new BoardLifecycle()
+  const canvas = makeCanvas([new Rect({ width: 10, height: 10 })])
+  const document = { format: 'mathboard-board', version: 1, title: 'B', objects: [] }
+  const repository = makeRepository(new Map([['mb_b', { id: 'mb_b', title: 'B', document }]]))
+  const service = makeService({ canvas, repository, lifecycle,
+    resetHistory: () => { throw new Error('history reset failed') } })
+  service.boardId = 'mb_a'
+
+  await assert.rejects(() => service.openBoard('mb_b'), /history reset failed/)
+  assert.equal(lifecycle.isReady(), false)
+  service.dispose()
+})
+
+test('failed history resume after canvas replacement fails closed', async () => {
+  const lifecycle = new BoardLifecycle()
+  const canvas = makeCanvas([new Rect({ width: 10, height: 10 })])
+  const document = { format: 'mathboard-board', version: 1, title: 'B', objects: [] }
+  const repository = makeRepository(new Map([['mb_b', { id: 'mb_b', title: 'B', document }]]))
+  const service = makeService({ canvas, repository, lifecycle,
+    suspendHistory: flag => { if (!flag) throw new Error('history resume failed') } })
+  service.boardId = 'mb_a'
+
+  await assert.rejects(() => service.openBoard('mb_b'), /history resume failed/)
+  assert.equal(lifecycle.isReady(), false)
+  service.dispose()
+})
+
 test('new board write failure preserves the current runtime', async () => {
   const current = new Rect({ width: 10, height: 10 })
   ensureMathBoardObjectId(current, 'mbobj_current')
   const canvas = makeCanvas([current])
   const repository = makeRepository()
-  repository.put = async () => {
+  repository.create = async () => {
     throw new Error('disk full')
   }
   const service = makeService({ canvas, repository })
@@ -355,11 +584,13 @@ test('flush marks all persisted legacy records saved after writing', async () =>
   assert.equal(repository.puts.at(-1).kind, 'saved')
 
   service.boardId = 'mb_unknown'
+  service.revision = null
   service.notifyDocumentChanged()
   await service.flush()
   assert.equal(repository.puts.at(-1).kind, 'saved')
 
   service.boardId = 'mb_legacy'
+  service.revision = null
   service.notifyDocumentChanged()
   await service.flush()
   assert.equal(repository.puts.at(-1).kind, 'saved')
@@ -437,10 +668,11 @@ test('a change during an in-flight save stays dirty until the next flush', async
   let releaseFirstPut
   let puts = 0
   const repository = makeRepository(new Map([['mb_current', { id: 'mb_current', kind: 'saved', title: 'Board', document: { format: 'mathboard-board', version: 1, title: 'Board', objects: [] } }]]))
-  repository.put = async (record) => {
+  const update = repository.updateIfRevisionMatches.bind(repository)
+  repository.updateIfRevisionMatches = async (...args) => {
     puts += 1
     if (puts === 1) await new Promise((resolve) => { releaseFirstPut = resolve })
-    return record
+    return update(...args)
   }
   const service = makeService({ canvas: makeCanvas([rect]), repository })
   service.boardId = 'mb_current'

@@ -121,6 +121,49 @@ test('readiness refuses active interactions and pending work without cleaning up
   await assert.rejects(waiting,e=>e.code==='capture_failed')
 })
 
+test('capture observes app-owned Formula readiness without replacing renderer methods', async () => {
+  const { createVisualCaptureAdapter, isCaptureStable } = await import('../dev-agent/capture/visual-capture.js')
+  const render = async () => null
+  const renderer = { render }
+  const board = {
+    _formulaRenderer: renderer,
+    canvas: { getActiveObject: () => null },
+    sessionReady: true,
+    readInteractionState: () => ({ formulaRender: true }),
+  }
+  const capture = createVisualCaptureAdapter(() => board)
+  assert.equal(renderer.render, render)
+  assert.equal(isCaptureStable(board), false)
+  capture.dispose()
+})
+
+test('disposing capture cancels a pending paint and rejects new screenshots', async () => {
+  const { createVisualCaptureAdapter } = await import('../src/board/capture/visual-capture.js')
+  const board = { canvas: { getActiveObject: () => null }, sessionReady: true,
+    readInteractionState: () => ({}) }
+  const environment = { document: { fonts: { ready: new Promise(() => {}) } } }
+  const capture = createVisualCaptureAdapter(() => board, environment)
+  const pending = capture.screenshot({ target: { kind: 'viewport' } })
+  capture.dispose()
+  await assert.rejects(pending, error => error.code === 'capture_failed')
+  await assert.rejects(capture.screenshot({ target: { kind: 'viewport' } }),
+    error => error.code === 'capture_failed')
+})
+
+test('capture readiness closes for an in-progress board transition', async () => {
+  const { isCaptureStable } = await import('../dev-agent/capture/visual-capture.js')
+  const { BoardLifecycle } = await import('../src/board/BoardLifecycle.js')
+  const lifecycle = new BoardLifecycle()
+  const board = { canvas: { getActiveObject: () => null }, sessionReady: true,
+    readInteractionState: () => ({}), _boardLifecycle: lifecycle }
+  let finish
+  const pending = lifecycle.transition(async () => new Promise(resolve => { finish = resolve }))
+  assert.equal(isCaptureStable(board), false)
+  finish()
+  await pending
+  assert.equal(isCaptureStable(board), true)
+})
+
 
 test('F033 descriptor is detached and reports exact executable limits, media and stability', async () => {
   const {getScreenshotDescriptor}=await import('../dev-agent/capture/discovery.js')
@@ -169,4 +212,45 @@ test('nested rendered resources have explicit traversal and depth limits before 
   const wide=new Group([])
   wide._objects=Array.from({length:CAPTURE_LIMITS.maxSceneNodes+1},()=>new Rect({width:1,height:1}))
   assert.throws(()=>readCaptureScene(makeControllerCanvas([wide])),e=>e.code==='capture_too_large')
+})
+
+test('C13: paint readiness finishes when background animation frames are suspended', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  let requested = 0
+  const cancelled = []
+  const environment = {
+    document: { fonts: { ready: Promise.resolve() } },
+    requestAnimationFrame: () => ++requested,
+    cancelAnimationFrame: id => cancelled.push(id),
+  }
+  const started = Date.now()
+  await waitForCapturePaint(environment, new AbortController().signal)
+  assert.equal(requested, 2)
+  assert.deepEqual(cancelled, [1, 2])
+  assert.ok(Date.now() - started < 1000, 'suspended frames must not wait for the broker deadline')
+})
+
+test('C13: paint readiness still uses live frames and honors abort', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  let requested = 0
+  const active = {
+    document: { fonts: { ready: Promise.resolve() } },
+    requestAnimationFrame: callback => { queueMicrotask(callback); return ++requested },
+    cancelAnimationFrame: () => {},
+  }
+  await waitForCapturePaint(active, new AbortController().signal)
+  assert.equal(requested, 2)
+
+  const controller = new AbortController()
+  let cancelled = 0
+  const suspended = {
+    document: { fonts: { ready: Promise.resolve() } },
+    requestAnimationFrame: () => 1,
+    cancelAnimationFrame: () => { cancelled++ },
+  }
+  const pending = waitForCapturePaint(suspended, controller.signal)
+  await Promise.resolve()
+  controller.abort()
+  await assert.rejects(pending, error => error.code === 'capture_failed')
+  assert.ok(cancelled <= 1)
 })

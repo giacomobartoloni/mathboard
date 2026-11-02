@@ -17,10 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="board-library-overlay" @click.self="$emit('close')" @keydown.esc.stop.prevent="$emit('close')"
+  <div class="board-library-overlay" @click.self="$emit('close')" @keydown.esc.stop.prevent="onOverlayEscape"
     @keydown.tab="trapTab">
     <section ref="dialogPanel" class="board-library-panel" role="dialog" aria-modal="true"
-      aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1" @click="onPanelClick">
+      aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
       <header class="board-library-header">
         <span class="board-library-heading-icon" aria-hidden="true">
           <font-awesome-icon :icon="['fas', 'chalkboard']" />
@@ -52,7 +52,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
       </div>
 
       <div class="board-library-content" :class="showArchived ? 'board-library-trash' : 'board-library-recent'"
-        :aria-busy="loading">
+        :aria-busy="loading" @scroll="hideOpenPopover">
         <div v-if="loading" class="board-library-loading" role="status" aria-label="Loading boards">
           <div v-for="index in 3" :key="index" class="board-library-loading-row" aria-hidden="true">
             <span></span><span></span>
@@ -97,23 +97,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                 </button>
                 <button :id="'more-action-' + board.id" type="button" :disabled="busy"
                   :aria-label="'More actions for ' + board.title" :title="'More actions for ' + board.title"
-                  :aria-expanded="moreMenuId === board.id" aria-haspopup="menu"
-                  :aria-controls="'more-menu-' + board.id" @click="toggleMoreMenu(board.id)">
+                  :popovertarget="'more-menu-' + board.id">
                   <font-awesome-icon :icon="['fas', 'ellipsis']" aria-hidden="true" />
                 </button>
               </div>
             </div>
 
-            <div v-if="moreMenuId === board.id" :id="'more-menu-' + board.id"
-              class="board-library-more-menu" role="menu" :aria-label="'More actions for ' + board.title"
-              @keydown.esc.stop.prevent="closeMoreMenu(board.id)"
-              @keydown.down.prevent="focusDelete(board.id)" @keydown.up.prevent="focusDelete(board.id)"
-              @focusout="onMoreMenuFocusOut">
+            <div :id="'more-menu-' + board.id" class="board-library-more-menu" popover="auto"
+              role="group" :aria-label="'More actions for ' + board.title"
+              @toggle="onMoreMenuToggle($event, board.id)">
               <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
-                role="menuitem" :disabled="busy" :aria-label="'Delete ' + board.title"
+                :disabled="busy" :aria-label="'Delete ' + board.title" :title="'Delete ' + board.title"
                 @click="beginDelete(board)">
                 <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
-                <span>Delete</span>
               </button>
             </div>
 
@@ -177,7 +173,6 @@ export default {
     const renameId = ref(null)
     const renameTitle = ref('')
     const confirmDeleteId = ref(null)
-    const moreMenuId = ref(null)
     const showArchived = ref(false)
     const closeButton = ref(null)
     const dialogPanel = ref(null)
@@ -233,32 +228,35 @@ export default {
       showArchived.value = archived
       renameId.value = null
       confirmDeleteId.value = null
-      moreMenuId.value = null
     }
-    const focusDelete = (boardId) => document.getElementById('delete-action-' + boardId)?.focus()
-    const closeMoreMenu = async (boardId) => {
-      moreMenuId.value = null
-      await nextTick()
-      document.getElementById('more-action-' + boardId)?.focus()
+    const hideOpenPopover = () => {
+      dialogPanel.value?.querySelector('.board-library-more-menu:popover-open')?.hidePopover()
     }
-    const toggleMoreMenu = async (boardId) => {
-      if (moreMenuId.value === boardId) {
-        await closeMoreMenu(boardId)
-        return
-      }
+    const onOverlayEscape = () => {
+      const popover = dialogPanel.value?.querySelector('.board-library-more-menu:popover-open')
+      if (popover) {
+        popover.hidePopover()
+        document.getElementById('more-action-' + popover.id.slice('more-menu-'.length))?.focus()
+      } else emit('close')
+    }
+    const onMoreMenuToggle = async (event, boardId) => {
+      if (event.newState !== 'open') return
       renameId.value = null
       confirmDeleteId.value = null
-      moreMenuId.value = boardId
       await nextTick()
-      focusDelete(boardId)
-    }
-    const onPanelClick = (event) => {
-      if (moreMenuId.value && !event.target.closest('.board-library-more-menu, [id^="more-action-"]')) {
-        moreMenuId.value = null
+      const popover = event.target
+      const trigger = document.getElementById('more-action-' + boardId)
+      if (!popover.matches(':popover-open') || !trigger) return
+      if (!CSS.supports('position-area: bottom span-left')) {
+        const anchor = trigger.getBoundingClientRect()
+        const width = popover.offsetWidth
+        const height = popover.offsetHeight
+        const top = anchor.bottom + height + 4 <= window.innerHeight
+          ? anchor.bottom + 4 : anchor.top - height - 4
+        popover.style.top = Math.max(8, top) + 'px'
+        popover.style.left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8)) + 'px'
       }
-    }
-    const onMoreMenuFocusOut = (event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) moreMenuId.value = null
+      document.getElementById('delete-action-' + boardId)?.focus()
     }
     const createBoard = () => {
       emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
@@ -268,7 +266,6 @@ export default {
       return `${action} ${board.title}`
     }
     const selectBoard = (board) => {
-      moreMenuId.value = null
       if (board.isActive) emit('close')
       else {
         awaitActionFocus('close')
@@ -276,12 +273,11 @@ export default {
       }
     }
     const submitAction = (action, boardId) => {
-      moreMenuId.value = null
       awaitActionFocus('close')
       emit('action', { action, boardId })
     }
     const beginRename = async (board) => {
-      moreMenuId.value = null
+      hideOpenPopover()
       confirmDeleteId.value = null
       renameId.value = board.id
       renameTitle.value = board.title
@@ -289,7 +285,7 @@ export default {
       document.getElementById('rename-' + board.id)?.focus()
     }
     const beginDelete = async (board) => {
-      moreMenuId.value = null
+      hideOpenPopover()
       renameId.value = null
       confirmDeleteId.value = board.id
       await nextTick()
@@ -313,10 +309,10 @@ export default {
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { boardQuery, renameId, renameTitle, confirmDeleteId, moreMenuId, showArchived, closeButton, dialogPanel,
+    return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, dialogPanel,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
       submitRename, beginRename, beginDelete, cancelInline, submitDelete, trapTab,
-      toggleMoreMenu, closeMoreMenu, focusDelete, onPanelClick, onMoreMenuFocusOut }
+      hideOpenPopover, onOverlayEscape, onMoreMenuToggle }
   },
 }
 </script>
@@ -538,23 +534,29 @@ export default {
 }
 .board-library-row-actions button:hover:enabled { background: var(--hover-bg); }
 .board-library-more-menu {
-  display: flex;
-  justify-content: flex-end;
-  margin: 0 0 6px;
-}
-.board-library-more-delete {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 140px;
-  min-height: 44px;
-  padding: 9px 14px;
+  position: fixed;
+  inset: auto;
+  position-area: bottom span-left;
+  position-try-fallbacks: flip-block;
+  justify-self: end;
+  margin: 0;
+  padding: 5px;
   border: 1px solid var(--border-color);
   border-radius: 8px;
   background: var(--surface-secondary);
-  color: var(--danger);
   box-shadow: var(--panel-shadow);
-  text-align: left;
+}
+.board-library-more-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--danger);
   cursor: pointer;
 }
 .board-library-more-delete:hover:enabled { background: var(--hover-bg); }

@@ -32,6 +32,11 @@ export class BoardHistory {
     this._step = -1;
     this._suspended = false;
     this._tipKind = "command";
+    this._committedSequence = 0;
+  }
+
+  committedSequence() {
+    return this._committedSequence;
   }
 
   summary() {
@@ -109,6 +114,7 @@ export class BoardHistory {
       this._tipKind = previousTipKind;
       throw error;
     }
+    this._committedSequence += 1;
     return true;
   }
 
@@ -133,7 +139,9 @@ export class BoardHistory {
       this._syncAutoInk();
     });
     this._step = direction === "undo" ? index - 1 : index;
-    canvas.requestRenderAll();
+    try { canvas.requestRenderAll(); } catch (error) {
+      console.error('Board history replay refresh failed.', error);
+    }
     return command;
   }
 

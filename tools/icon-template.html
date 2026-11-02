@@ -21,12 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <head>
   <meta charset="utf-8" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Satisfy&display=swap"
-    rel="stylesheet"
-  >
+  <!-- Font injected by generate-icons.mjs from local @fontsource/satisfy -->
+  <!-- LOCAL_SATISFY_FONT -->
 
   <style>
     html,
@@ -52,12 +48,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
       /*
        * Geometry is expressed proportionally through calc() so
-       * the same template renders correctly at 192 and 512 px.
+       * the same template renders at browser-tab, touch and PWA sizes.
        */
       --outer-padding: calc(var(--icon-size) * 0.045);
       --border-width: calc(var(--icon-size) * 0.035);
       --corner-radius: calc(var(--icon-size) * 0.16);
       --mark-size: calc(var(--icon-size) * 0.64);
+    }
+
+    /*
+     * Browser-tab favicons are rendered at their native size, not shrunk
+     * from 512px. The tighter padding, heavier border and larger M keep
+     * the brand recognizable at 16px and on high-DPI displays.
+     */
+    :root[data-icon-variant="favicon"] {
+      --outer-padding: calc(var(--icon-size) * 0.025);
+      --border-width: calc(var(--icon-size) * 0.06);
+      --mark-size: calc(var(--icon-size) * 0.72);
+    }
+
+    /* iOS applies its own rounded mask; provide an opaque square base. */
+    :root[data-icon-variant="apple"] #capture {
+      background: var(--mathboard-background);
     }
 
     #capture {

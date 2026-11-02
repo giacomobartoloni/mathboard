@@ -23,7 +23,7 @@ import {
 } from '../lib/render-components.mjs'
 
 export default {
-  lastmod: '2026-10-23',
+  lastmod: '2026-10-26',
   path: '/math-whiteboard/',
   title: 'MathBoard — Free Online Whiteboard for Math',
   description:
@@ -80,6 +80,7 @@ export default {
       <ul>
         <li><a href="/download/">Desktop beta downloads</a> — macOS, Windows and Linux</li>
         <li><a href="/latex-whiteboard/">LaTeX whiteboard</a> — formula workflow and examples</li>
+        <li><a href="/examples/graph-linear-function/">Graph a linear function</a> — a worked example with slope, intercept and a manual drawing walkthrough</li>
         <li><a href="/docs/keyboard-shortcuts/">Keyboard shortcuts</a></li>
         <li><a href="/open-source-math-whiteboard/">Open-source details</a></li>
         <li><a href="https://github.com/giacomobartoloni/mathboard">GitHub repository</a></li>

@@ -5,19 +5,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 */
 
 import { desktopRelease } from '../data/desktop-release.mjs'
+import { DESKTOP_ASSET_FORMATS } from './desktop-release.mjs'
 import { escapeHtml } from './escape-html.mjs'
 
 const REPO_RELEASES = 'https://github.com/giacomobartoloni/mathboard/releases'
-const ASSET_FORMATS = Object.freeze({
-  macosArm64: { platform: 'macos', suffix: '_aarch64.dmg' },
-  macosIntel: { platform: 'macos', suffix: '_x64.dmg' },
-  windowsExe: { platform: 'windows', suffix: '_x64-setup.exe' },
-  windowsMsi: { platform: 'windows', suffix: '_x64_en-US.msi' },
-  linuxAppImage: { platform: 'linux', suffix: '_amd64.AppImage' },
-  linuxDeb: { platform: 'linux', suffix: '_amd64.deb' },
-  checksums: { platform: 'all', suffix: 'SHA256SUMS.txt' },
-})
-
 /** Fail closed on missing, unreviewed, mismatched or non-official assets. */
 export function validateDesktopRelease(release = desktopRelease) {
   if (!/^\d+\.\d+\.\d+$/.test(release.version) ||
@@ -31,13 +22,13 @@ export function validateDesktopRelease(release = desktopRelease) {
       new Set(release.testedPlatforms).size !== release.testedPlatforms.length) {
     throw new Error('Invalid desktop release platform verification list')
   }
-  const names = Object.keys(ASSET_FORMATS)
+  const names = Object.keys(DESKTOP_ASSET_FORMATS)
   if (!release.assets || Object.keys(release.assets).length !== names.length) {
     throw new Error('Desktop release asset set is incomplete')
   }
   for (const key of names) {
     const file = release.assets[key]
-    const { suffix } = ASSET_FORMATS[key]
+    const { suffix } = DESKTOP_ASSET_FORMATS[key]
     const expected = key === 'checksums' ? suffix : `MathBoard_${release.version}${suffix}`
     if (file !== expected) {
       throw new Error(`Invalid desktop release asset: ${key}`)
@@ -55,7 +46,7 @@ export function releaseUrl(release = desktopRelease) {
 
 export function assetName(key, release = desktopRelease) {
   validateDesktopRelease(release)
-  if (!Object.hasOwn(ASSET_FORMATS, key)) {
+  if (!Object.hasOwn(DESKTOP_ASSET_FORMATS, key)) {
     throw new Error(`Unknown desktop release asset: ${key}`)
   }
   return release.assets[key]
@@ -66,7 +57,7 @@ export function assetUrl(key, release = desktopRelease) {
 }
 
 export function renderDownloadLink(key, label, placement, { primary = true } = {}) {
-  const platform = ASSET_FORMATS[key]?.platform
+  const platform = DESKTOP_ASSET_FORMATS[key]?.platform
   if (!platform || platform === 'all') throw new Error(`Not an installer: ${key}`)
   return `<a class="button ${primary ? 'button-primary' : ''}"
     href="${escapeHtml(assetUrl(key))}"

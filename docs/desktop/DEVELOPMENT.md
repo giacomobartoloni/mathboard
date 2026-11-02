@@ -58,6 +58,72 @@ the native application without creating installers:
 npm run desktop:build -- --no-bundle
 ```
 
+## Desktop CI policy
+
+The [Desktop CI workflow](../../.github/workflows/desktop.yml) is separate from
+the main [web CI workflow](../../.github/workflows/main.yml):
+
+- Every PR targeting `main` or `develop` runs a lightweight changed-file check.
+  The Linux, Windows, and macOS native build matrix runs only when the PR changes
+  `src-tauri/`, `src/platform/`, `src/analytics/`, `package.json`,
+  `package-lock.json`, `.node-version`, `vite.config.js`, or the desktop
+  CI/release workflow definitions.
+- Regular pushes do not trigger Desktop CI. The main CI still checks lint,
+  unit tests, production web build, and browser/agent E2E on pushes and PRs.
+- Every night at 02:17 UTC, the desktop matrix compiles the current `develop`
+  revision on all three platforms. GitHub Actions reads scheduled workflow
+  definitions from the default branch (`main`), so this schedule becomes
+  active once the workflow change also reaches `main`. The scheduled job
+  explicitly checks out `develop`.
+- `workflow_dispatch` provides a full desktop matrix on the selected branch.
+  A release tag (`desktop-v*`) is handled by
+  [Desktop Release Candidate](../../.github/workflows/release-desktop.yml),
+  which builds installers independently of the no-bundle CI.
+- Rust compilation dependencies are cached per runner OS. The Linux job checks Rust formatting and all three platforms run locked
+  native Rust unit tests.
+- Tauri invokes `npm run build` through `beforeBuildCommand`; the desktop
+  workflow does not repeat a separate web build or lint step.
+
+The nightly builds detect integration regressions in shared frontend changes
+that do not independently trigger native compilation on PRs. Before shipping,
+perform the installed-app and offline checks in [TEST_MATRIX.md](TEST_MATRIX.md);
+a passing `--no-bundle` compile is not a packaged-app acceptance test.
+## Board bridge harness
+
+The desktop runtime connects `src/platform/desktopBoardBridge.js` after the board
+session is ready; the web build never loads it. The adapter exposes only the 11 canvas
+methods in `src/board/agent/desktop-commands.js` (`observe`, `measure`, `screenshot`,
+`create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, `layout`).
+The Vite-only development bridge keeps its 19-method help and is not part of `dist/`.
+
+Run the harness and native broker tests before changing the bridge:
+
+```sh
+npm run test:agent-bridge   # Vite agent mode + e2e-agent/, includes board lifecycle races
+npm run assert:no-e2e-hook  # fails if development instrumentation leaks into dist/
+cd src-tauri && cargo test --locked && cargo fmt --check
+```
+
+Rust accepts correlated replies only from WebView `main` through
+`src-tauri/capabilities/board-bridge.json`. The native bridge uses schema version 2:
+every request and reply carries a top-level persistent `boardId` as well as the
+request ID, app and renderer generations, and board epoch. A target must be named
+explicitly when trusted native code queues a request. The browser checks its
+existence and revision before editing; inactive targets run in a detached Fabric
+context and commit through IndexedDB revision CAS. `screenshot` and `layout` require
+the active board. A timed-out write may have committed, so `execution_unknown`
+requires readback of that board before another write. The Vite-only development
+bridge keeps its existing command shape and is not an addressed native client.
+For example, an internal native request has this envelope; the correlated reply
+must echo `boardId`, `requestId`, both generations, `boardEpoch`, and `schemaVersion`:
+
+```json
+{"requestId":"app-1","appGeneration":"app","rendererGeneration":"renderer","boardEpoch":2,"boardId":"mb_example","schemaVersion":2,"expiresAtMs":1793200000000,"method":"observe","params":{}}
+```
+
+Phase C3 has no MCP listener: `--mathboard-companion-version` only proves the
+packaged binary can dispatch a companion mode before Tauri starts its GUI.
+
 ## Troubleshooting
 
 - Run `npm run desktop:info` first to inspect the detected Rust, Node, WebView, and

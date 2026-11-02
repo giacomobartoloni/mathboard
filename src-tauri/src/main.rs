@@ -19,5 +19,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    if let Some(status) = app_lib::companion::run_from_args() {
+        std::process::exit(status);
+    }
     app_lib::run();
 }

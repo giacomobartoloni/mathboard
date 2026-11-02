@@ -65,3 +65,28 @@ test('real BoardHistory gives createMany a single undo step and rolls back rejec
   history.undo()
   assert.deepEqual(canvas.getObjects(), [])
 })
+
+test('a suspended real history rejects a controller commit and leaves no board effect', async () => {
+  const canvas = makeControllerCanvas()
+  const history = new BoardHistory({
+    getCanvas: () => canvas,
+    onDocumentChanged: () => {},
+    syncAutoInk: () => {},
+  })
+  const effects = []
+  const controller = new BoardController({
+    getCanvas: () => canvas,
+    boardObjectPolicy: new BoardObjectPolicy(),
+    buildFormula: async () => { throw new Error('formula unused') },
+    pushHistoryCommand: (command) => history.record(command),
+    runWithoutHistory: (callback) => history.runSuspended(callback),
+    isMutationStable: () => true,
+    onCommittedOperation: (effect) => effects.push(effect),
+  })
+  history.setSuspended(true)
+  await assert.rejects(() => controller.create({ type: 'rect', width: 20, height: 20 }),
+    (error) => error.code === BOARD_CONTROLLER_ERROR_CODES.COMMIT_FAILED)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.deepEqual(history.summary(), { length: 0, step: -1, tipType: null })
+  assert.deepEqual(effects, [])
+})

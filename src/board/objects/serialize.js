@@ -217,6 +217,7 @@ export function readSemanticBoardObject(object, options = {}) {
       type: 'text',
       text: object.text ?? '',
       ...textProps,
+      ...(isType(object, 'Textbox', 'textbox') ? { width: object.width } : {}),
       ...commonProps(object),
     })
   }

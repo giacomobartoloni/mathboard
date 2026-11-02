@@ -55,6 +55,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @text-editing-completed="onTextEditingCompleted"
         @shape-drawing-completed="onShapeDrawingCompleted"
         @selection-color="onSelectionColor"
+        @persistence-status="onPersistenceStatus"
       />
       <ToolsPanel
         :selectedTool="selectedTool"
@@ -79,6 +80,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <div v-if="boardError" class="stamp-error" role="alert">
       <span>{{ boardError }}</span>
       <button type="button" @click="boardError = null" aria-label="Dismiss">×</button>
+    </div>
+    <div v-if="saveConflict" class="stamp-error" role="alert">
+      <span>This board changed in another tab. Save your current work as a copy before opening the newer board.</span>
+      <button class="save-copy-button" type="button" :disabled="recoveringConflict" @click="recoverConflict">
+        {{ recoveringConflict ? 'Saving…' : 'Save a copy' }}
+      </button>
     </div>
     
     <FormulaModal 
@@ -117,8 +124,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     
     <SupportPanel class="secondary-chrome" :inert="showBoardLibrary" />
     
-    <CookieBanner v-if="!desktopRuntime" v-show="!isFullscreen && !showBoardLibrary" :inert="showBoardLibrary" />
-    
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
 </template>
@@ -133,7 +138,6 @@ const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModa
 const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
-import CookieBanner from './components/CookieBanner.vue'
 import {
   BOARD_THEMES,
   loadThemePreferences,
@@ -193,7 +197,6 @@ export default {
     ShareStampModal,
     SupportPanel,
     ZoomPanel,
-    CookieBanner,
   },
   setup() {
     const desktopRuntime = isDesktopRuntime()
@@ -242,6 +245,23 @@ export default {
     const isFullscreen = ref(false)
     const fullscreenSupported = ref(desktopRuntime || detectFullscreenSupport())
     const boardError = ref(null)
+    const saveConflict = ref(false)
+    const recoveringConflict = ref(false)
+    const onPersistenceStatus = (status) => {
+      saveConflict.value = ['board_conflict', 'board_not_found', 'board_archived'].includes(status?.errorCode)
+    }
+    const recoverConflict = async () => {
+      if (recoveringConflict.value) return
+      recoveringConflict.value = true
+      try {
+        await drawBoardRef.value.recoverConflictedBoardAsCopy()
+        boardError.value = null
+      } catch (error) {
+        boardError.value = error?.message || 'Could not save a recovery copy.'
+      } finally {
+        recoveringConflict.value = false
+      }
+    }
     const showBoardLibrary = ref(false)
     const boardLibraryTriggerRef = ref(null)
     const boardList = ref([])
@@ -313,6 +333,7 @@ export default {
     let fullscreenInitialized = false
     let previousFullscreen = false
     let disconnectDesktopWindow = null
+    let disconnectDesktopBoardBridge = null
     let componentUnmounted = false
 
     const setFullscreenState = (next) => {
@@ -448,12 +469,25 @@ export default {
       } finally {
         boardSessionReady.value = true
       }
+      if (desktopRuntime && !componentUnmounted) {
+        await nextTick()
+        try {
+          const { connectDesktopBoardBridge } = await import('./platform/desktopBoardBridge.js')
+          const disconnect = await connectDesktopBoardBridge(() => drawBoardRef.value)
+          if (componentUnmounted) disconnect()
+          else disconnectDesktopBoardBridge = disconnect
+        } catch (error) {
+          console.warn('Desktop board bridge unavailable:', error)
+        }
+      }
     })
 
     onBeforeUnmount(() => {
       componentUnmounted = true
-      if (desktopRuntime) disconnectDesktopWindow?.()
-      else document.removeEventListener('fullscreenchange', syncWebFullscreenState)
+      if (desktopRuntime) {
+        disconnectDesktopWindow?.()
+        disconnectDesktopBoardBridge?.()
+      } else document.removeEventListener('fullscreenchange', syncWebFullscreenState)
     })
 
     const onToolSelected = (tool) => {
@@ -792,6 +826,10 @@ export default {
       onRedo,
       onInsertKit,
       boardError,
+      saveConflict,
+      recoveringConflict,
+      onPersistenceStatus,
+      recoverConflict,
       showBoardLibrary,
       boardLibraryTriggerRef,
       boardList,
@@ -903,13 +941,14 @@ body {
 
 .logo {
   font-family: 'Satisfy', cursive;
-  font-size: normal;
-  
+  font-size: 24px;
+  line-height: normal;
+
   color: whitesmoke;
   background-color: rgb(61, 61, 61);
-  border-radius: 5px;
-  padding: 5px 10px ;
-  border: tan 3px solid;
+  border-radius: 8px;
+  padding: 8px 15px;
+  border: tan 4px solid;
 
     position: absolute;
     z-index: 10;
@@ -920,8 +959,7 @@ body {
     -ms-flex-direction: row;
     flex-direction: row;
     z-index: 200;
-    transform: scale(1.5);
-    transform-origin: top left;
+    /* Render Satisfy at its final size instead of scaling a composited layer. */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
                 0 2px 4px rgba(0, 0, 0, 0.1);
 
@@ -1001,6 +1039,21 @@ body {
   padding: 0 2px;
 }
 
+.stamp-error .save-copy-button {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: var(--surface-primary);
+  color: var(--text-primary);
+  font: inherit;
+  white-space: nowrap;
+}
+
+.stamp-error .save-copy-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 @media (max-width: 768px) {
   .copyright {
     position: absolute;
@@ -1025,10 +1078,7 @@ body {
   .board-topbar .logo {
     position: static;
     flex: 0 0 auto;
-    transform: none;
-    font-size: 24px;
-    padding: 8px 15px;
-    border-width: 4px;
+    border-radius: 5px;
     white-space: nowrap;
   }
   .board-library-trigger {

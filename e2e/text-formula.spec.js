@@ -260,6 +260,51 @@ test('E2E-P0-005d formula edit preserves transform after scale and rotate', asyn
   expect(edited.padding).toBe(12)
 })
 
+test('E2E-P0-005f boldsymbol preview matches editable vector insertion', async ({ page }) => {
+  await gotoBoard(page)
+  const plainLatex = String.raw`\alpha+\beta`
+  const boldLatex = String.raw`\boldsymbol{\alpha}+\boldsymbol{\beta}`
+  let state = await insertFormula(page, { latex: plainLatex, x: 300, y: 180 })
+  const plainFormula = state.objects.find((object) => object.latex === plainLatex)
+  expect(plainFormula).toBeTruthy()
+
+  await selectTool(page, 'Formula')
+  await clickOnCanvas(page, { x: 300, y: 310 })
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await latexInput.fill(boldLatex)
+  await expect(page.locator('.preview-box .katex')).toBeVisible()
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+
+  state = await waitForState(
+    page,
+    (s) => s.objects.some((o) => o.latex === boldLatex),
+    { timeout: 15000 },
+  )
+  const boldFormula = state.objects.find((object) => object.latex === boldLatex)
+  expect(boldFormula.isVectorFormula).toBe(true)
+  expect(boldFormula.childCount).toBeGreaterThan(0)
+  expect(boldFormula.width).toBeGreaterThan(0)
+  expect(boldFormula.width).toBeLessThan(plainFormula.width * 2)
+
+  await dblclickFormula(page, boldFormula)
+  await expect(latexInput).toHaveValue(boldLatex)
+  const editedLatex = String.raw`\boldsymbol{x}+\boldsymbol{\nabla}`
+  await latexInput.fill(editedLatex)
+  await page.getByRole('button', { name: 'Update', exact: true }).click()
+
+  state = await waitForState(
+    page,
+    (s) => s.history.tipType === 'replace' && s.objects.some((o) => o.latex === editedLatex),
+    { timeout: 15000 },
+  )
+  expect(state.objects.find((object) => object.latex === editedLatex).isVectorFormula).toBe(true)
+  await clickUndo(page)
+  state = await waitForState(page, (s) => s.objects.some((o) => o.latex === boldLatex))
+  await clickRedo(page)
+  state = await waitForState(page, (s) => s.objects.some((o) => o.latex === editedLatex))
+  expect(state.objects.find((object) => object.latex === editedLatex).childCount).toBeGreaterThan(0)
+})
+
 test('E2E-P0-005e dynamic NewCM ranges load without CDN', async ({ page, baseURL }) => {
   const appOrigin = new URL(baseURL || page.url()).origin
   const mathjaxCdnRequests = []

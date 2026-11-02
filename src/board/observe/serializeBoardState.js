@@ -21,7 +21,7 @@ import { getMathBoardObjectId } from '../ids.js'
 import { readSemanticBoardObject, toBoardDocumentNode } from '../objects/serialize.js'
 
 /** Read-only scene observation, independent of history and persistence format. */
-export function serializeBoardState({ canvas, boardObjectPolicy, boardId = null }) {
+export function serializeBoardState({ canvas, boardObjectPolicy, boardId = null, detail = 'full' }) {
   return {
     version: 1,
     boardId,
@@ -39,6 +39,13 @@ export function serializeBoardState({ canvas, boardObjectPolicy, boardId = null 
       const bounds = {}
       for (const key of ['left', 'top', 'width', 'height']) {
         bounds[key] = Number.isFinite(rectangle[key]) ? rectangle[key] : 0
+      }
+      if (detail === 'summary') {
+        const { id, type, text, latex, mathboardInkMode } = semantic
+        return structuredClone({ id, type, bounds,
+          ...(text !== undefined ? { text } : {}),
+          ...(latex !== undefined ? { latex } : {}),
+          ...(mathboardInkMode !== undefined ? { mathboardInkMode } : {}) })
       }
       return structuredClone({ ...semantic, bounds })
     }),

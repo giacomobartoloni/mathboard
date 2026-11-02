@@ -1,0 +1,14 @@
+{
+  "identifier": "app.mathboard.desktop.phasecsmoke",
+  "productName": "MathBoard Phase C Smoke",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "MathBoard Phase C Smoke",
+        "width": 1280,
+        "height": 800
+      }
+    ]
+  }
+}

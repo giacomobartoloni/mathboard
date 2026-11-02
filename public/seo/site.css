@@ -94,7 +94,7 @@ main {
 }
 
 .brand {
-  /* Layout slot for the scaled badge (transform does not affect flow). */
+  /* Layout slot for the full-size badge. */
   position: relative;
   display: block;
   flex-shrink: 0;
@@ -106,14 +106,12 @@ main {
 
 /*
  * Keep synchronized with src/App.vue `.logo`.
- * Differences that broke visual identity before:
- * - missing transform: scale(1.5)
- * - different font-size / line-height
- * - remote Google Fonts vs app font stack timing
+ * Render at the final font size rather than scaling the badge.
+ * Keep the font, line-height and geometry aligned with the app.
  */
 .brand .logo {
   font-family: "Satisfy", cursive;
-  font-size: normal;
+  font-size: 24px;
   /* Isolate from SEO body line-height: 1.6 (App.vue logo inherits browser normal). */
   line-height: normal;
   -webkit-font-smoothing: antialiased;
@@ -121,9 +119,9 @@ main {
 
   color: whitesmoke;
   background-color: rgb(61, 61, 61);
-  border-radius: 5px;
-  padding: 5px 10px;
-  border: tan 3px solid;
+  border-radius: 8px;
+  padding: 8px 15px;
+  border: tan 4px solid;
 
   position: absolute;
   z-index: 10;
@@ -134,8 +132,6 @@ main {
   -ms-flex-direction: row;
   flex-direction: row;
   z-index: 200;
-  transform: scale(1.5);
-  transform-origin: top left;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
               0 2px 4px rgba(0, 0, 0, 0.1);
 
@@ -326,6 +322,12 @@ button:focus-visible {
   margin-top: 0.5rem;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+/* Supporting board capture: keep it legible without dominating the page. */
+.screenshot--board-capture {
+  max-width: 620px;
+  margin-inline: auto;
 }
 
 .formula-grid {

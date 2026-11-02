@@ -108,7 +108,7 @@ by the workflow.
 2. Confirm `main` has green CI and the committed `package.json`,
    `src-tauri/Cargo.toml`, and `src-tauri/Cargo.lock` versions agree.
 3. On the reviewed, immutable release commit reachable from `main`, create and
-   push a unique tag in the form `desktop-v1.9.0-rc.1` (or `desktop-v1.9.0`).
+   push a unique tag in the form `desktop-v1.10.0-rc.1` (or `desktop-v1.10.0`).
    The version part must equal the package and Cargo versions. Never reuse a tag.
 4. Check the `Desktop Release Candidate` workflow: the source verification job
    first checks the tag syntax, version consistency, main ancestry, lint, tests,
@@ -127,8 +127,8 @@ release commit on `main`):
 git fetch origin
 git switch main
 git pull --ff-only origin main
-git tag desktop-v1.9.0-rc.1
-git push origin desktop-v1.9.0-rc.1
+git tag desktop-v1.10.0-rc.1
+git push origin desktop-v1.10.0-rc.1
 ```
 
 The tag push triggers a billable GitHub Actions matrix and creates a **draft**, not

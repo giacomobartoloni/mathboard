@@ -26,6 +26,7 @@ import { RegisterHTMLHandler } from '@mathjax/src/js/handlers/html.js'
 // Side-effect imports register TeX package configurations (no CDN / \require).
 import '@mathjax/src/js/input/tex/base/BaseConfiguration.js'
 import '@mathjax/src/js/input/tex/ams/AmsConfiguration.js'
+import '@mathjax/src/js/input/tex/boldsymbol/BoldsymbolConfiguration.js'
 import '@mathjax/src/js/input/tex/newcommand/NewcommandConfiguration.js'
 import '@mathjax/src/js/input/tex/noundefined/NoUndefinedConfiguration.js'
 import '@mathjax/src/js/input/tex/textmacros/TextMacrosConfiguration.js'
@@ -42,6 +43,7 @@ export const MATHJAX_EX_PX = 10
 const TEX_PACKAGES = Object.freeze([
   'base',
   'ams',
+  'boldsymbol',
   'newcommand',
   'noundefined',
   'textmacros',

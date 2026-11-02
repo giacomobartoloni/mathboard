@@ -1,8 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { Path, Rect, IText, Group } from 'fabric'
+import { Path, Rect, IText, Textbox, Group } from 'fabric'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { materializeBoardObject, materializeBoardObjects } from '../src/board/objects/materialize.js'
+import { readSemanticBoardObject } from '../src/board/objects/serialize.js'
 
 installFabricDomStub()
 
@@ -65,4 +66,43 @@ test('formula failure rejects', async () => {
     ),
     /Formula render failed/,
   )
+})
+
+test('a later formula failure disposes objects materialized earlier in the batch', async () => {
+  const first = await materializeBoardObject({ type: 'rect', width: 10, height: 10 },
+    { buildFormula: async () => null })
+  let disposed = false
+  const originalDispose = Rect.prototype.dispose
+  Rect.prototype.dispose = function (...args) {
+    disposed = true
+    return originalDispose.apply(this, args)
+  }
+  try {
+    await assert.rejects(() => materializeBoardObjects([
+      { type: 'rect', width: 10, height: 10 },
+      { type: 'formula', latex: 'x' },
+    ], { buildFormula: async () => null }), /Formula render failed/)
+    assert.equal(disposed, true)
+  } finally {
+    Rect.prototype.dispose = originalDispose
+    first.dispose()
+  }
+})
+
+test('text without width remains editable IText with the UI font; explicit width wraps', async () => {
+  const opts = { buildFormula: async () => null }
+  const plain = await materializeBoardObject({ type: 'text', text: 'Hello' }, opts)
+  const wrapped = await materializeBoardObject({
+    type: 'text', text: 'one two three four five six seven', width: 100, fontSize: 20,
+  }, opts)
+  assert.ok(plain instanceof IText)
+  assert.equal(plain instanceof Textbox, false)
+  assert.equal(plain.fontFamily, 'Arial')
+  assert.ok(wrapped instanceof Textbox)
+  assert.equal(wrapped.fontFamily, 'Arial')
+  assert.equal(wrapped.width, 100)
+  // The headless Fabric stub does not provide browser font metrics for line wrapping.
+  assert.equal(readSemanticBoardObject(wrapped).width, 100)
+  plain.dispose()
+  wrapped.dispose()
 })

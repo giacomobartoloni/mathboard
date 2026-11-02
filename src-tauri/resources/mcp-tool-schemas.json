@@ -1,0 +1,206 @@
+[
+  {
+    "name": "mathboard_observe",
+    "description": "Read semantic objects, selection, viewport and interaction stability.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "boardId": {
+          "type": "string",
+          "pattern": "^mb_[A-Za-z0-9_-]+$",
+          "minLength": 4,
+          "maxLength": 131
+        },
+        "detail": {
+          "enum": [
+            "summary",
+            "full"
+          ],
+          "default": "summary",
+          "description": "Summary reduces object payload; full retains all semantic fields."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mathboard_measure",
+    "description": "Read detached scene bounds for one existing top-level object.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "boardId": {
+          "type": "string",
+          "pattern": "^mb_[A-Za-z0-9_-]+$",
+          "minLength": 4,
+          "maxLength": 131
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mathboard_screenshot",
+    "description": "Read the rendered live board as a bounded PNG, without changing board state.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "boardId": {
+          "type": "string",
+          "pattern": "^mb_[A-Za-z0-9_-]+$",
+          "minLength": 4,
+          "maxLength": 131
+        },
+        "target": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "sceneRect"
+                },
+                "rect": {
+                  "type": "object",
+                  "properties": {
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    },
+                    "width": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "height": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "x",
+                    "y",
+                    "width",
+                    "height"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "kind",
+                "rect"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "objectIds"
+                },
+                "ids": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 2000,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                },
+                "padding": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 128,
+                  "default": 16
+                }
+              },
+              "required": [
+                "kind",
+                "ids"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "viewport"
+                }
+              },
+              "required": [
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 3,
+          "default": 1
+        },
+        "format": {
+          "const": "png",
+          "default": "png"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "mathboard_command",
+    "description": "Execute one existing MathBoard drawing or library operation. BoardId defaults to the open board; boards.* operations use params.boardId where applicable. Re-observe after timeouts or board transitions before retrying writes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "create",
+            "createMany",
+            "update",
+            "delete",
+            "deleteMany",
+            "clear",
+            "group",
+            "layout",
+            "boards.list",
+            "boards.create",
+            "boards.open",
+            "boards.rename",
+            "boards.listArchived",
+            "boards.archive",
+            "boards.unarchive",
+            "boards.delete"
+          ]
+        },
+        "boardId": {
+          "type": "string",
+          "pattern": "^mb_[A-Za-z0-9_-]+$",
+          "minLength": 4,
+          "maxLength": 131
+        },
+        "params": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

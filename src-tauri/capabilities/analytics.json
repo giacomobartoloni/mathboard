@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-analytics",
+  "description": "Allow native event analytics from the main MathBoard WebView only",
+  "webviews": [
+    "main"
+  ],
+  "permissions": [
+    "allow-track-desktop-analytics"
+  ]
+}

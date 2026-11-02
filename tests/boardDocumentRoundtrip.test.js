@@ -147,6 +147,33 @@ test('atomic replace leaves current board on materialize failure', async () => {
   assert.equal(historyReset, false)
 })
 
+test('atomic replace restores the original objects when canvas installation fails', async () => {
+  const keep = new Rect({ width: 9, height: 9 })
+  ensureMathBoardObjectId(keep, 'mbobj_keep')
+  const canvas = makeCanvas([keep])
+  const add = canvas.add
+  let failed = false
+  canvas.add = object => {
+    if (!failed && object !== keep) {
+      failed = true
+      throw new Error('canvas insert failed')
+    }
+    add(object)
+  }
+  let resets = 0
+
+  await assert.rejects(() => replaceBoardFromDocument({
+    canvas,
+    document: { format: 'mathboard-board', version: 1, title: 'new',
+      objects: [{ id: 'mbobj_new', type: 'rect', width: 12, height: 8 }] },
+    buildFormula: async () => null,
+    resetHistory: () => { resets += 1 },
+  }), /canvas insert failed/)
+
+  assert.deepEqual(canvas.getObjects(), [keep])
+  assert.equal(resets, 0)
+})
+
 test('successful replace resets history callback', async () => {
   const canvas = makeCanvas([new Rect({ width: 1, height: 1 })])
   let historyReset = false

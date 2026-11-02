@@ -1,0 +1,34 @@
+# MathBoard
+
+> MathBoard is an open-source, local-first digital whiteboard for mathematical drawing and editable LaTeX formulas, built for teaching, studying, and explaining mathematics.
+
+This is a discovery guide for AI assistants, not an API endpoint or permission to interact with a user's boards. The public website, https://mathboard.app/, does not offer a hosted or remote MCP service.
+
+**Availability:** The browser app is available at https://mathboard.app/ and native desktop installers are listed on the download page. The native local MCP implementation was merged into the repository's `develop` branch in [PR #121](https://github.com/giacomobartoloni/mathboard/pull/121) on 2026-11-02. Being merged into `develop` does **not** establish that any currently published desktop installer includes it. Verify installed support against the [official releases](https://github.com/giacomobartoloni/mathboard/releases) and the [desktop MCP documentation](https://github.com/giacomobartoloni/mathboard/blob/develop/docs/desktop/LOCAL-MCP.md).
+
+## Local desktop MCP integration
+
+- **Where:** MCP runs only inside a supported installed MathBoard desktop app on the same computer as the MCP client. It is not available through the hosted browser board.
+- **Enable:** Open **Local assistants → Local MCP settings…** and turn **Allow local MCP connections** **On**. MCP starts **Off** each normal app launch; the switch enables all supported reading, drawing, editing, screenshot, and board-library tools, including permanent deletion. There are no per-board or read-only grants.
+- **Connect:** Use an MCP client supporting **Streamable HTTP**. The listener binds to `127.0.0.1` and prefers `http://127.0.0.1:43179/mcp`, but uses a higher free port if the preferred one is occupied. **Copy the actual endpoint shown in the native settings window.** The endpoint can change on restart or after switching MCP Off and On.
+- **Client authentication:** No Bearer token, password, or custom HTTP authorization header is required. While enabled, **any application on the same computer able to connect to localhost can use the exposed board operations**. Only enable MCP in a trusted local environment. A cloud-based AI client may still send board content to its provider even though MathBoard's MCP transport stays local.
+- **Optional CLI startup:** `mathboard --mathboard-mcp-http` starts the regular GUI with local HTTP MCP enabled and emits one JSON line containing `transport` and the actual `endpoint` to inherited stdout. It is neither a headless server nor automatic MCP client configuration; some GUI launchers do not expose stdout. **stdio MCP is not supported**; do not use `--mathboard-mcp-stdio`.
+- **Discover tools:** Initialize an MCP session and use `tools/list` rather than inventing arguments. Available source-defined tools include `mathboard_observe`, `mathboard_measure`, `mathboard_screenshot`, `mathboard_command`, `mathboard_help`, and schema-typed tools for supported commands (for example `mathboard_create`, `mathboard_create_many`, and `mathboard_boards_list`). Query `mathboard_help` with `{}` or `{"method":"create"}` for the current command catalog and schemas.
+- **Commands:** The legacy `mathboard_command` wrapper uses `method` plus `params` for the audited methods `create`, `createMany`, `update`, `delete`, `deleteMany`, `clear`, `group`, `layout`, `boards.list`, `boards.create`, `boards.open`, `boards.rename`, `boards.listArchived`, `boards.archive`, `boards.unarchive`, and `boards.delete`. Typed command tools accept their documented parameters directly; do not wrap them in `method` and `params`.
+- **Safe execution:** Inspect board state before editing, use tools only as authorized by the user, and avoid destructive operations without explicit intent. Permanent `boards.delete` requires `confirm:true`. Screenshot capture and some viewport-based layout work require an active rendered board even when other operations can target a specified `boardId`. After `execution_unknown` or an interrupted mutation, re-read state before retrying; the write might already have committed. Unknown arguments are rejected; `dryRun` is not a supported preview operation.
+
+## Official product documentation
+
+- [MathBoard web app](https://mathboard.app/): Interactive browser whiteboard.
+- [Desktop downloads](https://mathboard.app/download/): Available installers and platform information.
+- [Desktop installation and security](https://mathboard.app/download/security/): Install guidance, checksums, and unsigned beta caveats.
+- [LaTeX formula guide](https://mathboard.app/docs/latex/): Formula input and rendering.
+- [Keyboard shortcuts](https://mathboard.app/docs/keyboard-shortcuts/): Navigation and editing shortcuts.
+- [Learning resources](https://mathboard.app/resources/): Math whiteboard examples and resources.
+
+## Source and technical references
+
+- [GitHub repository](https://github.com/giacomobartoloni/mathboard): Source code, issues, and license.
+- [Native local MCP documentation](https://github.com/giacomobartoloni/mathboard/blob/develop/docs/desktop/LOCAL-MCP.md): Up-to-date connection details, tool contracts, limitations, and safety guidance.
+- [Merged MCP implementation — PR #121](https://github.com/giacomobartoloni/mathboard/pull/121): Implementation history and acceptance status.
+- [Official releases](https://github.com/giacomobartoloni/mathboard/releases): Verify which native builds actually provide local MCP.

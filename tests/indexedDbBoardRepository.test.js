@@ -19,6 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { indexedDB as fakeIndexedDB } from 'fake-indexeddb'
+import { openMathBoardDb } from '../src/storage/local/indexedDb.js'
 import {
   BOARD_RECORD_KINDS,
   createBoardRecord,
@@ -31,22 +33,67 @@ test('createBoardRecord defaults to a retained saved record', () => {
   assert.equal(createBoardRecord({ kind: BOARD_RECORD_KINDS.SCRATCH }).kind, BOARD_RECORD_KINDS.SCRATCH)
 })
 
-test('write consumes request and transaction failures together', async () => {
-  const request = { error: new Error('request failed'), onsuccess: null, onerror: null }
-  const tx = {
-    error: new Error('transaction aborted'), oncomplete: null, onabort: null, onerror: null,
-    objectStore: () => ({
-      put: () => {
-        queueMicrotask(() => request.onerror?.())
-        queueMicrotask(() => tx.onabort?.())
-        return request
-      },
-    }),
-  }
-  const repository = new IndexedDbBoardRepository({
-    openDb: async () => ({ transaction: () => tx }),
-  })
+test('failed conditional transaction leaves the previous record untouched', async () => {
+  const repository = new IndexedDbBoardRepository({ openDb: () => openMathBoardDb(fakeIndexedDB) })
+  const boardId = `mb_${globalThis.crypto.randomUUID()}`
+  await repository.create(createBoardRecord({ id: boardId, title: 'Before', document: { objects: [] } }))
+  await assert.rejects(() => repository.updateIfRevisionMatches(boardId, 1, () => {
+    throw new Error('materialization failed')
+  }), /materialization failed/)
+  assert.equal((await repository.get(boardId)).title, 'Before')
+  assert.equal((await repository.get(boardId)).revision, 1)
+})
 
-  await assert.rejects(() => repository.put({ id: 'mb_test' }), /request failed|transaction aborted/)
-  await new Promise((resolve) => setImmediate(resolve))
+test('two repository instances cannot commit the same board revision twice', async () => {
+  const openDb = () => openMathBoardDb(fakeIndexedDB)
+  const first = new IndexedDbBoardRepository({ openDb })
+  const second = new IndexedDbBoardRepository({ openDb })
+  const boardId = `mb_${globalThis.crypto.randomUUID()}`
+  const initial = createBoardRecord({ id: boardId, document: { objects: [] } })
+  await first.create(initial)
+  assert.equal((await second.get(boardId)).revision, 1)
+
+  const outcomes = await Promise.allSettled([
+    first.updateIfRevisionMatches(boardId, 1, current => ({ ...current, title: 'First' })),
+    second.updateIfRevisionMatches(boardId, 1, current => ({ ...current, title: 'Second' })),
+  ])
+  assert.equal(outcomes.filter(result => result.status === 'fulfilled').length, 1)
+  assert.equal(outcomes.filter(result => result.reason?.code === 'board_conflict').length, 1)
+  assert.equal((await first.get(boardId)).revision, 2)
+})
+
+test('legacy revision zero is upgraded once and stale delete cannot remove its successor', async () => {
+  const repository = new IndexedDbBoardRepository({ openDb: () => openMathBoardDb(fakeIndexedDB) })
+  const boardId = `mb_${globalThis.crypto.randomUUID()}`
+  const db = await openMathBoardDb(fakeIndexedDB)
+  const transaction = db.transaction('boards', 'readwrite')
+  transaction.objectStore('boards').add({ id: boardId, title: 'Legacy', document: { objects: [] } })
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve
+    transaction.onabort = reject
+  })
+  assert.equal((await repository.get(boardId)).revision, 0)
+  const updated = await repository.updateIfRevisionMatches(boardId, 0, current => ({ ...current, title: 'Current' }))
+  assert.equal(updated.revision, 1)
+  await assert.rejects(() => repository.deleteIfRevisionMatches(boardId, 0), { code: 'board_conflict' })
+  assert.equal((await repository.get(boardId)).title, 'Current')
+})
+
+test('no-op update keeps revision and overflow fails without changing storage', async () => {
+  const repository = new IndexedDbBoardRepository({ openDb: () => openMathBoardDb(fakeIndexedDB) })
+  const boardId = `mb_${globalThis.crypto.randomUUID()}`
+  await repository.create(createBoardRecord({ id: boardId, title: 'Before', document: { objects: [] } }))
+  const unchanged = await repository.updateIfRevisionMatches(boardId, 1, () => null)
+  assert.equal(unchanged.revision, 1)
+  const db = await openMathBoardDb(fakeIndexedDB)
+  const transaction = db.transaction('boards', 'readwrite')
+  transaction.objectStore('boards').put({ ...unchanged, revision: Number.MAX_SAFE_INTEGER })
+  await new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve
+    transaction.onabort = reject
+  })
+  await assert.rejects(() => repository.updateIfRevisionMatches(boardId, Number.MAX_SAFE_INTEGER,
+    current => ({ ...current, title: 'After' })), /revision limit/)
+  assert.equal((await repository.get(boardId)).title, 'Before')
+  await assert.rejects(() => repository.updateIfRevisionMatches(boardId, -1, current => current), /Invalid board revision/)
 })

@@ -21,19 +21,37 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { BoardPersistenceService, BOARD_PERSISTENCE_ERROR_CODES } from '../src/board/persistence/BoardPersistenceService.js'
 import { BoardWorkspaceService } from '../src/board/BoardWorkspaceService.js'
+import { BoardLifecycle } from '../src/board/BoardLifecycle.js'
 
-function fixture({ onActiveBoardChanged } = {}) {
+function fixture({ onActiveBoardChanged, lifecycle } = {}) {
   const records = new Map()
   const repository = {
     fail: false,
     async get(id) { return records.get(id) },
-    async put(record) {
+    async create(record) {
       if (this.fail) throw new Error('storage unavailable')
       records.set(record.id, record)
       return record
     },
+    async updateIfRevisionMatches(boardId, expectedRevision, build) {
+      if (this.fail) throw new Error('storage unavailable')
+      const current = records.get(boardId)
+      if (!current) throw Object.assign(new Error('Board missing'), { code: 'board_not_found' })
+      if ((current.revision ?? 0) !== expectedRevision) throw Object.assign(new Error('Board conflict'), { code: 'board_conflict' })
+      const next = build(current)
+      if (next === null) return current
+      const updated = { ...next, revision: expectedRevision + 1 }
+      records.set(boardId, updated)
+      return updated
+    },
     async list() { return [...records.values()].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) },
-    async delete(boardId) { if (this.fail) throw new Error('storage unavailable'); records.delete(boardId) },
+    async deleteIfRevisionMatches(boardId, expectedRevision) {
+      if (this.fail) throw new Error('storage unavailable')
+      const current = records.get(boardId)
+      if (!current) throw Object.assign(new Error('Board missing'), { code: 'board_not_found' })
+      if ((current.revision ?? 0) !== expectedRevision) throw Object.assign(new Error('Board conflict'), { code: 'board_conflict' })
+      records.delete(boardId)
+    },
   }
   const objects = []
   const canvas = {
@@ -58,6 +76,7 @@ function fixture({ onActiveBoardChanged } = {}) {
     },
     now: () => '2026-10-23T12:00:00Z',
     onActiveBoardChanged,
+    lifecycle,
   })
   const workspace = new BoardWorkspaceService(service)
   return { workspace, repository, service, records, session }
@@ -252,10 +271,10 @@ test('storage errors after choosing a fallback restore the previous active board
 test('late archive failure compensates the persisted last-board replacement', async () => {
   const { workspace, service, repository, records, session } = fixture()
   const active = await workspace.create({ title: 'Only board' })
-  const originalPut = repository.put.bind(repository)
-  repository.put = async record => {
-    if (record.id === active.id && record.archivedAt) throw new Error('late archive failure')
-    return originalPut(record)
+  const originalUpdate = repository.updateIfRevisionMatches.bind(repository)
+  repository.updateIfRevisionMatches = async (boardId, revision, build) => {
+    if (boardId === active.id) throw new Error('late archive failure')
+    return originalUpdate(boardId, revision, build)
   }
 
   await assert.rejects(() => workspace.archive({ boardId: active.id }), /late archive failure/)
@@ -270,12 +289,12 @@ test('late archive failure compensates the persisted last-board replacement', as
 test('late delete failure compensates the persisted last-board replacement', async () => {
   const { workspace, service, repository, records, session } = fixture()
   const active = await workspace.create({ title: 'Only board' })
-  const originalDelete = repository.delete.bind(repository)
+  const originalDelete = repository.deleteIfRevisionMatches.bind(repository)
   const removed = []
-  repository.delete = async boardId => {
+  repository.deleteIfRevisionMatches = async (boardId, revision) => {
     if (boardId === active.id) throw new Error('late delete failure')
     removed.push(boardId)
-    return originalDelete(boardId)
+    return originalDelete(boardId, revision)
   }
 
   await assert.rejects(() => workspace.delete({ boardId: active.id, confirm: true }), /late delete failure/)
@@ -288,6 +307,18 @@ test('late delete failure compensates the persisted last-board replacement', asy
   service.dispose()
 })
 
+test('deleting a dirty active board uses the revision committed by its own flush', async () => {
+  const { workspace, service, records } = fixture()
+  const active = await workspace.create({ title: 'Current' })
+  await workspace.create({ title: 'Other' })
+  await workspace.open({ boardId: active.id })
+  service.notifyDocumentChanged()
+
+  await workspace.delete({ boardId: active.id, confirm: true })
+  assert.equal(records.has(active.id), false)
+  service.dispose()
+})
+
 test('legacy scratch and trashed metadata remain recoverable without migration loss', async () => {
   const { workspace, service, records } = fixture()
   const scratch = await workspace.create({ title: 'Old draft' })
@@ -297,6 +328,25 @@ test('legacy scratch and trashed metadata remain recoverable without migration l
   assert.equal(records.get(scratch.id).trashedAt, undefined)
   assert.equal(records.get(scratch.id).kind, 'scratch')
   assert.ok((await workspace.list()).some(board => board.id === scratch.id))
+  service.dispose()
+})
+
+test('unconfirmed active-board delete preserves lifecycle and stored data', async () => {
+  const lifecycle = new BoardLifecycle()
+  const { workspace, records, service } = fixture({ lifecycle })
+  const active = await workspace.create({ title: 'Preserved board' })
+  const epoch = lifecycle.epoch
+
+  await assert.rejects(() => workspace.delete({ boardId: active.id }),
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED)
+  await assert.rejects(() => workspace.delete({ boardId: active.id, confirm: false }),
+    error => error.code === BOARD_PERSISTENCE_ERROR_CODES.CONFIRMATION_REQUIRED)
+
+  assert.equal(lifecycle.epoch, epoch)
+  assert.equal(lifecycle.isReady(), true)
+  assert.equal(service.boardId, active.id)
+  assert.equal(records.has(active.id), true)
+  assert.deepEqual((await workspace.list()).map(board => board.id), [active.id])
   service.dispose()
 })
 
@@ -363,4 +413,46 @@ test('omitted titles are generated and persisted while explicit names are preser
   await workspace.open({ boardId: generated.id })
   assert.equal(service.title, generated.title)
   service.dispose()
+})
+
+test('MCP Off rejects queued board-library writes before dispatch', async () => {
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  let ran = false
+  const workspace = new BoardWorkspaceService({
+    listBoards: async () => gate,
+    renameBoard: async () => { ran = true; return { id: 'mb_synthetic' } },
+  })
+  const busy = workspace.list()
+  const controller = new AbortController()
+  const queued = workspace.rename({ boardId: 'mb_synthetic', title: 'No write' },
+    { signal: controller.signal })
+  controller.abort()
+  release([])
+  await busy
+  await assert.rejects(queued, { code: 'execution_unknown' })
+  assert.equal(ran, false)
+})
+
+test('MCP Off during in-flight storage returns unknown without promising rollback', async () => {
+  let started, release
+  const entered = new Promise(resolve => { started = resolve })
+  const gate = new Promise(resolve => { release = resolve })
+  let finished = false
+  const workspace = new BoardWorkspaceService({
+    renameBoard: async () => {
+      started()
+      await gate
+      finished = true
+      return { id: 'mb_synthetic', title: 'Updated' }
+    },
+  })
+  const controller = new AbortController()
+  const writing = workspace.rename({ boardId: 'mb_synthetic', title: 'Updated' },
+    { signal: controller.signal })
+  await entered
+  controller.abort()
+  release()
+  await assert.rejects(writing, { code: 'execution_unknown' })
+  assert.equal(finished, true)
 })

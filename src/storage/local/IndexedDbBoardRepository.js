@@ -44,7 +44,30 @@ export function createBoardRecord({
     createdAt: createdAt || now,
     updatedAt: updatedAt || now,
     document,
+    revision: 1,
   }
+}
+
+export class BoardRevisionError extends Error {
+  constructor(code) {
+    super(code === 'board_not_found' ? 'Board no longer exists.' : 'Board changed in another writer.')
+    this.name = 'BoardRevisionError'
+    this.code = code
+  }
+}
+
+export function boardRevision(record) {
+  const revision = record?.revision ?? 0
+  if (!Number.isSafeInteger(revision) || revision < 0) {
+    throw new RangeError('Invalid board revision.')
+  }
+  return revision
+}
+
+function nextRevision(current) {
+  const revision = boardRevision(current)
+  if (revision === Number.MAX_SAFE_INTEGER) throw new RangeError('Board revision limit reached.')
+  return revision + 1
 }
 
 /**
@@ -65,6 +88,7 @@ export class IndexedDbBoardRepository {
   }
 
   async create(record) {
+    if (boardRevision(record) !== 1) throw new RangeError('New boards must start at revision 1.')
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
     await Promise.all([
@@ -77,16 +101,32 @@ export class IndexedDbBoardRepository {
   async get(boardId) {
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readonly')
-    return idbRequest(tx.objectStore(BOARDS_STORE).get(boardId))
+    const record = await idbRequest(tx.objectStore(BOARDS_STORE).get(boardId))
+    return record ? { ...record, revision: boardRevision(record) } : null
   }
 
-  async put(record) {
+  async updateIfRevisionMatches(boardId, expectedRevision, buildNextRecordFromCurrent) {
+    boardRevision({ revision: expectedRevision })
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
-    await Promise.all([
-      idbRequest(tx.objectStore(BOARDS_STORE).put(record)),
-      idbTransactionDone(tx),
-    ])
+    const store = tx.objectStore(BOARDS_STORE)
+    const done = idbTransactionDone(tx)
+    const operation = idbRequest(store.get(boardId)).then(current => {
+      if (!current) throw new BoardRevisionError('board_not_found')
+      if (boardRevision(current) !== expectedRevision) throw new BoardRevisionError('board_conflict')
+      const next = buildNextRecordFromCurrent({ ...current, revision: expectedRevision })
+      if (next === null) return { ...current, revision: expectedRevision }
+      if (!next || typeof next !== 'object' || next.id !== boardId || next.then) {
+        throw new TypeError('Revision update must return a synchronous record with the same board ID.')
+      }
+      const record = { ...next, revision: nextRevision(current) }
+      store.put(record)
+      return record
+    }).catch(error => {
+      tx.abort()
+      throw error
+    })
+    const [record] = await Promise.all([operation, done])
     return record
   }
 
@@ -94,15 +134,24 @@ export class IndexedDbBoardRepository {
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readonly')
     const rows = await idbRequest(tx.objectStore(BOARDS_STORE).getAll())
-    return (rows || []).slice().sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    return (rows || []).map(record => ({ ...record, revision: boardRevision(record) }))
+      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
   }
 
-  async delete(boardId) {
+  async deleteIfRevisionMatches(boardId, expectedRevision) {
+    boardRevision({ revision: expectedRevision })
     const db = await this._db()
     const tx = db.transaction(BOARDS_STORE, 'readwrite')
-    await Promise.all([
-      idbRequest(tx.objectStore(BOARDS_STORE).delete(boardId)),
-      idbTransactionDone(tx),
-    ])
+    const store = tx.objectStore(BOARDS_STORE)
+    const done = idbTransactionDone(tx)
+    const operation = idbRequest(store.get(boardId)).then(current => {
+      if (!current) throw new BoardRevisionError('board_not_found')
+      if (boardRevision(current) !== expectedRevision) throw new BoardRevisionError('board_conflict')
+      store.delete(boardId)
+    }).catch(error => {
+      tx.abort()
+      throw error
+    })
+    await Promise.all([operation, done])
   }
 }

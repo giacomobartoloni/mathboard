@@ -89,14 +89,16 @@ export function renderScreenshot({
   height = 720,
   eager = false,
   caption = '',
+  className = '',
 } = {}) {
   if (!src) return ''
   const loading = eager ? 'eager' : 'lazy'
+  const classes = className ? `screenshot ${className}` : 'screenshot'
   const captionHtml = caption
     ? `<figcaption>${escapeHtml(caption)}</figcaption>`
     : ''
   return `
-    <figure class="screenshot">
+    <figure class="${classes}">
       <img
         src="${escapeHtml(src)}"
         width="${width}"

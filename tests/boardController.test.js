@@ -46,6 +46,27 @@ const rect = { type: 'rect', left: 100, top: 150, width: 50, height: 40 }
 const formula = { type: 'formula', latex: 'x=1', left: 200, top: 150, scaleX: 1.5, angle: 20, opacity: 0.4 }
 const rejectsCode = (operation, code) => assert.rejects(operation, (error) => error.code === code)
 
+test('request commit guard prevents a late formula from mutating the live canvas', async () => {
+  let finishFormula
+  let expired = false
+  const { controller, canvas, history } = setup({
+    commitGuard: () => { if (expired) throw Object.assign(new Error('expired'), { code: 'command_timeout' }) },
+    buildFormula: () => new Promise(resolve => { finishFormula = resolve }),
+  })
+  const pending = controller.create(formula)
+  await Promise.resolve()
+  expired = true
+  const rendered = new FormulaObject([new Path('M 0 0 L 20 20')], { latex: formula.latex })
+  let disposed = false
+  const originalDispose = rendered.dispose.bind(rendered)
+  rendered.dispose = (...args) => { disposed = true; return originalDispose(...args) }
+  finishFormula(rendered)
+  await assert.rejects(pending, { code: 'command_timeout' })
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  assert.equal(disposed, true)
+})
+
 test('controller requires an interaction stability boundary', () => {
   assert.throws(() => new BoardController({
     getCanvas: () => makeControllerCanvas(),
@@ -96,6 +117,45 @@ test('creation rejects invalid recursive specs before changing the canvas', asyn
   assert.equal(history.length, 0)
 })
 
+test('reject malformed paths before creating objects or history entries', async () => {
+  const { controller, canvas, history } = setup()
+  const bad = [
+    [['M', 64, '532'], ['L', 100, 200]],
+    [['M', 0, 0], ['L', 10, null]],
+    [['M', 0, 0], ['L', Infinity, 10]],
+    [['M', 0, 0], ['C', 1, 2]],
+    [['M', 0, 0], ['X', 1, 2]],
+    [['M', 0, 0], ['Z', 1]],
+    [['M', 0, 0], ['A', 10, 10, 0, 2, 0, 20, 20]],
+    [['L', 10, 10]],
+    [],
+  ]
+  for (const path of bad) {
+    await rejectsCode(() => controller.create({ type: 'path', path }), C.INVALID_SPEC)
+  }
+  await rejectsCode(() => controller.createMany([
+    { type: 'text', text: 'must not persist' },
+    { type: 'path', path: [['M', 64, '532'], ['L', 100, 200]] },
+  ]), C.INVALID_SPEC)
+  await rejectsCode(() => controller.create({
+    type: 'group', objects: [{ type: 'path', path: [['M', 0, false]] }],
+  }), C.INVALID_SPEC)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+})
+
+test('valid curve commands retain finite geometry', async () => {
+  const { controller } = setup()
+  const node = await controller.create({
+    type: 'path',
+    path: [['M', 0, 0], ['L', 10, 10], ['Q', 15, 20, 20, 10],
+      ['C', 25, 5, 30, 15, 40, 0], ['Z']],
+  })
+  assert.equal(node.type, 'path')
+  assert.ok(Number.isFinite(node.left))
+  assert.ok(Number.isFinite(node.top))
+})
+
 test('createMany commits independent objects in order with one batch history entry', async () => {
   const { controller, canvas, history } = setup()
   await controller.create(rect)
@@ -118,6 +178,34 @@ test('Formula render failure leaves single and batch creation unchanged', async 
   }
 })
 
+test('delayed Formula creation cannot commit after a board transition reuses the canvas', async () => {
+  let finishFormula
+  let epoch = 0
+  let ready = true
+  const lifecycle = {
+    capture: () => ({ epoch }),
+    isReady: () => ready,
+    assertCurrent: (lease) => ready && lease.epoch === epoch,
+  }
+  const effects = []
+  const { controller, canvas, history } = setup({
+    lifecycle,
+    buildFormula: () => new Promise(resolve => { finishFormula = resolve }),
+    onCommittedOperation: effect => effects.push(effect),
+  })
+  const pending = controller.create(formula)
+  await Promise.resolve()
+  ready = false
+  epoch += 1
+  ready = true
+  finishFormula(new FormulaObject([new Path('M 0 0 L 20 20')], { latex: formula.latex }))
+
+  await rejectsCode(() => pending, C.NOT_READY)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  assert.deepEqual(effects, [])
+})
+
 test('failed batch history commit leaves the board unchanged', async () => {
   const { canvas, controller, history } = setup({
     pushHistoryCommand: () => { throw new Error('history failed') },
@@ -126,6 +214,74 @@ test('failed batch history commit leaves the board unchanged', async () => {
   assert.equal(canvas.getObjects().length, 0)
   assert.equal(history.length, 0)
   assert.equal(canvas.renderOnAddRemove, true)
+})
+
+test('a declined history command rolls back creation without a committed effect', async () => {
+  const effects = []
+  const { canvas, controller } = setup({
+    pushHistoryCommand: () => false,
+    onCommittedOperation: (effect) => effects.push(effect),
+  })
+  await rejectsCode(() => controller.create(rect), C.COMMIT_FAILED)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.deepEqual(effects, [])
+})
+
+test('committed effects fire once after accepted history, including when presentation fails', async () => {
+  const effects = []
+  const { canvas, controller, history } = setup({
+    onCommittedOperation: (effect) => effects.push(effect),
+    afterMutation: () => { throw new Error('panel unavailable') },
+  })
+  canvas.requestRenderAll = () => { throw new Error('paint unavailable') }
+  const logged = []
+  const original = console.error
+  console.error = (message) => logged.push(message)
+  try {
+    const node = await controller.create(rect)
+    assert.equal(history.length, 1)
+    assert.equal(node.type, 'rect')
+    assert.deepEqual(effects, [{ kind: 'create', objectKinds: ['shape'] }])
+    await controller.update(node.id, { left: 100 })
+    assert.equal(history.length, 1)
+    assert.equal(effects.length, 1)
+  } finally {
+    console.error = original
+  }
+  assert.deepEqual(logged, [
+    'Board refresh failed.', 'Board mutation committed, but post-commit refresh failed.',
+    'Board refresh failed.', 'Board mutation committed, but post-commit refresh failed.',
+  ])
+})
+
+test('batch creation, Formula edit and batch deletion report categorical committed effects once', async () => {
+  const effects = []
+  const { controller } = setup({ onCommittedOperation: (effect) => effects.push(effect) })
+  const nodes = await controller.createMany([rect, formula])
+  await controller.update(nodes[1].id, { latex: 'x=2' })
+  await controller.deleteMany(nodes.map((node) => node.id))
+  await controller.clear()
+  assert.deepEqual(effects, [
+    { kind: 'create', objectKinds: ['shape', 'formula'] },
+    { kind: 'formula_edit' },
+    { kind: 'delete', objectKinds: ['shape', 'formula'] },
+  ])
+  assert.equal(JSON.stringify(effects).includes('x=2'), false)
+})
+
+test('an analytics callback exception does not undo an accepted history command', async () => {
+  const { controller, history, canvas } = setup({
+    onCommittedOperation: () => { throw new Error('provider unavailable') },
+  })
+  const original = console.error
+  console.error = () => {}
+  try {
+    await controller.create(rect)
+  } finally {
+    console.error = original
+  }
+  assert.equal(history.length, 1)
+  assert.equal(canvas.getObjects().length, 1)
 })
 
 test('get traverses Group children while mutation rejects nested IDs', async () => {
@@ -269,10 +425,16 @@ test('missing canvas rejects every public operation with the readiness code', as
 test('async Formula update rejects a removed target without resurrecting it', async () => {
   let finish
   let delay = false
+  let replacementDisposed = false
   const { controller, canvas, history } = setup({
     buildFormula: async (spec) => {
       if (delay) await new Promise((resolve) => { finish = resolve })
-      return new FormulaObject([new Path('M 0 0 L 20 20')], { ...spec, latex: spec.latex })
+      const next = new FormulaObject([new Path('M 0 0 L 20 20')], { ...spec, latex: spec.latex })
+      if (delay) {
+        const dispose = next.dispose.bind(next)
+        next.dispose = (...args) => { replacementDisposed = true; return dispose(...args) }
+      }
+      return next
     },
   })
   const node = await controller.create(formula)
@@ -283,6 +445,7 @@ test('async Formula update rejects a removed target without resurrecting it', as
   await rejectsCode(() => pending, C.COMMIT_FAILED)
   assert.equal(canvas.getObjects().length, 0)
   assert.equal(history.length, 1)
+  assert.equal(replacementDisposed, true)
 })
 
 test('async Formula update keeps a human transform completed during rendering', async () => {
@@ -377,4 +540,46 @@ test('async batch creation rejects a gesture started during materialization', as
   await rejectsCode(() => pending, C.COMMIT_FAILED)
   assert.equal(canvas.getObjects().length, 0)
   assert.equal(history.length, 0)
+})
+
+test('explicit create ink and update ink use the same fixed-mode rule', async () => {
+  const { controller } = setup()
+  const created = await controller.create({
+    type: 'text', text: 'Colors', fill: '#9CA3AF',
+  })
+  assert.equal(created.fill, '#9CA3AF')
+  assert.equal(created.mathboardInkMode, 'fixed')
+  const updated = await controller.update(created.id, { fill: '#FF0000' })
+  assert.equal(updated.fill, '#FF0000')
+  assert.equal(updated.mathboardInkMode, 'fixed')
+  const explicitAuto = await controller.create({
+    type: 'text', text: 'Theme', fill: '#9CA3AF', mathboardInkMode: 'auto',
+  })
+  assert.equal(explicitAuto.mathboardInkMode, 'auto')
+})
+
+test('zero-size new geometry is rejected before writing history', async () => {
+  const { controller, canvas, history } = setup()
+  const invalid = [
+    { type: 'rect' }, { type: 'rect', width: 0, height: 20 },
+    { type: 'rect', width: 20, height: -1 }, { type: 'circle', radius: 0 },
+    { type: 'ellipse', rx: 12, ry: 0 },
+    { type: 'polygon', points: [{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 20 }] },
+    { type: 'text', text: 'bad width', width: 0 },
+  ]
+  for (const spec of invalid) await rejectsCode(() => controller.create(spec), C.INVALID_SPEC)
+  assert.equal(canvas.getObjects().length, 0)
+  assert.equal(history.length, 0)
+  const wrapped = await controller.create({ type: 'text', text: 'a word to wrap', width: 100 })
+  assert.equal(wrapped.width, 100)
+  assert.equal(history.length, 1)
+})
+
+test('self-intersecting polygon with painted lobes is accepted', async () => {
+  const { controller } = setup()
+  const points = [{ x: 0, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }, { x: 20, y: 0 }]
+  const node = await controller.create({ type: 'polygon', points, fill: '#aa0000' })
+  assert.deepEqual(node.points, points)
+  assert.ok(controller.observe().objects[0].bounds.width > 0)
+  assert.ok(controller.observe().objects[0].bounds.height > 0)
 })
