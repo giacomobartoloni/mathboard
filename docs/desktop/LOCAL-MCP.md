@@ -68,9 +68,13 @@ the actual bound `Host` value; unexpected `Host` values and browser `Origin`
 headers are rejected to
 reduce browser-origin and DNS rebinding exposure. These checks **do not**
 protect against a malicious local application. Request body and concurrent
-connection limits remain in place. Switching Off invalidates outstanding
-broker leases, closes RMCP sessions and stops the HTTP listener before
-confirming Off. Data already delivered to OS buffers cannot be recalled.
+connection limits remain in place; incomplete HTTP request headers expire
+after five seconds, including on idle keep-alive connections. Switching Off
+revokes queued MCP board requests before joining HTTP writers, invalidates
+broker leases, closes RMCP sessions and stops the listener before confirming
+Off. A board-library write already dispatched to storage may still finish,
+so a missing reply requires readback rather than automatic retry. Data
+already delivered to OS buffers cannot be recalled.
 
 ## Tools
 

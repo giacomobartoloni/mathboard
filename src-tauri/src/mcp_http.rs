@@ -31,7 +31,10 @@ use hyper::{
     header::{HOST, HeaderMap, ORIGIN},
     service::{Service, service_fn},
 };
-use hyper_util::{rt::{TokioIo, TokioTimer}, service::TowerToHyperService};
+use hyper_util::{
+    rt::{TokioIo, TokioTimer},
+    service::TowerToHyperService,
+};
 use rmcp::transport::streamable_http_server::{
     StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
 };
@@ -311,7 +314,8 @@ impl LocalMcpHttpServer {
             if old_epoch != epoch {
                 // A write already dispatched to IndexedDB may have an unknown outcome.
                 let _ = self.app.emit_to(
-                    "main", "mathboard-board-cancel",
+                    "main",
+                    "mathboard-board-cancel",
                     serde_json::json!({"epoch": epoch, "revokeAll": true}),
                 );
             }
@@ -403,7 +407,8 @@ mod tests {
                         Ok::<_, Infallible>(Response::new(Full::new(Bytes::from_static(b"ok"))))
                     });
                     let _ = http1_builder(HTTP_HEADER_TIMEOUT)
-                        .serve_connection(TokioIo::new(stream), handler).await;
+                        .serve_connection(TokioIo::new(stream), handler)
+                        .await;
                 });
                 started.send(()).unwrap();
                 cancel.cancelled().await;
@@ -411,8 +416,12 @@ mod tests {
             // Dropping the runtime also drops active Hyper response writers.
         });
         let mut client = TcpStream::connect(address).unwrap();
-        client.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
-        client.write_all(b"GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
+        client
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        client
+            .write_all(b"GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+            .unwrap();
         ready.recv_timeout(Duration::from_secs(2)).unwrap();
         let mut reply = Vec::new();
         loop {
@@ -421,7 +430,9 @@ mod tests {
             assert!(size > 0, "HTTP handler closed before responding");
             reply.extend_from_slice(&chunk[..size]);
             if let Some(end) = reply.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
-                if reply.len() >= end + 4 + 2 { break; }
+                if reply.len() >= end + 4 + 2 {
+                    break;
+                }
             }
         }
         assert!(String::from_utf8_lossy(&reply).contains("200 OK"));
@@ -439,8 +450,13 @@ mod tests {
         let mut buf = [0u8; 1];
         match client.read(&mut buf) {
             Ok(0) => {}
-            Err(error) if matches!(error.kind(), io::ErrorKind::ConnectionReset
-                | io::ErrorKind::ConnectionAborted | io::ErrorKind::BrokenPipe) => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::ConnectionReset
+                        | io::ErrorKind::ConnectionAborted
+                        | io::ErrorKind::BrokenPipe
+                ) => {}
             outcome => panic!("Expected EOF or peer reset, got {outcome:?}"),
         }
         assert!(TcpStream::connect(address).is_err());
@@ -453,7 +469,10 @@ mod tests {
         use std::time::Instant;
 
         let runtime = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2).enable_all().build().unwrap();
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap();
         runtime.block_on(async {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
             let addr = listener.local_addr().unwrap();
@@ -462,19 +481,23 @@ mod tests {
             let task = tokio::spawn(async move {
                 loop {
                     let (stream, _) = listener.accept().await.unwrap();
-                    let Ok(permit) = free.clone().try_acquire_owned() else { continue };
+                    let Ok(permit) = free.clone().try_acquire_owned() else {
+                        continue;
+                    };
                     tokio::spawn(async move {
                         let _permit = permit;
                         let handler = service_fn(|_: Request<Incoming>| async {
                             Ok::<_, Infallible>(Response::new(Full::new(Bytes::from_static(b"ok"))))
                         });
                         let _ = http1_builder(Duration::from_millis(300))
-                            .serve_connection(TokioIo::new(stream), handler).await;
+                            .serve_connection(TokioIo::new(stream), handler)
+                            .await;
                     });
                 }
             });
             let idle: Vec<_> = (0..MAX_CONNECTIONS)
-                .map(|_| TcpStream::connect(addr).unwrap()).collect();
+                .map(|_| TcpStream::connect(addr).unwrap())
+                .collect();
             let until = Instant::now() + Duration::from_secs(2);
             while slots.available_permits() != 0 && Instant::now() < until {
                 tokio::time::sleep(Duration::from_millis(10)).await;
@@ -484,12 +507,18 @@ mod tests {
             assert_eq!(slots.available_permits(), MAX_CONNECTIONS);
             let response = tokio::task::spawn_blocking(move || {
                 let mut socket = TcpStream::connect(addr).unwrap();
-                socket.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
-                socket.write_all(b"GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n").unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                socket
+                    .write_all(b"GET /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+                    .unwrap();
                 let mut text = String::new();
                 socket.read_to_string(&mut text).unwrap();
                 text
-            }).await.unwrap();
+            })
+            .await
+            .unwrap();
             assert!(response.contains("200 OK") && response.ends_with("ok"));
             drop(idle);
             task.abort();
