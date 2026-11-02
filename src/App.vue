@@ -54,6 +54,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @edit-formula="onEditFormula"
         @text-editing-completed="onTextEditingCompleted"
         @shape-drawing-completed="onShapeDrawingCompleted"
+        @zoom-changed="updateZoomLevel"
         @selection-color="onSelectionColor"
         @persistence-status="onPersistenceStatus"
       />
@@ -156,6 +157,7 @@ import {
   isPlainColorDigit,
   isPlainShapeKey,
   isPlainToolKey,
+  isSpacePanKey,
   isRedoShortcut,
   isShareStampLinkShortcut,
   isSelectAllShortcut,
@@ -166,6 +168,7 @@ import {
   isZoomResetShortcut,
   shouldIgnoreGlobalShortcut,
 } from './config/shortcuts'
+import { createTemporaryPanController } from './board/interactions/TemporaryPanController.js'
 import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
 import { trackEvent } from './analytics'
@@ -230,6 +233,10 @@ export default {
     }
 
     const selectedTool = ref('select')
+    const spacePan = createTemporaryPanController({
+      getTool: () => selectedTool.value,
+      setTool: (tool) => { selectedTool.value = tool },
+    })
     const selectedShape = ref('rectangle')
     const drawBoardRef = ref(null)
     const fullscreenRootRef = ref(null)
@@ -491,6 +498,8 @@ export default {
     })
 
     const onToolSelected = (tool) => {
+      // Explicit tool choices made during a hold win over the temporary override.
+      spacePan.cancel()
       selectedTool.value = tool
       if (tool === 'font') {
         trackEvent(ANALYTICS_EVENTS.TEXT_TOOL_SELECTED)
@@ -591,6 +600,13 @@ export default {
         || drawBoardRef.value?.isTextEditing()
       ) return
 
+      if (isSpacePanKey(event)) {
+        // Repeated keydown events are idempotent and must not scroll the page.
+        event.preventDefault()
+        spacePan.press()
+        return
+      }
+
       const toolId = isPlainToolKey(event)
       if (toolId) {
         event.preventDefault()
@@ -666,8 +682,24 @@ export default {
       }
     }
 
-    onMounted(() => window.addEventListener('keydown', onKeyDown))
-    onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+    const onKeyUp = (event) => {
+      // Release even when focus/modifiers changed while Space was held.
+      if ((event.code === 'Space' || event.key === ' ') && spacePan.release()) {
+        event.preventDefault()
+      }
+    }
+    const onWindowBlur = () => spacePan.release()
+    onMounted(() => {
+      window.addEventListener('keydown', onKeyDown)
+      window.addEventListener('keyup', onKeyUp)
+      window.addEventListener('blur', onWindowBlur)
+    })
+    onUnmounted(() => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onWindowBlur)
+      spacePan.release()
+    })
 
     const onUndo = () => {
       drawBoardRef.value?.undo()

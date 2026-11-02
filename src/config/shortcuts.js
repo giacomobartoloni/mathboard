@@ -74,6 +74,13 @@ function isUnmodifiedPlainKey(event) {
   return typeof event.key === 'string' && event.key.length === 1
 }
 
+/** Plain Space temporarily activates Pan; repeat is handled by the hold controller. */
+export function isSpacePanKey(event) {
+  return Boolean(event
+    && (event.key === ' ' || event.code === 'Space')
+    && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey)
+}
+
 export function isPlainToolKey(event) {
   if (!isUnmodifiedPlainKey(event)) return null
   return TOOL_SHORTCUTS[event.key.toLowerCase()] ?? null
@@ -178,7 +185,7 @@ export const SHORTCUT_HELP = [
     group: 'Tools',
     items: [
       { id: 'select', label: 'Select', keys: 'V' },
-      { id: 'pan', label: 'Pan', keys: 'H' },
+      { id: 'pan', label: 'Pan', keys: 'H / hold Space' },
       { id: 'pen', label: 'Pen', keys: 'P' },
       { id: 'text', label: 'Text', keys: 'T' },
       { id: 'formula', label: 'Formula', keys: 'F' },
@@ -215,6 +222,7 @@ export const SHORTCUT_HELP = [
   {
     group: 'View',
     items: [
+      { id: 'wheelZoom', label: 'Zoom at pointer', keys: 'Mouse wheel / trackpad' },
       { id: 'zoomIn', label: 'Zoom in', keys: 'Ctrl/Cmd++' },
       { id: 'zoomOut', label: 'Zoom out', keys: 'Ctrl/Cmd+-' },
       { id: 'zoomReset', label: 'Reset zoom', keys: 'Ctrl/Cmd+0' },

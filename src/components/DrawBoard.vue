@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
+import { wheelZoomLevel } from "../board/viewport/wheelZoom.js";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import { paletteColorFromSelection } from "../config/colors";
@@ -1292,6 +1293,18 @@ export default {
         this.refreshSelectionPanel();
       }
     },
+    onWheelZoom({ e }) {
+      if (!this.sessionReady) return;
+      // Keep wheel zoom within the board and preserve the scene point at the cursor.
+      e.preventDefault();
+      e.stopPropagation();
+      const nextZoom = wheelZoomLevel(this.canvas.getZoom(), e.deltaY, e.deltaMode);
+      if (nextZoom === this.canvas.getZoom()) return;
+      this.canvas.zoomToPoint(this.canvas.getViewportPoint(e), nextZoom);
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      this.$emit('zoom-changed', nextZoom);
+    },
     zoomIn() {
       const currentZoom = this.canvas.getZoom();
       const newZoom = currentZoom * 1.1;
@@ -1376,6 +1389,7 @@ export default {
       this.canvas = markRaw(new Canvas(this.id, {
         ...this.definedProps,
       }));
+      this.canvas.on('mouse:wheel', this.onWheelZoom);
       
       this._ensureBoardController();
       this._shapeGesture = new ShapeGesture({
@@ -1469,6 +1483,7 @@ export default {
     this._shapeGesture?.dispose();
     this._textInsertion?.dispose();
     this._panGesture?.dispose();
+    this.canvas?.off('mouse:wheel', this.onWheelZoom);
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
