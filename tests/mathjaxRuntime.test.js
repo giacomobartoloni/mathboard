@@ -33,6 +33,10 @@ const CORPUS = [
   '\\mathfrak{g}',
   '\\mathsf{ABC}',
   '\\mathtt{xyz}',
+  String.raw`\boldsymbol{x}`,
+  String.raw`\boldsymbol{\alpha}`,
+  String.raw`\boldsymbol{\nabla}`,
+  String.raw`\boldsymbol{x+\alpha}`,
 ]
 
 function paletteLatex() {
@@ -62,6 +66,28 @@ test('MathJaxRuntime renders mandatory corpus to standalone SVG', async () => {
     assert.doesNotMatch(markupWithoutStyle(svg), /data-mml-node="merror"/)
     assert.match(svg, /width="[\d.]+"/)
     assert.doesNotMatch(svg, /width="[\d.]+ex"/)
+  }
+})
+
+
+test('MathJaxRuntime renders boldsymbol as bold glyphs instead of an undefined command', async () => {
+  const runtime = runtimeWithLiteEngine()
+  const pairs = [
+    ['x', String.raw`\boldsymbol{x}`],
+    [String.raw`\alpha`, String.raw`\boldsymbol{\alpha}`],
+    [String.raw`\nabla`, String.raw`\boldsymbol{\nabla}`],
+  ]
+
+  for (const [normalLatex, boldLatex] of pairs) {
+    const normalSvg = await runtime.renderSvg(normalLatex)
+    const boldSvg = await runtime.renderSvg(boldLatex)
+    const normalWidth = Number(normalSvg.match(/<svg[^>]*\\bwidth="([\\d.]+)"/)?.[1])
+    const boldWidth = Number(boldSvg.match(/<svg[^>]*\\bwidth="([\\d.]+)"/)?.[1])
+
+    assert.ok(normalWidth > 0 && boldWidth > 0)
+    assert.ok(boldWidth < normalWidth * 2, `Unexpected extra content in ${boldLatex}`)
+    assert.notEqual(boldSvg, normalSvg, `Expected a distinct bold glyph for ${boldLatex}`)
+    assert.doesNotMatch(markupWithoutStyle(boldSvg), /data-mml-node="merror"/)
   }
 })
 
