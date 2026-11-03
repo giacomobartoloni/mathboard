@@ -19,7 +19,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { ActiveSelection, Point, Rect } from 'fabric';
+import { installFabricDomStub } from './helpers/fabric-dom-stub.js';
 import { GridSnapDrag } from '../src/board/interactions/GridSnapDrag.js';
+
+installFabricDomStub();
 
 function fixture(bounds = { left: 71, top: 51 }) {
   let enabled = true;
@@ -82,4 +86,52 @@ test('a raw pointer update never accumulates the preceding snapped offset', () =
   target.setXY({ x: 73, y: 64 });
   assert.equal(gesture.move({ target }), false);
   assert.deepEqual(target.bounds, { left: 73, top: 64 });
+});
+
+test('Fabric setXY applies a real Point with nonzero offsets and snap bounds', () => {
+  const rect = new Rect({
+    left: 71, top: 51, width: 20, height: 20,
+    strokeWidth: 0, originX: 'left', originY: 'top',
+  });
+  const gesture = new GridSnapDrag({
+    canvas: { getZoom: () => 1 },
+    isEnabled: () => true,
+  });
+  const before = rect.getBoundingRect();
+  gesture.begin({ action: 'drag', target: rect });
+  rect.setXY(new Point(rect.getXY().x + 7.2, rect.getXY().y + 7.2));
+  rect.setCoords();
+  assert.equal(gesture.move({ target: rect }), true);
+  const after = rect.getBoundingRect();
+  assert.ok(Math.abs(after.left - 80) < 1e-6, JSON.stringify({ before, after }));
+  assert.ok(Math.abs(after.top - 60) < 1e-6, JSON.stringify({ before, after }));
+  assert.equal(rect.width, 20);
+  assert.equal(rect.height, 20);
+});
+
+test('Fabric ActiveSelection translates as one target without changing member spacing', () => {
+  const a = new Rect({ left: 71, top: 51, width: 20, height: 20, strokeWidth: 0 });
+  const b = new Rect({ left: 121, top: 71, width: 20, height: 20, strokeWidth: 0 });
+  const selection = new ActiveSelection([a, b]);
+  const beforeA = a.getBoundingRect();
+  const beforeB = b.getBoundingRect();
+  const initial = selection.getBoundingRect();
+  const gesture = new GridSnapDrag({
+    canvas: { getZoom: () => 1 },
+    isEnabled: () => true,
+  });
+  gesture.begin({ action: 'drag', target: selection });
+  const pos = selection.getXY();
+  selection.setXY(new Point(pos.x + 18.4, pos.y + 18.4));
+  selection.setCoords();
+  assert.equal(gesture.move({ target: selection }), true);
+  const after = selection.getBoundingRect();
+  assert.ok(Math.abs(after.left / 10 - Math.round(after.left / 10)) < 1e-6);
+  assert.ok(Math.abs(after.top / 10 - Math.round(after.top / 10)) < 1e-6);
+  assert.ok(Math.abs((a.getBoundingRect().left - beforeA.left)
+    - (b.getBoundingRect().left - beforeB.left)) < 1e-6);
+  assert.ok(Math.abs((a.getBoundingRect().top - beforeA.top)
+    - (b.getBoundingRect().top - beforeB.top)) < 1e-6);
+  assert.equal(selection.getObjects().length, 2);
+  assert.notDeepEqual(selection.getBoundingRect(), initial);
 });
