@@ -18,1095 +18,583 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -->
 
 <template>
-  <div
-    id="app"
-    ref="fullscreenRootRef"
-    :aria-busy="!boardSessionReady"
-    :data-theme="uiTheme"
-    :data-fullscreen="isFullscreen ? 'true' : 'false'"
-  >
-    <div class="board-topbar">
-      <span class="logo">MathBoard</span>
-      <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
-        aria-label="Open Board library" title="Open Board library"
-        :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
-        <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
-        <span class="board-library-trigger-label">
-          <span class="board-library-trigger-label-long">Board library</span>
-          <span class="board-library-trigger-label-short" aria-hidden="true">Boards</span>
-        </span>
-        <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
-      </button>
-    </div>
-
-    <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || showBoardLibrary">
-      <DrawBoard
-        :id="'board'"
-        :selectedTool="selectedTool"
-        :selectedShape="selectedShape"
-        :session-ready="boardSessionReady"
-        :board-theme="boardTheme"
-        :selected-color="selectedColor"
-        :selection-panel-suspended="showFormulaModal || showShareStampModal"
-        ref="drawBoardRef"
-        @request-formula="onRequestFormula"
-        @edit-formula="onEditFormula"
-        @text-editing-completed="onTextEditingCompleted"
-        @shape-drawing-completed="onShapeDrawingCompleted"
-        @selection-color="onSelectionColor"
-        @persistence-status="onPersistenceStatus"
-      />
-      <ToolsPanel
-        :selectedTool="selectedTool"
-        :selected-shape="selectedShape"
-        :selected-color="selectedColor"
-        :display-color="displayColor"
-        :main-color="boardThemeConfig.defaultInk"
-        :main-ink-is-light="mainInkIsLight"
-        @tool-selected="onToolSelected"
-        @shape-selected="onShapeSelected"
-        @color-selected="onColorSelected"
-        @insert-kit="onInsertKit"
-      />
-
-    </div>
-    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
-      :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
-      @close="closeBoardLibrary" @action="onBoardLibraryAction" />
-
-    <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
-
-    <div v-if="boardError" class="stamp-error" role="alert">
-      <span>{{ boardError }}</span>
-      <button type="button" @click="boardError = null" aria-label="Dismiss">×</button>
-    </div>
-    <div v-if="saveConflict" class="stamp-error" role="alert">
-      <span>This board changed in another tab. Save your current work as a copy before opening the newer board.</span>
-      <button class="save-copy-button" type="button" :disabled="recoveringConflict" @click="recoverConflict">
-        {{ recoveringConflict ? 'Saving…' : 'Save a copy' }}
-      </button>
-    </div>
+  <div class="support-panel" :class="{ 'about-open': showAbout }">
+    <button
+      type="button"
+      class="about-button"
+      @click="openAbout"
+      title="About"
+      aria-label="About"
+    >
+      <font-awesome-icon :icon="['fas', 'info-circle']" />
+      <span class="about-label">About</span>
+    </button>
     
-    <FormulaModal 
-      v-if="showFormulaModal"
-      :isVisible="showFormulaModal"
-      :initialLatex="editingLatex"
-      :mode="formulaModalMode"
-      @close="onFormulaModalClose"
-      @insert-formula="onInsertFormula"
-      @assist-used="onFormulaAssistUsed"
-    />
 
-    <ShareStampModal
-      v-if="showShareStampModal"
-      :isVisible="showShareStampModal"
-      :url="shareStampUrl"
-      @close="closeShareStampModal"
-      @copied="onStampShareCopied"
-      @copy-failed="onStampShareCopyFailed"
-    />
-    
-    <ZoomPanel 
-      :inert="showBoardLibrary"
-      :zoomLevel="zoomLevel"
-      :board-theme="boardTheme"
-      :is-fullscreen="isFullscreen"
-      :fullscreen-supported="fullscreenSupported"
-      @zoom-in="onZoomIn"
-      @zoom-out="onZoomOut"
-      @reset-zoom="onResetZoom"
-      @undo="onUndo"
-      @redo="onRedo"
-      @cycle-theme="onCycleTheme"
-      @toggle-fullscreen="toggleFullscreen"
-    />
-    
-    <SupportPanel class="secondary-chrome" :inert="showBoardLibrary" />
-    
-    <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
+    <!-- About Modal -->
+    <div v-if="showAbout" class="modal-overlay" @click="showAbout = false">
+      <div class="modal-content" @click.stop>
+        <button class="close-button" @click="showAbout = false">✕</button>
+        <h2>MathBoard</h2>
+        <p class="version">Version {{ version }}</p>
+        
+        <div class="about-text">
+          <p>
+            <strong>MathBoard</strong> is a free and open-source interactive digital whiteboard designed for mathematical notation and drawings. 
+            It combines freehand drawing with LaTeX formula support, allowing you to create, edit, and organize 
+            mathematical content with ease.
+          </p>
+          <p>
+            Specifically crafted for educators, students, and professionals, MathBoard aims to enhance the way mathematical ideas 
+            are communicated and understood in both academic and professional settings.
+          </p>
+        </div>
+
+        <div class="shortcuts-section">
+          <button
+            type="button"
+            class="shortcuts-toggle"
+            :aria-expanded="shortcutsExpanded"
+            aria-controls="shortcuts-panel"
+            @click="shortcutsExpanded = !shortcutsExpanded"
+          >
+            <span id="shortcuts-heading"><strong>Keyboard shortcuts</strong></span>
+            <span class="shortcuts-chevron" aria-hidden="true">{{ shortcutsExpanded ? '▾' : '▸' }}</span>
+          </button>
+          <div
+            v-show="shortcutsExpanded"
+            id="shortcuts-panel"
+            role="region"
+            aria-labelledby="shortcuts-heading"
+          >
+            <div
+              v-for="section in shortcutHelp"
+              :key="section.group"
+              class="shortcut-group"
+            >
+              <p class="shortcut-group-title">{{ section.group }}</p>
+              <ul class="shortcut-list">
+                <li v-for="item in section.items" :key="item.id" class="shortcut-row">
+                  <div class="shortcut-main">
+                    <span class="shortcut-label">{{ item.label }}</span>
+                    <kbd class="shortcut-keys">{{ item.keys }}</kbd>
+                  </div>
+                  <p v-if="item.hint" class="shortcut-hint">{{ item.hint }}</p>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="opensource-section">
+          <p><font-awesome-icon :icon="['fas', 'code-branch']" /> <strong>Open Source</strong></p>
+          <p>MathBoard is licensed under the <strong>GNU AGPL v3</strong>. The source code is freely available on GitHub. Contributions, issues, and suggestions are welcome!</p>
+          <div class="contact-links">
+            <a href="/resources/" @click="onSiteLink($event, '/resources/')">
+              Resources &amp; shortcuts
+            </a>
+            <a href="/download/" target="_blank" rel="noopener noreferrer" @click="onSiteLink($event, '/download/')">
+              Download desktop beta
+            </a>
+            <a href="https://github.com/giacomobartoloni/mathboard" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard')">
+              <font-awesome-icon :icon="['fab', 'github']" /> GitHub Repository
+            </a>
+          </div>
+        </div>
+
+        <div class="feedback-section">
+          <p><strong>Get in touch</strong></p>
+          <p>Send your feedback, suggestions, or bug reports:</p>
+          <div class="contact-links">
+            <a href="https://github.com/giacomobartoloni/mathboard/issues/new" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://github.com/giacomobartoloni/mathboard/issues/new')">Suggest a feature / report a bug</a>
+            <a href="mailto:gbartoloni@proton.me" @click.prevent="onExternalLink('mailto:gbartoloni@proton.me')">Email me</a>
+            <a href="https://www.linkedin.com/in/giacomobartoloni/" target="_blank" rel="noopener noreferrer" @click.prevent="onExternalLink('https://www.linkedin.com/in/giacomobartoloni/')">LinkedIn</a>
+          </div>
+        </div>
+
+        <div class="coffee-section">
+          <p>If you find MathBoard useful, consider supporting the project:</p>
+          <a href="https://www.buymeacoffee.com/gbartoloni" target="_blank" rel="noopener noreferrer" class="coffee-link" @click.prevent="onExternalLink('https://www.buymeacoffee.com/gbartoloni')">
+            <img src="../assets/bmc.png" alt="Buy Me A Coffee" />
+            <span>Buy me a coffee</span>
+          </a>
+        </div>
+
+        <div class="legal-links">
+          <a href="/resources/" @click="onSiteLink($event, '/resources/')">Resources</a>
+          <span class="separator" aria-hidden="true">·</span>
+          <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" @click="onSiteLink($event, '/privacy-policy.html')">Privacy Policy</a>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
-import DrawBoard from './components/DrawBoard.vue'
-import BoardLibraryModal from './components/BoardLibraryModal.vue'
-import ToolsPanel from './components/ToolsPanel.vue'
-// Deferred until opened: FormulaModal brings the KaTeX preview renderer.
-const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
-const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
-import SupportPanel from './components/SupportPanel.vue'
-import ZoomPanel from './components/ZoomPanel.vue'
-import {
-  BOARD_THEMES,
-  loadThemePreferences,
-  normalizeBoardTheme,
-  saveUiTheme,
-  saveBoardTheme,
-  cycleBoardTheme,
-  uiThemeForBoardTheme,
-} from './config/themes'
-import { normalizeHexColor } from './config/colors'
-import {
-  isDeleteShortcut,
-  isDuplicateShortcut,
-  isEscapeShortcut,
-  isGroupShortcut,
-  isPlainColorDigit,
-  isPlainShapeKey,
-  isPlainToolKey,
-  isRedoShortcut,
-  isShareStampLinkShortcut,
-  isSelectAllShortcut,
-  isUngroupShortcut,
-  isUndoShortcut,
-  isZoomInShortcut,
-  isZoomOutShortcut,
-  isZoomResetShortcut,
-  shouldIgnoreGlobalShortcut,
-} from './config/shortcuts'
-import { isDesktopRuntime } from './platform/runtime'
-import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
-import { trackEvent } from './analytics'
-import {
-  ANALYTICS_EVENTS,
-  ANALYTICS_FORMULA_MODES,
-  ANALYTICS_FORMULA_CLOSE_REASONS,
-  ANALYTICS_FORMULA_ASSIST_SOURCES,
-  ANALYTICS_FORMULA_PALETTE_GROUPS,
-  ANALYTICS_STAMP_SHARE_FAILURE_STAGES,
-} from './analytics/events.js'
-import { getKitById } from './stamps/registry.js'
-import { buildStampShareUrl, clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
-
-function detectFullscreenSupport() {
-  return typeof document !== 'undefined'
-    && typeof Element !== 'undefined'
-    && typeof document.exitFullscreen === 'function'
-    && typeof Element.prototype.requestFullscreen === 'function'
-}
+import { ref } from 'vue'
+import packageInfo from '../../package.json'
+import { openExternalUrl } from '../platform/externalLinks'
+import { publicSitePageUrl } from '../platform/siteLinks'
+import { isDesktopRuntime } from '../platform/runtime'
+import { SHORTCUT_HELP } from '../config/shortcuts.js'
+import { trackEvent } from '../analytics'
+import { ANALYTICS_EVENTS } from '../analytics/events.js'
 
 export default {
-  name: 'App',
-  components: {
-    DrawBoard,
-    BoardLibraryModal,
-    ToolsPanel,
-    FormulaModal,
-    ShareStampModal,
-    SupportPanel,
-    ZoomPanel,
-  },
+  name: 'SupportPanel',
   setup() {
+    const showAbout = ref(false)
+    const shortcutsExpanded = ref(false)
+    const version = packageInfo.version
+    const shortcutHelp = SHORTCUT_HELP
     const desktopRuntime = isDesktopRuntime()
-    const boardSessionReady = ref(false)
-    // Persisted presentation preferences. DrawBoard adapts objects authored with
-    // the automatic board ink when boardTheme changes; explicit ink stays put.
-    const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
-    const uiTheme = ref(initialUiTheme)
-    const boardTheme = ref(initialBoardTheme)
-    const selectedColor = ref(null)
-    const boardThemeConfig = computed(() => BOARD_THEMES[normalizeBoardTheme(boardTheme.value)])
-    const displayColor = computed(() => (
-      selectedColor.value ?? boardThemeConfig.value.defaultInk
-    ))
-    const mainInkIsLight = computed(() => boardThemeConfig.value.inkIsLight)
-    const onColorSelected = (value, options = {}) => {
-      if (value === null) {
-        selectedColor.value = null
-        drawBoardRef.value?.recolorSelection(null, options)
-        return
-      }
-      const normalized = normalizeHexColor(value)
-      if (!normalized) return
-      selectedColor.value = normalized
-      drawBoardRef.value?.recolorSelection(normalized, options)
-    }
 
-    // Mirror selection ink into the palette only. Never recolor here.
-    const onSelectionColor = (value) => {
-      selectedColor.value = value
-    }
-
-    const selectedTool = ref('select')
-    const selectedShape = ref('rectangle')
-    const drawBoardRef = ref(null)
-    const fullscreenRootRef = ref(null)
-    const showFormulaModal = ref(false)
-    const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
-    const showShareStampModal = ref(false)
-    const shareStampUrl = ref('')
-    const formulaPosition = ref({ x: 0, y: 0 })
-    const editingLatex = ref('')
-    const editingElement = ref(null)
-    const zoomLevel = ref(1)
-    // Web follows the Fullscreen API; desktop follows the native Tauri window.
-    const isFullscreen = ref(false)
-    const fullscreenSupported = ref(desktopRuntime || detectFullscreenSupport())
-    const boardError = ref(null)
-    const saveConflict = ref(false)
-    const recoveringConflict = ref(false)
-    const onPersistenceStatus = (status) => {
-      saveConflict.value = ['board_conflict', 'board_not_found', 'board_archived'].includes(status?.errorCode)
-    }
-    const recoverConflict = async () => {
-      if (recoveringConflict.value) return
-      recoveringConflict.value = true
+    const onExternalLink = async (url) => {
       try {
-        await drawBoardRef.value.recoverConflictedBoardAsCopy()
-        boardError.value = null
+        await openExternalUrl(url)
       } catch (error) {
-        boardError.value = error?.message || 'Could not save a recovery copy.'
-      } finally {
-        recoveringConflict.value = false
-      }
-    }
-    const showBoardLibrary = ref(false)
-    const boardLibraryTriggerRef = ref(null)
-    const boardList = ref([])
-    const archivedList = ref([])
-    const boardLibraryBusy = ref(false)
-    const boardLibraryLoading = ref(false)
-    const boardLibraryError = ref(null)
-    const closeBoardLibrary = async () => {
-      if (boardLibraryBusy.value) return
-      showBoardLibrary.value = false
-      await nextTick()
-      boardLibraryTriggerRef.value?.focus()
-    }
-    const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
-    const refreshBoardLibrary = async () => {
-      const workspace = boardWorkspace()
-      if (!workspace) throw new Error('Board workspace is not ready.')
-      const [boards, archived] = await Promise.all([workspace.list(), workspace.listArchived()])
-      boardList.value = boards
-      archivedList.value = archived
-    }
-    const openBoardLibrary = async () => {
-      if (!boardSessionReady.value) return
-      boardLibraryError.value = null
-      boardList.value = []
-      archivedList.value = []
-      boardLibraryLoading.value = true
-      showBoardLibrary.value = true
-      try { await refreshBoardLibrary() } catch (error) { boardLibraryError.value = error.message }
-      finally { boardLibraryLoading.value = false }
-    }
-    const onBoardLibraryAction = async ({ action, boardId, title }) => {
-      if (boardLibraryBusy.value) return
-      const switchedAwayFromActive = (action === 'archive' || action === 'delete')
-        && boardList.value.some(board => board.id === boardId && board.isActive)
-      boardLibraryError.value = null
-      boardLibraryBusy.value = true
-      try {
-        const workspace = boardWorkspace()
-        if (!workspace) throw new Error('Board workspace is not ready.')
-        if (action === 'create') await workspace.create({ title })
-        else if (action === 'open') await workspace.open({ boardId })
-        else if (action === 'unarchive-open') {
-          await workspace.unarchive({ boardId })
-          try { await workspace.open({ boardId }) }
-          catch (error) { throw new Error(`Board restored but could not be opened. ${error?.message || ''}`.trim()) }
-        }
-        else if (action === 'rename') await workspace.rename({ boardId, title })
-        else if (action === 'archive') await workspace.archive({ boardId })
-        else if (action === 'unarchive') await workspace.unarchive({ boardId })
-        else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
-        else throw new Error('Unsupported board library action.')
-        await refreshBoardLibrary()
-        if (switchedAwayFromActive) selectedTool.value = 'select'
-        if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
-          selectedTool.value = 'select'
-          showBoardLibrary.value = false
-          await nextTick()
-          boardLibraryTriggerRef.value?.focus()
-        }
-      } catch (error) {
-        boardLibraryError.value = error?.message || 'Board library operation failed.'
-        // A failed post-transition metadata write may still leave a new active board.
-        try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
-      } finally {
-        boardLibraryBusy.value = false
-      }
-    }
-    let fullscreenInitialized = false
-    let previousFullscreen = false
-    let disconnectDesktopWindow = null
-    let disconnectDesktopBoardBridge = null
-    let componentUnmounted = false
-
-    const setFullscreenState = (next) => {
-      isFullscreen.value = next
-      if (fullscreenInitialized && next !== previousFullscreen) {
-        trackEvent(next ? ANALYTICS_EVENTS.FULLSCREEN_ENTERED : ANALYTICS_EVENTS.FULLSCREEN_EXITED)
-      }
-      previousFullscreen = next
-      fullscreenInitialized = true
-      // Preserve canvas zoom and pan when either fullscreen mechanism resizes.
-      nextTick(() => {
-        drawBoardRef.value?.updateCanvasSize?.()
-      })
-    }
-    const syncWebFullscreenState = () => {
-      setFullscreenState(Boolean(document.fullscreenElement))
-    }
-
-    const toggleFullscreen = async () => {
-      if (!fullscreenSupported.value) return
-      try {
-        if (desktopRuntime) {
-          setFullscreenState(await toggleDesktopFullscreen())
-        } else if (!document.fullscreenElement) {
-          const root = fullscreenRootRef.value
-          if (!root?.requestFullscreen) return
-          await root.requestFullscreen()
-        } else {
-          await document.exitFullscreen()
-        }
-      } catch (err) {
-        console.warn('Fullscreen request failed:', err)
-        if (!desktopRuntime) syncWebFullscreenState()
+        console.warn('Could not open external URL:', error)
       }
     }
 
-    const waitForBoardReady = () => new Promise((resolve) => {
-      const start = performance.now()
-      const tick = () => {
-        if (drawBoardRef.value?.canvas) {
-          resolve(true)
-          return
-        }
-        if (performance.now() - start > 5000) {
-          resolve(false)
-          return
-        }
-        requestAnimationFrame(tick)
-      }
-      nextTick(tick)
-    })
-
-    const trackStampShareFailure = (stage) => {
-      trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_FAILED, { stage })
+    // Keep same-origin navigation on the web; desktop pages live on the public site.
+    const onSiteLink = (event, path) => {
+      if (!desktopRuntime) return
+      event.preventDefault()
+      onExternalLink(publicSitePageUrl(path))
     }
 
-    const bootstrapStampFromUrl = async () => {
-      const payload = readStampFromLocation()
-      if (!payload) return false
-      try {
-        const ready = await waitForBoardReady()
-        if (!ready || !drawBoardRef.value) {
-          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          boardError.value = 'Board is not ready to load the stamp link.'
-          return false
-        }
-        const result = await drawBoardRef.value.bootstrapFromStamp(payload)
-        if (!result?.ok) {
-          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          boardError.value = result?.message || 'Could not load stamp from the link.'
-          return false
-        }
-        trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_OPENED)
-        selectedTool.value = 'select'
-        return true
-      } catch (error) {
-        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-        boardError.value = error?.message || 'Could not load stamp from the link.'
-        return false
-      } finally {
-        clearStampFromLocation()
-      }
-    }
-
-    const bootstrapLocalBoard = async () => {
-      const ready = await waitForBoardReady()
-      if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for local storage.')
-      const result = await drawBoardRef.value.bootstrapPersistence()
-      if (result?.restoreFailure) {
-        boardError.value = result.restoreFailure.recoverable
-          ? 'MathBoard could not restore your previous board. A new local board was opened, and the previous board was kept for recovery.'
-          : 'MathBoard could not find your previous local board. A new board was opened.'
-      }
-    }
-
-    onMounted(async () => {
-      fullscreenSupported.value = desktopRuntime || detectFullscreenSupport()
-      if (desktopRuntime) {
-        try {
-          const disconnect = await connectDesktopWindow({
-            onUndo: () => {
-              if (boardSessionReady.value && !showBoardLibrary.value
-                && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
-            },
-            onRedo: () => {
-              if (boardSessionReady.value && !showBoardLibrary.value
-                && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
-            },
-            onFullscreenChange: setFullscreenState,
-          })
-          if (componentUnmounted) disconnect()
-          else disconnectDesktopWindow = disconnect
-        } catch (error) {
-          console.warn('Desktop window integration failed:', error)
-        }
-      } else {
-        document.addEventListener('fullscreenchange', syncWebFullscreenState)
-        syncWebFullscreenState()
-      }
-      try {
-        const stampLoaded = await bootstrapStampFromUrl()
-        if (stampLoaded) {
-          // Stamp URL starts a new session: keep canvas, mint a new local board id.
-          const ready = await waitForBoardReady()
-          if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for Stamp adoption.')
-          await drawBoardRef.value.bootstrapPersistence({ adoptCurrent: true })
-        } else {
-          await bootstrapLocalBoard()
-        }
-      } catch (error) {
-        console.error('Board session bootstrap failed', error)
-        boardError.value = 'Local board storage is unavailable. Your changes may not be saved.'
-      } finally {
-        boardSessionReady.value = true
-      }
-      if (desktopRuntime && !componentUnmounted) {
-        await nextTick()
-        try {
-          const { connectDesktopBoardBridge } = await import('./platform/desktopBoardBridge.js')
-          const disconnect = await connectDesktopBoardBridge(() => drawBoardRef.value)
-          if (componentUnmounted) disconnect()
-          else disconnectDesktopBoardBridge = disconnect
-        } catch (error) {
-          console.warn('Desktop board bridge unavailable:', error)
-        }
-      }
-    })
-
-    onBeforeUnmount(() => {
-      componentUnmounted = true
-      if (desktopRuntime) {
-        disconnectDesktopWindow?.()
-        disconnectDesktopBoardBridge?.()
-      } else document.removeEventListener('fullscreenchange', syncWebFullscreenState)
-    })
-
-    const onToolSelected = (tool) => {
-      selectedTool.value = tool
-      if (tool === 'font') {
-        trackEvent(ANALYTICS_EVENTS.TEXT_TOOL_SELECTED)
-      }
-      if (tool === 'formula') {
-        trackEvent(ANALYTICS_EVENTS.FORMULA_TOOL_SELECTED)
-      }
-    }
-
-    const onShapeSelected = (shape) => {
-      selectedShape.value = shape
-    }
-
-    const onCycleTheme = () => {
-      const nextBoard = cycleBoardTheme(boardTheme.value)
-      boardTheme.value = nextBoard
-      uiTheme.value = uiThemeForBoardTheme(nextBoard)
-      saveBoardTheme(nextBoard)
-      saveUiTheme(uiTheme.value)
-      trackEvent(ANALYTICS_EVENTS.THEME_CHANGED, { theme: nextBoard })
-    }
-
-    const closeShareStampModal = () => {
-      showShareStampModal.value = false
-      shareStampUrl.value = ''
-    }
-
-    const onStampShareCopied = () => {
-      trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_COPIED)
-    }
-
-    const onStampShareCopyFailed = () => {
-      trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.COPY)
-    }
-
-    const openShareStampLink = () => {
-      boardError.value = null
-      if (!drawBoardRef.value) {
-        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
-        return
-      }
-      let payload
-      try {
-        payload = drawBoardRef.value.exportSelectionToStamp()
-      } catch (error) {
-        // No selection is a silent no-op; other failures surface in English.
-        if (/Nothing is selected/i.test(error?.message || '')) return
-        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.EXPORT_SELECTION)
-        boardError.value = error?.message || 'Could not create a share link.'
-        return
-      }
-      try {
-        shareStampUrl.value = buildStampShareUrl(payload, undefined, { desktop: desktopRuntime })
-        showShareStampModal.value = true
-        trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_CREATED)
-      } catch (error) {
-        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.BUILD_URL)
-        boardError.value = error?.message || 'Could not create a share link.'
-      }
-    }
-
-    const onKeyDown = (event) => {
-      if (!boardSessionReady.value) return
-      if (isEscapeShortcut(event)) {
-        // The browser uses Escape to leave fullscreen. Do not cancel that.
-        if (document.fullscreenElement) return
-        if (showFormulaModal.value) {
-          onFormulaModalClose(ANALYTICS_FORMULA_CLOSE_REASONS.ESCAPE)
-          event.preventDefault()
-          return
-        }
-        if (showShareStampModal.value) {
-          closeShareStampModal()
-          event.preventDefault()
-          return
-        }
-        if (showBoardLibrary.value) {
-          closeBoardLibrary()
-          event.preventDefault()
-          return
-        }
-        if (drawBoardRef.value?.isTextEditing()) {
-          drawBoardRef.value.exitTextEditing()
-          event.preventDefault()
-          return
-        }
-        if (shouldIgnoreGlobalShortcut(event)) return
-        drawBoardRef.value?.cancelTransientAction()
-        event.preventDefault()
-        return
-      }
-
-      if (
-        showFormulaModal.value
-        || showShareStampModal.value
-        || showBoardLibrary.value
-        || shouldIgnoreGlobalShortcut(event)
-        || drawBoardRef.value?.isTextEditing()
-      ) return
-
-      const toolId = isPlainToolKey(event)
-      if (toolId) {
-        event.preventDefault()
-        onToolSelected(toolId)
-        return
-      }
-      const shapeId = isPlainShapeKey(event)
-      if (shapeId) {
-        event.preventDefault()
-        onToolSelected('shapes')
-        onShapeSelected(shapeId)
-        return
-      }
-      const colorPreset = isPlainColorDigit(event)
-      if (colorPreset) {
-        event.preventDefault()
-        onColorSelected(colorPreset.value)
-        return
-      }
-      if (isZoomInShortcut(event)) {
-        event.preventDefault()
-        onZoomIn()
-        return
-      }
-      if (isZoomOutShortcut(event)) {
-        event.preventDefault()
-        onZoomOut()
-        return
-      }
-      if (isZoomResetShortcut(event)) {
-        event.preventDefault()
-        onResetZoom()
-        return
-      }
-      if (isDuplicateShortcut(event)) {
-        event.preventDefault()
-        drawBoardRef.value?.duplicateSelection()
-        return
-      }
-      if (isSelectAllShortcut(event)) {
-        event.preventDefault()
-        drawBoardRef.value?.selectAll()
-        return
-      }
-      if (isDeleteShortcut(event)) {
-        event.preventDefault()
-        drawBoardRef.value?.deleteSelection()
-        return
-      }
-      if (isGroupShortcut(event)) {
-        event.preventDefault()
-        drawBoardRef.value?.groupSelection()
-        return
-      }
-      if (isUngroupShortcut(event)) {
-        event.preventDefault()
-        drawBoardRef.value?.ungroupSelection()
-        return
-      }
-      if (isShareStampLinkShortcut(event)) {
-        event.preventDefault()
-        openShareStampLink()
-        return
-      }
-      if (isUndoShortcut(event)) {
-        event.preventDefault()
-        onUndo()
-        return
-      }
-      if (isRedoShortcut(event)) {
-        event.preventDefault()
-        onRedo()
-      }
-    }
-
-    onMounted(() => window.addEventListener('keydown', onKeyDown))
-    onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
-
-    const onUndo = () => {
-      drawBoardRef.value?.undo()
-    }
-
-    const onRedo = () => {
-      drawBoardRef.value?.redo()
-    }
-
-    const onInsertKit = async (kitId) => {
-      boardError.value = null
-      let encoded
-      try {
-        encoded = getKitById(kitId)
-      } catch (error) {
-        boardError.value = error?.message || 'Unknown kit.'
-        return
-      }
-      const result = await drawBoardRef.value?.insertStamp(encoded)
-      if (!result?.ok) {
-        boardError.value = result?.message || 'Could not insert stamp.'
-        return
-      }
-      selectedTool.value = 'select'
-    }
-
-    const onRequestFormula = (position) => {
-      formulaPosition.value = position
-      editingLatex.value = ''
-      editingElement.value = null
-      formulaModalMode.value = ANALYTICS_FORMULA_MODES.CREATE
-      showFormulaModal.value = true
-      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_OPENED, {
-        mode: ANALYTICS_FORMULA_MODES.CREATE,
-      })
-    }
-
-    const onEditFormula = ({ latex, position, fabricObject }) => {
-      formulaPosition.value = position
-      editingLatex.value = latex
-      // markRaw: a reactive proxy breaks Fabric identity checks in replaceFormula.
-      editingElement.value = fabricObject ? markRaw(fabricObject) : null
-      formulaModalMode.value = ANALYTICS_FORMULA_MODES.EDIT
-      showFormulaModal.value = true
-      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_OPENED, {
-        mode: ANALYTICS_FORMULA_MODES.EDIT,
-      })
-    }
-
-    const onFormulaModalClose = (reason) => {
-      const allowed = Object.values(ANALYTICS_FORMULA_CLOSE_REASONS)
-      const closeReason = allowed.includes(reason)
-        ? reason
-        : ANALYTICS_FORMULA_CLOSE_REASONS.CANCEL_BUTTON
-      trackEvent(ANALYTICS_EVENTS.FORMULA_MODAL_CANCELLED, {
-        mode: formulaModalMode.value,
-        reason: closeReason,
-      })
-      showFormulaModal.value = false
-    }
-
-    const onFormulaAssistUsed = ({ source, group } = {}) => {
-      const allowedSources = Object.values(ANALYTICS_FORMULA_ASSIST_SOURCES)
-      if (!allowedSources.includes(source)) return
-
-      const metadata = {
-        mode: formulaModalMode.value,
-        source,
-      }
-
-      if (source === ANALYTICS_FORMULA_ASSIST_SOURCES.PALETTE) {
-        const allowedGroups = Object.values(ANALYTICS_FORMULA_PALETTE_GROUPS)
-        if (!allowedGroups.includes(group)) return
-        metadata.group = group
-      }
-
-      trackEvent(ANALYTICS_EVENTS.FORMULA_ASSIST_USED, metadata)
-    }
-
-    const onTextEditingCompleted = () => {
-      // Auto-switch to select tool after text editing
-      selectedTool.value = 'select'
-    }
-
-    const onShapeDrawingCompleted = () => {
-      // Like Text and Formula, Shapes is a one-shot creation tool.
-      selectedTool.value = 'select'
-    }
-
-    const onZoomIn = () => {
-      drawBoardRef.value?.zoomIn()
-      updateZoomLevel()
-    }
-
-    const onZoomOut = () => {
-      drawBoardRef.value?.zoomOut()
-      updateZoomLevel()
-    }
-
-    const onResetZoom = () => {
-      drawBoardRef.value?.resetZoom()
-      zoomLevel.value = 1
-    }
-
-    const updateZoomLevel = () => {
-      if (drawBoardRef.value) {
-        zoomLevel.value = drawBoardRef.value.getZoom()
-      }
-    }
-
-    const onInsertFormula = (formulaData) => {
-      const mode = formulaModalMode.value
-      trackEvent(ANALYTICS_EVENTS.FORMULA_SUBMITTED, { mode })
-
-      if (editingElement.value) {
-        // One gesture: replace the formula on the command log; do not remove first.
-        // Removing here would drop the existing formula if the new render failed.
-        drawBoardRef.value?.replaceFormula(editingElement.value, formulaData)
-        editingElement.value = null
-      } else if (drawBoardRef.value && drawBoardRef.value.addFormulaToCanvas) {
-        // Add new formula
-        drawBoardRef.value.addFormulaToCanvas(formulaData, formulaPosition.value);
-      } else {
-        console.error('drawBoardRef or addFormulaToCanvas not available');
-      }
-      
-      showFormulaModal.value = false
-      editingLatex.value = ''
-      
-      // Auto-switch to select tool after formula insertion
-      selectedTool.value = 'select'
+    const openAbout = () => {
+      showAbout.value = true
+      shortcutsExpanded.value = false
+      trackEvent(ANALYTICS_EVENTS.SUPPORT_OPENED)
     }
 
     return {
-      desktopRuntime,
-      boardSessionReady,
-      selectedTool,
-      selectedShape,
-      drawBoardRef,
-      fullscreenRootRef,
-      showFormulaModal,
-      formulaModalMode,
-      showShareStampModal,
-      shareStampUrl,
-      closeShareStampModal,
-      onStampShareCopied,
-      onStampShareCopyFailed,
-      editingLatex,
-      zoomLevel,
-      isFullscreen,
-      fullscreenSupported,
-      toggleFullscreen,
-      onToolSelected,
-      onShapeSelected,
-      onUndo,
-      onRedo,
-      onInsertKit,
-      boardError,
-      saveConflict,
-      recoveringConflict,
-      onPersistenceStatus,
-      recoverConflict,
-      showBoardLibrary,
-      boardLibraryTriggerRef,
-      boardList,
-      archivedList,
-      boardLibraryBusy,
-      boardLibraryLoading,
-      boardLibraryError,
-      openBoardLibrary,
-      closeBoardLibrary,
-      onBoardLibraryAction,
-      onRequestFormula,
-      onEditFormula,
-      onInsertFormula,
-      onFormulaModalClose,
-      onFormulaAssistUsed,
-      onTextEditingCompleted,
-      onShapeDrawingCompleted,
-      onZoomIn,
-      onZoomOut,
-      onResetZoom,
-      uiTheme,
-      boardTheme,
-      selectedColor,
-      displayColor,
-      boardThemeConfig,
-      mainInkIsLight,
-      onColorSelected,
-      onSelectionColor,
-      onCycleTheme,
+      showAbout,
+      shortcutsExpanded,
+      version,
+      shortcutHelp,
+      onExternalLink,
+      onSiteLink,
+      openAbout,
     }
   }
 }
 </script>
 
-<style>
-body {
-  margin: 0px;
-  overflow: hidden;
-}
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: var(--text-primary);
-
-  /* Dark Mode v2 semantic tokens: light defaults. Components consume these
-     inherited variables and must not receive theme props. */
-  --surface-primary: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
-  --surface-secondary: #ffffff;
-  --surface-tertiary: rgba(0, 0, 0, 0.03);
-  --surface-muted: #f5f5f5;
-  --text-primary: #2c3e50;
-  --text-secondary: #555;
-  --text-muted: #666;
-  --text-placeholder: #999;
-  --border-color: #e0e0e0;
-  --panel-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
-  --hover-bg: rgba(0, 0, 0, 0.05);
-  --icon-color: #555;
-  --danger: #c62828;
-  --danger-hover: rgba(198, 40, 40, 0.12);
-  --selected-bg: tan;
-  --selected-text: rgb(61, 61, 61);
-  --selected-shadow: 0 2px 8px rgba(210, 180, 140, 0.5);
-  --callout-info-bg: linear-gradient(135deg, #f0f7ff 0%, #e3f0ff 100%);
-  --callout-neutral-bg: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-}
-
-#app[data-theme="dark"] {
-  --surface-primary: linear-gradient(135deg, #2a2a2e 0%, #1e1e22 100%);
-  --surface-secondary: #2a2a2e;
-  --surface-tertiary: rgba(255, 255, 255, 0.06);
-  --surface-muted: #1e1e22;
-  --text-primary: #e0e0e0;
-  --text-secondary: #bbb;
-  --text-muted: #888;
-  --text-placeholder: #777;
-  --border-color: #444;
-  --panel-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
-  --hover-bg: rgba(255, 255, 255, 0.08);
-  --icon-color: #b0b0b0;
-  --danger: #ef9a9a;
-  --danger-hover: rgba(239, 154, 154, 0.16);
-  --selected-bg: #8b6914;
-  --selected-text: #f0e6d0;
-  --selected-shadow: 0 2px 8px rgba(139, 105, 20, 0.5);
-  --callout-info-bg: linear-gradient(135deg, #1a2a3a 0%, #1e2e40 100%);
-  --callout-neutral-bg: linear-gradient(135deg, #2a2a2e 0%, #333338 100%);
-}
-
-/* Fullscreen shell: fill the fullscreen element; do not introduce scrollbars. */
-#app:fullscreen,
-#app[data-fullscreen="true"] {
-  width: 100%;
-  height: 100%;
-  box-sizing: border-box;
-  overflow: hidden;
-  background: var(--surface-muted);
-}
-
-#app[data-fullscreen="true"] .secondary-chrome,
-#app:fullscreen .secondary-chrome {
-  display: none !important;
-}
-
-/* On desktop, keep the existing independent logo and centered board selector. */
-.board-topbar { display: contents; }
-
-.logo {
-  font-family: 'Satisfy', cursive;
-  font-size: 24px;
-  line-height: normal;
-
-  color: whitesmoke;
-  background-color: rgb(61, 61, 61);
-  border-radius: 8px;
-  padding: 8px 15px;
-  border: tan 4px solid;
-
-    position: absolute;
-    z-index: 10;
-    left: 12px;
-    top: 12px;
-    display: -ms-flexbox;
-    display: flex;
-    -ms-flex-direction: row;
-    flex-direction: row;
-    z-index: 200;
-    /* Render Satisfy at its final size instead of scaling a composited layer. */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-                0 2px 4px rgba(0, 0, 0, 0.1);
-
-}
-
-.board-library-trigger {
-  position: fixed;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1100;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: min(330px, calc(100vw - 350px));
-  min-height: 44px;
-  padding: 9px 14px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--surface-secondary);
-  color: var(--text-primary);
-  box-shadow: var(--panel-shadow);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-.board-library-trigger:hover:not(:disabled) { box-shadow: var(--panel-shadow), inset 0 0 0 1px var(--border-color); }
-.board-library-trigger:focus-visible { outline: 2px solid var(--selected-bg); outline-offset: 2px; }
-.board-library-trigger-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.board-library-trigger-label-short { display: none; }
-.board-library-trigger > svg:last-child { color: var(--text-muted); font-size: 12px; }
-.board-library-trigger:disabled { opacity: .6; cursor: default; }
-
-.copyright {
+<style scoped>
+.support-panel {
   position: absolute;
+  z-index: 10;
+  right: 12px;
   bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: var(--text-muted);
-  font-size: 12px;
-  z-index: 1000;
-  white-space: nowrap;
-}
-
-@media (max-width: 1100px) {
-  .copyright { display: none; }
-}
-
-.stamp-error {
-  position: absolute;
-  z-index: 1200;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  max-width: min(520px, calc(100vw - 24px));
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--surface-secondary);
-  color: var(--text-primary);
-  box-shadow: var(--panel-shadow);
-  font-size: 14px;
-  text-align: left;
-}
-
-.stamp-error button {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 2px;
-}
-
-.stamp-error .save-copy-button {
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 6px 10px;
+  
   background: var(--surface-primary);
-  color: var(--text-primary);
-  font: inherit;
-  white-space: nowrap;
+  border-radius: 8px;
+  padding: 8px 6px;
+  box-shadow: var(--panel-shadow);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
 }
 
-.stamp-error .save-copy-button:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
+.support-panel.about-open { z-index: 10000; }
 
-@media (max-width: 768px) {
-  .copyright {
-    position: absolute;
-    bottom: 3px;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-}
-
-@media (max-width: 600px) {
-  /* Fit the board selector beside the logo instead of dedicating another row. */
-  .board-topbar {
-    position: fixed;
-    top: max(12px, env(safe-area-inset-top));
-    left: max(12px, env(safe-area-inset-left));
-    right: max(12px, env(safe-area-inset-right));
-    z-index: 1100;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .board-topbar .logo {
-    position: static;
-    flex: 0 0 auto;
-    border-radius: 5px;
-    white-space: nowrap;
-  }
-  .board-library-trigger {
-    position: static;
-    flex: 1 1 0;
-    min-width: 0;
-    width: auto;
-    max-width: none;
-    transform: none;
-    gap: 8px;
-    padding: 9px 10px;
-  }
-  .copyright { display: none; }
-}
-
-/* Keep the selector legible beside the logo on very narrow phones. */
-@media (max-width: 360px) {
-  .board-library-trigger-label-long { display: none; }
-  .board-library-trigger-label-short { display: inline; }
-}
-
-.board-session-loading {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
+.about-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-primary);
+  gap: 6px;
+  color: var(--icon-color);
+}
+
+.about-button:hover {
+  background-color: var(--hover-bg);
+  transform: translateY(-1px);
+}
+
+.about-button:focus-visible {
+  outline: 2px solid var(--selected-bg);
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .support-panel {
+    top: auto;
+    bottom: max(80px, calc(env(safe-area-inset-bottom) + 68px));
+  }
+
+  .about-label {
+    display: none;
+  }
+
+  .about-button {
+    padding: 8px;
+    font-size: 16px;
+    min-width: 40px;
+    min-height: 40px;
+    gap: 0;
+  }
+}
+
+.support-panel a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--icon-color);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.support-panel a img {
+  width: 15px;
+  height: auto;
+}
+
+.support-panel a span {
+  white-space: nowrap;
+}
+
+.support-panel a:hover {
+  background-color: var(--hover-bg);
+  transform: translateY(-1px);
+  color: #FFDD00;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--surface-secondary);
+  border-radius: 12px;
+  padding: 30px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.close-button {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-muted);
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.close-button:hover {
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.modal-content h2 {
+  margin: 0 0 5px 0;
+  color: var(--text-primary);
+  font-size: 28px;
+  font-family: 'Satisfy', cursive;
+}
+
+.version {
+  margin: 0 0 20px 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.about-text {
+  margin-bottom: 25px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.about-text p {
+  margin: 0 0 15px 0;
+}
+
+.opensource-section {
+  background: var(--callout-info-bg);
+  padding: 20px;
+  border-radius: 8px;
+  text-align: left;
+  margin-top: 20px;
+}
+
+.shortcuts-section {
+  background: var(--callout-neutral-bg);
+  padding: 12px 16px;
+  border-radius: 8px;
+  text-align: left;
+  margin-top: 20px;
+}
+
+.shortcuts-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.shortcuts-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.shortcuts-toggle:focus {
+  outline: none;
+}
+
+.shortcuts-toggle:focus-visible {
+  outline: 2px solid var(--text-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.shortcuts-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+#shortcuts-panel {
+  margin-top: 12px;
+}
+
+.shortcut-group + .shortcut-group {
+  margin-top: 14px;
+}
+
+.shortcut-group-title {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.shortcut-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.shortcut-row {
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.shortcut-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.shortcut-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.shortcut-label {
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.shortcut-keys {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.shortcut-hint {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.opensource-section p {
+  margin: 0 0 10px 0;
+  color: var(--text-primary);
+}
+
+.opensource-section p:last-of-type {
+  margin-bottom: 0;
+}
+
+.feedback-section {
+  background: var(--callout-neutral-bg);
+  padding: 20px;
+  border-radius: 8px;
+  text-align: left;
+  margin-top: 20px;
+}
+
+.feedback-section p {
+  margin: 0 0 10px 0;
+  color: var(--text-primary);
+}
+
+.feedback-section p:last-child {
+  margin-bottom: 0;
+}
+
+.feedback-section a {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.feedback-section a:hover {
+  text-decoration: underline;
+}
+
+.contact-links {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.contact-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.contact-links a:hover {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 123, 255, 0.3);
+  text-decoration: none;
+}
+
+.coffee-section {
+  text-align: center;
+  margin-top: 20px;
+  padding: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.coffee-section p {
+  margin: 0 0 15px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.coffee-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #FFDD00 0%, #FFC800 100%);
+  border-radius: 8px;
+  color: #333;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(255, 221, 0, 0.3);
+}
+
+.coffee-link img {
+  width: 20px;
+  height: auto;
+}
+
+.support-panel .coffee-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 221, 0, 0.4);
+  color: #000;
+}
+
+.legal-links {
+  text-align: center;
+  padding: 15px 20px 0;
+  margin-top: 15px;
+  border-top: 1px solid var(--border-color);
+  font-size: 13px;
+}
+
+.legal-links a {
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.legal-links a:hover {
+  color: #007bff;
+  text-decoration: underline;
+}
+
+.legal-links .separator {
+  margin: 0 10px;
+  color: #ccc;
 }
 </style>
