@@ -38,12 +38,8 @@ test('Ctrl/Cmd copy paste and cut use editable objects and atomic history', asyn
   const ids = state.objects.map(o => o.mathboardId);
   expect(new Set(ids).size).toBe(4);
 
-  await clickUndo(page);
-  await waitForState(page, s => s.objects.length === 2);
-  await clickRedo(page);
-  await waitForState(page, s => s.objects.length === 4);
-
-  // Paste selected exactly two roots; cutting must be one delete history step.
+  // Paste selects only the two new roots; cut them before Undo/Redo,
+  // because history replay intentionally does not restore selections.
   await page.keyboard.press('ControlOrMeta+x');
   state = await waitForState(page, s => s.objects.length === 2);
   expect(state.history.tipType).toBe('delete');
@@ -51,4 +47,8 @@ test('Ctrl/Cmd copy paste and cut use editable objects and atomic history', asyn
   state = await waitForState(page, s => s.objects.length === 4);
   expect(state.history.tipType).toBe('batch-add');
   expect(new Set(state.objects.map(o => o.mathboardId)).size).toBe(4);
+  await clickUndo(page);
+  await waitForState(page, s => s.objects.length === 2);
+  await clickRedo(page);
+  await waitForState(page, s => s.objects.length === 4);
 });
