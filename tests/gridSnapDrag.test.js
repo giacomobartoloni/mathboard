@@ -51,7 +51,8 @@ test('drag moves one whole target to an invisible subgrid anchor without a click
   assert.equal(gesture.move({ target }), true);
   assert.ok(Math.abs(target.bounds.left - 80) < 1e-8);
   assert.ok(Math.abs(target.bounds.top - 60) < 1e-8);
-  assert.equal(target.coordCalls, 2);
+  // One no-op frame refresh, then refresh before and after magnetic movement.
+  assert.equal(target.coordCalls, 3);
   assert.equal(gesture.session.latchX, 80);
   gesture.clear();
   assert.equal(gesture.move({ target }), false);

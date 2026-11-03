@@ -208,7 +208,6 @@ function setFormulaTransform(getBoard, latex, patch) {
 
 export function installBoardE2eHook(getBoard, bootstrapGate) {
   const analyticsEffects = []
-  const snapTrace = []
   let restoreAnalytics = null
   let formulaRenderGate = null
   // Canary string must remain in dist-e2e for assert:e2e-hook (void alone is DCE'd).
@@ -217,35 +216,6 @@ export function installBoardE2eHook(getBoard, bootstrapGate) {
     isBootstrapWaiting: () => bootstrapGate?.isWaiting() || false,
     resumeBootstrap: () => bootstrapGate?.resume(),
     getState: () => getBoardState(getBoard()),
-    startSnapTrace: () => {
-      const board = getBoard()
-      if (!board?.canvas) return false
-      board.canvas.on('before:transform', ({ transform }) => {
-        snapTrace.push({
-          kind: 'before',
-          action: transform?.action,
-          enabled: board.snapToGrid,
-          tool: board.selectedTool,
-          hasSession: Boolean(board._gridSnapDrag?.session),
-        })
-      })
-      board.canvas.on('object:moving', ({ target, e }) => {
-        const bounds = target?.getBoundingRect?.()
-        const session = board._gridSnapDrag?.session
-        snapTrace.push({
-          kind: 'move',
-          left: bounds?.left,
-          top: bounds?.top,
-          step: session?.step,
-          latchX: session?.latchX,
-          latchY: session?.latchY,
-          active: Boolean(session),
-          alt: Boolean(e?.altKey),
-        })
-      })
-      return true
-    },
-    takeSnapTrace: () => snapTrace.slice(),
     // E2E-only scene geometry oracle: Fabric origins need not equal the visual bbox.
     getSceneBounds: (id) => {
       const object = getBoard()?.canvas?.getObjects().find((item) => item.mathboardId === id)
