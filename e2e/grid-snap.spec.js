@@ -43,6 +43,7 @@ test('F042 magnetic object drag is invisible, undoable and locally configurable'
 
   await toggle.click()
   await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  await page.evaluate(() => window.__MATHBOARD_E2E__.startSnapTrace())
   const afterToggle = await getBoardState(page)
   expect(afterToggle.history).toEqual(before.history)
   await dragBy(page, { x: 321, y: 220 }, { x: 18.4, y: 18.4 })
@@ -53,6 +54,7 @@ test('F042 magnetic object drag is invisible, undoable and locally configurable'
   const snappedBounds = await page.evaluate(
     (id) => window.__MATHBOARD_E2E__.getSceneBounds(id), snapped.objects[0].mathboardId,
   )
+  console.log('F042 SNAP TRACE', JSON.stringify(await page.evaluate(() => window.__MATHBOARD_E2E__.takeSnapTrace())))
   expect(snappedBounds.left).toBeCloseTo(300, 1)
   expect(snappedBounds.top).toBeCloseTo(200, 1)
 
