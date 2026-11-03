@@ -208,6 +208,7 @@ export default {
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
     this._boardLifecycle = new BoardLifecycle({
       onReadyChanged: (ready) => {
+        if (!ready) this._gridSnapDrag?.clear();
         if (this.canvas?.upperCanvasEl) {
           this.canvas.upperCanvasEl.style.pointerEvents = ready ? '' : 'none';
         }
@@ -673,6 +674,7 @@ export default {
       this.refreshSelectionPanel();
     },
     onSelectionCleared() {
+      this._gridSnapDrag?.clear();
       this._syncGeometryEditing();
       this.refreshSelectionPanel();
     },
@@ -1177,6 +1179,7 @@ export default {
       return true;
     },
     cancelTransientAction() {
+      this._gridSnapDrag?.clear();
       if (this.cancelInProgressShape()) return true;
       if (this._cancelGeometryTransform()) return true;
       return this.clearSelection();
@@ -1268,6 +1271,9 @@ export default {
     },
     onObjectMoving(opt) {
       this._gridSnapDrag?.move(opt);
+    },
+    onSnapWindowBlur() {
+      this._gridSnapDrag?.clear();
     },
     onObjectModified(opt) {
       this._gridSnapDrag?.clear();
@@ -1378,6 +1384,7 @@ export default {
       });
       
       window.addEventListener('resize', this.updateCanvasSize);
+      window.addEventListener('blur', this.onSnapWindowBlur);
     },
     initializeCanvas() {
       const canvasElement = document.querySelector('canvas');
@@ -1506,6 +1513,7 @@ export default {
     this.canvas.off('mouse:up', this.onSelectionPointerUp);
     
     window.removeEventListener('resize', this.updateCanvasSize);
+    window.removeEventListener('blur', this.onSnapWindowBlur);
   },
   watch: {
     // Shallow on purpose. A deep watch traverses the whole Fabric graph and
