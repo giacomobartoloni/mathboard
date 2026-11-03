@@ -216,6 +216,13 @@ export function installBoardE2eHook(getBoard, bootstrapGate) {
     isBootstrapWaiting: () => bootstrapGate?.isWaiting() || false,
     resumeBootstrap: () => bootstrapGate?.resume(),
     getState: () => getBoardState(getBoard()),
+    // E2E-only scene geometry oracle: Fabric origins need not equal the visual bbox.
+    getSceneBounds: (id) => {
+      const object = getBoard()?.canvas?.getObjects().find((item) => item.mathboardId === id)
+      if (!object) return null
+      const { left, top, width, height } = object.getBoundingRect()
+      return { left, top, width, height }
+    },
     setFormulaTransform: (latex, patch) => setFormulaTransform(getBoard, latex, patch),
     flushPersistence: () => getBoard()?.flushPersistence?.(),
     createObjects: (specs, options) => getBoard().getBoardController().createMany(specs, options),

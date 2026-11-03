@@ -51,6 +51,7 @@ import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 import { faObjectGroup } from '@fortawesome/free-solid-svg-icons'
 import { faObjectUngroup } from '@fortawesome/free-solid-svg-icons'
 import { faBorderAll } from '@fortawesome/free-solid-svg-icons'
+import { faMagnet } from '@fortawesome/free-solid-svg-icons'
 import { faCircleNotch } from '@fortawesome/free-solid-svg-icons'
 import { faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons'
 import { faHandPaper } from '@fortawesome/free-regular-svg-icons'
@@ -89,6 +90,7 @@ library.add(faPenToSquare)
 library.add(faObjectGroup)
 library.add(faObjectUngroup)
 library.add(faBorderAll)
+library.add(faMagnet)
 library.add(faCircleNotch)
 library.add(faWandMagicSparkles)
 library.add(faGithub)

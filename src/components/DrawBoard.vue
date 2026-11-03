@@ -85,6 +85,7 @@ import { SelectionMutations } from "../board/interactions/SelectionMutations.js"
 import { ShapeGesture } from "../board/interactions/ShapeGesture.js";
 import { TextInsertionSession } from "../board/interactions/TextInsertionSession.js";
 import { PanGesture } from "../board/interactions/PanGesture.js";
+import { GridSnapDrag } from "../board/interactions/GridSnapDrag.js";
 import { createBoardOperationAnalytics } from "../board/analytics/BoardOperationAnalytics.js";
 import {
   trackEvent,
@@ -158,6 +159,7 @@ export default {
     boardTheme: { type: String, default: "light" },
     selectedColor: { type: String, default: null },
     sessionReady: { type: Boolean, default: true },
+    snapToGrid: { type: Boolean, default: false },
     selectionPanelSuspended: { type: Boolean, default: false },
   },
   data() {
@@ -198,6 +200,7 @@ export default {
     this._geometryEditing = null;
     this._shapeGesture = null;
     this._panGesture = null;
+    this._gridSnapDrag = null;
     this._textInsertion = null;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
@@ -205,6 +208,7 @@ export default {
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
     this._boardLifecycle = new BoardLifecycle({
       onReadyChanged: (ready) => {
+        if (!ready) this._gridSnapDrag?.clear();
         if (this.canvas?.upperCanvasEl) {
           this.canvas.upperCanvasEl.style.pointerEvents = ready ? '' : 'none';
         }
@@ -670,6 +674,7 @@ export default {
       this.refreshSelectionPanel();
     },
     onSelectionCleared() {
+      this._gridSnapDrag?.clear();
       this._syncGeometryEditing();
       this.refreshSelectionPanel();
     },
@@ -681,6 +686,7 @@ export default {
       // Fabric starts a transform before it knows whether the pointer will move.
       // A click (including Formula double-click) has no object:modified event.
       this._pendingTransform = null;
+      this._gridSnapDrag?.clear();
       if (!this._selectionGesture) return;
       this._selectionGesture = false;
       this.refreshSelectionPanel();
@@ -894,6 +900,7 @@ export default {
       return { ok: true, group };
     },
     _resetHistory() {
+      this._gridSnapDrag?.clear();
       this._boardHistory.reset();
       this._pendingTransform = null;
       this._pendingText = null;
@@ -1172,6 +1179,7 @@ export default {
       return true;
     },
     cancelTransientAction() {
+      this._gridSnapDrag?.clear();
       if (this.cancelInProgressShape()) return true;
       if (this._cancelGeometryTransform()) return true;
       return this.clearSelection();
@@ -1197,6 +1205,7 @@ export default {
     },
     _runHistory(direction) {
       if (!this.canvas) return null;
+      this._gridSnapDrag?.clear();
       this._pendingTransform = null;
       this._pendingText = null;
       const command = direction === "undo" ? this._boardHistory.undo() : this._boardHistory.redo();
@@ -1227,6 +1236,7 @@ export default {
       }
     },
     onBeforeTransform({ transform }) {
+      this._gridSnapDrag?.begin(transform);
       if (!this._selectionGesture) {
         this._selectionGesture = true;
         this._hideSelectionPanel();
@@ -1259,7 +1269,14 @@ export default {
       }
       this.refreshSelectionPanel();
     },
+    onObjectMoving(opt) {
+      this._gridSnapDrag?.move(opt);
+    },
+    onSnapWindowBlur() {
+      this._gridSnapDrag?.clear();
+    },
     onObjectModified(opt) {
+      this._gridSnapDrag?.clear();
       this._selectionGesture = false;
       try {
         if (this._boardHistory.isSuspended() || !opt) return;
@@ -1339,6 +1356,7 @@ export default {
       this.canvas.on('before:path:created', this.markPathInk);
       this.canvas.on('path:created', this.onPathCreated);
       this.canvas.on('before:transform', this.onBeforeTransform);
+      this.canvas.on('object:moving', this.onObjectMoving);
       this.canvas.on('object:modified', this.onObjectModified);
       this.canvas.on('text:editing:entered', this.onTextEditingEntered);
       this.canvas.on('text:editing:exited', this.onTextEditingExited);
@@ -1366,6 +1384,7 @@ export default {
       });
       
       window.addEventListener('resize', this.updateCanvasSize);
+      window.addEventListener('blur', this.onSnapWindowBlur);
     },
     initializeCanvas() {
       const canvasElement = document.querySelector('canvas');
@@ -1389,6 +1408,10 @@ export default {
           }
         },
         onComplete: () => this.$emit('shape-drawing-completed'),
+      });
+      this._gridSnapDrag = new GridSnapDrag({
+        canvas: this.canvas,
+        isEnabled: () => this.snapToGrid && this.selectedTool === 'select' && this._boardLifecycle.isReady(),
       });
       this._panGesture = new PanGesture({
         canvas: this.canvas,
@@ -1443,6 +1466,7 @@ export default {
       delete obj.boardTheme;
       delete obj.selectedColor;
       delete obj.selectionPanelSuspended;
+      delete obj.snapToGrid;
       Object.keys(obj).forEach((key) => {
         if (obj[key] === undefined) {
           delete obj[key];
@@ -1469,6 +1493,7 @@ export default {
     this._shapeGesture?.dispose();
     this._textInsertion?.dispose();
     this._panGesture?.dispose();
+    this._gridSnapDrag?.clear();
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
@@ -1477,6 +1502,7 @@ export default {
     this.canvas.off('before:path:created', this.markPathInk);
     this.canvas.off('path:created', this.onPathCreated);
     this.canvas.off('before:transform', this.onBeforeTransform);
+    this.canvas.off('object:moving', this.onObjectMoving);
     this.canvas.off('object:modified', this.onObjectModified);
     this.canvas.off('text:editing:entered', this.onTextEditingEntered);
     this.canvas.off('text:editing:exited', this.onTextEditingExited);
@@ -1487,6 +1513,7 @@ export default {
     this.canvas.off('mouse:up', this.onSelectionPointerUp);
     
     window.removeEventListener('resize', this.updateCanvasSize);
+    window.removeEventListener('blur', this.onSnapWindowBlur);
   },
   watch: {
     // Shallow on purpose. A deep watch traverses the whole Fabric graph and
@@ -1523,7 +1550,11 @@ export default {
       this.syncAutoInk(this.boardThemeConfig);
       this.canvas.requestRenderAll();
     },
+    snapToGrid() {
+      this._gridSnapDrag?.clear();
+    },
     selectedTool(newTool) {
+      this._gridSnapDrag?.clear();
       if (!this.canvas) return;
 
       // Switching tools during endpoint editing must roll back the whole drag
