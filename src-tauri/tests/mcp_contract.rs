@@ -139,8 +139,21 @@ fn screenshot_contract_accepts_bounded_targets_and_rejects_invalid_options() {
         call.params(),
         json!({"target":{"kind":"viewport"},"scale":1.0,"format":"png"})
     );
+    let branded = parse_tool_call(
+        "mathboard_screenshot",
+        json!({"boardId":"mb_a","target":{"kind":"viewport"},"includeLogo":true}),
+    ).unwrap();
+    assert_eq!(branded.params()["includeLogo"],json!(true));
+    let disabled = parse_tool_call(
+        "mathboard_screenshot",
+        json!({"boardId":"mb_a","target":{"kind":"viewport"},"includeLogo":false}),
+    ).unwrap();
+    assert!(disabled.params().get("includeLogo").is_none());
     for args in [
         json!({"boardId":"mb_a"}),
+        json!({"boardId":"mb_a","target":{"kind":"viewport"},"includeLogo":null}),
+        json!({"boardId":"mb_a","target":{"kind":"viewport"},"includeLogo":1}),
+        json!({"boardId":"mb_a","target":{"kind":"viewport"},"includeLogo":"true"}),
         json!({"boardId":"mb_a","target":{"kind":"viewport","ids":["x"]}}),
         json!({"boardId":"mb_a","target":{"kind":"sceneRect","rect":{"x":0,"y":0,"width":0,"height":1}}}),
         json!({"boardId":"mb_a","target":{"kind":"objectIds","ids":["x","x"]}}),
