@@ -31,7 +31,7 @@ async function command(request, method, params = {}) {
 async function rejected(request, params, code) {
   const response = await request.post(commandUrl, { data: { method: 'screenshot', params } })
   const body = await response.json()
-  expect(response.status(), JSON.stringify(body)).toBe(409)
+  expect(response.status(), JSON.stringify(body.error)).toBe(409)
   expect(body.error.code).toBe(code)
   expect(body.result).toBeUndefined()
 }
@@ -327,6 +327,10 @@ test('branded screenshots add the fixed grid and preserve all source pixels', as
     expect(explicitlyOff.data).toEqual(plain.data)
     expect(plain.branding).toBeUndefined()
     const branded=await command(request,'screenshot',{target,includeLogo:true})
+    const badgeFonts=await page.evaluate(()=>Array.from(document.fonts)
+      .filter(face=>face.family.replaceAll(/["']/g,'')==='Satisfy')
+      .map(face=>face.status))
+    expect(badgeFonts).toContain('loaded')
     expect([branded.widthPx,branded.heightPx]).toEqual([plain.widthPx,plain.heightPx+branded.branding.headerHeightPx])
     expect(branded.region).toEqual(plain.region)
     expect(branded.branding).toMatchObject({
@@ -368,4 +372,37 @@ test('branded screenshots add the fixed grid and preserve all source pixels', as
     'invalid_capture_request')
   await rejected(request,{target:{kind:'sceneRect',rect:{x:0,y:0,width:500,height:1961}},includeLogo:true},
     'capture_too_large')
+})
+
+test('branded screenshots reject an unavailable Satisfy resource without affecting unbranded capture', async ({ page, request }) => {
+  await page.route('**/*satisfy*.woff*', route => route.abort())
+  await openBoard(page, request)
+  const before=await snapshot(page,true)
+  const target={kind:'sceneRect',rect:{x:0,y:0,width:400,height:150}}
+  await rejected(request,{target,includeLogo:true},'capture_failed')
+  const plain=await command(request,'screenshot',{target})
+  expect([plain.widthPx,plain.heightPx]).toEqual([400,150])
+  expect(plain.branding).toBeUndefined()
+  expect(await snapshot(page)).toEqual(before)
+})
+
+test('branded screenshots reject missing Satisfy definitions instead of trusting fonts.ready', async ({ page, request }) => {
+  await openBoard(page, request)
+  await page.evaluate(async()=>{
+    await document.fonts.ready
+    // CSS-connected faces cannot be deleted from FontFaceSet directly.
+    for(const sheet of document.styleSheets) {
+      for(let i=sheet.cssRules.length-1;i>=0;i--) {
+        const rule=sheet.cssRules[i]
+        if(rule instanceof CSSFontFaceRule&&rule.style.fontFamily.replaceAll(/["']/g,'')==='Satisfy') {
+          sheet.deleteRule(i)
+        }
+      }
+    }
+  })
+  expect(await page.evaluate(()=>Array.from(document.fonts)
+    .some(face=>face.family.replaceAll(/["']/g,'')==='Satisfy'))).toBe(false)
+  await rejected(request,{
+    target:{kind:'sceneRect',rect:{x:0,y:0,width:400,height:150}},includeLogo:true,
+  },'capture_failed')
 })

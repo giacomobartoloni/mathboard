@@ -53,6 +53,10 @@ than 128 output pixels fail with `invalid_capture_request`. Existing PNG
 size/area/byte limits apply **including the header**; exceeding them fails
 with `capture_too_large` without shrinking the board.
 
+Branded capture explicitly loads and verifies the bundled Satisfy face before
+drawing. An unavailable or failed font returns `capture_failed` instead of a
+fallback wordmark; this requirement does not apply to unbranded capture.
+
 Scene rectangles and object bounds use scene units, independent of pan/zoom. Object IDs must be distinct existing top-level semantic IDs; nested children cannot be targeted individually. Groups and formulas are captured as rendered atomic objects. Bounds include Fabric transforms and stroke geometry. Padding defaults to 16 scene units (0–128). Invisible objects do not contribute bounds; a wholly invisible requested set is rejected. The crop includes everything rendered inside that region, including overlapping unrequested objects.
 
 Viewport captures use the canvas CSS dimensions and its actual transform, without retina multiplication. They exclude DOM controls, selection handles and tool previews. For toolbar occlusion or whole-workspace review, continue using `e2e/helpers/visual-observation.js` and `e2e/visual-observation.spec.js`; canvas evidence alone cannot establish that the toolbar does not cover content.

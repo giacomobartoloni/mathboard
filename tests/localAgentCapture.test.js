@@ -255,6 +255,79 @@ test('C13: paint readiness still uses live frames and honors abort', async () =>
   assert.ok(cancelled <= 1)
 })
 
+test('branded paint readiness rejects missing or failed Satisfy faces', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  for (const load of [
+    async () => [],
+    async () => [{ status: 'error' }],
+    async () => { throw new Error('Font resource unavailable') },
+  ]) {
+    const environment = {
+      document: { fonts: { ready: Promise.resolve(), load } },
+      requestAnimationFrame: callback => { queueMicrotask(callback); return 1 },
+      cancelAnimationFrame: () => {},
+    }
+    await assert.rejects(waitForCapturePaint(environment, new AbortController().signal, true),
+      error => error.code === 'capture_failed')
+  }
+})
+
+test('branded readiness loads the badge font before waiting for paint', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  let loaded = false
+  const environment = {
+    document: { fonts: {
+      ready: Promise.resolve(),
+      async load(font, text) {
+        assert.equal(font, '24px Satisfy')
+        assert.equal(text, 'MathBoard')
+        loaded = true
+        return [{ status: 'loaded' }]
+      },
+    } },
+    requestAnimationFrame: callback => {
+      assert.ok(loaded, 'paint must wait for the actual badge face')
+      queueMicrotask(callback)
+      return 1
+    },
+    cancelAnimationFrame: () => {},
+  }
+  await waitForCapturePaint(environment, new AbortController().signal, true)
+})
+
+test('unbranded paint readiness does not request the branding font', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  const environment = {
+    document: { fonts: {
+      ready: Promise.resolve(),
+      load() { throw new Error('Unbranded capture must not load Satisfy') },
+    } },
+    requestAnimationFrame: callback => { queueMicrotask(callback); return 1 },
+    cancelAnimationFrame: () => {},
+  }
+  await waitForCapturePaint(environment, new AbortController().signal)
+  await waitForCapturePaint(environment, new AbortController().signal, false)
+})
+
+test('branded paint readiness aborts while Satisfy is still loading', { timeout: 1000 }, async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  let finishLoading
+  const loading = new Promise(resolve => { finishLoading = resolve })
+  let started
+  const loadStarted = new Promise(resolve => { started = resolve })
+  const controller = new AbortController()
+  const environment = {
+    document: { fonts: { ready: Promise.resolve(), load: () => { started(); return loading } } },
+    requestAnimationFrame: () => { throw new Error('Aborted font load must not paint') },
+    cancelAnimationFrame: () => {},
+  }
+  const pending = waitForCapturePaint(environment, controller.signal, true)
+  await loadStarted
+  controller.abort()
+  await assert.rejects(pending, error => error.code === 'capture_failed')
+  finishLoading([{ status: 'loaded' }])
+})
+
 // Branding preserves source crop geometry and adds a fixed non-overlapping header.
 test('branded capture geometry and final output limits', () => {
   const base={target:{kind:'sceneRect',rect:{x:50,y:80,width:800,height:600}}}

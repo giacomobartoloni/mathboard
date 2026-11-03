@@ -42,12 +42,24 @@ function assertNotAborted(signal) {
   if(signal.aborted) throw captureError('capture_failed','Capture readiness or rendering deadline exceeded.')
 }
 
-export async function waitForCapturePaint(environment,signal) {
+export async function waitForCapturePaint(environment,signal,includeLogo=false) {
   assertNotAborted(signal)
   await new Promise((resolve,reject)=>{
     const abort=()=>{signal.removeEventListener('abort',abort);reject(captureError('capture_failed','Capture font deadline exceeded.'))}
     signal.addEventListener('abort',abort,{once:true})
-    Promise.resolve(environment.document.fonts.ready).then(resolve,reject)
+    Promise.resolve().then(async()=>{
+      assertNotAborted(signal)
+      const fonts=environment.document.fonts
+      if(includeLogo) {
+        // fonts.ready also resolves for failed or unregistered faces. Require
+        // the actual bundled badge face before Canvas2D can silently fall back.
+        const faces=await fonts.load('24px Satisfy','MathBoard')
+        if(!faces.length||faces.some(face=>face.status!=='loaded')) {
+          throw captureError('capture_failed','The screenshot badge font is unavailable.')
+        }
+      }
+      return fonts.ready
+    }).then(resolve,()=>reject(captureError('capture_failed','Unable to load screenshot fonts.')))
       .finally(()=>signal.removeEventListener('abort',abort))
   })
   assertNotAborted(signal)
@@ -144,7 +156,7 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
     const board=getBoard(),canvas=board?.canvas
     assertReady(board,canvas)
     const lease=board?._boardLifecycle?.capture()
-    await waitForCapturePaint(environment,signal)
+    await waitForCapturePaint(environment,signal,request.includeLogo)
     assertReady(board,canvas,lease)
     const scene=readCaptureScene(canvas),boardId=board.getBoardId()
     const plan=planCapture(request,scene)
