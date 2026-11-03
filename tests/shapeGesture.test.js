@@ -34,7 +34,9 @@ function canvasStub() {
     remove(object) { const i = objects.indexOf(object); if (i >= 0) objects.splice(i, 1); },
     on(event, callback) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(callback); },
     off(event, callback) { listeners.get(event)?.delete(callback); },
-    fire(event, point) { for (const callback of [...(listeners.get(event) || [])]) callback({ scenePoint: point }); },
+    fire(event, point, modifiers = {}) {
+      for (const callback of [...(listeners.get(event) || [])]) callback({ scenePoint: point, e: modifiers });
+    },
     renderAll() {}, requestRenderAll() {},
     getScenePoint(event) { return event; },
   };
@@ -106,4 +108,40 @@ test('tool switch finalizes once without one-shot callback and removes listeners
   assert.equal(canvas.listeners.get('mouse:down').size,1);
   gesture.dispose();
   assert.equal(canvas.listeners.get('mouse:down').size,0);
+});
+
+test('Arrow is a semantic atomic shape while the legacy Line stays a Line', () => {
+  const arrow = setup('vector-arrow');
+  arrow.canvas.fire('mouse:down', { x: 50, y: 60 });
+  arrow.canvas.fire('mouse:move', { x: 110, y: 90 });
+  arrow.canvas.fire('mouse:up', { x: 110, y: 90 });
+  assert.equal(arrow.commands.length, 1);
+  assert.equal(arrow.commands[0].kind, 'vector-arrow');
+  assert.equal(arrow.commands[0].object.mathboardShapeType, 'arrow');
+  assert.equal(arrow.commands[0].object.x1, 50);
+  assert.equal(arrow.commands[0].object.x2, 110);
+  assert.equal(arrow.canvas.objects.length, 1);
+  assert.equal(arrow.canvas.objects[0], arrow.commands[0].object);
+  const line = setup('arrow');
+  line.canvas.fire('mouse:down', { x: 50, y: 60 });
+  line.canvas.fire('mouse:move', { x: 110, y: 90 });
+  line.canvas.fire('mouse:up', { x: 110, y: 90 });
+  assert.equal(line.commands[0].object.isType('Line'), true);
+});
+
+test('Shift restricts new Line and Arrow drags to horizontal or vertical axes', () => {
+  for (const kind of ['arrow', 'vector-arrow']) {
+    for (const [end, expected] of [
+      [{ x: 95, y: 68 }, { x: 95, y: 20 }],
+      [{ x: 65, y: -100 }, { x: 20, y: -100 }],
+    ]) {
+      const { canvas, commands } = setup(kind);
+      canvas.fire('mouse:down', { x: 20, y: 20 });
+      canvas.fire('mouse:move', end, { shiftKey: true });
+      canvas.fire('mouse:up', end);
+      assert.equal(commands.length, 1);
+      assert.equal(commands[0].object.x2, expected.x);
+      assert.equal(commands[0].object.y2, expected.y);
+    }
+  }
 });
