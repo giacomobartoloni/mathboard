@@ -36,4 +36,5 @@ test('MCP catalog matches the current JS read descriptors and rejects unknown fi
   assert.equal(committed[0].inputSchema.properties.detail.default, 'summary')
   assert.deepEqual(committed[1].inputSchema.required, ['id'])
   assert.deepEqual(committed[2].inputSchema.required, ['target'])
+  assert.deepEqual(committed[2].inputSchema.properties.includeLogo,{type:'boolean',default:false})
 })

@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { watch } from 'vue'
+import '@fontsource/satisfy/400.css'
 import { createVisualCaptureAdapter } from './capture/visual-capture.js'
 import { mountMathBoard } from '../src/app-bootstrap.js'
 import { installLocalAgentBrowserBridge } from './local-agent-browser-bridge.js'
