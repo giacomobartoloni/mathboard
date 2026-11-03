@@ -141,6 +141,20 @@ export function isShareStampLinkShortcut(event) {
   return event.key?.toLowerCase() === 'l'
 }
 
+/** Ctrl/Cmd+C/X/V — in-app object clipboard when the board has focus. */
+export function isCopyShortcut(event) {
+  return Boolean(event && hasCommandModifier(event) && !event.altKey && !event.shiftKey
+    && event.key?.toLowerCase() === 'c')
+}
+export function isCutShortcut(event) {
+  return Boolean(event && hasCommandModifier(event) && !event.altKey && !event.shiftKey
+    && event.key?.toLowerCase() === 'x')
+}
+export function isPasteShortcut(event) {
+  return Boolean(event && hasCommandModifier(event) && !event.altKey && !event.shiftKey
+    && event.key?.toLowerCase() === 'v')
+}
+
 /** Ctrl/Cmd+D — duplicate the active selection. */
 export function isDuplicateShortcut(event) {
   if (!event || !hasCommandModifier(event) || event.altKey || event.shiftKey) return false
@@ -201,6 +215,10 @@ export const SHORTCUT_HELP = [
       { id: 'undo', label: 'Undo', keys: 'Ctrl/Cmd+Z' },
       { id: 'redo', label: 'Redo', keys: 'Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y' },
       { id: 'duplicate', label: 'Duplicate', keys: 'Ctrl/Cmd+D' },
+      { id: 'copy', label: 'Copy selection', keys: 'Ctrl/Cmd+C' },
+      { id: 'cut', label: 'Cut selection', keys: 'Ctrl/Cmd+X' },
+      { id: 'paste', label: 'Paste selection', keys: 'Ctrl/Cmd+V',
+        hint: 'Paste objects copied in this MathBoard tab at the viewport center.' },
       { id: 'selectAll', label: 'Select all', keys: 'Ctrl/Cmd+A' },
       { id: 'delete', label: 'Delete', keys: 'Delete / Backspace' },
       { id: 'group', label: 'Group', keys: 'Ctrl/Cmd+G' },

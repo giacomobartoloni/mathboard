@@ -152,6 +152,9 @@ import { normalizeHexColor } from './config/colors'
 import {
   isDeleteShortcut,
   isDuplicateShortcut,
+  isCopyShortcut,
+  isCutShortcut,
+  isPasteShortcut,
   isEscapeShortcut,
   isGroupShortcut,
   isPlainColorDigit,
@@ -639,6 +642,19 @@ export default {
       if (isZoomResetShortcut(event)) {
         event.preventDefault()
         onResetZoom()
+        return
+      }
+      if (isCopyShortcut(event) && drawBoardRef.value?.copySelectionToClipboard()) {
+        event.preventDefault()
+        return
+      }
+      if (isCutShortcut(event) && drawBoardRef.value?.cutSelectionToClipboard()) {
+        event.preventDefault()
+        return
+      }
+      if (isPasteShortcut(event) && drawBoardRef.value?.hasBoardClipboard()) {
+        event.preventDefault()
+        drawBoardRef.value.pasteBoardClipboard()
         return
       }
       if (isDuplicateShortcut(event)) {

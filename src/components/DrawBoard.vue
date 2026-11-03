@@ -86,6 +86,7 @@ import {
 import { BoardHistory } from "../history/BoardHistory.js";
 import { SelectionMutations } from "../board/interactions/SelectionMutations.js";
 import { ShapeGesture } from "../board/interactions/ShapeGesture.js";
+import { captureObjectClipboard, makeClipboardPasteSpecs } from "../board/clipboard/selectionClipboard.js";
 import { TextInsertionSession } from "../board/interactions/TextInsertionSession.js";
 import { PanGesture } from "../board/interactions/PanGesture.js";
 import { createBoardOperationAnalytics } from "../board/analytics/BoardOperationAnalytics.js";
@@ -200,6 +201,7 @@ export default {
     this._pencilGesture = false;
     this._selectionGesture = false;
     this._geometryEditing = null;
+    this._objectClipboard = null;
     this._shapeGesture = null;
     this._panGesture = null;
     this._textInsertion = null;
@@ -758,6 +760,57 @@ export default {
       const changed = await this._selectionMutations.duplicate();
       if (changed) this.refreshSelectionPanel();
       return changed;
+    },
+    _captureBoardClipboard() {
+      if (!this.canvas || !this._boardLifecycle.isReady() || !this._isBoardInteractionStable()) return null;
+      try {
+        return captureObjectClipboard(this.canvas, this._boardObjectPolicy);
+      } catch (error) {
+        console.error('Cannot copy board selection', error);
+        return null;
+      }
+    },
+    hasBoardClipboard() {
+      return Boolean(this._objectClipboard?.specs?.length);
+    },
+    copySelectionToClipboard() {
+      const clipboard = this._captureBoardClipboard();
+      if (!clipboard) return false;
+      this._objectClipboard = clipboard;
+      return true;
+    },
+    cutSelectionToClipboard() {
+      const clipboard = this._captureBoardClipboard();
+      if (!clipboard) return false;
+      // The clipboard becomes current only AFTER the transactional delete
+      // succeeds. A rejected history commit leaves scene and clipboard intact.
+      try {
+        const deleted = this._selectionMutations.delete();
+        if (!deleted.length) return false;
+        this._objectClipboard = clipboard;
+        this.refreshSelectionPanel();
+        this._focusBoard();
+        return true;
+      } catch (error) {
+        console.error('Cannot cut board selection', error);
+        return false;
+      }
+    },
+    async pasteBoardClipboard() {
+      const clipboard = this._objectClipboard;
+      if (!clipboard?.specs?.length || !this.canvas || !this._boardLifecycle.isReady()
+        || !this._isBoardInteractionStable()) return false;
+      const nextCount = clipboard.pasteCount + 1;
+      const specs = makeClipboardPasteSpecs(clipboard, this._viewportCenterScenePoint(), nextCount);
+      try {
+        await this._ensureBoardController('ui').createMany(specs, { select: true });
+        if (this._objectClipboard === clipboard) clipboard.pasteCount = nextCount;
+        this.refreshSelectionPanel();
+        return true;
+      } catch (error) {
+        console.error('Cannot paste board objects', error);
+        return false;
+      }
     },
     editSelection() {
       const active = this.canvas?.getActiveObject();
