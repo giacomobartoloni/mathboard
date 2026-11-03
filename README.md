@@ -124,3 +124,7 @@ npm run preview
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE.md) file for details.
+
+---
+
+Built by [Giacomo Bartoloni](https://github.com/giacomobartoloni) · [Contribute](CONTRIBUTING.md)
