@@ -127,4 +127,4 @@ This project is licensed under the GNU Affero General Public License v3.0 - see 
 
 ---
 
-Built by [Giacomo Bartoloni](https://github.com/giacomobartoloni) · [Contribute](CONTRIBUTING.md)
+Built by [Giacomo Bartoloni](https://github.com/giacomobartoloni) · [LinkedIn](https://www.linkedin.com/in/giacomobartoloni/) · [Contribute](CONTRIBUTING.md)
