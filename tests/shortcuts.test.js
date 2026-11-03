@@ -25,6 +25,9 @@ import {
   TOOL_SHORTCUTS,
   isDeleteShortcut,
   isDuplicateShortcut,
+  isCopyShortcut,
+  isCutShortcut,
+  isPasteShortcut,
   isEscapeShortcut,
   isGroupShortcut,
   isPlainColorDigit,
@@ -213,3 +216,19 @@ test('visible tool hints round-trip to the executable shortcut', () => {
     assert.equal(getToolShortcutHint(unsupported), null)
   }
 })
+
+test('board clipboard shortcuts classify Ctrl/Cmd without hijacking edited text', () => {
+  for (const [check, key] of [
+    [isCopyShortcut, 'c'],
+    [isCutShortcut, 'x'],
+    [isPasteShortcut, 'v'],
+  ]) {
+    assert.equal(check({ key, ctrlKey: true }), true);
+    assert.equal(check({ key: key.toUpperCase(), metaKey: true }), true);
+    assert.equal(check({ key }), false);
+    assert.equal(check({ key, ctrlKey: true, shiftKey: true }), false);
+    assert.equal(check({ key, metaKey: true, altKey: true }), false);
+  }
+  assert.equal(shouldIgnoreGlobalShortcut({ target: { tagName: 'TEXTAREA' } }), true);
+  assert.equal(shouldIgnoreGlobalShortcut({ target: { tagName: 'SELECT' } }), true);
+});
