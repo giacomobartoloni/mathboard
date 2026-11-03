@@ -64,3 +64,22 @@ test('copy respects text font attributes and rejects an empty selection', () => 
   assert.equal(captureObjectClipboard({ ...canvas, getActiveObject: () => null }, new BoardObjectPolicy()), null);
   assert.equal(makeClipboardPasteSpecs(null, { x: 1, y: 1 }).length, 0);
 });
+
+test('multi-root paste translates together but preserves grouped child coordinates', () => {
+  const clipboard = {
+    specs: [
+      { type: 'rect', left: 10, top: 20, width: 30, height: 40 },
+      { type: 'group', left: 100, top: 200, objects: [
+        { type: 'text', left: 8, top: 7, text: 'member' },
+      ] },
+    ],
+    center: { x: 60, y: 110 },
+    pasteCount: 0,
+  };
+  const pasted = makeClipboardPasteSpecs(clipboard, { x: 360, y: 210 }, 1);
+  assert.equal(pasted[1].left - pasted[0].left, 90);
+  assert.equal(pasted[1].top - pasted[0].top, 180);
+  assert.equal(pasted[1].objects[0].left, 8);
+  assert.equal(pasted[1].objects[0].top, 7);
+  assert.equal(clipboard.specs[0].left, 10);
+});
