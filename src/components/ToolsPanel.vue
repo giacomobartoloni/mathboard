@@ -144,6 +144,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             >
               |
             </button>
+            <button
+              type="button"
+              class="submenu-button line-icon"
+              :class="{ 'selected-shape': selectedShape === 'vector-arrow' }"
+              :aria-pressed="selectedShape === 'vector-arrow'"
+              aria-label="Arrow"
+              title="Arrow"
+              @click="selectShape('vector-arrow')"
+            >
+              →
+            </button>
           </div>
         </transition>
       </div>
