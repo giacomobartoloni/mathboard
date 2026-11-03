@@ -17,6 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { Point } from 'fabric';
 import { effectiveGridStep, snapDragAnchor } from '../geometry/gridSnap.js';
 
 /**
@@ -85,7 +86,8 @@ export class GridSnapDrag {
     if (!snap.dx && !snap.dy) return false;
 
     const position = target.getXY();
-    target.setXY({ x: position.x + snap.dx, y: position.y + snap.dy });
+    // Fabric's position/origin helpers require a real Point (not a plain { x, y }).
+    target.setXY(new Point(position.x + snap.dx, position.y + snap.dy));
     target.setCoords();
     return true;
   }
