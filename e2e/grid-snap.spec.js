@@ -65,7 +65,11 @@ test('F042 magnetic object drag is invisible, undoable and locally configurable'
   expect(redone.objects[0].left).toBeCloseTo(snapped.objects[0].left, 3)
   expect(redone.objects[0].top).toBeCloseTo(snapped.objects[0].top, 3)
 
+  // Flush the debounced IndexedDB write before reloading the active board.
+  await page.evaluate(() => window.__MATHBOARD_E2E__.flushPersistence())
   await page.reload()
+  await page.waitForFunction(() => Boolean(window.__MATHBOARD_E2E__?.getState?.().boardId))
+  await expect(page.getByRole('status', { name: 'Loading board' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Snap to Grid' })).toHaveAttribute('aria-pressed', 'true')
   const persisted = await getBoardState(page)
   expect(persisted.objects[0].left).toBeCloseTo(snapped.objects[0].left, 3)
