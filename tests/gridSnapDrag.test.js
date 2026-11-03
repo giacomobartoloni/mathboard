@@ -51,7 +51,7 @@ test('drag moves one whole target to an invisible subgrid anchor without a click
   assert.equal(gesture.move({ target }), true);
   assert.ok(Math.abs(target.bounds.left - 80) < 1e-8);
   assert.ok(Math.abs(target.bounds.top - 60) < 1e-8);
-  assert.equal(target.coordCalls, 1);
+  assert.equal(target.coordCalls, 2);
   assert.equal(gesture.session.latchX, 80);
   gesture.clear();
   assert.equal(gesture.move({ target }), false);
@@ -100,7 +100,7 @@ test('Fabric setXY applies a real Point with nonzero offsets and snap bounds', (
   const before = rect.getBoundingRect();
   gesture.begin({ action: 'drag', target: rect });
   rect.setXY(new Point(rect.getXY().x + 7.2, rect.getXY().y + 7.2));
-  rect.setCoords();
+  // The real Fabric drag event has not refreshed aCoords before object:moving.
   assert.equal(gesture.move({ target: rect }), true);
   const after = rect.getBoundingRect();
   assert.ok(Math.abs(after.left - 80) < 1e-6, JSON.stringify({ before, after }));
@@ -123,7 +123,6 @@ test('Fabric ActiveSelection translates as one target without changing member sp
   gesture.begin({ action: 'drag', target: selection });
   const pos = selection.getXY();
   selection.setXY(new Point(pos.x + 18.4, pos.y + 18.4));
-  selection.setCoords();
   assert.equal(gesture.move({ target: selection }), true);
   const after = selection.getBoundingRect();
   assert.ok(Math.abs(after.left / 10 - Math.round(after.left / 10)) < 1e-6);

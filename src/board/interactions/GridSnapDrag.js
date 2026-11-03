@@ -58,6 +58,9 @@ export class GridSnapDrag {
       return false;
     }
 
+    // Fabric updates left/top during drag before refreshing cached aCoords.
+    // Recompute them so getBoundingRect reads the current scene position.
+    target.setCoords();
     const bounds = target.getBoundingRect();
     if (!Number.isFinite(bounds.left) || !Number.isFinite(bounds.top)) return false;
     // Fabric may announce a transform even for an unchanged pointer.
