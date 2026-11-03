@@ -1,53 +1,53 @@
-# Desktop update discovery (notification only)
+# Native desktop update discovery
 
-MathBoard desktop checks the official GitHub Releases catalog for newer *published*
-`vMAJOR.MINOR.PATCH` builds. This is **not** an automatic updater: it does not
-download, install, replace, or restart binaries. It adds no signing keys or Tauri
-updater plugin. The existing unsigned-beta warnings and manually reviewed release
-workflow remain unchanged.
+MathBoard's **Updates** menu is implemented entirely in Tauri's Rust host.
+The shared Vue/Vite application and browser build are unchanged. This is
+**discovery-only**: no automatic download, installation, restart, updater
+plugin, signature keys, WebView commands or frontend event listeners.
 
-## Runtime contract
+## Behavior
 
-- Only the main Tauri WebView can invoke `check_desktop_update`. The browser build
-  never performs the check. A fixed HTTPS GitHub API URL is requested from Rust
-  with a 10-second deadline, no redirects, and no user-supplied URLs.
-- Release eligibility requires `draft: false`, `published_at`, a strict
-  `vMAJOR.MINOR.PATCH` tag, an official installer for the running OS/architecture,
-  and `SHA256SUMS.txt`. Published prereleases are intentionally included while
-  MathBoard is in the unsigned public beta channel. Release ordering is based
-  on numeric versions rather than GitHub's API ordering.
-- Compare against Tauri's bundled application version (from `package.json` via
-  `tauri.conf.json`), **not** `src-tauri/Cargo.toml` or the website's version.
-  The native response contains only the installed version, newer version (if any),
-  and a canonical official GitHub release page URL.
-- A silent background check runs when the desktop UI mounts and once every 24 hours
-  while open. A manual check appears in About. Errors during background checks
-  remain quiet; manual failures remain retryable. A dismissible update indicator
-  does not interrupt the canvas.
-- Detection does not claim that a specific installer has passed manual platform
-  acceptance. Users follow the official release and its security instructions.
-  GitHub network errors do not affect offline board editing.
+- A background check starts when the native application opens (excluding the
+  headless companion HTTP mode), then every 24 hours while the process runs.
+  **Updates (new version)** appears in the native menu when an eligible
+  release is found.
+- **Updates > Check for Updates…** checks on demand. While checking, the
+  action is disabled. The second menu row displays **Up to date**, a
+  retryable **Could not check updates** state, or
+  **Version X.Y.Z available — View release…**. Selecting a newer release
+  opens the official GitHub release page in the system browser.
+- A fixed GitHub Releases API endpoint is queried from Rust with a 10-second
+  timeout and redirects disabled. No user/board data or caller-provided URLs
+  are sent. Failed checks never block the board or its offline storage.
+- Only published `vMAJOR.MINOR.PATCH` releases newer than the installed
+  bundled Tauri version are eligible. Drafts, packaging `desktop-v*` RCs,
+  missing `SHA256SUMS.txt`, and releases without an installer for the
+  running OS and CPU are ignored. Published prereleases remain eligible
+  during the explicitly unsigned public beta.
+- Release links are constructed only from validated version tags under
+  `https://github.com/giacomobartoloni/mathboard/releases/tag/`.
+  The user still chooses and installs an unsigned beta manually and should
+  consult its release-specific security guidance and platform QA status.
 
-## Manual verification
+## Verification
 
-1. Install an older published desktop build and launch while online; verify an
-   eligible newer published release is signaled and opens its official release page.
-2. Launch while offline; confirm the board remains usable and manual check shows
-   a retryable error.
-3. Verify the browser build has no update notices or GitHub API requests.
-4. Publish no release during tests; verify draft and version-ineligible releases
-   are ignored. Repeat on macOS arm64/x64, Windows x64, and Linux x64.
-5. Review the unsigned-beta security language before distribution.
+- `cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check`
+- `cargo test --manifest-path src-tauri/Cargo.toml desktop_updates`
+- Standard frontend lint, tests and build, with no changes to `src/`.
+- Native packaged acceptance on macOS (Apple Silicon and Intel), Windows
+  x64, Linux x64: startup check, repeat/manual check, online/offline behavior,
+  menu status, official release link, no WebView network requests.
+- Ensure the updater does not run in the headless companion startup mode.
+  Native CI compilation alone does not prove packaged GUI behavior.
 
 ## Release workflow follow-up
 
-Packaging currently uses `desktop-v*` tags, while approved public downloads
-use `v*` tags. The discovery checker intentionally recognizes only the public
-`vMAJOR.MINOR.PATCH` channel. Reconcile these naming conventions in a separate,
-explicitly reviewed release-workflow change; do not auto-publish draft releases.
+The packaging workflow uses `desktop-v*` candidate tags while approved
+public download pages use `v*`. Discovery follows the published public
+channel only; reconciling release naming requires a separate reviewed change.
+No GitHub draft is promoted automatically.
 
 ## Future updater (out of scope)
 
-Automatic package download and installation require an additional architectural
-decision for Tauri updater signing-key custody, supported bundle formats,
-channel/promotion policy, rollback and recovery, and signing/notarization.
+Automatic updates require a separate decision about signing keys, artifact
+formats, distribution channels, rollback and recovery behavior.

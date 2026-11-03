@@ -2,12 +2,29 @@
 // Copyright (C) 2026 Giacomo Bartoloni
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use std::sync::{
+    Mutex,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
+use tauri::Manager;
+use tauri::menu::{MenuItem, Submenu};
 
+pub const CHECK_MENU_ID: &str = "mathboard-check-updates";
+pub const OPEN_MENU_ID: &str = "mathboard-open-update-release";
 const RELEASES_API: &str =
-    "https://api.github.com/repos/giacomobartoloni/mathboard/releases?per_page=30";
+    "https://api.github.com/repos/giacomobartoloni/mathboard/releases?per_page=100";
 const RELEASE_PAGE: &str = "https://github.com/giacomobartoloni/mathboard/releases/tag/";
+const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
+struct UpdateMenu {
+    submenu: Submenu,
+    check: MenuItem,
+    release: MenuItem,
+    release_url: Mutex<Option<String>>,
+    checking: AtomicBool,
+}
 
 #[derive(Debug, Deserialize)]
 struct GithubAsset {
@@ -20,6 +37,12 @@ struct GithubRelease {
     draft: bool,
     published_at: Option<String>,
     assets: Vec<GithubAsset>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AvailableUpdate {
+    version: String,
+    release_url: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,16 +80,7 @@ impl Platform {
     }
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct DesktopUpdate {
-    installed_version: String,
-    latest_version: Option<String>,
-    release_url: Option<String>,
-}
-
-// The desktop beta release channel uses published vMAJOR.MINOR.PATCH tags.
-// Never treat a draft, RC, or arbitrary GitHub tag as an installable update.
+// Public desktop releases use vMAJOR.MINOR.PATCH. Packaging RCs are not updates.
 fn parse_version(value: &str) -> Option<[u64; 3]> {
     let fields: Vec<_> = value.split('.').collect();
     if fields.len() != 3 {
@@ -83,11 +97,11 @@ fn parse_version(value: &str) -> Option<[u64; 3]> {
     Some(numbers)
 }
 
-fn newest_release<'a>(
-    releases: &'a [GithubRelease],
+fn newest_release(
+    releases: &[GithubRelease],
     installed_version: &str,
     platform: Platform,
-) -> Option<&'a GithubRelease> {
+) -> Option<AvailableUpdate> {
     let installed = parse_version(installed_version)?;
     releases
         .iter()
@@ -113,55 +127,28 @@ fn newest_release<'a>(
             {
                 return None;
             }
-            Some((parsed, release))
+            Some((
+                parsed,
+                AvailableUpdate {
+                    version: version.to_owned(),
+                    release_url: format!("{RELEASE_PAGE}{}", release.tag_name),
+                },
+            ))
         })
         .max_by_key(|(version, _)| *version)
-        .map(|(_, release)| release)
+        .map(|(_, update)| update)
 }
 
-fn select_update(
-    releases: &[GithubRelease],
-    installed_version: &str,
-    platform: Platform,
-) -> DesktopUpdate {
-    let latest = newest_release(releases, installed_version, platform);
-    DesktopUpdate {
-        installed_version: installed_version.to_owned(),
-        latest_version: latest.map(|release| release.tag_name[1..].to_owned()),
-        release_url: latest.map(|release| format!("{RELEASE_PAGE}{}", release.tag_name)),
-    }
-}
-
-fn main_webview(label: &str) -> bool {
-    label == "main"
-}
-
-#[tauri::command]
-pub async fn check_desktop_update(
-    window: tauri::WebviewWindow,
-    app: tauri::AppHandle,
-) -> Result<DesktopUpdate, String> {
-    use tauri::Manager;
-
-    if !main_webview(window.label()) {
-        return Err("Update discovery is not permitted from this window".into());
-    }
+async fn find_update(installed_version: &str) -> Result<Option<AvailableUpdate>, ()> {
     let platform = Platform::current();
-    if platform == Platform::Unsupported {
-        return Err("Update discovery is unavailable for this platform".into());
-    }
-
-    // The Tauri package version comes from tauri.conf.json -> package.json,
-    // not from Cargo's separately maintained package version.
-    let installed_version = app.package_info().version.to_string();
-    if parse_version(&installed_version).is_none() {
-        return Err("The installed version is not a supported release version".into());
+    if parse_version(installed_version).is_none() || platform == Platform::Unsupported {
+        return Err(());
     }
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .map_err(|_| "Could not initialize the update check")?;
+        .map_err(|_| ())?;
     let response = client
         .get(RELEASES_API)
         .header(
@@ -171,18 +158,106 @@ pub async fn check_desktop_update(
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .send()
         .await
-        .map_err(|_| "Could not contact GitHub Releases")?;
+        .map_err(|_| ())?;
     if !response.status().is_success() {
-        return Err("GitHub Releases is unavailable; try again later".into());
+        return Err(());
     }
-    let releases = response
-        .text()
-        .await
-        .ok()
-        .and_then(|body| serde_json::from_str::<Vec<GithubRelease>>(&body).ok())
-        .ok_or("Could not read the GitHub release catalog")?;
+    let body = response.text().await.map_err(|_| ())?;
+    let releases: Vec<GithubRelease> = serde_json::from_str(&body).map_err(|_| ())?;
+    Ok(newest_release(&releases, installed_version, platform))
+}
 
-    Ok(select_update(&releases, &installed_version, platform))
+/// Install native-only actions; nothing is exposed through Tauri IPC.
+pub fn menu(handle: &tauri::AppHandle) -> tauri::Result<Submenu> {
+    let check = MenuItem::with_id(
+        handle,
+        CHECK_MENU_ID,
+        "Check for Updates…",
+        true,
+        None::<&str>,
+    )?;
+    let release = MenuItem::with_id(
+        handle,
+        OPEN_MENU_ID,
+        "Not checked yet",
+        false,
+        None::<&str>,
+    )?;
+    let submenu = Submenu::with_items(handle, "Updates", true, &[&check, &release])?;
+    handle.manage(UpdateMenu {
+        submenu: submenu.clone(),
+        check,
+        release,
+        release_url: Mutex::new(None),
+        checking: AtomicBool::new(false),
+    });
+    Ok(submenu)
+}
+
+async fn check_updates(app: &tauri::AppHandle) {
+    let Some(menu) = app.try_state::<UpdateMenu>() else {
+        return;
+    };
+    if menu.checking.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let _ = menu.check.set_enabled(false);
+    let _ = menu.release.set_text("Checking for updates…");
+    let _ = menu.release.set_enabled(false);
+
+    let version = app.package_info().version.to_string();
+    let result = find_update(&version).await;
+    let (label, submenu_label, url) = match result {
+        Ok(Some(update)) => (
+            format!("Version {} available — View release…", update.version),
+            "Updates (new version)",
+            Some(update.release_url),
+        ),
+        Ok(None) => ("Up to date".to_owned(), "Updates", None),
+        Err(()) => ("Could not check updates".to_owned(), "Updates", None),
+    };
+    if let Ok(mut release_url) = menu.release_url.lock() {
+        *release_url = url.clone();
+    }
+    let _ = menu.release.set_text(label);
+    let _ = menu.release.set_enabled(url.is_some());
+    let _ = menu.submenu.set_text(submenu_label);
+    let _ = menu.check.set_enabled(true);
+    menu.checking.store(false, Ordering::Release);
+}
+
+pub fn check_now(app: &tauri::AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        check_updates(&app).await;
+    });
+}
+
+pub fn open_release(app: &tauri::AppHandle) {
+    use tauri_plugin_opener::OpenerExt;
+
+    let Some(menu) = app.try_state::<UpdateMenu>() else {
+        return;
+    };
+    let url = menu.release_url.lock().ok().and_then(|value| value.clone());
+    if let Some(url) = url {
+        if let Err(error) = app.opener().open_url(url, None::<&str>) {
+            eprintln!("Could not open MathBoard release page: {error}");
+        }
+    }
+}
+
+pub fn start(app: &tauri::AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        check_updates(&app).await;
+        let mut interval = tokio::time::interval(CHECK_INTERVAL);
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            check_updates(&app).await;
+        }
+    });
 }
 
 #[cfg(test)]
@@ -241,17 +316,14 @@ mod tests {
                 &["MathBoard_2.0.0_aarch64.dmg", "SHA256SUMS.txt"],
             ),
         ];
-        let update = select_update(&releases, "2.1.0", Platform::MacArm64);
-        assert_eq!(update.latest_version.as_deref(), Some("2.2.0"));
+        let update = newest_release(&releases, "2.1.0", Platform::MacArm64)
+            .expect("2.2.0 should be the newest eligible release");
+        assert_eq!(update.version, "2.2.0");
         assert_eq!(
-            update.release_url.as_deref(),
-            Some("https://github.com/giacomobartoloni/mathboard/releases/tag/v2.2.0")
+            update.release_url,
+            "https://github.com/giacomobartoloni/mathboard/releases/tag/v2.2.0"
         );
-        assert!(
-            select_update(&releases, "2.2.0", Platform::MacArm64)
-                .latest_version
-                .is_none()
-        );
+        assert!(newest_release(&releases, "2.2.0", Platform::MacArm64).is_none());
     }
 
     #[test]
@@ -277,32 +349,21 @@ mod tests {
             ),
         ];
         assert_eq!(
-            select_update(&releases, "1.8.0", Platform::LinuxX64)
-                .latest_version
-                .as_deref(),
-            Some("1.11.0")
+            newest_release(&releases, "1.8.0", Platform::LinuxX64)
+                .map(|update| update.version),
+            Some("1.11.0".into())
         );
-        assert!(
-            select_update(&releases, "1.11.0", Platform::LinuxX64)
-                .latest_version
-                .is_none()
-        );
+        assert!(newest_release(&releases, "1.11.0", Platform::LinuxX64).is_none());
     }
 
     #[test]
-    fn windows_requires_its_own_installer_and_main_window() {
+    fn windows_requires_its_own_installer() {
         let releases = vec![release(
             "v1.12.0",
             false,
             true,
             &["MathBoard_1.12.0_amd64.AppImage", "SHA256SUMS.txt"],
         )];
-        assert!(
-            select_update(&releases, "1.11.0", Platform::WindowsX64)
-                .latest_version
-                .is_none()
-        );
-        assert!(main_webview("main"));
-        assert!(!main_webview("mcp-settings"));
+        assert!(newest_release(&releases, "1.11.0", Platform::WindowsX64).is_none());
     }
 }

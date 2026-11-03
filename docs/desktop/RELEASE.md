@@ -203,11 +203,13 @@ decision.
 
 ## Update discovery (notification only)
 
-Desktop builds can query published GitHub Releases from the native host and show
-a non-blocking About/toolbar notice when a newer eligible build exists.
-This is a **discovery-only** feature, not the Tauri updater: nothing is downloaded,
-installed, or restarted, and no signing identity is added. The existing unsigned
-public beta security warnings and mandatory per-platform QA gates still apply.
+Desktop builds can check published GitHub Releases entirely from Rust. The native
+**Updates** menu shows a newer available version and opens its official GitHub
+release page. The Vue/browser frontend is not involved.
 
-See [Update discovery](UPDATE_DISCOVERY.md) for the eligibility contract, supported
-platforms, tests, offline behavior and explicit future-updater boundary.
+This is **discovery-only**, not an auto-updater: nothing is downloaded, installed,
+or restarted, and no signing identity is added. The existing unsigned-beta
+security warnings and mandatory per-platform QA gates still apply.
+
+See [Update discovery](UPDATE_DISCOVERY.md) for the release eligibility contract,
+native menu behavior, platform verification and future-updater boundary.
