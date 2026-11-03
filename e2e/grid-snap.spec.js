@@ -50,8 +50,11 @@ test('F042 magnetic object drag is invisible, undoable and locally configurable'
   expect(snapped.history.length).toBe(before.history.length + 1)
   expect(snapped.history.tipType).toBe('modify')
   expect(snapped.objects).toHaveLength(1)
-  expect(snapped.objects[0].left).toBeCloseTo(300, 0)
-  expect(snapped.objects[0].top).toBeCloseTo(200, 0)
+  const snappedBounds = await page.evaluate(
+    (id) => window.__MATHBOARD_E2E__.getSceneBounds(id), snapped.objects[0].mathboardId,
+  )
+  expect(snappedBounds.left).toBeCloseTo(300, 1)
+  expect(snappedBounds.top).toBeCloseTo(200, 1)
 
   await page.getByRole('button', { name: 'Undo', exact: true }).click()
   const undone = await getBoardState(page)
