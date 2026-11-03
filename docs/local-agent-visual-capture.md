@@ -35,6 +35,24 @@ Send `screenshot` to the existing `POST /__mathboard_agent/command`. Exactly one
 {"method":"screenshot","params":{"target":{"kind":"viewport"},"scale":0.5}}
 ```
 
+To add the complete MathBoard wordmark, pass `"includeLogo":true` in the screenshot
+params. This composes a **separate top header** with the fixed MathBoard light grid
+(40px cells, `#f9f9f9` background, `#e0e0e0` lines) and the full Satisfy badge.
+It never covers or rescales board pixels, and the header remains fixed when
+the board is panned, zoomed, cropped, or shown in dark/chalkboard mode. For example:
+
+```json
+{"method":"screenshot","params":{"target":{"kind":"viewport"},"includeLogo":true}}
+```
+
+The option is a strict boolean, default `false`; unbranded screenshots are
+unchanged. Badge coordinates are (16,16) in final PNG pixels, its width is
+`min(160, captureWidthPx - 32)`, its height is `round(width * 56 / 160)`,
+and the grid header is 32px taller than the badge. Branded crops narrower
+than 128 output pixels fail with `invalid_capture_request`. Existing PNG
+size/area/byte limits apply **including the header**; exceeding them fails
+with `capture_too_large` without shrinking the board.
+
 Scene rectangles and object bounds use scene units, independent of pan/zoom. Object IDs must be distinct existing top-level semantic IDs; nested children cannot be targeted individually. Groups and formulas are captured as rendered atomic objects. Bounds include Fabric transforms and stroke geometry. Padding defaults to 16 scene units (0–128). Invisible objects do not contribute bounds; a wholly invisible requested set is rejected. The crop includes everything rendered inside that region, including overlapping unrequested objects.
 
 Viewport captures use the canvas CSS dimensions and its actual transform, without retina multiplication. They exclude DOM controls, selection handles and tool previews. For toolbar occlusion or whole-workspace review, continue using `e2e/helpers/visual-observation.js` and `e2e/visual-observation.spec.js`; canvas evidence alone cannot establish that the toolbar does not cover content.
@@ -42,6 +60,15 @@ Viewport captures use the canvas CSS dimensions and its actual transform, withou
 ## Result and local image review
 
 Success uses the existing `{ok:true,result:...}` envelope. Result fields are `mimeType: "image/png"`, `encoding: "base64"`, `data`, `widthPx`, `heightPx`, `region`, `scale`, `boardId`, and `observationVersion:1`. The latter identifies the existing observation schema (`serializeBoardState().version`), not a scene revision. Associate captures with observations using board ID, region and the unchanged board state; do not treat version 1 as a content counter.
+
+A branded result adds `branding` with `layoutVersion:1`,
+`style:"header"`, `asset:"mathboard-badge"`, a `background` object,
+`headerHeightPx`, `logoRectPx` and `contentRectPx`. Top-level
+`widthPx`/`heightPx` describe the **final image**. `region` and
+`scale` continue to describe only the source board. Clients can locate
+the unchanged board pixels at `contentRectPx.y = headerHeightPx`.
+Unbranded results omit `branding`. Desktop MCP keeps its existing single
+PNG image content block and does not expose this JSON envelope.
 
 Pixel dimensions round upward: `ceil(sourceSize * scale)`. Region width/height report the effective dimensions `pixels / scale`; sceneRect additionally preserves `requestedRect`. Object targets include requested IDs, padding and actual `unionBounds`; viewport includes `coordinateSpace:"viewport"` and a copy of `viewportTransform`. Scene targets use `coordinateSpace:"scene"`.
 

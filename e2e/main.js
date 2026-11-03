@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { mountMathBoard } from '../src/app-bootstrap.js'
+import '@fontsource/satisfy/400.css'
 import { installBoardE2eHook } from './instrumentation/board-hook.js'
 
 import { installBootstrapGate } from './instrumentation/bootstrap-gate.js'
