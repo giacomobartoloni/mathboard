@@ -40,6 +40,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @click="$emit('cycle-theme')">
         <font-awesome-icon :icon="['fas', themeIcon]" />
       </button>
+      <button type="button" class="zoom-button snap-toggle" :class="{ 'snap-enabled': snapToGridEnabled }"
+        aria-label="Snap to Grid" title="Snap to Grid" :aria-pressed="snapToGridEnabled ? 'true' : 'false'"
+        @click="$emit('toggle-snap-to-grid')">
+        <font-awesome-icon :icon="['fas', 'magnet']" aria-hidden="true" />
+      </button>
       <button v-if="fullscreenSupported" type="button" class="zoom-button fullscreen-toggle"
         :title="fullscreenLabel" :aria-label="fullscreenLabel" :aria-pressed="isFullscreen ? 'true' : 'false'"
         @click="$emit('toggle-fullscreen')">
@@ -73,12 +78,16 @@ export default {
       type: Boolean,
       default: false
     },
+    snapToGridEnabled: {
+      type: Boolean,
+      default: false
+    },
     fullscreenSupported: {
       type: Boolean,
       default: true
     }
   },
-  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'undo', 'redo', 'cycle-theme', 'toggle-fullscreen'],
+  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'undo', 'redo', 'cycle-theme', 'toggle-fullscreen', 'toggle-snap-to-grid'],
   computed: {
     zoomPercentage() {
       return Math.round(this.zoomLevel * 100)
@@ -174,7 +183,12 @@ export default {
     right: 12px;
     bottom: max(12px, env(safe-area-inset-bottom));
     justify-content: space-between;
+    gap: 0;
+    padding: 4px;
   }
+  .zoom-button { min-width: 36px; padding: 6px; }
+  .zoom-button.reset { min-width: 45px; }
+  .divider { margin: 6px 2px; }
 }
 
 @media (max-width: 360px) {
@@ -182,6 +196,11 @@ export default {
   .zoom-button { min-width: 34px; padding: 6px; }
   .zoom-button.reset { min-width: 45px; }
   .divider { margin: 6px 1px; }
+}
+
+.snap-enabled {
+  background-color: var(--selected-bg);
+  color: var(--selected-text);
 }
 
 .theme-toggle,

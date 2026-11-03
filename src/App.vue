@@ -46,6 +46,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         :selectedTool="selectedTool"
         :selectedShape="selectedShape"
         :session-ready="boardSessionReady"
+        :snap-to-grid="snapToGrid"
         :board-theme="boardTheme"
         :selected-color="selectedColor"
         :selection-panel-suspended="showFormulaModal || showShareStampModal"
@@ -112,6 +113,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
       :is-fullscreen="isFullscreen"
+      :snap-to-grid-enabled="snapToGrid"
       :fullscreen-supported="fullscreenSupported"
       @zoom-in="onZoomIn"
       @zoom-out="onZoomOut"
@@ -119,6 +121,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @undo="onUndo"
       @redo="onRedo"
       @cycle-theme="onCycleTheme"
+      @toggle-snap-to-grid="onToggleSnapToGrid"
       @toggle-fullscreen="toggleFullscreen"
     />
     
@@ -138,6 +141,7 @@ const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModa
 const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
+import { loadSnapPreference, saveSnapPreference } from './config/snapPreferences.js'
 import {
   BOARD_THEMES,
   loadThemePreferences,
@@ -206,6 +210,11 @@ export default {
     const { uiTheme: initialUiTheme, boardTheme: initialBoardTheme } = loadThemePreferences()
     const uiTheme = ref(initialUiTheme)
     const boardTheme = ref(initialBoardTheme)
+    const snapToGrid = ref(loadSnapPreference())
+    const onToggleSnapToGrid = () => {
+      snapToGrid.value = !snapToGrid.value
+      saveSnapPreference(snapToGrid.value)
+    }
     const selectedColor = ref(null)
     const boardThemeConfig = computed(() => BOARD_THEMES[normalizeBoardTheme(boardTheme.value)])
     const displayColor = computed(() => (
@@ -852,6 +861,8 @@ export default {
       onResetZoom,
       uiTheme,
       boardTheme,
+      snapToGrid,
+      onToggleSnapToGrid,
       selectedColor,
       displayColor,
       boardThemeConfig,
