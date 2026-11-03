@@ -12,24 +12,27 @@
 </p>
 
 <p align="center">
+  <a href="https://mathboard.app/">Launch MathBoard</a> ·
+  <a href="https://mathboard.app/download/">Desktop beta</a> ·
+  <a href="#key-features">Features</a> ·
+  <a href="#getting-started">Get started</a> ·
+  <a href="#documentation">Documentation</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/giacomobartoloni/mathboard/actions/workflows/main.yml">
     <img src="https://github.com/giacomobartoloni/mathboard/actions/workflows/main.yml/badge.svg?branch=main" alt="CI status">
   </a>
   <a href="LICENSE.md">
-    <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0 license">
+    <img src="https://img.shields.io/badge/license-AGPL--3.0-D2B48C?style=flat-square&amp;labelColor=3D3D3D" alt="AGPL-3.0 license">
   </a>
   <a href="https://mathboard.app/">
-    <img src="https://img.shields.io/badge/web-app-success" alt="Web app">
+    <img src="https://img.shields.io/badge/web-live-D2B48C?style=flat-square&amp;labelColor=3D3D3D" alt="Web app">
   </a>
   <a href="https://mathboard.app/download/">
-    <img src="https://img.shields.io/badge/desktop-public%20beta-blueviolet" alt="Desktop public beta">
+    <img src="https://img.shields.io/badge/desktop-public%20beta-D2B48C?style=flat-square&amp;labelColor=3D3D3D" alt="Desktop public beta">
   </a>
-</p>
-
-<p align="center">
-  <a href="https://mathboard.app/">Launch the app</a> ·
-  <a href="https://mathboard.app/download/">Download desktop</a> ·
-  <a href="https://mathboard.app/resources/">Resources</a>
 </p>
 
 MathBoard is an innovative digital whiteboard application specifically designed for math teachers. It seamlessly combines freehand drawing capabilities with powerful LaTeX formula support, enabling users to create, edit, and organize mathematical content with unprecedented ease.
