@@ -142,12 +142,14 @@ fn screenshot_contract_accepts_bounded_targets_and_rejects_invalid_options() {
     let branded = parse_tool_call(
         "mathboard_screenshot",
         json!({"boardId":"mb_a","target":{"kind":"viewport"},"includeLogo":true}),
-    ).unwrap();
-    assert_eq!(branded.params()["includeLogo"],json!(true));
+    )
+    .unwrap();
+    assert_eq!(branded.params()["includeLogo"], json!(true));
     let disabled = parse_tool_call(
         "mathboard_screenshot",
         json!({"boardId":"mb_a","target":{"kind":"viewport"},"includeLogo":false}),
-    ).unwrap();
+    )
+    .unwrap();
     assert!(disabled.params().get("includeLogo").is_none());
     for args in [
         json!({"boardId":"mb_a"}),
