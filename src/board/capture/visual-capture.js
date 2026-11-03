@@ -21,6 +21,7 @@ import { StaticCanvas, Pattern, util } from 'fabric'
 import '../../formulas/FormulaObject.js'
 import { CAPTURE_LIMITS, captureError, validateCaptureRequest, planCapture } from './contract.js'
 import { readCaptureScene } from './scene.js'
+import { composeBrandedCapture } from './branding.js'
 
 const notReady=()=>{throw captureError('board_not_ready','Wait for a stable, fully rendered board before capture.')}
 
@@ -165,7 +166,11 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
       offscreen.setViewportTransform(plan.renderTransform)
       offscreen.add(...clones)
       offscreen.renderAll()
-      const blob=await pngBlob(offscreen.lowerCanvasEl,signal)
+      assertNotAborted(signal)
+      const output=plan.branding
+        ? composeBrandedCapture(environment.document,offscreen.lowerCanvasEl,plan.branding)
+        : offscreen.lowerCanvasEl
+      const blob=await pngBlob(output,signal)
       assertNotAborted(signal)
       if(blob.size>CAPTURE_LIMITS.maxPngBytes) throw captureError('capture_too_large','PNG exceeds the byte limit.')
       assertReady(board,canvas,lease)
@@ -181,8 +186,10 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
       const data=await blobBase64(blob)
       assertNotAborted(signal)
       assertCurrent()
-      return {mimeType:'image/png',encoding:'base64',data,widthPx:plan.widthPx,heightPx:plan.heightPx,
-        region:plan.region,scale:plan.scale,boardId,observationVersion:1}
+      return {mimeType:'image/png',encoding:'base64',data,widthPx:plan.widthPx,
+        heightPx:plan.heightPx+(plan.branding?.headerHeightPx??0),
+        region:plan.region,scale:plan.scale,boardId,observationVersion:1,
+        ...(plan.branding ? {branding:plan.branding} : {})}
     } finally {
       if(offscreen) await offscreen.dispose()
       else clones.forEach(clone=>clone.dispose())

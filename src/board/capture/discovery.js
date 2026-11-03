@@ -22,6 +22,8 @@ import { CAPTURE_LIMITS } from './contract.js'
 const object=(properties,required=Object.keys(properties))=>({type:'object',properties,required,additionalProperties:false})
 const number={type:'number'}
 const rect=object({x:number,y:number,width:{type:'number',exclusiveMinimum:0},height:{type:'number',exclusiveMinimum:0}})
+const pixelRect=object({x:{type:'integer',minimum:0},y:{type:'integer',minimum:0},
+  width:{type:'integer',minimum:1},height:{type:'integer',minimum:1}})
 const target={oneOf:[
   object({kind:{const:'sceneRect'},rect}),
   object({kind:{const:'objectIds'},ids:{type:'array',minItems:1,maxItems:CAPTURE_LIMITS.maxSceneObjects,uniqueItems:true,
@@ -35,7 +37,7 @@ export function getScreenshotDescriptor() {
     method:'screenshot', summary:'Read the rendered live board as a bounded PNG, without changing board state.',
     mutatesBoard:false,requiresStable:true,
     paramsSchema:object({target,scale:{type:'number',minimum:CAPTURE_LIMITS.minScale,maximum:CAPTURE_LIMITS.maxScale,default:1},
-      format:{const:'png',default:'png'}},['target']),
+      format:{const:'png',default:'png'},includeLogo:{type:'boolean',default:false}},['target']),
     resultSchema:object({mimeType:{const:'image/png'},encoding:{const:'base64'},
       data:{type:'string',contentEncoding:'base64',contentMediaType:'image/png',maxLength:CAPTURE_LIMITS.maxBase64Chars},
       widthPx:{type:'integer',minimum:1,maximum:CAPTURE_LIMITS.maxDimension},
@@ -46,7 +48,13 @@ export function getScreenshotDescriptor() {
           ids:{type:'array',items:{type:'string'}},padding:number,
           viewportTransform:{type:'array',minItems:6,maxItems:6,items:number}},additionalProperties:false},
       scale:{type:'number',minimum:CAPTURE_LIMITS.minScale,maximum:CAPTURE_LIMITS.maxScale},
-      boardId:{type:'string'},observationVersion:{const:1}}),
+      boardId:{type:'string'},observationVersion:{const:1},
+      branding:object({
+        layoutVersion:{const:1},style:{const:'header'},asset:{const:'mathboard-badge'},
+        headerHeightPx:{type:'integer',minimum:1},
+        background:object({kind:{const:'mathboard-grid'},variant:{const:'light'},cellSizePx:{const:40}}),
+        logoRectPx:pixelRect,contentRectPx:pixelRect,
+      })},['mimeType','encoding','data','widthPx','heightPx','region','scale','boardId','observationVersion']),
     example:{method:'screenshot',params:{target:{kind:'sceneRect',rect:{x:200,y:120,width:800,height:600}},scale:1,format:'png'}},
     limits:{...CAPTURE_LIMITS},
     limitations:[
@@ -54,6 +62,7 @@ export function getScreenshotDescriptor() {
       'objectIds accepts existing top-level semantic IDs only; formula vectors remain atomic.',
       'sceneRect/objectIds use scene units independent of live pan/zoom; viewport uses CSS viewport pixels and the returned transform.',
       'The PNG is visual evidence, not automatic proof of layout quality. Capture never grants permission to mutate.',
+      'Optional includeLogo adds a fixed light 40px-grid MathBoard header outside the board pixels; final PNG limits include the header.',
       'External image resources, canvas background/overlay images and canvas clip paths are rejected.',
     ],
   })
