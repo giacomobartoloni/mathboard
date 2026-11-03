@@ -63,7 +63,10 @@ test('text font and size controls produce history-safe semantic text updates', a
   await page.keyboard.press('Escape');
   await waitForState(page, s => s.objects.some(o => o.text === 'vector'));
   await selectTool(page, 'Select');
-  await clickOnCanvas(page, { x: 345, y: 259 });
+  // The newly committed IText can remain selected; clicking it again opens
+  // native Fabric text editing, which intentionally hides formatting controls.
+  await clickOnCanvas(page, { x: 650, y: 430 });
+  await clickOnCanvas(page, { x: 360, y: 270 });
   const family = page.getByRole('combobox', { name: 'Text font family' });
   const size = page.getByRole('combobox', { name: 'Text font size' });
   await expect(family).toBeVisible();
