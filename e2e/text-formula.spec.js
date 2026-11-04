@@ -21,6 +21,12 @@ import { test, expect } from '@playwright/test'
 import { gotoBoard } from './fixtures.js'
 import { selectTool, clickUndo, clickRedo } from './helpers/board.js'
 import { clickOnCanvas, getBoardState, waitForState } from './helpers/canvas.js'
+import {
+  CURSOR,
+  SELECTION,
+  QUICK_INSERT_ITEMS,
+  LATEX_PALETTE_GROUPS,
+} from '../src/config/latexPalette.js'
 
 async function createText(page, value) {
   await selectTool(page, 'Text')
@@ -334,3 +340,127 @@ test('E2E-P0-005e dynamic NewCM ranges load without CDN', async ({ page, baseURL
   expect(errors).toEqual([])
   expect(mathjaxCdnRequests).toEqual([])
 })
+
+
+test('E2E-P0-005g every Quick Insert keeps cursor and selection semantics', async ({ page }) => {
+  await gotoBoard(page)
+  await selectTool(page, 'Formula')
+  await clickOnCanvas(page, { x: 340, y: 240 })
+
+  const input = page.getByLabel('LaTeX Formula:')
+  const submit = page.getByRole('button', { name: 'Insert', exact: true })
+
+  for (const item of QUICK_INSERT_ITEMS) {
+    const button = page.getByRole('button', { name: item.ariaLabel, exact: true })
+    await expect(button.locator('.katex')).toBeVisible()
+    await input.fill('')
+    await button.click()
+
+    const expected = item.template.replaceAll(CURSOR, '').replaceAll(SELECTION, '')
+    await expect(input).toHaveValue(expected)
+    await expect.poll(async () => input.evaluate((element) => element.selectionStart))
+      .toBe(item.template.indexOf(CURSOR))
+
+    await input.fill(item.preview)
+    await expect(page.locator('.preview-box .katex')).toBeVisible()
+    await expect(submit).toBeEnabled()
+
+    if (item.selectionTemplate) {
+      await input.fill('xy')
+      await input.evaluate((element) => element.setSelectionRange(0, 2))
+      await button.click()
+      const withSelection = item.selectionTemplate.replaceAll(SELECTION, 'xy')
+      await expect(input).toHaveValue(withSelection.replaceAll(CURSOR, ''))
+      await expect.poll(async () => input.evaluate((element) => element.selectionStart))
+        .toBe(withSelection.indexOf(CURSOR))
+    }
+  }
+})
+
+for (const group of LATEX_PALETTE_GROUPS) {
+  test('E2E-P0-005h every ' + group.id + ' palette symbol inserts and previews', async ({ page }) => {
+    await gotoBoard(page)
+    await selectTool(page, 'Formula')
+    await clickOnCanvas(page, { x: 340, y: 240 })
+    await page.getByRole('tab', { name: group.label, exact: true }).click()
+
+    const panel = page.getByRole('tabpanel', { name: group.label, exact: true })
+    const input = page.getByLabel('LaTeX Formula:')
+    const submit = page.getByRole('button', { name: 'Insert', exact: true })
+
+    for (const item of group.items) {
+      const button = panel.getByRole('button', { name: item.ariaLabel, exact: true })
+      await expect(button.locator('.katex')).toBeVisible()
+      await input.fill('x')
+      await button.click()
+      await expect(input).toHaveValue('x' + item.template)
+      await expect(page.locator('.preview-box .katex')).toBeVisible()
+      await expect(submit).toBeEnabled()
+    }
+  })
+}
+
+const FORMULA_TOOLBAR_BOARD_CASES = [
+  {
+    id: 'mathbf',
+    action: 'Insert bold upright math',
+    latex: '\\mathbf{A}+\\mathbf{B}',
+  },
+  {
+    id: 'bmatrix',
+    action: 'Insert matrix',
+    latex: '\\begin{bmatrix}1&2\\\\3&4\\end{bmatrix}',
+  },
+  {
+    id: 'symbols',
+    group: 'Symbols',
+    action: 'Insert times',
+    latex: 'x\\times y',
+  },
+  {
+    id: 'greek',
+    group: 'Greek',
+    action: 'Insert alpha',
+    latex: '\\alpha+\\beta',
+  },
+  {
+    id: 'relations',
+    group: 'Relations',
+    action: 'Insert less than or equal',
+    latex: 'x\\leq y',
+  },
+]
+
+for (const sample of FORMULA_TOOLBAR_BOARD_CASES) {
+  test('E2E-P0-005i ' + sample.id + ' preview becomes editable MathJax vectors', async ({ page }) => {
+    await gotoBoard(page)
+    await selectTool(page, 'Formula')
+    await clickOnCanvas(page, { x: 340, y: 240 })
+
+    if (sample.group) {
+      await page.getByRole('tab', { name: sample.group, exact: true }).click()
+    }
+    await page.getByRole('button', { name: sample.action, exact: true }).click()
+
+    const input = page.getByLabel('LaTeX Formula:')
+    await input.fill(sample.latex)
+    await expect(page.locator('.preview-box .katex')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Insert', exact: true })).toBeEnabled()
+    await page.getByRole('button', { name: 'Insert', exact: true }).click()
+
+    const state = await waitForState(
+      page,
+      (next) => next.objects.some((object) => object.latex === sample.latex),
+      { timeout: 15000 },
+    )
+    const formula = state.objects.find((object) => object.latex === sample.latex)
+    expect(formula.isVectorFormula).toBe(true)
+    expect(formula.childCount).toBeGreaterThan(0)
+    expect(formula.width).toBeGreaterThan(0)
+    expect(formula.height).toBeGreaterThan(0)
+    expect(formula.vectorPaints.length).toBeGreaterThan(0)
+
+    await dblclickFormula(page, formula)
+    await expect(input).toHaveValue(sample.latex)
+  })
+}
