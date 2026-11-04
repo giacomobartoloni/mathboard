@@ -83,5 +83,5 @@ test('locale alternate validation detects missing self-links and reciprocity', (
 test('language switcher items do not inherit article list spacing', () => {
   const css = readFileSync(new URL('../public/seo/site.css', import.meta.url), 'utf8')
   // Shared list spacing shifts all flex items after the first language link.
-  assert.match(css, /main \\.language-links ul li \\+ li \\{\\s*margin-top: 0;/)
+  assert.match(css, /main \.language-links ul li \+ li \{\s*margin-top: 0;/)
 })
