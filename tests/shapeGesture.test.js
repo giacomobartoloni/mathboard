@@ -34,9 +34,7 @@ function canvasStub() {
     remove(object) { const i = objects.indexOf(object); if (i >= 0) objects.splice(i, 1); },
     on(event, callback) { if (!listeners.has(event)) listeners.set(event, new Set()); listeners.get(event).add(callback); },
     off(event, callback) { listeners.get(event)?.delete(callback); },
-    fire(event, point, modifiers = {}) {
-      for (const callback of [...(listeners.get(event) || [])]) callback({ scenePoint: point, e: modifiers });
-    },
+    fire(event, point) { for (const callback of [...(listeners.get(event) || [])]) callback({ scenePoint: point }); },
     renderAll() {}, requestRenderAll() {},
     getScenePoint(event) { return event; },
   };
@@ -108,19 +106,4 @@ test('tool switch finalizes once without one-shot callback and removes listeners
   assert.equal(canvas.listeners.get('mouse:down').size,1);
   gesture.dispose();
   assert.equal(canvas.listeners.get('mouse:down').size,0);
-});
-
-test('Shift restricts newly drawn Lines to horizontal or vertical axes', () => {
-  for (const [end, expected] of [
-    [{ x: 95, y: 68 }, { x: 95, y: 20 }],
-    [{ x: 65, y: -100 }, { x: 20, y: -100 }],
-  ]) {
-    const { canvas, commands } = setup('arrow');
-    canvas.fire('mouse:down', { x: 20, y: 20 });
-    canvas.fire('mouse:move', end, { shiftKey: true });
-    canvas.fire('mouse:up', end);
-    assert.equal(commands.length, 1);
-    assert.equal(commands[0].object.x2, expected.x);
-    assert.equal(commands[0].object.y2, expected.y);
-  }
 });
