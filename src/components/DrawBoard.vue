@@ -105,6 +105,7 @@ import {
 } from "../stamps/index.js";
 import { resolveStampRoot } from "../stamps/resolveStampRoot.js";
 import { geometryControls, lineGeometryAdapter, isGeometryHandleTransform } from "../board/geometry/geometryHandles.js";
+import { arrowGeometryAdapter } from "../board/geometry/arrowGeometryAdapter.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -639,9 +640,11 @@ export default {
     },
     _syncGeometryEditing() {
       const active = this.canvas?.getActiveObject();
-      // Geometry editing is deliberately limited to top-level, singly selected lines.
+      // Line and Arrow share the controls; only their intrinsic geometry differs.
+      const adapter = active?.isType?.('Line') ? lineGeometryAdapter
+        : active?.mathboardShapeType === 'arrow' ? arrowGeometryAdapter : null;
       const editable = this.selectedTool === 'select'
-        && active?.isType?.('Line')
+        && adapter
         && this.canvas.getObjects().includes(active)
         && this.canvas.getActiveObjects().length === 1 ? active : null;
       if (this._geometryEditing?.object === editable) return;
@@ -653,7 +656,7 @@ export default {
         hadOwnControls: Object.prototype.hasOwnProperty.call(editable, 'controls'),
         hasBorders: editable.hasBorders,
       };
-      editable.controls = geometryControls(lineGeometryAdapter);
+      editable.controls = geometryControls(adapter);
       editable.hasBorders = false;
       // Rebuild oCoords before the next hit test: stale native keys crash findControl.
       editable.setCoords();
