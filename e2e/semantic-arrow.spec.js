@@ -27,6 +27,8 @@ test('Shapes popup uses equal-sized buttons for Rectangle, Circle, Line and Arro
   await page.getByRole('button', { name: 'Shapes', exact: true }).click();
   const submenu = page.getByRole('group', { name: 'Shape options' });
   await expect(submenu).toBeVisible();
+  await expect(submenu.getByRole('button', { name: 'Arrow', exact: true })
+    .locator('svg.fa-arrow-right')).toBeVisible();
   const names = ['Rectangle', 'Circle', 'Line', 'Arrow'];
   const boxes = await Promise.all(names.map((name) => submenu.getByRole('button', {
     name, exact: true,
