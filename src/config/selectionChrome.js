@@ -74,6 +74,12 @@ const HIDDEN_SIDE_CONTROLS = Object.freeze({
   mb: false,
   ml: false,
 })
+const VISIBLE_SIDE_CONTROLS = Object.freeze({
+  mt: true,
+  mr: true,
+  mb: true,
+  ml: true,
+})
 
 const CANVAS_MARQUEE_KEYS = [
   'selectionColor',
@@ -103,7 +109,10 @@ export function applySelectionObjectChrome(object, objectChrome) {
   const themeChrome = { ...objectChrome }
   delete themeChrome.padding
   object.set(themeChrome)
-  object.setControlsVisibility?.(HIDDEN_SIDE_CONTROLS)
+  // Side handles are meaningful for planar shapes. Keep them hidden on text,
+  // lines, paths, formulas, Groups and transient ActiveSelections.
+  const stretchable = object.isType?.('Rect', 'Circle', 'Ellipse')
+  object.setControlsVisibility?.(stretchable ? VISIBLE_SIDE_CONTROLS : HIDDEN_SIDE_CONTROLS)
 
   const isGroup = typeof object.isType === 'function' && object.isType('Group')
   if (!isGroup || typeof object.getObjects !== 'function') return
