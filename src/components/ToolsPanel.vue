@@ -533,6 +533,12 @@ export default {
 }
 
 .submenu-button {
+  padding: 6px 10px;
+  border-radius: 5px;
+}
+
+/* Normalize only the four Shapes targets; keep Stamp kit sizing unchanged. */
+.shapes-submenu:not(.kits-submenu) .submenu-button {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -540,7 +546,6 @@ export default {
   width: 36px;
   height: 32px;
   padding: 6px;
-  border-radius: 5px;
 }
 
 .submenu-button.selected-shape {
