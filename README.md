@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://mathboard.app/">
-    <img src="public/icon-192x192.png" alt="MathBoard logo" width="112">
+    <img src="public/og-image.png" alt="MathBoard — open-source math whiteboard" width="720">
   </a>
 </p>
 
