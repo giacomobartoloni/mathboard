@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { Rect, Circle, Line } from "fabric";
+import { orthogonalEndpoint } from "../geometry/angleConstraints.js";
 
 const LEFT_TOP_ORIGIN = { originX: "left", originY: "top" };
 
@@ -84,7 +85,9 @@ export class ShapeGesture {
 
   move(opt) {
     if (!this.pending || !this.origin) return;
-    const point = this._point(opt);
+    const rawPoint = this._point(opt);
+    const point = (this.shapeType === "arrow" || this.shapeType === "vector-arrow") && opt.e?.shiftKey
+      ? orthogonalEndpoint(this.origin, rawPoint) : rawPoint;
     const width = point.x - this.origin.x;
     const height = point.y - this.origin.y;
     if (this.shapeType === "rectangle") {

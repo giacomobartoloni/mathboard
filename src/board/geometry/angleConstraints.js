@@ -32,3 +32,12 @@ export function snapPointToAngle(anchor, point, incrementDegrees = 15) {
     y: anchor.y + radius * Math.sin(angle),
   }
 }
+
+/** Hold Shift during a NEW line/arrow drag to constrain its endpoint to an axis. */
+export function orthogonalEndpoint(anchor, point) {
+  const dx = point.x - anchor.x
+  const dy = point.y - anchor.y
+  return Math.abs(dx) >= Math.abs(dy)
+    ? { x: point.x, y: anchor.y }
+    : { x: anchor.x, y: point.y }
+}
