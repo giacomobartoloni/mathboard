@@ -130,7 +130,31 @@ export function validatePages(pages) {
   }
 
   const knownPaths = new Set([...EXTRA_KNOWN_PATHS, ...paths])
+  const pageByPath = new Map(pages.map((page) => [page.path, page]))
   for (const page of pages) {
+    if (page.alternates) {
+      const codes = new Set()
+      for (const { lang, path } of page.alternates) {
+        if (!lang || codes.has(lang) || !pageByPath.has(path)) {
+          throw new Error(`Invalid locale alternate on ${page.path}: ${lang} -> ${path}`)
+        }
+        codes.add(lang)
+        if ((pageByPath.get(path).locale || 'en') !== lang) {
+          throw new Error(`Locale alternate mismatch on ${page.path}: ${lang} -> ${path}`)
+        }
+      }
+      const currentLang = page.locale || 'en'
+      if (!page.alternates.some(({ lang, path }) => lang === currentLang && path === page.path)) {
+        throw new Error(`Missing self-referencing locale alternate on ${page.path}`)
+      }
+      for (const { path } of page.alternates) {
+        const target = pageByPath.get(path)
+        if (!target.alternates || !target.alternates.some(({ path: reciprocal }) => reciprocal === page.path)) {
+          throw new Error(`Non-reciprocal locale alternate on ${page.path}: ${path}`)
+        }
+      }
+    }
+
     const hrefs = collectInternalHrefs(page.body)
     for (const href of hrefs) {
       if (!knownPaths.has(href)) {
@@ -218,7 +242,7 @@ export function validateStructuredData(page, html) {
   }
   if (expectedCrumbs.length) {
     const crumbItems = breadcrumbNodes[0].itemListElement || []
-    const visible = html.match(/<nav aria-label="Breadcrumb">([\s\S]*?)<\/nav>/)?.[1] || ''
+    const visible = html.match(/<nav aria-label="[^"]+">\s*<ol class="breadcrumbs">([\s\S]*?)<\/nav>/)?.[1] || ''
     const itemCount = (visible.match(/<li\b/g) || []).length
     if (crumbItems.length !== expectedCrumbs.length || itemCount !== expectedCrumbs.length) {
       throw new Error(`BreadcrumbList length mismatch on ${page.path}`)
