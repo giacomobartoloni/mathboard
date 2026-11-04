@@ -1682,6 +1682,12 @@ th {
   margin: 0;
 }
 
+/* Regular content lists add top spacing to later siblings; the flex language
+   navigation needs every item aligned on the same row. */
+main .language-links ul li + li {
+  margin-top: 0;
+}
+
 .language-links a[aria-current="page"] {
   font-weight: 750;
   text-decoration: none;

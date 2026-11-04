@@ -17,6 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import mathWhiteboard from '../seo/pages/math-whiteboard.mjs'
@@ -77,4 +78,10 @@ test('locale alternate validation detects missing self-links and reciprocity', (
     page('/english/', 'en', links),
     page('/italian/', 'it', [{ lang: 'it', path: '/italian/' }]),
   ]), /Non-reciprocal locale alternate/)
+})
+
+test('language switcher items do not inherit article list spacing', () => {
+  const css = readFileSync(new URL('../public/seo/site.css', import.meta.url), 'utf8')
+  // Shared list spacing shifts all flex items after the first language link.
+  assert.match(css, /main \.language-links ul li \+ li \{\s*margin-top: 0;/)
 })
