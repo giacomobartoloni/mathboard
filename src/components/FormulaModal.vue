@@ -65,7 +65,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
                 </button>
               </div>
               <p class="tools-hint">
-                Tip: select an expression before choosing √, fraction, parentheses, or |x|.
+                Tip: select an expression before choosing a wrapper like bold, fraction, parentheses, or |x|.
               </p>
             </div>
 
