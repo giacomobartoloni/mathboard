@@ -22,6 +22,22 @@ import { gotoBoard } from './fixtures.js';
 import { selectShape, clickUndo, clickRedo } from './helpers/board.js';
 import { clickOnCanvas, dragOnCanvas, getBoardState, waitForState } from './helpers/canvas.js';
 
+test('Shapes popup uses equal-sized buttons for Rectangle, Circle, Line and Arrow', async ({ page }) => {
+  await gotoBoard(page);
+  await page.getByRole('button', { name: 'Shapes', exact: true }).click();
+  const submenu = page.getByRole('group', { name: 'Shape options' });
+  await expect(submenu).toBeVisible();
+  const names = ['Rectangle', 'Circle', 'Line', 'Arrow'];
+  const boxes = await Promise.all(names.map((name) => submenu.getByRole('button', {
+    name, exact: true,
+  }).boundingBox()));
+  for (const box of boxes) {
+    expect(box).not.toBeNull();
+    expect(box.width).toBeCloseTo(boxes[0].width, 1);
+    expect(box.height).toBeCloseTo(boxes[0].height, 1);
+  }
+});
+
 test('UI Arrow creates an editable semantic arrow and can Undo/Redo', async ({ page }) => {
   await gotoBoard(page);
   await selectShape(page, 'Arrow');

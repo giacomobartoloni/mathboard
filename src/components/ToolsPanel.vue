@@ -533,7 +533,13 @@ export default {
 }
 
 .submenu-button {
-  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 32px;
+  padding: 6px;
   border-radius: 5px;
 }
 
@@ -546,11 +552,7 @@ export default {
 .submenu-button.line-icon {
   font-size: 15px;
   font-weight: bold;
-  width: 15px;
   line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .fade-enter-active, .fade-leave-active {
