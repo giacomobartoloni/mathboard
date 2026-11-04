@@ -19,50 +19,50 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { escapeHtml } from './escape-html.mjs'
 
-export function renderOpenBoardCTA({ placement = 'main' } = {}) {
+export function renderOpenBoardCTA({ placement = 'main', label = 'Open MathBoard' } = {}) {
   return `
     <a
       class="button button-primary"
       href="/"
       data-seo-cta="open-board"
       data-placement="${escapeHtml(placement)}"
-    >Open MathBoard</a>
+    >${escapeHtml(label)}</a>
   `.trim()
 }
 
-export function renderHeader() {
+export function renderHeader(ui = {}) {
   return `
     <header class="site-header">
       <a href="/" class="brand" aria-label="MathBoard home">
         <span class="logo">MathBoard</span>
       </a>
-      <nav aria-label="Primary">
-        <a href="/resources/">Resources</a>
-        <a href="/download/">Download</a>
+      <nav aria-label="${escapeHtml(ui.primary || 'Primary')}">
+        <a href="/resources/">${escapeHtml(ui.resources || 'Resources')}</a>
+        <a href="/download/">${escapeHtml(ui.download || 'Download')}</a>
         <a href="https://github.com/giacomobartoloni/mathboard">GitHub</a>
-        ${renderOpenBoardCTA({ placement: 'header' })}
+        ${renderOpenBoardCTA({ placement: 'header', label: ui.openBoard || 'Open MathBoard' })}
       </nav>
     </header>
   `.trim()
 }
 
-export function renderFooter() {
+export function renderFooter(ui = {}) {
   return `
     <footer class="site-footer">
-      <nav aria-label="Footer">
-        <a href="/resources/">Resources</a>
-        <a href="/download/">Desktop downloads</a>
-        <a href="/docs/keyboard-shortcuts/">Keyboard shortcuts</a>
-        <a href="/docs/latex/">LaTeX examples</a>
-        <a href="/privacy-policy.html">Privacy Policy</a>
+      <nav aria-label="${escapeHtml(ui.footer || 'Footer')}">
+        <a href="/resources/">${escapeHtml(ui.resources || 'Resources')}</a>
+        <a href="/download/">${escapeHtml(ui.downloads || 'Desktop downloads')}</a>
+        <a href="/docs/keyboard-shortcuts/">${escapeHtml(ui.shortcuts || 'Keyboard shortcuts')}</a>
+        <a href="/docs/latex/">${escapeHtml(ui.latex || 'LaTeX examples')}</a>
+        <a href="/privacy-policy.html">${escapeHtml(ui.privacy || 'Privacy Policy')}</a>
         <a href="https://github.com/giacomobartoloni/mathboard">GitHub</a>
       </nav>
-      <p class="footer-note">MathBoard is free and open source under the GNU AGPL v3.</p>
+      <p class="footer-note">${escapeHtml(ui.footerNote || 'MathBoard is free and open source under the GNU AGPL v3.')}</p>
     </footer>
   `.trim()
 }
 
-export function renderBreadcrumbs(crumbs = []) {
+export function renderBreadcrumbs(crumbs = [], label = 'Breadcrumb') {
   if (!Array.isArray(crumbs) || crumbs.length === 0) return ''
   const items = crumbs
     .map((crumb, index) => {
@@ -74,7 +74,7 @@ export function renderBreadcrumbs(crumbs = []) {
     })
     .join('\n')
   return `
-    <nav aria-label="Breadcrumb">
+    <nav aria-label="${escapeHtml(label)}">
       <ol class="breadcrumbs">
         ${items}
       </ol>
