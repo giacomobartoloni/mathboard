@@ -31,7 +31,7 @@ test('desktop hints preserve accessible names, tab order and board state', async
   const before = await gotoBoard(page)
   for (const [name, key] of tools) {
     const button = page.getByRole('button', { name, exact: true })
-    await expect(button).toHaveAttribute('title', `${name} (${key})`)
+    await expect(button).toHaveAttribute('title', name === 'Pan' ? 'Pan (H · hold Space)' : `${name} (${key})`)
     const hint = button.locator('span[aria-hidden="true"]')
     await expect(hint).toHaveText(key)
     await expect(hint).toBeVisible()

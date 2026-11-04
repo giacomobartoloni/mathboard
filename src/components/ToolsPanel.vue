@@ -38,7 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         :class="{ selected: selected === 'pan' }"
         :aria-pressed="selected === 'pan'"
         aria-label="Pan"
-        title="Pan (H)"
+        title="Pan (H · hold Space)"
         @click="select('pan')"
       >
         <font-awesome-icon :icon="['far', 'hand-paper']" />
