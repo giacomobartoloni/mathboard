@@ -128,7 +128,8 @@ export function snapshotObject(object, { includeGeometry = false } = {}) {
     ? [...STYLE_KEYS, "mathboardInkMode"] : ["opacity"];
   // Explicit geometry gestures include intrinsic endpoints. Ordinary move/scale/rotate
   // snapshots keep the established transform-only contract (ADR 0001).
-  const geometryKeys = includeGeometry && object.isType('Line')
+  const geometryKeys = includeGeometry
+    && (object.isType('Line') || snapshotPolicy.isArrow(object))
     ? ['x1', 'y1', 'x2', 'y2'] : [];
   const keys = [...geometryKeys, ...keysFor(object), ...styleKeys];
   const group = object.group;
@@ -151,6 +152,12 @@ export function applySnapshot(object, snapshot) {
   Object.keys(snapshot).forEach((key) => {
     next[key] = copyValue(key, snapshot[key]);
   });
+  // Unlike a Fabric Line, a semantic Arrow derives its Path from endpoints.
+  // Rebuild it on geometry Undo/Redo (and Escape cancellation) before restoring placement.
+  if (snapshotPolicy.isArrow(object) && Object.hasOwn(next, 'x1')) {
+    object.setEndpoints(next);
+    for (const key of ['x1', 'y1', 'x2', 'y2']) delete next[key];
+  }
   object.set(next);
   object.setCoords();
   object.dirty = true;

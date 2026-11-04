@@ -144,6 +144,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             >
               |
             </button>
+            <button
+              type="button"
+              class="submenu-button line-icon"
+              :class="{ 'selected-shape': selectedShape === 'vector-arrow' }"
+              :aria-pressed="selectedShape === 'vector-arrow'"
+              aria-label="Arrow"
+              title="Arrow"
+              @click="selectShape('vector-arrow')"
+            >
+              <font-awesome-icon :icon="['fas', 'arrow-right']" />
+            </button>
           </div>
         </transition>
       </div>
@@ -526,6 +537,17 @@ export default {
   border-radius: 5px;
 }
 
+/* Normalize only the four Shapes targets; keep Stamp kit sizing unchanged. */
+.shapes-submenu:not(.kits-submenu) .submenu-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 32px;
+  padding: 6px;
+}
+
 .submenu-button.selected-shape {
   background-color: var(--selected-bg);
   color: var(--selected-text);
@@ -535,11 +557,7 @@ export default {
 .submenu-button.line-icon {
   font-size: 15px;
   font-weight: bold;
-  width: 15px;
   line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .fade-enter-active, .fade-leave-active {
