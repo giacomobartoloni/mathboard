@@ -19,7 +19,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CURSOR, SELECTION, QUICK_INSERT_ITEMS } from '../src/config/latexPalette.js';
+import katex from 'katex';
+import {
+  CURSOR,
+  SELECTION,
+  QUICK_INSERT_ITEMS,
+  LATEX_PALETTE_GROUPS,
+} from '../src/config/latexPalette.js';
 
 test('math helpers insert editable wrappers with cursor and selection support', () => {
   const cases = {
@@ -37,4 +43,52 @@ test('math helpers insert editable wrappers with cursor and selection support', 
     assert.ok(item.selectionTemplate.includes(CURSOR), id);
   }
   assert.equal(new Set(QUICK_INSERT_ITEMS.map((item) => item.id)).size, QUICK_INSERT_ITEMS.length);
+});
+
+
+test('formula toolbar entries have unique identifiers and insertion templates', () => {
+  const groups = [
+    { id: 'quick-insert', items: QUICK_INSERT_ITEMS },
+    ...LATEX_PALETTE_GROUPS,
+  ];
+  const seen = new Set();
+
+  for (const group of groups) {
+    assert.ok(group.items.length > 0, group.id);
+    for (const item of group.items) {
+      const context = group.id + '/' + item.id;
+      assert.ok(!seen.has(item.id), 'Duplicate identifier: ' + context);
+      seen.add(item.id);
+      assert.ok(item.ariaLabel, context);
+      assert.ok(item.preview, context);
+      assert.ok(item.template, context);
+      assert.ok(!item.preview.includes(CURSOR), context);
+      assert.ok(!item.preview.includes(SELECTION), context);
+    }
+  }
+});
+
+test('KaTeX accepts every Quick Insert and symbol palette preview', () => {
+  const groups = [
+    { id: 'quick-insert', items: QUICK_INSERT_ITEMS },
+    ...LATEX_PALETTE_GROUPS,
+  ];
+
+  for (const group of groups) {
+    for (const item of group.items) {
+      const context = group.id + '/' + item.id;
+      let markup;
+      try {
+        markup = katex.renderToString(item.preview, {
+          displayMode: true,
+          throwOnError: true,
+          strict: false,
+        });
+      } catch (error) {
+        assert.fail(context + ': ' + error.message);
+      }
+      assert.match(markup, /class="katex"/, context);
+      assert.doesNotMatch(markup, /katex-error/, context);
+    }
+  }
 });
