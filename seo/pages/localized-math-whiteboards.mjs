@@ -463,6 +463,10 @@ const localizedContent = [
 
 function renderLocalizedBody(content) {
   const escaped = (value) => escapeHtml(value)
+  // Keep left-to-right mathematical notation readable inside RTL prose.
+  const mathExample = (value) => escaped(value)
+    .replaceAll('2x + 3 = 11', '<bdi dir="ltr">2x + 3 = 11</bdi>')
+    .replaceAll('x = 4', '<bdi dir="ltr">x = 4</bdi>')
   const featureItems = content.features
     .map((feature) => '<li>' + escaped(feature) + '</li>')
     .join('\n')
@@ -486,7 +490,7 @@ function renderLocalizedBody(content) {
     '</div>',
     '<section><h2>' + escaped(content.featuresTitle) + '</h2><ul>' + featureItems + '</ul></section>',
     '<section><h2>' + escaped(content.workflowTitle) + '</h2><p>' + escaped(content.workflow) + '</p></section>',
-    '<section><h2>' + escaped(content.exampleTitle) + '</h2><p>' + escaped(content.example) + '</p></section>',
+    '<section><h2>' + escaped(content.exampleTitle) + '</h2><p>' + mathExample(content.example) + '</p></section>',
     '<section><h2>' + escaped(content.relatedTitle) + '</h2>',
     '  <p><a href="/latex-whiteboard/">' + escaped(content.relatedLabel) + '</a></p>',
     '  <p class="muted">' + escaped(content.note) + '</p>',
@@ -494,7 +498,7 @@ function renderLocalizedBody(content) {
   ].join('\n')
 }
 
-// Copy is reviewed in source control; no translation or page generation calls run at build time.
+// Localized copy is checked into source control; native-speaker review is required before release.
 export const localizedMathWhiteboards = localizedContent.map((content) => ({
   path: content.path,
   locale: content.locale,
