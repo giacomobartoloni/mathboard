@@ -462,9 +462,18 @@ test('mobile board selector stays in the top-right beside the logo', async ({ pa
       (logoBox.y + logoBox.height / 2) - (selectorBox.y + selectorBox.height / 2),
     )).toBeLessThanOrEqual(8)
     await expect(switcher).toBeInViewport()
-    await expect(switcher.locator('.board-library-trigger-label-' + (width <= 360 ? 'short' : 'long'))).toBeVisible()
-    await expect(switcher.locator('.board-library-trigger-label-' + (width <= 360 ? 'long' : 'short'))).toBeHidden()
+    await expect(switcher.locator('svg.board-library-trigger-icon')).toBeVisible()
+    await expect(switcher.locator('.board-library-trigger-label')).toBeHidden()
+    expect(Math.round(selectorBox.width)).toBe(44)
   }
+
+  // Desktop keeps a short, visible label instead of the previous dropdown cue.
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await expect(switcher.locator('.board-library-trigger-label')).toHaveText('Boards')
+  await expect(switcher.locator('.board-library-trigger-label')).toBeVisible()
+  await expect(switcher.locator('svg.board-library-trigger-icon')).toBeVisible()
+  expect((await switcher.boundingBox()).width).toBeLessThan(160)
+  await expect(switcher.locator('svg')).toHaveCount(1)
 })
 
 
