@@ -74,10 +74,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       />
 
     </div>
-    <BoardLibraryModal v-if="showBoardLibrary" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
-      :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
-      :pinned="boardLibraryMode === 'pinned'" :can-pin="canPinBoardLibrary"
-      @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @action="onBoardLibraryAction" />
+    <Transition name="board-library" @after-leave="restoreBoardLibraryFocus">
+      <BoardLibraryModal v-if="showBoardLibrary" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
+        :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
+        :pinned="boardLibraryMode === 'pinned'" :can-pin="canPinBoardLibrary"
+        @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @action="onBoardLibraryAction" />
+    </Transition>
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
 
@@ -302,12 +304,12 @@ export default {
     const boardLibraryBusy = ref(false)
     const boardLibraryLoading = ref(false)
     const boardLibraryError = ref(null)
-    const closeBoardLibrary = async () => {
+    const closeBoardLibrary = () => {
       if (boardLibraryBusy.value) return
       boardLibraryMode.value = 'closed'
-      await nextTick()
-      boardLibraryTriggerRef.value?.focus()
     }
+    // The trigger receives focus only after the closing slide has finished.
+    const restoreBoardLibraryFocus = () => boardLibraryTriggerRef.value?.focus()
     const toggleBoardLibraryPin = () => {
       if (boardLibraryBusy.value) return
       if (boardLibraryMode.value === 'overlay' && canPinBoardLibrary.value) boardLibraryMode.value = 'pinned'
@@ -358,8 +360,6 @@ export default {
           selectedTool.value = 'select'
           if (boardLibraryMode.value === 'overlay') {
             boardLibraryMode.value = 'closed'
-            await nextTick()
-            boardLibraryTriggerRef.value?.focus()
           }
         }
       } catch (error) {
@@ -918,6 +918,7 @@ export default {
       boardLibraryError,
       openBoardLibrary,
       closeBoardLibrary,
+      restoreBoardLibraryFocus,
       onBoardLibraryAction,
       onRequestFormula,
       onEditFormula,
