@@ -43,6 +43,7 @@ import { faChevronDown } from '@fortawesome/free-solid-svg-icons'
 import { faPlus } from '@fortawesome/free-solid-svg-icons'
 import { faBoxArchive } from '@fortawesome/free-solid-svg-icons'
 import { faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faThumbtack } from '@fortawesome/free-solid-svg-icons'
 import { faExpand } from '@fortawesome/free-solid-svg-icons'
 import { faCompress } from '@fortawesome/free-solid-svg-icons'
 import { faCopy } from '@fortawesome/free-solid-svg-icons'
@@ -82,6 +83,7 @@ library.add(faChevronDown)
 library.add(faPlus)
 library.add(faBoxArchive)
 library.add(faXmark)
+library.add(faThumbtack)
 library.add(faExpand)
 library.add(faCompress)
 library.add(faCopy)
