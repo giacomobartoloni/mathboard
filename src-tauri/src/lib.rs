@@ -139,7 +139,7 @@ pub fn run() {
             )?;
             let assistants = Submenu::with_items(handle, "Local assistants", true, &[&settings])?;
             menu.append(&assistants)?;
-            menu.append(&desktop_updates::menu(handle)?)?;
+            desktop_updates::install_menu(handle, &menu)?;
             Ok(menu)
         })
         .on_menu_event(|app, event| {
