@@ -19,9 +19,9 @@ const RELEASE_PAGE: &str = "https://github.com/giacomobartoloni/mathboard/releas
 const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 struct UpdateMenu {
-    submenu: Submenu,
-    check: MenuItem,
-    release: MenuItem,
+    submenu: Submenu<tauri::Wry>,
+    check: MenuItem<tauri::Wry>,
+    release: MenuItem<tauri::Wry>,
     release_url: Mutex<Option<String>>,
     checking: AtomicBool,
 }
@@ -168,7 +168,7 @@ async fn find_update(installed_version: &str) -> Result<Option<AvailableUpdate>,
 }
 
 /// Install native-only actions; nothing is exposed through Tauri IPC.
-pub fn menu(handle: &tauri::AppHandle) -> tauri::Result<Submenu> {
+pub fn menu(handle: &tauri::AppHandle) -> tauri::Result<Submenu<tauri::Wry>> {
     let check = MenuItem::with_id(
         handle,
         CHECK_MENU_ID,
@@ -176,13 +176,7 @@ pub fn menu(handle: &tauri::AppHandle) -> tauri::Result<Submenu> {
         true,
         None::<&str>,
     )?;
-    let release = MenuItem::with_id(
-        handle,
-        OPEN_MENU_ID,
-        "Not checked yet",
-        false,
-        None::<&str>,
-    )?;
+    let release = MenuItem::with_id(handle, OPEN_MENU_ID, "Not checked yet", false, None::<&str>)?;
     let submenu = Submenu::with_items(handle, "Updates", true, &[&check, &release])?;
     handle.manage(UpdateMenu {
         submenu: submenu.clone(),
@@ -349,8 +343,7 @@ mod tests {
             ),
         ];
         assert_eq!(
-            newest_release(&releases, "1.8.0", Platform::LinuxX64)
-                .map(|update| update.version),
+            newest_release(&releases, "1.8.0", Platform::LinuxX64).map(|update| update.version),
             Some("1.11.0".into())
         );
         assert!(newest_release(&releases, "1.11.0", Platform::LinuxX64).is_none());
