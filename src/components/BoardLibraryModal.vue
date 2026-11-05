@@ -42,6 +42,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
       </header>
 
       <div class="board-library-search">
+        <button class="board-library-create-button" type="button" :disabled="busy || loading"
+          :aria-label="createLabel" :title="createLabel" @click="createBoard">
+          <font-awesome-icon :icon="['fas', 'plus']" aria-hidden="true" />
+        </button>
         <label for="board-library-search-input">Find or create a board</label>
         <div class="board-library-search-field">
           <input id="board-library-search-input" v-model="boardQuery" type="text" inputmode="search"
@@ -144,15 +148,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <div v-else class="board-library-empty" role="status">
           <font-awesome-icon :icon="['fas', showArchived ? 'box-archive' : 'chalkboard']" aria-hidden="true" />
           <strong>{{ boardQuery.trim() ? 'No matching boards' : showArchived ? 'No archived boards' : 'No saved boards yet' }}</strong>
-          <p>{{ boardQuery.trim() ? 'Try another name or create a board below.' : showArchived ? 'Boards you archive will appear here.' : 'Your current board will appear after its first edit.' }}</p>
+          <p>{{ boardQuery.trim() ? 'Try another name or use the + button beside search.' : showArchived ? 'Boards you archive will appear here.' : 'Your current board will appear after its first edit.' }}</p>
         </div>
       </div>
-      <div class="board-library-create">
-        <button class="board-library-create-button" type="button" :disabled="busy || loading"
-          :title="createLabel" @click="createBoard">
-          <font-awesome-icon :icon="['fas', 'plus']" aria-hidden="true" />
-          <span>{{ createLabel }}</span>
-        </button>
+      <div class="board-library-footer">
         <BoardStorageNotice :is-desktop="isDesktop" />
       </div>
     </section>
@@ -338,6 +337,7 @@ export default {
   align-items: stretch;
   justify-content: flex-end;
   background: rgba(0, 0, 0, .22);
+  transition: background-color 200ms ease;
 }
 .board-library-overlay.is-pinned {
   background: transparent;
@@ -357,18 +357,33 @@ export default {
   color: var(--text-primary);
   box-shadow: -8px 0 32px rgba(0, 0, 0, .14);
   text-align: left;
-  animation: board-library-enter 200ms ease-out both;
 }
 .board-library-overlay.is-pinned .board-library-panel {
   pointer-events: auto;
   box-shadow: none;
 }
-@keyframes board-library-enter {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
+/* The same CSS transition handles both opening and closing. */
+.board-library-enter-active, .board-library-leave-active {
+  transition: background-color 220ms ease;
+}
+.board-library-enter-active .board-library-panel,
+.board-library-leave-active .board-library-panel {
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+.board-library-enter-from, .board-library-leave-to {
+  background-color: transparent;
+}
+.board-library-enter-from .board-library-panel,
+.board-library-leave-to .board-library-panel {
+  transform: translateX(100%);
+  opacity: .9;
 }
 @media (prefers-reduced-motion: reduce) {
-  .board-library-panel { animation: none; }
+  .board-library-overlay,
+  .board-library-enter-active,
+  .board-library-leave-active,
+  .board-library-enter-active .board-library-panel,
+  .board-library-leave-active .board-library-panel { transition-duration: 0.01ms; }
 }
 .board-library-header {
   display: flex;
@@ -403,7 +418,26 @@ export default {
 }
 .board-library-icon-button:hover:enabled { background: var(--hover-bg); }
 .board-library-pin-button[aria-pressed="true"] { background: var(--surface-tertiary); color: var(--text-primary); }
-.board-library-search { padding: 0 20px 12px; }
+.board-library-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 12px;
+}
+.board-library-create-button {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.board-library-create-button:hover:not(:disabled) { background: var(--hover-bg); }
 .board-library-search label {
   position: absolute;
   width: 1px;
@@ -420,7 +454,7 @@ export default {
   font-size: 12px;
   font-weight: 600;
 }
-.board-library-search-field { position: relative; }
+.board-library-search-field { position: relative; flex: 1 1 auto; min-width: 0; }
 .board-library-search-field > svg {
   position: absolute;
   right: 14px;
@@ -468,25 +502,7 @@ export default {
 .board-library-delete-confirm button:hover:enabled {
   box-shadow: inset 0 0 0 1px var(--border-color);
 }
-.board-library-create { flex: none; padding: 10px 20px 14px; border-top: 1px solid var(--border-color); }
-.board-library-create p { margin: 4px 12px 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
-.board-library-create-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-primary);
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-.board-library-create-button:hover:enabled { background: var(--hover-bg); }
-.board-library-create-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-library-footer { flex: none; padding: 10px 20px 14px; border-top: 1px solid var(--border-color); }
 .board-library-tabs {
   display: flex;
   gap: 18px;
@@ -624,7 +640,7 @@ export default {
   .board-library-icon-button, .board-library-glyph, .board-library-row-actions button { width: 44px; height: 44px; }
   .board-library-search { padding: 0 16px 12px; }
   .board-library-error { margin: 0 16px 12px; }
-  .board-library-create { padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
+  .board-library-footer { padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
   .board-library-tabs { padding: 0 16px; }
   .board-library-content { min-height: 0; padding: 4px 16px 12px; }
   .board-library-delete-confirm, .board-library-rename { margin-left: 0; }
