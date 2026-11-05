@@ -203,9 +203,11 @@ decision.
 
 ## Update discovery (notification only)
 
-Desktop builds can check published GitHub Releases entirely from Rust. The native
-**Updates** menu shows a newer available version and opens its official GitHub
-release page. The Vue/browser frontend is not involved.
+Desktop builds can check published GitHub Releases entirely from Rust.
+**Check for Updates…** appears directly below **About MathBoard** in the
+macOS app menu (below **About** in Help on Windows/Linux). An adjacent native
+status item shows an available version and opens its official GitHub release
+page. The Vue/browser frontend is not involved.
 
 This is **discovery-only**, not an auto-updater: nothing is downloaded, installed,
 or restarted, and no signing identity is added. The existing unsigned-beta
