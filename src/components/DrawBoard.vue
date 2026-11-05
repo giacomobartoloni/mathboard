@@ -461,13 +461,17 @@ export default {
       });
     },
     updateCanvasSize() {
-      this.windowWidth = document.documentElement.clientWidth;
-      this.windowHeight = document.documentElement.clientHeight;
+      if (!this.canvas || !this.$refs.boardRoot) return;
+      // The sidebar may resize the board without resizing the window.
+      // Measure its actual viewport; never move objects or alter scene zoom/pan.
+      const { width, height } = this.$refs.boardRoot.getBoundingClientRect();
+      const nextWidth = Math.max(1, Math.round(width));
+      const nextHeight = Math.max(1, Math.round(height));
+      if (this.canvas.getWidth() === nextWidth && this.canvas.getHeight() === nextHeight) return;
+      this.windowWidth = nextWidth;
+      this.windowHeight = nextHeight;
       // Fabric 7 removed setWidth/setHeight; use setDimensions.
-      this.canvas.setDimensions({
-        width: this.windowWidth,
-        height: this.windowHeight
-      });
+      this.canvas.setDimensions({ width: nextWidth, height: nextHeight });
       this.canvas.renderAll();
       this.canvas.calcOffset();
       this.refreshSelectionPanel();
@@ -1471,6 +1475,11 @@ export default {
   },
   mounted() {
     this.initializeCanvas();
+    // Layout changes from pin/unpin do not emit a window resize.
+    if (typeof ResizeObserver !== 'undefined') {
+      this._boardResizeObserver = new ResizeObserver(() => this.updateCanvasSize());
+      this._boardResizeObserver.observe(this.$refs.boardRoot);
+    }
     this.$refs.boardRoot.addEventListener('wheel', this.onWheelZoom, { passive: false });
     
     this.$nextTick(() => {
@@ -1489,6 +1498,7 @@ export default {
     this._textInsertion?.dispose();
     this._panGesture?.dispose();
     this.$refs.boardRoot.removeEventListener('wheel', this.onWheelZoom);
+    this._boardResizeObserver?.disconnect();
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
