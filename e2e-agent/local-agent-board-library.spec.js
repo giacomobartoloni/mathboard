@@ -146,7 +146,7 @@ test('active board archival/deletion selects the latest remaining board without 
   expect(surviving[0].title).toMatch(/^[a-z]+-[a-z]+$/)
 })
 
-test('board glyphs select boards from the anchored library', async ({ page, request }) => {
+test('board glyphs select boards from the right sidebar', async ({ page, request }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
@@ -159,20 +159,25 @@ test('board glyphs select boards from the anchored library', async ({ page, requ
 
   const switcher = page.getByRole('button', { name: 'Open Board library' })
   const switcherBox = await switcher.boundingBox()
+  const canvasBefore = await page.locator('canvas.upper-canvas').boundingBox()
+  expect(switcherBox.x).toBeGreaterThan(1440 - 280)
   await expect(page.locator('.cookie-banner')).toHaveCount(0)
   await switcher.click()
   let dialog = page.getByRole('dialog', { name: 'Board library' })
   const panelBox = await dialog.boundingBox()
+  const canvasOverlay = await page.locator('canvas.upper-canvas').boundingBox()
+  expect(panelBox.x + panelBox.width).toBe(1440)
+  expect(panelBox.y).toBe(0)
+  expect(panelBox.height).toBe(900)
+  expect(canvasOverlay.width).toBe(canvasBefore.width)
+  expect(canvasOverlay.height).toBe(canvasBefore.height)
+  await expect(dialog).toHaveAttribute('aria-modal', 'true')
   const search = dialog.getByRole('textbox', { name: 'Find or create a board' })
   await search.fill('Geom')
   const geometryGlyph = dialog.getByRole('button', { name: 'Open Geometry' })
   await expect(geometryGlyph).toBeVisible()
   await expect(dialog.getByRole('button', { name: 'Continue with Baseline Algebra' })).toHaveCount(0)
   await expect(dialog.locator('.board-library-list > li')).toHaveCount(1)
-  const glyphBox = await geometryGlyph.boundingBox()
-  expect(panelBox.y - (switcherBox.y + switcherBox.height)).toBeGreaterThanOrEqual(0)
-  expect(panelBox.y - (switcherBox.y + switcherBox.height)).toBeLessThanOrEqual(16)
-  expect(glyphBox.y - (switcherBox.y + switcherBox.height)).toBeLessThan(210)
   await geometryGlyph.click()
   await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   await expect(dialog).toHaveCount(0)
@@ -364,6 +369,7 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   const dialog = page.getByRole('dialog', { name: 'Board library' })
   await expect(dialog).toBeVisible()
   const closeButton = dialog.getByRole('button', { name: 'Close board library' })
+  const pinButton = dialog.getByRole('button', { name: 'Pin sidebar' })
   const lastControl = dialog.getByRole('button', { name: 'About board storage and sync' })
   const lastAction = dialog.getByRole('button', { name: /^More actions for / }).last()
   await expect(closeButton).toBeFocused()
@@ -373,9 +379,11 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await page.keyboard.press('Tab')
   await expect(closeButton).toBeFocused()
   await page.keyboard.press('Tab')
+  await expect(pinButton).toBeFocused()
+  await page.keyboard.press('Tab')
   await expect(dialog.getByRole('textbox', { name: 'Find or create a board' })).toBeFocused()
   await page.keyboard.press('Shift+Tab')
-  await expect(closeButton).toBeFocused()
+  await expect(pinButton).toBeFocused()
   const renameAction = dialog.getByRole('button', { name: /^Rename / })
   await renameAction.click()
   await expect(dialog.getByRole('textbox', { name: 'Rename board' })).toBeFocused()
@@ -401,7 +409,7 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await expect(switcher).toBeFocused()
 })
 
-test('mobile board selector stays beside the logo in the top row', async ({ page }) => {
+test('mobile board selector stays in the top-right beside the logo', async ({ page }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
   await page.evaluate(() => document.fonts.ready)
@@ -419,6 +427,7 @@ test('mobile board selector stays beside the logo in the top row', async ({ page
     expect(selectorBox).not.toBeNull()
     expect(selectorBox.x).toBeGreaterThanOrEqual(logoBox.x + logoBox.width + 6)
     expect(selectorBox.x + selectorBox.width).toBeLessThanOrEqual(width - 6)
+    expect(selectorBox.x + selectorBox.width).toBeGreaterThanOrEqual(width - 20)
     expect(Math.abs(
       (logoBox.y + logoBox.height / 2) - (selectorBox.y + selectorBox.height / 2),
     )).toBeLessThanOrEqual(8)
@@ -426,6 +435,83 @@ test('mobile board selector stays beside the logo in the top row', async ({ page
     await expect(switcher.locator('.board-library-trigger-label-' + (width <= 360 ? 'short' : 'long'))).toBeVisible()
     await expect(switcher.locator('.board-library-trigger-label-' + (width <= 360 ? 'long' : 'short'))).toBeHidden()
   }
+})
+
+
+test('pin and unpin preserve Fabric scene while switching between modal and docked sidebar', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
+  await send(request, 'create', { spec: { type: 'rect', left: 300, top: 220, width: 80, height: 70 } })
+  const sceneBefore = (await send(request, 'observe')).objects
+  const canvas = page.locator('canvas.upper-canvas')
+  const before = await canvas.boundingBox()
+
+  const trigger = page.getByRole('button', { name: 'Open Board library' })
+  await trigger.click()
+  const dialog = page.getByRole('dialog', { name: 'Board library' })
+  await expect(dialog.getByRole('button', { name: 'Pin sidebar' })).toBeEnabled()
+  expect((await canvas.boundingBox()).width).toBe(before.width)
+  await dialog.getByRole('button', { name: 'Pin sidebar' }).click()
+
+  const sidebar = page.getByRole('complementary', { name: 'Board library' })
+  await expect(sidebar).toBeVisible()
+  await expect(page.getByRole('dialog', { name: 'Board library' })).toHaveCount(0)
+  const pinnedBox = await sidebar.boundingBox()
+  expect(pinnedBox.x + pinnedBox.width).toBe(1440)
+  expect(pinnedBox.y).toBe(0)
+  expect(pinnedBox.height).toBe(900)
+  await expect(sidebar.getByRole('button', { name: 'Unpin sidebar' })).toHaveAttribute('aria-pressed', 'true')
+  await expect.poll(async () => (await canvas.boundingBox()).width).toBe(before.width - pinnedBox.width)
+  expect((await send(request, 'observe')).objects).toEqual(sceneBefore)
+
+  // In docked mode document transitions do not dismiss the sidebar.
+  await sidebar.getByRole('button', { name: 'New board' }).click()
+  await expect(sidebar).toBeVisible()
+  await expect(sidebar.getByText('Current board')).toBeVisible()
+  await canvas.click({ position: { x: 250, y: 180 } })
+  await sidebar.getByRole('button', { name: 'Unpin sidebar' }).click()
+
+  const overlayAgain = page.getByRole('dialog', { name: 'Board library' })
+  await expect(overlayAgain).toBeVisible()
+  await expect(overlayAgain).toHaveAttribute('aria-modal', 'true')
+  await expect.poll(async () => (await canvas.boundingBox()).width).toBe(before.width)
+  await overlayAgain.getByRole('button', { name: 'Close board library' }).click()
+  await expect(trigger).toBeFocused()
+  await trigger.click()
+  await expect(page.getByRole('dialog', { name: 'Board library' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Unpin sidebar' })).toHaveCount(0)
+})
+
+test('pin is unavailable when a usable drawing viewport cannot be reserved', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  const trigger = page.getByRole('button', { name: 'Open Board library' })
+  await trigger.click()
+  const modal = page.getByRole('dialog', { name: 'Board library' })
+  await expect(modal.getByRole('button', { name: 'Pin sidebar' })).toBeDisabled()
+  await expect(modal.getByRole('button', { name: 'Pin sidebar' })).toHaveAttribute('title', 'Pin available on wider screens')
+  const box = await modal.boundingBox()
+  expect(box.x).toBe(0)
+  expect(box.y).toBe(0)
+  expect(box.width).toBe(390)
+  expect(box.height).toBe(844)
+})
+
+test('reducing the window while pinned reverts safely to an overlay', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+  await page.getByRole('button', { name: 'Pin sidebar' }).click()
+  await expect(page.getByRole('complementary', { name: 'Board library' })).toBeVisible()
+  await page.setViewportSize({ width: 768, height: 900 })
+  const modal = page.getByRole('dialog', { name: 'Board library' })
+  await expect(modal).toBeVisible()
+  await expect(modal.getByRole('button', { name: 'Pin sidebar' })).toBeDisabled()
+  await expect.poll(async () => (await page.locator('canvas.upper-canvas').boundingBox()).width).toBe(768)
 })
 
 test('Board library heading is vertically centered with its icon at mobile and desktop widths', async ({ page }) => {
