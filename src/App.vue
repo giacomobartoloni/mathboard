@@ -24,13 +24,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
-    :class="{ 'board-library-pinned': boardLibraryMode === 'pinned' }"
+    :class="{ 'board-library-pinned': boardLibraryMode === 'pinned', 'board-library-dialog-open': showFormulaModal || showShareStampModal }"
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
       <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
         aria-label="Open Board library" title="Open Board library"
-         :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="boardLibraryMode === 'overlay'" @click="openBoardLibrary">
+        :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="boardLibraryMode === 'overlay'" @click="openBoardLibrary">
         <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
         <span class="board-library-trigger-label">
           <span class="board-library-trigger-label-long">Board library</span>
@@ -41,7 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div  :inert="!boardSessionReady || showFormulaModal || showShareStampModal || boardLibraryMode === 'overlay'">
+    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || boardLibraryMode === 'overlay'">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
@@ -74,7 +74,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       />
 
     </div>
-    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
+    <BoardLibraryModal v-if="showBoardLibrary" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
       :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
       :pinned="boardLibraryMode === 'pinned'" :can-pin="canPinBoardLibrary"
       @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @action="onBoardLibraryAction" />
@@ -472,7 +472,8 @@ export default {
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
             },
             onRedo: () => {
-              if (boardSessionReady.value && !showBoardLibrary.value
+              if (boardSessionReady.value && boardLibraryMode.value !== 'overlay'
+                && !document.activeElement?.closest?.('.board-library-panel')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
             },
             onFullscreenChange: setFullscreenState,
@@ -1062,6 +1063,8 @@ body {
 #app.board-library-pinned #boardcontainer { right: var(--board-library-width); }
 #app.board-library-pinned .support-panel { right: calc(var(--board-library-width) + 12px); }
 #app.board-library-pinned .copyright { display: none; }
+/* Editing dialogs must remain above an open pinned sidebar. */
+#app.board-library-dialog-open .board-library-overlay.is-pinned { z-index: 500; }
 
 .copyright {
   position: absolute;
