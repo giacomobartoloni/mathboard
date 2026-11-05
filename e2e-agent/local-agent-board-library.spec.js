@@ -514,6 +514,7 @@ test('reducing the window while pinned reverts safely to an overlay', async ({ p
   const modal = page.getByRole('dialog', { name: 'Board library' })
   await expect(modal).toBeVisible()
   await expect(modal.getByRole('button', { name: 'Pin sidebar' })).toBeDisabled()
+  await expect(modal.getByRole('button', { name: 'Close board library' })).toBeFocused()
   await expect.poll(async () => (await page.locator('canvas.upper-canvas').boundingBox()).width).toBe(768)
 })
 
