@@ -82,12 +82,13 @@ export function selectionMeta(object) {
   }
 }
 
-export function panelSize(actionCount) {
+export function panelSize(actionCount, textControls = false) {
   const count = Math.max(0, actionCount | 0)
   if (count === 0) return { width: 0, height: 0 }
   return {
-    width: PANEL_PAD * 2 + PANEL_BUTTON,
-    height: PANEL_PAD * 2 + count * PANEL_BUTTON + (count - 1) * PANEL_ACTION_GAP,
+    width: textControls ? 148 : PANEL_PAD * 2 + PANEL_BUTTON,
+    height: PANEL_PAD * 2 + count * PANEL_BUTTON + (count - 1) * PANEL_ACTION_GAP
+      + (textControls ? 70 : 0),
   }
 }
 

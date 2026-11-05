@@ -29,7 +29,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         :selection-type="selectionPanel.selectionType"
         :selection-count="selectionPanel.selectionCount"
         :actions="selectionPanel.actions"
+        :text-style="selectionPanel.textStyle"
         @action="onSelectionAction"
+        @text-style="onTextStyle"
       />
     </div>
   </div>
@@ -176,6 +178,7 @@ export default {
         selectionType: null,
         selectionCount: 0,
         actions: [],
+        textStyle: null,
       },
     };
   },
@@ -553,6 +556,7 @@ export default {
         ...this.selectionPanel,
         visible: false,
         actions: [],
+        textStyle: null,
       };
     },
     _selectionClientBox(active) {
@@ -598,7 +602,7 @@ export default {
           height: client.height,
         },
         viewport: { left: 0, top: 0, width: overlayBounds.width, height: overlayBounds.height },
-        panel: panelSize(meta.actions.length),
+        panel: panelSize(meta.actions.length, meta.selectionType === 'text'),
       });
       if (!position) {
         this._hideSelectionPanel();
@@ -612,6 +616,9 @@ export default {
         selectionType: meta.selectionType,
         selectionCount: meta.selectionCount,
         actions: meta.actions,
+        textStyle: meta.selectionType === 'text'
+          ? { fontFamily: active.fontFamily || 'Arial', fontSize: active.fontSize || 32 }
+          : null,
       };
       const prev = this.selectionPanel;
       const same = prev.visible === next.visible
@@ -620,7 +627,9 @@ export default {
         && prev.placement === next.placement
         && prev.selectionType === next.selectionType
         && prev.selectionCount === next.selectionCount
-        && prev.actions.join() === next.actions.join();
+        && prev.actions.join() === next.actions.join()
+        && prev.textStyle?.fontFamily === next.textStyle?.fontFamily
+        && prev.textStyle?.fontSize === next.textStyle?.fontSize;
       if (!same) this.selectionPanel = next;
     },
     _clearGeometryEditing() {
@@ -709,6 +718,20 @@ export default {
         return;
       }
       if (actionId === ACTION_EDIT) this.editSelection();
+    },
+    async onTextStyle(patch) {
+      const active = this.canvas?.getActiveObject();
+      if (!this._boardLifecycle.isReady() || !active || active.isEditing
+        || !this.canvas.getObjects().includes(active)
+        || this._boardObjectPolicy.kindOf(active) !== 'text') return false;
+      try {
+        await this._ensureBoardController('ui').update(getMathBoardObjectId(active), patch);
+        this.refreshSelectionPanel();
+        return true;
+      } catch (error) {
+        console.error('Text formatting failed', error);
+        return false;
+      }
     },
     _focusBoard() {
       const root = this.$refs.boardRoot;
