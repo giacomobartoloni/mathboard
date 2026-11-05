@@ -17,9 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="board-library-overlay" @click.self="$emit('close')" @keydown.esc.stop.prevent="onOverlayEscape"
+  <div class="board-library-overlay" :class="{ 'is-pinned': pinned }" @click.self="!pinned && $emit('close')" @keydown.esc.stop.prevent="onOverlayEscape"
     @keydown.tab="trapTab">
-    <section ref="dialogPanel" class="board-library-panel" role="dialog" aria-modal="true"
+    <section ref="dialogPanel" class="board-library-panel" :role="pinned ? 'complementary' : 'dialog'" :aria-modal="pinned ? null : 'true'"
       aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
       <header class="board-library-header">
         <span class="board-library-heading-icon" aria-hidden="true">
@@ -31,6 +31,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <button ref="closeButton" class="board-library-icon-button" type="button" :disabled="busy"
           aria-label="Close board library" @click="$emit('close')">
           <font-awesome-icon :icon="['fas', 'xmark']" aria-hidden="true" />
+        </button>
+        <button class="board-library-icon-button board-library-pin-button" type="button"
+          :disabled="busy || (!pinned && !canPin)" :aria-pressed="pinned"
+          :aria-label="pinned ? 'Unpin sidebar' : 'Pin sidebar'"
+          :title="!canPin && !pinned ? 'Pin available on wider screens' : pinned ? 'Unpin sidebar' : 'Pin sidebar'"
+          @click="$emit('toggle-pin')">
+          <font-awesome-icon :icon="['fas', 'thumbtack']" aria-hidden="true" />
         </button>
       </header>
 
@@ -161,13 +168,15 @@ export default {
   components: { BoardStorageNotice },
   props: {
     isDesktop: { type: Boolean, default: false },
+    pinned: { type: Boolean, default: false },
+    canPin: { type: Boolean, default: false },
     boards: { type: Array, default: () => [] },
     archivedBoards: { type: Array, default: () => [] },
     busy: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
     error: { type: String, default: null },
   },
-  emits: ['close', 'action'],
+  emits: ['close', 'action', 'toggle-pin'],
   setup(props, { emit }) {
     const boardQuery = ref('')
     const renameId = ref(null)
@@ -202,6 +211,7 @@ export default {
       dialogPanel.value?.focus()
     }
     const trapTab = (event) => {
+      if (props.pinned) return
       const controls = [...dialogPanel.value.querySelectorAll('button:not(:disabled), input:not(:disabled)')]
         .filter(element => element.getClientRects().length)
       if (!controls.length) {
@@ -266,7 +276,9 @@ export default {
       return `${action} ${board.title}`
     }
     const selectBoard = (board) => {
-      if (board.isActive) emit('close')
+      if (board.isActive) {
+        if (!props.pinned) emit('close')
+      }
       else {
         awaitActionFocus('close')
         emit('action', { action: showArchived.value ? 'unarchive-open' : 'open', boardId: board.id })
@@ -323,23 +335,40 @@ export default {
   inset: 0;
   z-index: 1800;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 68px 16px 16px;
+  align-items: stretch;
+  justify-content: flex-end;
   background: rgba(0, 0, 0, .22);
+}
+.board-library-overlay.is-pinned {
+  background: transparent;
+  pointer-events: none;
 }
 .board-library-panel {
   box-sizing: border-box;
-  width: min(560px, 100%);
-  max-height: calc(100dvh - 84px);
+  width: min(400px, 100vw);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 14px;
+  border-left: 1px solid var(--border-color);
   background: var(--surface-secondary);
   color: var(--text-primary);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, .22);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, .14);
   text-align: left;
+  animation: board-library-enter 200ms ease-out both;
+}
+.board-library-overlay.is-pinned .board-library-panel {
+  pointer-events: auto;
+  box-shadow: none;
+}
+@keyframes board-library-enter {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .board-library-panel { animation: none; }
 }
 .board-library-header {
   display: flex;
@@ -373,6 +402,7 @@ export default {
   cursor: pointer;
 }
 .board-library-icon-button:hover:enabled { background: var(--hover-bg); }
+.board-library-pin-button[aria-pressed="true"] { background: var(--surface-tertiary); color: var(--text-primary); }
 .board-library-search { padding: 0 20px 12px; }
 .board-library-search label {
   position: absolute;
@@ -589,8 +619,7 @@ export default {
   outline-offset: 2px;
 }
 @media (max-width: 600px) {
-  .board-library-overlay { padding: 0; }
-  .board-library-panel { width: 100%; max-height: none; height: 100vh; height: 100dvh; border-radius: 0; }
+  .board-library-panel { width: 100%; }
   .board-library-header { padding: max(20px, env(safe-area-inset-top)) 16px 16px; }
   .board-library-icon-button, .board-library-glyph, .board-library-row-actions button { width: 44px; height: 44px; }
   .board-library-search { padding: 0 16px 12px; }
@@ -601,8 +630,6 @@ export default {
   .board-library-delete-confirm, .board-library-rename { margin-left: 0; }
 }
 @media (max-height: 560px) and (min-width: 601px) {
-  .board-library-overlay { padding: 0; }
-  .board-library-panel { height: 100dvh; max-height: none; border-radius: 0; }
   .board-library-content { min-height: 0; }
 }
 @media (max-width: 420px) {
