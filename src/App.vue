@@ -278,7 +278,16 @@ export default {
     const canPinBoardLibrary = ref(window.innerWidth >= 1000)
     const syncPinEligibility = () => {
       canPinBoardLibrary.value = window.innerWidth >= 1000
-      if (!canPinBoardLibrary.value && boardLibraryMode.value === 'pinned') boardLibraryMode.value = 'overlay'
+      if (!canPinBoardLibrary.value && boardLibraryMode.value === 'pinned') {
+        boardLibraryMode.value = 'overlay'
+        // A resize can change a nonmodal region into a modal dialog while
+        // keyboard focus is still on the canvas. Move focus into the dialog.
+        void nextTick(() => {
+          if (boardLibraryMode.value === 'overlay' && !document.activeElement?.closest?.('.board-library-panel')) {
+            document.querySelector('.board-library-panel .board-library-icon-button')?.focus()
+          }
+        })
+      }
     }
     onMounted(() => window.addEventListener('resize', syncPinEligibility))
     onBeforeUnmount(() => window.removeEventListener('resize', syncPinEligibility))
