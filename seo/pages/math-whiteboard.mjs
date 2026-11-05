@@ -21,10 +21,12 @@ import {
   renderOpenBoardCTA,
   renderScreenshot,
 } from '../lib/render-components.mjs'
+import { MATH_WHITEBOARD_ALTERNATES } from './localized-math-whiteboards.mjs'
 
 export default {
-  lastmod: '2026-10-26',
+  lastmod: '2026-11-04',
   path: '/math-whiteboard/',
+  alternates: MATH_WHITEBOARD_ALTERNATES,
   title: 'MathBoard — Free Online Whiteboard for Math',
   description:
     'A browser-based whiteboard for math: draw freehand, write text, add LaTeX formulas, use shapes, and switch between light, dark, and chalkboard themes.',

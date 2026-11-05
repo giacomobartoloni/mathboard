@@ -87,6 +87,30 @@ export const QUICK_INSERT_ITEMS = [
     preview: '\\left|x\\right|',
     template: `\\left|${CURSOR}\\right|`,
     selectionTemplate: `\\left|${SELECTION}\\right|${CURSOR}`
+  },
+  {
+    id: 'boldsymbol',
+    label: 'Bold symbol',
+    ariaLabel: 'Insert bold symbol',
+    preview: '\\boldsymbol{v}',
+    template: `\\boldsymbol{${CURSOR}}`,
+    selectionTemplate: `\\boldsymbol{${SELECTION}}${CURSOR}`,
+  },
+  {
+    id: 'mathbf',
+    label: 'Bold upright',
+    ariaLabel: 'Insert bold upright math',
+    preview: '\\mathbf{A}',
+    template: `\\mathbf{${CURSOR}}`,
+    selectionTemplate: `\\mathbf{${SELECTION}}${CURSOR}`,
+  },
+  {
+    id: 'bmatrix',
+    label: 'Matrix',
+    ariaLabel: 'Insert matrix',
+    preview: '\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}',
+    template: `\\begin{bmatrix}${CURSOR}\\end{bmatrix}`,
+    selectionTemplate: `\\begin{bmatrix}${SELECTION}\\end{bmatrix}${CURSOR}`,
   }
 ]
 

@@ -107,6 +107,8 @@ struct ScreenshotArgs {
     scale: f64,
     #[serde(default = "default_format")]
     format: String,
+    #[serde(default)]
+    include_logo: bool,
 }
 
 #[derive(Deserialize)]
@@ -405,10 +407,14 @@ pub fn parse_tool_call(name: &str, arguments: Value) -> Result<ToolCall, ToolCal
             {
                 return Err(ToolCallError::InvalidArguments);
             }
+            let mut params = json!({"target":args.target,"scale":args.scale,"format":"png"});
+            if args.include_logo {
+                params["includeLogo"] = json!(true);
+            }
             ToolCall {
                 method,
                 board_id: args.board_id,
-                params: json!({"target":args.target,"scale":args.scale,"format":"png"}),
+                params,
             }
         }
         "command" => {

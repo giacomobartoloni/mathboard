@@ -31,7 +31,7 @@ async function command(request, method, params = {}) {
 async function rejected(request, params, code) {
   const response = await request.post(commandUrl, { data: { method: 'screenshot', params } })
   const body = await response.json()
-  expect(response.status(), JSON.stringify(body)).toBe(409)
+  expect(response.status(), JSON.stringify(body.error)).toBe(409)
   expect(body.error.code).toBe(code)
   expect(body.result).toBeUndefined()
 }
@@ -309,4 +309,100 @@ test('transformed Board Group with nested formula captures dark theme and reject
   expect(repeated.hash).toBe(pixels.hash)
   expect(await snapshot(page)).toEqual(before)
   expect(await command(request, 'observe')).toEqual(state)
+})
+
+// The complete PNG can be taller, but the board rectangle must be pixel-identical.
+test('branded screenshots add the fixed grid and preserve all source pixels', async ({ page, request }, testInfo) => {
+  await openBoard(page, request)
+  const created=await command(request,'create',{spec:{type:'rect',left:120,top:140,width:220,height:125,
+    fill:'#ff2020',stroke:'#ff2020',mathboardInkMode:'fixed'}})
+  const targets=[
+    {kind:'sceneRect',rect:{x:100,y:110,width:320,height:200}},
+    {kind:'objectIds',ids:[created.id],padding:0},
+    {kind:'viewport'},
+  ]
+  for(const target of targets) {
+    const plain=await command(request,'screenshot',{target})
+    const explicitlyOff=await command(request,'screenshot',{target,includeLogo:false})
+    expect(explicitlyOff.data).toEqual(plain.data)
+    expect(plain.branding).toBeUndefined()
+    const branded=await command(request,'screenshot',{target,includeLogo:true})
+    const badgeFonts=await page.evaluate(()=>Array.from(document.fonts)
+      .filter(face=>face.family.replaceAll(/["']/g,'')==='Satisfy')
+      .map(face=>face.status))
+    expect(badgeFonts).toContain('loaded')
+    expect([branded.widthPx,branded.heightPx]).toEqual([plain.widthPx,plain.heightPx+branded.branding.headerHeightPx])
+    expect(branded.region).toEqual(plain.region)
+    expect(branded.branding).toMatchObject({
+      style:'header',layoutVersion:1,background:{kind:'mathboard-grid',variant:'light',cellSizePx:40},
+      contentRectPx:{x:0,y:branded.branding.headerHeightPx,width:plain.widthPx,height:plain.heightPx},
+    })
+    await pngEvidence(page,branded,testInfo,`branded-${target.kind}.png`)
+    const result=await page.evaluate(async ({before,after,offset})=>{
+      const decode=async data=>{
+        const image=await createImageBitmap(await (await fetch(`data:image/png;base64,${data}`)).blob())
+        const canvas=document.createElement('canvas')
+        canvas.width=image.width;canvas.height=image.height
+        const ctx=canvas.getContext('2d')
+        ctx.drawImage(image,0,0)
+        const pixels=ctx.getImageData(0,0,image.width,image.height).data
+        image.close()
+        return {width:canvas.width,height:canvas.height,pixels}
+      }
+      const source=await decode(before),final=await decode(after)
+      let mismatches=0
+      for(let y=0;y<source.height;y++)for(let x=0;x<source.width;x++) {
+        const a=(y*source.width+x)*4
+        const b=((y+offset)*final.width+x)*4
+        for(let channel=0;channel<4;channel++)if(source.pixels[a+channel]!==final.pixels[b+channel])mismatches++
+      }
+      const pixel=(x,y)=>Array.from(final.pixels.slice((y*final.width+x)*4,(y*final.width+x)*4+4))
+      return {mismatches,background:pixel(10,20),grid:pixel(0,40),badge:pixel(25,30)}
+    },{before:plain.data,after:branded.data,offset:branded.branding.headerHeightPx})
+    expect(result.mismatches).toBe(0)
+    expect(result.background).toEqual([249,249,249,255])
+    expect(result.grid[0]).toBeLessThan(249)
+    expect(result.badge[0]).toBeLessThan(220)
+    expect((await command(request,'screenshot',{target,includeLogo:true})).data).toBe(branded.data)
+  }
+  for(const bad of [null,1,'yes']) {
+    await rejected(request,{target:{kind:'viewport'},includeLogo:bad},'invalid_capture_request')
+  }
+  await rejected(request,{target:{kind:'sceneRect',rect:{x:0,y:0,width:127,height:50}},includeLogo:true},
+    'invalid_capture_request')
+  await rejected(request,{target:{kind:'sceneRect',rect:{x:0,y:0,width:500,height:1961}},includeLogo:true},
+    'capture_too_large')
+})
+
+test('branded screenshots reject an unavailable Satisfy resource without affecting unbranded capture', async ({ page, request }) => {
+  await page.route('**/*satisfy*.woff*', route => route.abort())
+  await openBoard(page, request)
+  const before=await snapshot(page,true)
+  const target={kind:'sceneRect',rect:{x:0,y:0,width:400,height:150}}
+  await rejected(request,{target,includeLogo:true},'capture_failed')
+  const plain=await command(request,'screenshot',{target})
+  expect([plain.widthPx,plain.heightPx]).toEqual([400,150])
+  expect(plain.branding).toBeUndefined()
+  expect(await snapshot(page)).toEqual(before)
+})
+
+test('branded screenshots reject missing Satisfy definitions instead of trusting fonts.ready', async ({ page, request }) => {
+  await openBoard(page, request)
+  await page.evaluate(async()=>{
+    await document.fonts.ready
+    // CSS-connected faces cannot be deleted from FontFaceSet directly.
+    for(const sheet of document.styleSheets) {
+      for(let i=sheet.cssRules.length-1;i>=0;i--) {
+        const rule=sheet.cssRules[i]
+        if(rule instanceof CSSFontFaceRule&&rule.style.fontFamily.replaceAll(/["']/g,'')==='Satisfy') {
+          sheet.deleteRule(i)
+        }
+      }
+    }
+  })
+  expect(await page.evaluate(()=>Array.from(document.fonts)
+    .some(face=>face.family.replaceAll(/["']/g,'')==='Satisfy'))).toBe(false)
+  await rejected(request,{
+    target:{kind:'sceneRect',rect:{x:0,y:0,width:400,height:150}},includeLogo:true,
+  },'capture_failed')
 })

@@ -21,6 +21,7 @@ import { StaticCanvas, Pattern, util } from 'fabric'
 import '../../formulas/FormulaObject.js'
 import { CAPTURE_LIMITS, captureError, validateCaptureRequest, planCapture } from './contract.js'
 import { readCaptureScene } from './scene.js'
+import { composeBrandedCapture } from './branding.js'
 
 const notReady=()=>{throw captureError('board_not_ready','Wait for a stable, fully rendered board before capture.')}
 
@@ -41,12 +42,24 @@ function assertNotAborted(signal) {
   if(signal.aborted) throw captureError('capture_failed','Capture readiness or rendering deadline exceeded.')
 }
 
-export async function waitForCapturePaint(environment,signal) {
+export async function waitForCapturePaint(environment,signal,includeLogo=false) {
   assertNotAborted(signal)
   await new Promise((resolve,reject)=>{
     const abort=()=>{signal.removeEventListener('abort',abort);reject(captureError('capture_failed','Capture font deadline exceeded.'))}
     signal.addEventListener('abort',abort,{once:true})
-    Promise.resolve(environment.document.fonts.ready).then(resolve,reject)
+    Promise.resolve().then(async()=>{
+      assertNotAborted(signal)
+      const fonts=environment.document.fonts
+      if(includeLogo) {
+        // fonts.ready also resolves for failed or unregistered faces. Require
+        // the actual bundled badge face before Canvas2D can silently fall back.
+        const faces=await fonts.load('24px Satisfy','MathBoard')
+        if(!faces.length||faces.some(face=>face.status!=='loaded')) {
+          throw captureError('capture_failed','The screenshot badge font is unavailable.')
+        }
+      }
+      return fonts.ready
+    }).then(resolve,()=>reject(captureError('capture_failed','Unable to load screenshot fonts.')))
       .finally(()=>signal.removeEventListener('abort',abort))
   })
   assertNotAborted(signal)
@@ -143,7 +156,7 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
     const board=getBoard(),canvas=board?.canvas
     assertReady(board,canvas)
     const lease=board?._boardLifecycle?.capture()
-    await waitForCapturePaint(environment,signal)
+    await waitForCapturePaint(environment,signal,request.includeLogo)
     assertReady(board,canvas,lease)
     const scene=readCaptureScene(canvas),boardId=board.getBoardId()
     const plan=planCapture(request,scene)
@@ -165,7 +178,11 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
       offscreen.setViewportTransform(plan.renderTransform)
       offscreen.add(...clones)
       offscreen.renderAll()
-      const blob=await pngBlob(offscreen.lowerCanvasEl,signal)
+      assertNotAborted(signal)
+      const output=plan.branding
+        ? composeBrandedCapture(environment.document,offscreen.lowerCanvasEl,plan.branding)
+        : offscreen.lowerCanvasEl
+      const blob=await pngBlob(output,signal)
       assertNotAborted(signal)
       if(blob.size>CAPTURE_LIMITS.maxPngBytes) throw captureError('capture_too_large','PNG exceeds the byte limit.')
       assertReady(board,canvas,lease)
@@ -181,8 +198,10 @@ export function createVisualCaptureAdapter(getBoard,environment=globalThis) {
       const data=await blobBase64(blob)
       assertNotAborted(signal)
       assertCurrent()
-      return {mimeType:'image/png',encoding:'base64',data,widthPx:plan.widthPx,heightPx:plan.heightPx,
-        region:plan.region,scale:plan.scale,boardId,observationVersion:1}
+      return {mimeType:'image/png',encoding:'base64',data,widthPx:plan.widthPx,
+        heightPx:plan.heightPx+(plan.branding?.headerHeightPx??0),
+        region:plan.region,scale:plan.scale,boardId,observationVersion:1,
+        ...(plan.branding ? {branding:plan.branding} : {})}
     } finally {
       if(offscreen) await offscreen.dispose()
       else clones.forEach(clone=>clone.dispose())

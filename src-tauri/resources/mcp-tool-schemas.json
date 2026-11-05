@@ -152,6 +152,10 @@
         "format": {
           "const": "png",
           "default": "png"
+        },
+        "includeLogo": {
+          "type": "boolean",
+          "default": false
         }
       },
       "required": [
