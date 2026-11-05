@@ -9,7 +9,7 @@ use std::sync::{
 };
 use std::time::Duration;
 use tauri::Manager;
-use tauri::menu::{MenuItem, Submenu};
+use tauri::menu::{Menu, MenuItem, Submenu};
 
 pub const CHECK_MENU_ID: &str = "mathboard-check-updates";
 pub const OPEN_MENU_ID: &str = "mathboard-open-update-release";
@@ -19,7 +19,6 @@ const RELEASE_PAGE: &str = "https://github.com/giacomobartoloni/mathboard/releas
 const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 struct UpdateMenu {
-    submenu: Submenu<tauri::Wry>,
     check: MenuItem<tauri::Wry>,
     release: MenuItem<tauri::Wry>,
     release_url: Mutex<Option<String>>,
@@ -167,8 +166,8 @@ async fn find_update(installed_version: &str) -> Result<Option<AvailableUpdate>,
     Ok(newest_release(&releases, installed_version, platform))
 }
 
-/// Install native-only actions; nothing is exposed through Tauri IPC.
-pub fn menu(handle: &tauri::AppHandle) -> tauri::Result<Submenu<tauri::Wry>> {
+/// Add native-only actions directly after the default About entry.
+pub fn install_menu(handle: &tauri::AppHandle, menu: &Menu<tauri::Wry>) -> tauri::Result<()> {
     let check = MenuItem::with_id(
         handle,
         CHECK_MENU_ID,
@@ -177,15 +176,36 @@ pub fn menu(handle: &tauri::AppHandle) -> tauri::Result<Submenu<tauri::Wry>> {
         None::<&str>,
     )?;
     let release = MenuItem::with_id(handle, OPEN_MENU_ID, "Not checked yet", false, None::<&str>)?;
-    let submenu = Submenu::with_items(handle, "Updates", true, &[&check, &release])?;
+
+    // About is in the app menu on macOS and Help on Windows/Linux.
+    let mut added = false;
+    for item in menu.items()? {
+        if let Some(submenu) = item.as_submenu() {
+            let about_index = submenu.items()?.iter().position(|item| {
+                item.as_predefined_menuitem()
+                    .and_then(|about| about.text().ok())
+                    .is_some_and(|label| label.starts_with("About"))
+            });
+            if let Some(index) = about_index {
+                submenu.insert_items(&[&check, &release], index + 1)?;
+                added = true;
+                break;
+            }
+        }
+    }
+    if !added {
+        // Preserve the action if a future Tauri default menu omits About.
+        let fallback = Submenu::with_items(handle, "Updates", true, &[&check, &release])?;
+        menu.append(&fallback)?;
+    }
+
     handle.manage(UpdateMenu {
-        submenu: submenu.clone(),
         check,
         release,
         release_url: Mutex::new(None),
         checking: AtomicBool::new(false),
     });
-    Ok(submenu)
+    Ok(())
 }
 
 async fn check_updates(app: &tauri::AppHandle) {
@@ -201,21 +221,19 @@ async fn check_updates(app: &tauri::AppHandle) {
 
     let version = app.package_info().version.to_string();
     let result = find_update(&version).await;
-    let (label, submenu_label, url) = match result {
+    let (label, url) = match result {
         Ok(Some(update)) => (
             format!("Version {} available — View release…", update.version),
-            "Updates (new version)",
             Some(update.release_url),
         ),
-        Ok(None) => ("Up to date".to_owned(), "Updates", None),
-        Err(()) => ("Could not check updates".to_owned(), "Updates", None),
+        Ok(None) => ("Up to date".to_owned(), None),
+        Err(()) => ("Could not check updates".to_owned(), None),
     };
     if let Ok(mut release_url) = menu.release_url.lock() {
         *release_url = url.clone();
     }
     let _ = menu.release.set_text(label);
     let _ = menu.release.set_enabled(url.is_some());
-    let _ = menu.submenu.set_text(submenu_label);
     let _ = menu.check.set_enabled(true);
     menu.checking.store(false, Ordering::Release);
 }
