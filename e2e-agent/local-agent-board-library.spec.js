@@ -189,7 +189,7 @@ test('board glyphs select boards from the right sidebar', async ({ page, request
   await expect(dialog).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Open Board library' }).click()
-  await page.mouse.click(1100, 150)
+  await page.mouse.click(900, 150)
   await expect(page.getByRole('dialog', { name: 'Board library' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Open Board library' })).toBeFocused()
 
