@@ -260,7 +260,10 @@ test('a long board list scrolls while creation stays reachable', async ({ page, 
   await expect(dialog.getByRole('button', { name: `Open ${initial.title}` })).toBeInViewport()
   const panelBox = await dialog.boundingBox()
   const createBox = await dialog.getByRole('button', { name: 'New board' }).boundingBox()
+  const searchBox = await dialog.getByRole('textbox', { name: 'Find or create a board' }).boundingBox()
   expect(createBox.y + createBox.height).toBeLessThanOrEqual(panelBox.y + panelBox.height)
+  expect(createBox.x + createBox.width).toBeLessThan(searchBox.x)
+  expect(searchBox.width).toBeGreaterThan(120)
   await expect(dialog.getByRole('button', { name: 'New board' })).toBeInViewport()
 })
 
@@ -372,6 +375,7 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await expect(dialog).toBeVisible()
   const closeButton = dialog.getByRole('button', { name: 'Close board library' })
   const pinButton = dialog.getByRole('button', { name: 'Pin sidebar' })
+  const newBoardButton = dialog.getByRole('button', { name: 'New board' })
   const lastControl = dialog.getByRole('button', { name: 'About board storage and sync' })
   const lastAction = dialog.getByRole('button', { name: /^More actions for / }).last()
   await expect(closeButton).toBeFocused()
@@ -383,9 +387,11 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await page.keyboard.press('Tab')
   await expect(pinButton).toBeFocused()
   await page.keyboard.press('Tab')
+  await expect(newBoardButton).toBeFocused()
+  await page.keyboard.press('Tab')
   await expect(dialog.getByRole('textbox', { name: 'Find or create a board' })).toBeFocused()
   await page.keyboard.press('Shift+Tab')
-  await expect(pinButton).toBeFocused()
+  await expect(newBoardButton).toBeFocused()
   const renameAction = dialog.getByRole('button', { name: /^Rename / })
   await renameAction.click()
   await expect(dialog.getByRole('textbox', { name: 'Rename board' })).toBeFocused()
@@ -409,6 +415,28 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog', { name: 'Board library' })).toHaveCount(0)
   await expect(switcher).toBeFocused()
+})
+
+test('sidebar close slides out before focus returns to its trigger', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  const trigger = page.getByRole('button', { name: 'Open Board library' })
+  await trigger.click()
+  const dialog = page.getByRole('dialog', { name: 'Board library' })
+  await expect(dialog).toBeVisible()
+
+  const slideFinished = dialog.evaluate(element => new Promise(resolve => {
+    const timeout = setTimeout(() => resolve(false), 1500)
+    element.addEventListener('transitionend', event => {
+      if (event.propertyName !== 'transform') return
+      clearTimeout(timeout)
+      resolve(true)
+    })
+  }))
+  await dialog.getByRole('button', { name: 'Close board library' }).click()
+  expect(await slideFinished).toBe(true)
+  await expect(dialog).toHaveCount(0)
+  await expect(trigger).toBeFocused()
 })
 
 test('mobile board selector stays in the top-right beside the logo', async ({ page }) => {
