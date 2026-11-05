@@ -31,12 +31,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
         aria-label="Open Board library" title="Open Board library"
         :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="boardLibraryMode === 'overlay'" @click="openBoardLibrary">
-        <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
-        <span class="board-library-trigger-label">
-          <span class="board-library-trigger-label-long">Board library</span>
-          <span class="board-library-trigger-label-short" aria-hidden="true">Boards</span>
-        </span>
-        <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
+        <!-- Lucide Library Big icon, ISC license: https://lucide.dev/icons/library-big -->
+        <svg class="board-library-trigger-icon" width="20" height="20" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <rect width="8" height="18" x="3" y="3" rx="1" />
+          <path d="M7 3v18" />
+          <path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" />
+        </svg>
+        <span class="board-library-trigger-label">Boards</span>
       </button>
     </div>
 
@@ -1054,7 +1057,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(232px, calc(100vw - 350px));
+  width: auto;
   min-height: 44px;
   padding: 9px 14px;
   border: 0;
@@ -1068,9 +1071,8 @@ body {
 }
 .board-library-trigger:hover:not(:disabled) { box-shadow: var(--panel-shadow), inset 0 0 0 1px var(--border-color); }
 .board-library-trigger:focus-visible { outline: 2px solid var(--selected-bg); outline-offset: 2px; }
-.board-library-trigger-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.board-library-trigger-label-short { display: none; }
-.board-library-trigger > svg:last-child { color: var(--text-muted); font-size: 12px; }
+.board-library-trigger-icon { flex: none; }
+.board-library-trigger-label { white-space: nowrap; }
 .board-library-trigger:disabled { opacity: .6; cursor: default; }
 
 /* Docked mode narrows only the Fabric viewport, never its scene coordinates. */
@@ -1152,7 +1154,7 @@ body {
 }
 
 @media (max-width: 600px) {
-  /* Fit the board selector beside the logo instead of dedicating another row. */
+  /* Keep the compact board control opposite the logo on mobile. */
   .board-topbar {
     position: fixed;
     top: max(12px, env(safe-area-inset-top));
@@ -1171,21 +1173,15 @@ body {
   }
   .board-library-trigger {
     position: static;
-    flex: 1 1 0;
-    min-width: 0;
-    width: auto;
-    max-width: none;
-    transform: none;
-    gap: 8px;
-    padding: 9px 10px;
+    flex: 0 0 44px;
+    justify-content: center;
+    margin-left: auto;
+    width: 44px;
+    height: 44px;
+    padding: 0;
   }
+  .board-library-trigger-label { display: none; }
   .copyright { display: none; }
-}
-
-/* Keep the selector legible beside the logo on very narrow phones. */
-@media (max-width: 360px) {
-  .board-library-trigger-label-long { display: none; }
-  .board-library-trigger-label-short { display: inline; }
 }
 
 .board-session-loading {
