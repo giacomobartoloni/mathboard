@@ -32,6 +32,7 @@ import { faFont } from '@fortawesome/free-solid-svg-icons'
 import { faSearch } from '@fortawesome/free-solid-svg-icons'
 import { faSquareRootAlt } from '@fortawesome/free-solid-svg-icons'
 import { faShapes } from '@fortawesome/free-solid-svg-icons'
+import { faArrowRight } from '@fortawesome/free-solid-svg-icons'
 import { faInfoCircle } from '@fortawesome/free-solid-svg-icons'
 import { faHeart } from '@fortawesome/free-solid-svg-icons'
 import { faCodeBranch } from '@fortawesome/free-solid-svg-icons'
@@ -64,6 +65,7 @@ library.add(faFont)
 library.add(faSearch)
 library.add(faSquareRootAlt)
 library.add(faShapes)
+library.add(faArrowRight)
 library.add(faInfoCircle)
 library.add(faHeart)
 library.add(faHandPaper)

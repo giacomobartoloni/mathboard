@@ -35,7 +35,7 @@ export function getScreenshotDescriptor() {
     method:'screenshot', summary:'Read the rendered live board as a bounded PNG, without changing board state.',
     mutatesBoard:false,requiresStable:true,
     paramsSchema:object({target,scale:{type:'number',minimum:CAPTURE_LIMITS.minScale,maximum:CAPTURE_LIMITS.maxScale,default:1},
-      format:{const:'png',default:'png'}},['target']),
+      format:{const:'png',default:'png'},includeLogo:{type:'boolean',default:false}},['target']),
     resultSchema:object({mimeType:{const:'image/png'},encoding:{const:'base64'},
       data:{type:'string',contentEncoding:'base64',contentMediaType:'image/png',maxLength:CAPTURE_LIMITS.maxBase64Chars},
       widthPx:{type:'integer',minimum:1,maximum:CAPTURE_LIMITS.maxDimension},
@@ -46,7 +46,14 @@ export function getScreenshotDescriptor() {
           ids:{type:'array',items:{type:'string'}},padding:number,
           viewportTransform:{type:'array',minItems:6,maxItems:6,items:number}},additionalProperties:false},
       scale:{type:'number',minimum:CAPTURE_LIMITS.minScale,maximum:CAPTURE_LIMITS.maxScale},
-      boardId:{type:'string'},observationVersion:{const:1}}),
+      boardId:{type:'string'},observationVersion:{const:1},
+      // Discovery stays below F033's bounded help payload. Detailed nested
+      // geometry is documented in docs/local-agent-visual-capture.md.
+      branding:object({
+        layoutVersion:{const:1},style:{const:'header'},asset:{const:'mathboard-badge'},
+        headerHeightPx:{type:'integer',minimum:1},
+        background:{type:'object'},logoRectPx:{type:'object'},contentRectPx:{type:'object'},
+      })},['mimeType','encoding','data','widthPx','heightPx','region','scale','boardId','observationVersion']),
     example:{method:'screenshot',params:{target:{kind:'sceneRect',rect:{x:200,y:120,width:800,height:600}},scale:1,format:'png'}},
     limits:{...CAPTURE_LIMITS},
     limitations:[

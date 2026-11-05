@@ -36,7 +36,8 @@ const rectValid = rect => keys(rect, ['x','y','width','height']) && ['x','y','wi
   && rect.width > 0 && rect.height > 0 && finite(rect.x + rect.width) && finite(rect.y + rect.height)
 
 export function validateCaptureRequest(params) {
-  if (!keys(params,['target','scale','format'])) invalid()
+  if (!keys(params,['target','scale','format','includeLogo'])) invalid()
+  if (params.includeLogo !== undefined && typeof params.includeLogo !== 'boolean') invalid()
   const scale=params.scale === undefined ? 1 : params.scale
   if (!finite(scale) || scale<CAPTURE_LIMITS.minScale || scale>CAPTURE_LIMITS.maxScale
     || ('format' in params && params.format !== 'png')) invalid()
@@ -50,11 +51,13 @@ export function validateCaptureRequest(params) {
       || new Set(target.ids).size!==target.ids.length) invalid()
     const padding=target.padding===undefined ? 16 : target.padding
     if (!finite(padding)||padding<0||padding>CAPTURE_LIMITS.maxPadding) invalid()
-    return { target:{kind:target.kind,ids:target.ids.slice(),padding},scale,format:'png' }
+    return { target:{kind:target.kind,ids:target.ids.slice(),padding},scale,format:'png',
+      ...(params.includeLogo ? {includeLogo:true} : {}) }
   } else if (target.kind==='viewport') {
     if (!keys(target,['kind'])) invalid()
   } else invalid()
-  return { target:structuredClone(target),scale,format:'png' }
+  return { target:structuredClone(target),scale,format:'png',
+    ...(params.includeLogo ? {includeLogo:true} : {}) }
 }
 
 export function planCapture(request, context) {
@@ -90,8 +93,23 @@ export function planCapture(request, context) {
     ||heightPx>CAPTURE_LIMITS.maxDimension||widthPx*heightPx>CAPTURE_LIMITS.maxPixels) {
     throw captureError('capture_too_large','Capture exceeds output dimension or pixel limits.')
   }
+  let branding
+  if(request.includeLogo) {
+    if(widthPx<128) invalid()
+    const logoWidthPx=Math.min(160,widthPx-32)
+    const logoHeightPx=Math.round(logoWidthPx*56/160)
+    const headerHeightPx=logoHeightPx+32
+    const outputHeightPx=heightPx+headerHeightPx
+    if(outputHeightPx>CAPTURE_LIMITS.maxDimension||widthPx*outputHeightPx>CAPTURE_LIMITS.maxPixels) {
+      throw captureError('capture_too_large','Branded capture exceeds output dimension or pixel limits.')
+    }
+    branding={layoutVersion:1,style:'header',asset:'mathboard-badge',headerHeightPx,
+      background:{kind:'mathboard-grid',variant:'light',cellSizePx:40},
+      logoRectPx:{x:16,y:16,width:logoWidthPx,height:logoHeightPx},
+      contentRectPx:{x:0,y:headerHeightPx,width:widthPx,height:heightPx}}
+  }
   if(!renderTransform) renderTransform = [scale,0,0,scale,-rect.x*scale,-rect.y*scale]
-  return {widthPx,heightPx,scale,renderTransform,region:{kind:target.kind,
+  return {widthPx,heightPx,scale,renderTransform,...(branding ? {branding} : {}),region:{kind:target.kind,
     coordinateSpace:target.kind==='viewport'?'viewport':'scene',x:rect.x,y:rect.y,
     width:widthPx/scale,height:heightPx/scale,...region}}
 }

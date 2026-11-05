@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { Rect, Circle, Line } from "fabric";
+import { ArrowObject } from "../objects/ArrowObject.js";
 
 const LEFT_TOP_ORIGIN = { originX: "left", originY: "top" };
 
@@ -48,7 +49,7 @@ export class ShapeGesture {
       shape = new Rect({ left: x, top: y, width: 0, height: 0, ...LEFT_TOP_ORIGIN, ...props });
     } else if (type === "circle") {
       shape = new Circle({ left: x, top: y, radius: 0, ...props, originX: "center", originY: "center" });
-    } else if (type === "arrow") {
+    } else if (type === "arrow" || type === "vector-arrow") {
       shape = new Line([x, y, x, y], { ...LEFT_TOP_ORIGIN, ...props, strokeWidth: 3 });
     } else {
       return null;
@@ -99,19 +100,36 @@ export class ShapeGesture {
         left: this.origin.x, top: this.origin.y,
         originX: "center", originY: "center",
       });
-    } else if (this.shapeType === "arrow") {
+    } else if (this.shapeType === "arrow" || this.shapeType === "vector-arrow") {
       this.pending.set({ x2: point.x, y2: point.y });
     }
     this.canvas.renderAll();
   }
 
   finish(complete = true) {
-    const shape = this.pending;
+    let shape = this.pending;
     const type = this.shapeType;
+    const origin = this.origin;
     this.pending = null;
     this.origin = null;
     this.shapeType = null;
     if (!shape) return false;
+    if (type === "vector-arrow") {
+      // The drag preview remains a lightweight Fabric Line. Commit an atomic
+      // semantic Arrow only once, after the final endpoint is known.
+      const { x2, y2, stroke, mathboardInkMode } = shape;
+      this.canvas.remove(shape);
+      if (Math.hypot(x2 - origin.x, y2 - origin.y) < 0.01) {
+        if (complete) this.onComplete();
+        return false;
+      }
+      shape = new ArrowObject([], {
+        x1: origin.x, y1: origin.y, x2, y2,
+        stroke, fill: stroke, strokeWidth: 2,
+        mathboardInkMode, selectable: false,
+      });
+      this.canvas.add(shape);
+    }
     shape.setCoords();
     this.onCommitted(shape, type);
     // A tool switch calls deactivate() and must win over a late one-shot event.

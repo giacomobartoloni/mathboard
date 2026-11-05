@@ -33,6 +33,15 @@ export class ArrowObject extends Path {
     Object.assign(this, geometry, { mathboardShapeType: 'arrow' })
   }
 
+  // Keep the semantic endpoints and Fabric's derived path/bounds in sync.
+  // Placement is managed by the geometry adapter or history snapshot.
+  setEndpoints({ x1, y1, x2, y2 }) {
+    Object.assign(this, { x1, y1, x2, y2 })
+    this.path = makeArrowPath(this)
+    this.setBoundingBox()
+    this.dirty = true
+  }
+
   toObject(propertiesToInclude = []) {
     return super.toObject([...propertiesToInclude, 'mathboardShapeType',
       'x1', 'y1', 'x2', 'y2', 'headLength', 'headWidth'])

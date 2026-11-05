@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
 import { Canvas, Pattern, PencilBrush, Shadow, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
+import { wheelZoomLevel } from "../board/viewport/wheelZoom.js";
 import * as fabric from "fabric";
 import fabricStaticCanvas from "./fabricStaticCanvas";
 import { paletteColorFromSelection } from "../config/colors";
@@ -104,6 +105,7 @@ import {
 } from "../stamps/index.js";
 import { resolveStampRoot } from "../stamps/resolveStampRoot.js";
 import { geometryControls, lineGeometryAdapter, isGeometryHandleTransform } from "../board/geometry/geometryHandles.js";
+import { arrowGeometryAdapter } from "../board/geometry/arrowGeometryAdapter.js";
 
 // Objects whose board ink lives on "stroke" (pencil strokes, shapes).
 // Prefer Fabric class names; isType() also accepts legacy lowercase aliases.
@@ -638,9 +640,11 @@ export default {
     },
     _syncGeometryEditing() {
       const active = this.canvas?.getActiveObject();
-      // Geometry editing is deliberately limited to top-level, singly selected lines.
+      // Line and Arrow share the controls; only their intrinsic geometry differs.
+      const adapter = active?.isType?.('Line') ? lineGeometryAdapter
+        : active?.mathboardShapeType === 'arrow' ? arrowGeometryAdapter : null;
       const editable = this.selectedTool === 'select'
-        && active?.isType?.('Line')
+        && adapter
         && this.canvas.getObjects().includes(active)
         && this.canvas.getActiveObjects().length === 1 ? active : null;
       if (this._geometryEditing?.object === editable) return;
@@ -652,7 +656,7 @@ export default {
         hadOwnControls: Object.prototype.hasOwnProperty.call(editable, 'controls'),
         hasBorders: editable.hasBorders,
       };
-      editable.controls = geometryControls(lineGeometryAdapter);
+      editable.controls = geometryControls(adapter);
       editable.hasBorders = false;
       // Rebuild oCoords before the next hit test: stale native keys crash findControl.
       editable.setCoords();
@@ -1292,6 +1296,20 @@ export default {
         this.refreshSelectionPanel();
       }
     },
+    onWheelZoom(event) {
+      if (!this.sessionReady || !this.canvas) return;
+      // Capture native wheel events on the board root, preventing page scroll
+      // while zooming. Fabric owns the canvas viewport transform.
+      event.preventDefault();
+      event.stopPropagation();
+      const currentZoom = this.canvas.getZoom();
+      const nextZoom = wheelZoomLevel(currentZoom, event.deltaY, event.deltaMode);
+      if (nextZoom === currentZoom) return;
+      this.canvas.zoomToPoint(this.canvas.getViewportPoint(event), nextZoom);
+      this.canvas.requestRenderAll();
+      this.refreshSelectionPanel();
+      this.$emit('zoom-changed', nextZoom);
+    },
     zoomIn() {
       const currentZoom = this.canvas.getZoom();
       const newZoom = currentZoom * 1.1;
@@ -1453,6 +1471,7 @@ export default {
   },
   mounted() {
     this.initializeCanvas();
+    this.$refs.boardRoot.addEventListener('wheel', this.onWheelZoom, { passive: false });
     
     this.$nextTick(() => {
       this.updateCanvasSize();
@@ -1469,6 +1488,7 @@ export default {
     this._shapeGesture?.dispose();
     this._textInsertion?.dispose();
     this._panGesture?.dispose();
+    this.$refs.boardRoot.removeEventListener('wheel', this.onWheelZoom);
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);

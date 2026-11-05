@@ -80,6 +80,21 @@ already delivered to OS buffers cannot be recalled.
 
 The external tool names are `mathboard_observe`, `mathboard_measure`, `mathboard_screenshot`, and `mathboard_command`.
 
+`mathboard_screenshot` accepts an optional strict boolean `includeLogo`
+(default `false`). Set it to `true` to compose a non-overlapping top
+header with the full MathBoard Satisfy wordmark on a fixed 40px light grid:
+
+```json
+{"target":{"kind":"viewport"},"scale":1,"includeLogo":true}
+```
+
+The board pixels remain unchanged below the header; only final PNG height
+grows. Crops narrower than 128 output pixels cannot be branded, and the
+existing image limits apply to the full header-inclusive PNG. The MCP result
+remains a single `image/png` content block. The agent local-dev HTTP
+response additionally exposes optional `branding` metadata, including
+`headerHeightPx` and `contentRectPx`. MCP authorization is unchanged.
+
 `mathboard_command` accepts an existing command name and its parameters:
 
 ```json

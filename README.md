@@ -1,8 +1,39 @@
-# MathBoard
+<p align="center">
+  <a href="https://mathboard.app/">
+    <img src="public/og-image.png" alt="MathBoard — open-source math whiteboard" width="720">
+  </a>
+</p>
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+<h1 align="center">MathBoard</h1>
 
-> **Interactive Digital Whiteboard for Mathematical Notation & LaTeX**
+<p align="center">
+  <strong>An open-source, math-first whiteboard for teachers and tutors.</strong><br>
+  Draw freely. Write editable LaTeX. Teach visually.
+</p>
+
+<p align="center">
+  <a href="https://mathboard.app/">Launch MathBoard</a> ·
+  <a href="https://mathboard.app/download/">Desktop beta</a> ·
+  <a href="#key-features">Features</a> ·
+  <a href="#getting-started">Get started</a> ·
+  <a href="#documentation">Documentation</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/giacomobartoloni/mathboard/actions/workflows/main.yml">
+    <img src="https://github.com/giacomobartoloni/mathboard/actions/workflows/main.yml/badge.svg?branch=main" alt="CI status">
+  </a>
+  <a href="LICENSE.md">
+    <img src="https://img.shields.io/badge/license-AGPL--3.0-D2B48C?style=flat-square&amp;labelColor=3D3D3D" alt="AGPL-3.0 license">
+  </a>
+  <a href="https://mathboard.app/">
+    <img src="https://img.shields.io/badge/web-live-D2B48C?style=flat-square&amp;labelColor=3D3D3D" alt="Web app">
+  </a>
+  <a href="https://mathboard.app/download/">
+    <img src="https://img.shields.io/badge/desktop-public%20beta-D2B48C?style=flat-square&amp;labelColor=3D3D3D" alt="Desktop public beta">
+  </a>
+</p>
 
 MathBoard is an innovative digital whiteboard application specifically designed for math teachers. It seamlessly combines freehand drawing capabilities with powerful LaTeX formula support, enabling users to create, edit, and organize mathematical content with unprecedented ease.
 
@@ -93,3 +124,7 @@ npm run preview
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 - see the [LICENSE](LICENSE.md) file for details.
+
+---
+
+Built by [Giacomo Bartoloni](https://github.com/giacomobartoloni) · [LinkedIn](https://www.linkedin.com/in/giacomobartoloni/) · [Contribute](CONTRIBUTING.md)

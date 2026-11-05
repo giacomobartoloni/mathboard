@@ -1659,3 +1659,56 @@ th {
     transition: none;
   }
 }
+
+
+/* International math whiteboard landing pages: visible language switcher. */
+.language-links {
+  margin-top: 3.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.language-links h2 {
+  font-size: 1.2rem;
+  margin: 0 0 0.75rem;
+}
+
+.language-links ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1.1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* Regular content lists add top spacing to later siblings; the flex language
+   navigation needs every item aligned on the same row. */
+main .language-links ul li + li {
+  margin-top: 0;
+}
+
+.language-links a[aria-current="page"] {
+  font-weight: 750;
+  text-decoration: none;
+}
+
+html[dir="rtl"] .brand .logo {
+  left: auto;
+  right: 0;
+}
+
+html[dir="rtl"] .skip-link {
+  left: auto;
+  right: -9999px;
+}
+
+html[dir="rtl"] .skip-link:focus {
+  left: auto;
+  right: 0.5rem;
+}
+
+html[dir="rtl"] .breadcrumbs li:not(:last-child)::after {
+  margin-left: 0;
+  margin-right: 0.35rem;
+}

@@ -21,6 +21,27 @@ import { escapeHtml } from './escape-html.mjs'
 import { renderBreadcrumbs, renderFooter, renderHeader } from './render-components.mjs'
 import { absoluteUrl, ORIGIN, renderStructuredData } from './structured-data.mjs'
 
+
+function renderLanguageLinks(page) {
+  if (!page.alternates?.length) return ''
+  const heading = escapeHtml(page.ui?.languages || 'Other languages')
+  const links = page.alternates.map(({ path, label }) => {
+    const current = page.path === path ? ' aria-current="page"' : ''
+    return '<li><a href="' + escapeHtml(path) + '"' + current + '>' + escapeHtml(label) + '</a></li>'
+  }).join('\n')
+  return '<section class="language-links"><h2>' + heading + '</h2>'
+    + '<nav aria-label="' + heading + '"><ul>' + links + '</ul></nav></section>'
+}
+
+function renderHreflang(page) {
+  if (!page.alternates?.length) return ''
+  const entries = [...page.alternates, { lang: 'x-default', path: '/math-whiteboard/' }]
+  return entries.map(({ lang, path }) =>
+    '<link rel="alternate" hreflang="' + escapeHtml(lang) + '" href="' +
+    escapeHtml(ORIGIN + path) + '">'
+  ).join('\n')
+}
+
 export function renderLayout(page) {
   const canonical = page.canonical || `${ORIGIN}${page.path}`
   const ogImage = absoluteUrl(page.ogImage || '/og-image.png')
@@ -29,13 +50,16 @@ export function renderLayout(page) {
   const h1 = escapeHtml(page.h1)
   // Only pages that render an in-body heading opt out of the shared h1 slot.
   const heading = page.h1InBody ? '' : `<h1>${h1}</h1>`
-  const breadcrumbs = renderBreadcrumbs(page.breadcrumbs)
+  const ui = page.ui || {}
+  const breadcrumbs = renderBreadcrumbs(page.breadcrumbs, ui.breadcrumb || 'Breadcrumb')
+  const hreflang = renderHreflang(page)
+  const languageLinks = renderLanguageLinks(page)
   const katexCss = page.needsKatex
     ? '<link rel="stylesheet" href="/seo/katex/katex.min.css">'
     : ''
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(page.locale || 'en')}"${page.dir ? ` dir="${escapeHtml(page.dir)}"` : ''}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -43,6 +67,7 @@ export function renderLayout(page) {
   <title>${title}</title>
   <meta name="description" content="${description}">
   <link rel="canonical" href="${escapeHtml(canonical)}">
+  ${hreflang}
 
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="MathBoard">
@@ -64,17 +89,18 @@ export function renderLayout(page) {
   ${renderStructuredData(page)}
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
+  <a class="skip-link" href="#main">${escapeHtml(ui.skip || 'Skip to content')}</a>
 
-  ${renderHeader()}
+  ${renderHeader(ui)}
 
   <main id="main">
     ${breadcrumbs}
     ${heading}
     ${page.body}
+    ${languageLinks}
   </main>
 
-  ${renderFooter()}
+  ${renderFooter(ui)}
 
   <script src="/seo/seo.js" defer></script>
 </body>

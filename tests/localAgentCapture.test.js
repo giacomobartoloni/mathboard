@@ -254,3 +254,112 @@ test('C13: paint readiness still uses live frames and honors abort', async () =>
   await assert.rejects(pending, error => error.code === 'capture_failed')
   assert.ok(cancelled <= 1)
 })
+
+test('branded paint readiness rejects missing or failed Satisfy faces', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  for (const load of [
+    async () => [],
+    async () => [{ status: 'error' }],
+    async () => { throw new Error('Font resource unavailable') },
+  ]) {
+    const environment = {
+      document: { fonts: { ready: Promise.resolve(), load } },
+      requestAnimationFrame: callback => { queueMicrotask(callback); return 1 },
+      cancelAnimationFrame: () => {},
+    }
+    await assert.rejects(waitForCapturePaint(environment, new AbortController().signal, true),
+      error => error.code === 'capture_failed')
+  }
+})
+
+test('branded readiness loads the badge font before waiting for paint', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  let loaded = false
+  const environment = {
+    document: { fonts: {
+      ready: Promise.resolve(),
+      async load(font, text) {
+        assert.equal(font, '24px Satisfy')
+        assert.equal(text, 'MathBoard')
+        loaded = true
+        return [{ status: 'loaded' }]
+      },
+    } },
+    requestAnimationFrame: callback => {
+      assert.ok(loaded, 'paint must wait for the actual badge face')
+      queueMicrotask(callback)
+      return 1
+    },
+    cancelAnimationFrame: () => {},
+  }
+  await waitForCapturePaint(environment, new AbortController().signal, true)
+})
+
+test('unbranded paint readiness does not request the branding font', async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  const environment = {
+    document: { fonts: {
+      ready: Promise.resolve(),
+      load() { throw new Error('Unbranded capture must not load Satisfy') },
+    } },
+    requestAnimationFrame: callback => { queueMicrotask(callback); return 1 },
+    cancelAnimationFrame: () => {},
+  }
+  await waitForCapturePaint(environment, new AbortController().signal)
+  await waitForCapturePaint(environment, new AbortController().signal, false)
+})
+
+test('branded paint readiness aborts while Satisfy is still loading', { timeout: 1000 }, async () => {
+  const { waitForCapturePaint } = await import('../src/board/capture/visual-capture.js')
+  let finishLoading
+  const loading = new Promise(resolve => { finishLoading = resolve })
+  let started
+  const loadStarted = new Promise(resolve => { started = resolve })
+  const controller = new AbortController()
+  const environment = {
+    document: { fonts: { ready: Promise.resolve(), load: () => { started(); return loading } } },
+    requestAnimationFrame: () => { throw new Error('Aborted font load must not paint') },
+    cancelAnimationFrame: () => {},
+  }
+  const pending = waitForCapturePaint(environment, controller.signal, true)
+  await loadStarted
+  controller.abort()
+  await assert.rejects(pending, error => error.code === 'capture_failed')
+  finishLoading([{ status: 'loaded' }])
+})
+
+// Branding preserves source crop geometry and adds a fixed non-overlapping header.
+test('branded capture geometry and final output limits', () => {
+  const base={target:{kind:'sceneRect',rect:{x:50,y:80,width:800,height:600}}}
+  const plain=planCapture(validateCaptureRequest(base),context)
+  const branded=planCapture(validateCaptureRequest({...base,includeLogo:true}),context)
+  assert.deepEqual(branded.region,plain.region)
+  assert.deepEqual(branded.renderTransform,plain.renderTransform)
+  assert.deepEqual(branded.branding,{
+    layoutVersion:1,style:'header',asset:'mathboard-badge',headerHeightPx:88,
+    background:{kind:'mathboard-grid',variant:'light',cellSizePx:40},
+    logoRectPx:{x:16,y:16,width:160,height:56},
+    contentRectPx:{x:0,y:88,width:800,height:600},
+  })
+  assert.deepEqual(validateCaptureRequest({...base,includeLogo:false}),validateCaptureRequest(base))
+  for(const [width,logoWidth,logoHeight,headerHeight] of [
+    [128,96,34,66],[160,128,45,77],[191,159,56,88],[192,160,56,88],
+  ]) {
+    const p=planCapture(validateCaptureRequest({target:{kind:'sceneRect',rect:{x:0,y:0,width,height:100}},
+      includeLogo:true}),context)
+    assert.deepEqual([p.branding.logoRectPx.width,p.branding.logoRectPx.height,p.branding.headerHeightPx],
+      [logoWidth,logoHeight,headerHeight])
+  }
+  for(const v of [null,0,1,'true',{},[]]) invalid({...base,includeLogo:v})
+  assert.throws(()=>planCapture(validateCaptureRequest({
+    target:{kind:'sceneRect',rect:{x:0,y:0,width:127,height:100}},includeLogo:true
+  }),context),e=>e.code==='invalid_capture_request')
+  for(const [width,height] of [[500,1961],[1200,1660]]) {
+    assert.throws(()=>planCapture(validateCaptureRequest({
+      target:{kind:'sceneRect',rect:{x:0,y:0,width,height}},includeLogo:true
+    }),context),e=>e.code==='capture_too_large')
+    assert.doesNotThrow(()=>planCapture(validateCaptureRequest({
+      target:{kind:'sceneRect',rect:{x:0,y:0,width,height}}
+    }),context))
+  }
+})

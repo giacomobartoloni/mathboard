@@ -107,3 +107,23 @@ test('tool switch finalizes once without one-shot callback and removes listeners
   gesture.dispose();
   assert.equal(canvas.listeners.get('mouse:down').size,0);
 });
+
+test('Arrow is a semantic atomic shape while the legacy Line stays a Line', () => {
+  const arrow = setup('vector-arrow');
+  arrow.canvas.fire('mouse:down', { x: 50, y: 60 });
+  arrow.canvas.fire('mouse:move', { x: 110, y: 90 });
+  arrow.canvas.fire('mouse:up', { x: 110, y: 90 });
+  assert.equal(arrow.commands.length, 1);
+  assert.equal(arrow.commands[0].kind, 'vector-arrow');
+  assert.equal(arrow.commands[0].object.mathboardShapeType, 'arrow');
+  assert.equal(arrow.commands[0].object.x1, 50);
+  assert.equal(arrow.commands[0].object.x2, 110);
+  assert.equal(arrow.canvas.objects.length, 1);
+  assert.equal(arrow.canvas.objects[0], arrow.commands[0].object);
+  const line = setup('arrow');
+  line.canvas.fire('mouse:down', { x: 50, y: 60 });
+  line.canvas.fire('mouse:move', { x: 110, y: 90 });
+  line.canvas.fire('mouse:up', { x: 110, y: 90 });
+  assert.equal(line.commands[0].object.isType('Line'), true);
+});
+
