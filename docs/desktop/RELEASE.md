@@ -200,3 +200,18 @@ does not consume signing secrets.
 Automatic updates are deferred. Before adding an updater, define signing-key custody,
 artifact hosting, channels, rollback behavior, and compatibility policy in a separate
 decision.
+
+## Update discovery (notification only)
+
+Desktop builds can check published GitHub Releases entirely from Rust.
+**Check for Updates…** appears directly below **About MathBoard** in the
+macOS app menu (below **About** in Help on Windows/Linux). An adjacent native
+status item shows an available version and opens its official GitHub release
+page. The Vue/browser frontend is not involved.
+
+This is **discovery-only**, not an auto-updater: nothing is downloaded, installed,
+or restarted, and no signing identity is added. The existing unsigned-beta
+security warnings and mandatory per-platform QA gates still apply.
+
+See [Update discovery](UPDATE_DISCOVERY.md) for the release eligibility contract,
+native menu behavior, platform verification and future-updater boundary.

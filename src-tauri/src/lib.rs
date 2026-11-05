@@ -18,6 +18,7 @@
 mod analytics;
 pub mod board_bridge;
 pub mod companion;
+mod desktop_updates;
 pub mod mcp_contract;
 mod mcp_http;
 pub mod mcp_ipc_client;
@@ -74,6 +75,10 @@ pub fn run() {
                 // startup must instead fail cleanly with a nonzero exit code.
                 companion::exit_http_startup_failure(&error);
             }
+        }
+        // Update discovery runs exclusively in the native host, not the board WebView.
+        if !enable_http_at_start {
+            desktop_updates::start(app.handle());
         }
         #[cfg(feature = "phase-c-verification")]
         {
@@ -134,9 +139,18 @@ pub fn run() {
             )?;
             let assistants = Submenu::with_items(handle, "Local assistants", true, &[&settings])?;
             menu.append(&assistants)?;
+            desktop_updates::install_menu(handle, &menu)?;
             Ok(menu)
         })
         .on_menu_event(|app, event| {
+            if event.id() == desktop_updates::CHECK_MENU_ID {
+                desktop_updates::check_now(app);
+                return;
+            }
+            if event.id() == desktop_updates::OPEN_MENU_ID {
+                desktop_updates::open_release(app);
+                return;
+            }
             if event.id() == mcp_settings::MENU_ID {
                 let handle = app.clone();
                 // Windows WebView2 can deadlock if created in the synchronous
