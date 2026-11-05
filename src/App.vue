@@ -279,12 +279,17 @@ export default {
     const syncPinEligibility = () => {
       canPinBoardLibrary.value = window.innerWidth >= 1000
       if (!canPinBoardLibrary.value && boardLibraryMode.value === 'pinned') {
+        // The focused pin control becomes disabled when docking is unavailable.
+        // Capture it before Vue updates the DOM, since browsers may blur it.
+        const pinHadFocus = document.activeElement?.matches?.('.board-library-pin-button')
         boardLibraryMode.value = 'overlay'
-        // A resize can change a nonmodal region into a modal dialog while
-        // keyboard focus is still on the canvas. Move focus into the dialog.
+        // A nonmodal region has become a modal dialog. Keep valid sidebar
+        // input focus, but move focus from the board or disabled pin to Close.
         void nextTick(() => {
-          if (boardLibraryMode.value === 'overlay' && !document.activeElement?.closest?.('.board-library-panel')) {
-            document.querySelector('.board-library-panel .board-library-icon-button')?.focus()
+          if (boardLibraryMode.value !== 'overlay') return
+          const focused = document.activeElement
+          if (pinHadFocus || !focused?.closest?.('.board-library-panel') || focused?.matches?.(':disabled')) {
+            document.querySelector('.board-library-panel [aria-label="Close board library"]')?.focus()
           }
         })
       }
