@@ -1,7 +1,9 @@
 # Native desktop update discovery
 
-MathBoard's **Updates** menu is implemented entirely in Tauri's Rust host.
-The shared Vue/Vite application and browser build are unchanged. This is
+MathBoard's native **Check for Updates…** action lives directly below
+**About MathBoard** in the macOS application menu, or below **About** in the
+Windows/Linux **Help** menu. The shared Vue/Vite application and browser
+build are unchanged. This is
 **discovery-only**: no automatic download, installation, restart, updater
 plugin, signature keys, WebView commands or frontend event listeners.
 
@@ -9,10 +11,11 @@ plugin, signature keys, WebView commands or frontend event listeners.
 
 - A background check starts when the native application opens (excluding the
   headless companion HTTP mode), then every 24 hours while the process runs.
-  **Updates (new version)** appears in the native menu when an eligible
-  release is found.
-- **Updates > Check for Updates…** checks on demand. While checking, the
-  action is disabled. The second menu row displays **Up to date**, a
+  The native menu's release row identifies an eligible newer version when
+  one is found.
+- **Check for Updates…** checks on demand directly from the default About
+  menu. While checking, the action is disabled. The following status row
+  displays **Up to date**, a
   retryable **Could not check updates** state, or
   **Version X.Y.Z available — View release…**. Selecting a newer release
   opens the official GitHub release page in the system browser.
@@ -36,7 +39,8 @@ plugin, signature keys, WebView commands or frontend event listeners.
 - Standard frontend lint, tests and build, with no changes to `src/`.
 - Native packaged acceptance on macOS (Apple Silicon and Intel), Windows
   x64, Linux x64: startup check, repeat/manual check, online/offline behavior,
-  menu status, official release link, no WebView network requests.
+  check action immediately after the native About item, adjacent status and
+  official release link, no WebView network requests.
 - Ensure the updater does not run in the headless companion startup mode.
   Native CI compilation alone does not prove packaged GUI behavior.
 
