@@ -24,12 +24,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
+    :class="{ 'board-library-pinned': boardLibraryMode === 'pinned' }"
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
       <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
         aria-label="Open Board library" title="Open Board library"
-        :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
+         :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="boardLibraryMode === 'overlay'" @click="openBoardLibrary">
         <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
         <span class="board-library-trigger-label">
           <span class="board-library-trigger-label-long">Board library</span>
@@ -40,7 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || showBoardLibrary">
+    <div  :inert="!boardSessionReady || showFormulaModal || showShareStampModal || boardLibraryMode === 'overlay'">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
@@ -57,6 +58,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @zoom-changed="updateZoomLevel"
         @selection-color="onSelectionColor"
         @persistence-status="onPersistenceStatus"
+        @active-board-changed="onActiveBoardChanged"
       />
       <ToolsPanel
         :selectedTool="selectedTool"
@@ -74,7 +76,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
     <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
       :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
-      @close="closeBoardLibrary" @action="onBoardLibraryAction" />
+      :pinned="boardLibraryMode === 'pinned'" :can-pin="canPinBoardLibrary"
+      @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @action="onBoardLibraryAction" />
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
 
@@ -109,7 +112,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     />
     
     <ZoomPanel 
-      :inert="showBoardLibrary"
+      :inert="boardLibraryMode === 'overlay'"
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
       :is-fullscreen="isFullscreen"
@@ -123,7 +126,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @toggle-fullscreen="toggleFullscreen"
     />
     
-    <SupportPanel class="secondary-chrome" :inert="showBoardLibrary" />
+    <SupportPanel class="secondary-chrome" :inert="boardLibraryMode === 'overlay'" />
     
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
@@ -269,7 +272,16 @@ export default {
         recoveringConflict.value = false
       }
     }
-    const showBoardLibrary = ref(false)
+    // Overlay is the default on every open. Pinning is explicit and session-local.
+    const boardLibraryMode = ref('closed')
+    const showBoardLibrary = computed(() => boardLibraryMode.value !== 'closed')
+    const canPinBoardLibrary = ref(window.innerWidth >= 1000)
+    const syncPinEligibility = () => {
+      canPinBoardLibrary.value = window.innerWidth >= 1000
+      if (!canPinBoardLibrary.value && boardLibraryMode.value === 'pinned') boardLibraryMode.value = 'overlay'
+    }
+    onMounted(() => window.addEventListener('resize', syncPinEligibility))
+    onBeforeUnmount(() => window.removeEventListener('resize', syncPinEligibility))
     const boardLibraryTriggerRef = ref(null)
     const boardList = ref([])
     const archivedList = ref([])
@@ -278,9 +290,14 @@ export default {
     const boardLibraryError = ref(null)
     const closeBoardLibrary = async () => {
       if (boardLibraryBusy.value) return
-      showBoardLibrary.value = false
+      boardLibraryMode.value = 'closed'
       await nextTick()
       boardLibraryTriggerRef.value?.focus()
+    }
+    const toggleBoardLibraryPin = () => {
+      if (boardLibraryBusy.value) return
+      if (boardLibraryMode.value === 'overlay' && canPinBoardLibrary.value) boardLibraryMode.value = 'pinned'
+      else if (boardLibraryMode.value === 'pinned') boardLibraryMode.value = 'overlay'
     }
     const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
     const refreshBoardLibrary = async () => {
@@ -296,7 +313,7 @@ export default {
       boardList.value = []
       archivedList.value = []
       boardLibraryLoading.value = true
-      showBoardLibrary.value = true
+      boardLibraryMode.value = 'overlay'
       try { await refreshBoardLibrary() } catch (error) { boardLibraryError.value = error.message }
       finally { boardLibraryLoading.value = false }
     }
@@ -325,9 +342,11 @@ export default {
         if (switchedAwayFromActive) selectedTool.value = 'select'
         if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
           selectedTool.value = 'select'
-          showBoardLibrary.value = false
-          await nextTick()
-          boardLibraryTriggerRef.value?.focus()
+          if (boardLibraryMode.value === 'overlay') {
+            boardLibraryMode.value = 'closed'
+            await nextTick()
+            boardLibraryTriggerRef.value?.focus()
+          }
         }
       } catch (error) {
         boardLibraryError.value = error?.message || 'Board library operation failed.'
@@ -335,6 +354,12 @@ export default {
         try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
       } finally {
         boardLibraryBusy.value = false
+      }
+    }
+    const onActiveBoardChanged = () => {
+      // Keep a pinned library in sync with agent-originated board transitions.
+      if (showBoardLibrary.value && !boardLibraryBusy.value) {
+        void refreshBoardLibrary().catch(error => { boardLibraryError.value = error?.message || 'Board list could not be refreshed.' })
       }
     }
     let fullscreenInitialized = false
@@ -442,7 +467,8 @@ export default {
         try {
           const disconnect = await connectDesktopWindow({
             onUndo: () => {
-              if (boardSessionReady.value && !showBoardLibrary.value
+              if (boardSessionReady.value && boardLibraryMode.value !== 'overlay'
+                && !document.activeElement?.closest?.('.board-library-panel')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
             },
             onRedo: () => {
@@ -576,7 +602,8 @@ export default {
           event.preventDefault()
           return
         }
-        if (showBoardLibrary.value) {
+        if (boardLibraryMode.value === 'overlay'
+          || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-panel'))) {
           closeBoardLibrary()
           event.preventDefault()
           return
@@ -595,7 +622,8 @@ export default {
       if (
         showFormulaModal.value
         || showShareStampModal.value
-        || showBoardLibrary.value
+        || boardLibraryMode.value === 'overlay'
+        || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-panel'))
         || shouldIgnoreGlobalShortcut(event)
         || drawBoardRef.value?.isTextEditing()
       ) return
@@ -863,6 +891,10 @@ export default {
       onPersistenceStatus,
       recoverConflict,
       showBoardLibrary,
+      boardLibraryMode,
+      canPinBoardLibrary,
+      toggleBoardLibraryPin,
+      onActiveBoardChanged,
       boardLibraryTriggerRef,
       boardList,
       archivedList,
@@ -969,7 +1001,7 @@ body {
   display: none !important;
 }
 
-/* On desktop, keep the existing independent logo and centered board selector. */
+/* Keep the logo left and the library trigger at the top-right. */
 .board-topbar { display: contents; }
 
 .logo {
@@ -1001,13 +1033,12 @@ body {
 .board-library-trigger {
   position: fixed;
   top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: max(16px, env(safe-area-inset-right));
   z-index: 1100;
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(330px, calc(100vw - 350px));
+  width: min(232px, calc(100vw - 350px));
   min-height: 44px;
   padding: 9px 14px;
   border: 0;
@@ -1025,6 +1056,12 @@ body {
 .board-library-trigger-label-short { display: none; }
 .board-library-trigger > svg:last-child { color: var(--text-muted); font-size: 12px; }
 .board-library-trigger:disabled { opacity: .6; cursor: default; }
+
+/* Docked mode narrows only the Fabric viewport, never its scene coordinates. */
+#app { --board-library-width: 400px; }
+#app.board-library-pinned #boardcontainer { right: var(--board-library-width); }
+#app.board-library-pinned .support-panel { right: calc(var(--board-library-width) + 12px); }
+#app.board-library-pinned .copyright { display: none; }
 
 .copyright {
   position: absolute;
