@@ -368,7 +368,105 @@ test('Anchored icon-only actions popover supports mouse, keyboard and confirmed 
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(320)
   await more.click()
   await expect(deleteAction).toBeInViewport()
-  await expect(deleteAction).toHaveText('')
+  await expect(deleteAction).toHaveText('Delete')
+  await expect(row.getByRole('button', { name: `Rename ${active.title}` })).toBeVisible()
+})
+
+test('compact sidebar moves Rename and Archive into the existing menu at actual panel width', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
+
+  const target = await send(request, 'boards.create', { title: 'Compact actions' })
+  await send(request, 'boards.create', { title: 'Another active board' })
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+  const sidebar = page.getByRole('dialog', { name: 'Board library' })
+  const row = sidebar.locator('.board-library-list li').filter({
+    has: sidebar.locator(`#more-action-${target.id}`),
+  })
+  const more = row.getByRole('button', { name: 'More actions for Compact actions' })
+  const resize = sidebar.getByRole('separator', { name: 'Resize library sidebar' })
+  await expect(resize).toHaveAttribute('aria-valuenow', '400')
+  await expect(row.locator('.board-library-row-actions button')).toHaveCount(3)
+
+  // The window stays wide: only the actual panel width drives compact mode.
+  await resize.focus()
+  await page.keyboard.press('Home')
+  await expect(resize).toHaveAttribute('aria-valuenow', '320')
+  await expect(row.locator('.board-library-row-actions button')).toHaveCount(1)
+  await expect(row.locator('.board-library-row').getByRole('button', { name: 'Rename Compact actions' })).toHaveCount(0)
+  await expect(row.locator('.board-library-row').getByRole('button', { name: 'Archive Compact actions' })).toHaveCount(0)
+
+  await more.click()
+  const menu = row.locator('.board-library-more-menu')
+  await expect(menu).toBeVisible()
+  const rename = menu.getByRole('button', { name: 'Rename Compact actions' })
+  const archive = menu.getByRole('button', { name: 'Archive Compact actions' })
+  const deleteAction = menu.getByRole('button', { name: 'Delete Compact actions' })
+  await expect(rename).toBeFocused()
+  await expect(archive).toBeVisible()
+  await expect(deleteAction).toBeVisible()
+  await expect(menu.getByRole('button')).toHaveCount(3)
+
+  await rename.click()
+  await expect(menu).toBeHidden()
+  const input = row.getByRole('textbox', { name: 'Rename board' })
+  await expect(input).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(more).toBeFocused()
+
+  // Rename keeps its existing save behavior and returns focus to overflow.
+  await more.click()
+  await menu.getByRole('button', { name: 'Rename Compact actions' }).click()
+  await input.fill('Compact renamed')
+  await row.getByRole('button', { name: 'Save name' }).click()
+  await expect(more).toBeFocused()
+  await more.click()
+  await menu.getByRole('button', { name: 'Archive Compact renamed' }).click()
+  await expect.poll(async () =>
+    (await send(request, 'boards.listArchived')).some(board => board.id === target.id)).toBe(true)
+  await expect(sidebar).toBeVisible()
+
+  // Archived rows keep Unarchive direct; overflow contains only Delete.
+  await sidebar.getByRole('button', { name: 'Archived (1)' }).click()
+  const archivedRow = sidebar.locator('.board-library-trash li').filter({ hasText: 'Compact renamed' })
+  await expect(archivedRow.getByRole('button', { name: 'Unarchive Compact renamed' })).toBeVisible()
+  const archivedMore = archivedRow.getByRole('button', { name: 'More actions for Compact renamed' })
+  await archivedMore.click()
+  const archivedMenu = archivedRow.locator('.board-library-more-menu')
+  await expect(archivedMenu.getByRole('button', { name: 'Delete Compact renamed' })).toBeFocused()
+  await expect(archivedMenu.getByRole('button')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(archivedMore).toBeFocused()
+
+  // Expanding restores the existing direct actions and Delete-only menu.
+  await sidebar.getByRole('button', { name: 'Recent (1)' }).click()
+  await resize.focus()
+  await page.keyboard.press('End')
+  await expect(resize).toHaveAttribute('aria-valuenow', '560')
+  const wideRow = sidebar.locator('.board-library-list li').filter({ hasText: 'Another active board' })
+  await expect(wideRow.locator('.board-library-row-actions button')).toHaveCount(3)
+  await expect(wideRow.getByRole('button', { name: 'Archive Another active board' })).toBeVisible()
+  await wideRow.getByRole('button', { name: 'More actions for Another active board' }).click()
+  await expect(wideRow.locator('.board-library-more-menu').getByRole('button')).toHaveCount(1)
+})
+
+test('compact menu is available on a narrow viewport without a resizable sidebar', async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  const active = (await send(request, 'boards.list')).find(board => board.isActive)
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+  const sidebar = page.getByRole('dialog', { name: 'Board library' })
+  await expect(sidebar.getByRole('separator', { name: 'Resize library sidebar' })).toHaveCount(0)
+  const row = sidebar.locator('.board-library-list li').filter({ hasText: active.title }).first()
+  await expect(row.locator('.board-library-row-actions button')).toHaveCount(1)
+  await row.getByRole('button', { name: `More actions for ${active.title}` }).click()
+  const menu = row.locator('.board-library-more-menu')
+  await expect(menu.getByRole('button', { name: `Rename ${active.title}` })).toBeFocused()
+  await expect(menu.getByRole('button', { name: `Archive ${active.title}` })).toBeVisible()
+  await expect(menu.getByRole('button', { name: `Delete ${active.title}` })).toBeVisible()
 })
 
 test('board library isolates drawing shortcuts and returns focus on Escape', async ({ page }) => {
