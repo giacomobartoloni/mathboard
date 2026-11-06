@@ -42,6 +42,7 @@ function objectType(obj) {
     'FabricImage',
     'Image',
     'MathBoardFormula',
+    'MathBoardPlot',
   ]
 
   for (const name of names) {
@@ -57,7 +58,8 @@ function isComposite(obj) {
     obj.isType?.('Group')
     || obj.isType?.('ActiveSelection')
     || obj.isType?.('MathBoardFormula')
-    || obj.formulaType,
+    || obj.formulaType
+    || obj.objectKind === 'plot',
   )
 }
 
@@ -85,6 +87,11 @@ function snapshotForE2e(obj, { includeChildren = true } = {}) {
 
   const snapshot = {
     type: objectType(obj),
+    objectKind: obj.objectKind || null,
+    plotSpec: obj.objectKind === 'plot' ? structuredClone(obj.plotSpec) : null,
+    plotBorder: obj.objectKind === 'plot' ? obj.getObjects().some(child => child.isType('Rect') && Boolean(child.stroke)) : null,
+    plotAxisNumberCount: obj.objectKind === 'plot' ? obj.getObjects().filter(child => child.isType('Text')).length : null,
+    plotBackground: obj.objectKind === 'plot' ? { fill: obj.getObjects()[0].fill, opacity: obj.getObjects()[0].opacity } : null,
     left: Number(layout.left) || 0,
     top: Number(layout.top) || 0,
     width: layout.width != null

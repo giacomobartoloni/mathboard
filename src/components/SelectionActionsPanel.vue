@@ -96,7 +96,7 @@ export default {
     },
     resolvedActions() {
       return this.actions
-        .map((id) => (ACTION_CATALOG[id] ? { id, ...ACTION_CATALOG[id] } : null))
+        .map((id) => (ACTION_CATALOG[id] ? { id, ...ACTION_CATALOG[id], ...(id === 'edit' && this.selectionType === 'plot' ? {label:'Edit graph',title:'Edit graph'} : {}) } : null))
         .filter(Boolean)
     },
     metricsStyle() {

@@ -14,7 +14,7 @@ test('v1 migration is identity', () => {
 
 test('unknown version rejects', () => {
   assert.throws(
-    () => migrateBoardDocument({ format: 'mathboard-board', version: 2, title: 't', objects: [] }),
+    () => migrateBoardDocument({ format: 'mathboard-board', version: 99, title: 't', objects: [] }),
     (error) => error instanceof BoardDocumentError
       && error.code === BOARD_DOCUMENT_ERROR_CODES.UNSUPPORTED_VERSION,
   )

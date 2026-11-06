@@ -38,6 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
+import { plotSemanticProps } from '../plots/plotSpec.js';
 import { Canvas, Pattern, PencilBrush, Shadow, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import { wheelZoomLevel } from "../board/viewport/wheelZoom.js";
 import * as fabric from "fabric";
@@ -256,7 +257,11 @@ export default {
         boardObjectPolicy: this._boardObjectPolicy,
         getCanvas: () => this.canvas,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
-        resetHistory: () => this._resetHistory(),
+        resetHistory: () => {
+          this._resetHistory();
+          // Loaded AUTO ink and graph surfaces belong to the destination board theme.
+          this.syncAutoInk(this.boardThemeConfig);
+        },
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
         onActiveBoardChanged: (board) => this.$emit('active-board-changed', board),
@@ -415,7 +420,9 @@ export default {
      * Walks into permanent Groups (and ActiveSelection) so stamp kits follow theme.
      */
     _syncObjectAutoInk(object, config) {
-      if (!object || object.mathboardInkMode !== INK_MODE_AUTO) return;
+      if (!object) return;
+      if (this._boardObjectPolicy.isPlot(object)) { object.applyTheme(config); return; }
+      if (object.mathboardInkMode !== INK_MODE_AUTO) return;
       if (this._boardObjectPolicy.isFormula(object)) {
         this._formulaRenderer.syncInk(object, config);
         return;
@@ -519,7 +526,7 @@ export default {
         this.setCursor(CURSOR_TYPES.text);
         return;
       }
-      if (tool === 'formula') {
+      if (tool === 'formula' || tool === 'graph') {
         this.setCursor(CURSOR_TYPES.crosshair);
         return;
       }
@@ -755,6 +762,7 @@ export default {
     },
     editSelection() {
       const active = this.canvas?.getActiveObject();
+      if (this._boardObjectPolicy.isPlot(active)) { this.requestPlotEdit(active); return; }
       if (!active || active.isEditing || !this._boardObjectPolicy.isFormula(active)) return;
       this.$emit("edit-formula", {
         latex: active.latex,
@@ -834,6 +842,10 @@ export default {
       const walk = (object) => {
         if (!object) return;
 
+        if (this._boardObjectPolicy.isPlot(object)) {
+          object.applyTheme(this.boardThemeConfig);
+          return;
+        }
         if (this._boardObjectPolicy.isFormula(object)) {
           if (object.mathboardInkMode !== INK_MODE_FIXED) {
             object.mathboardInkMode = INK_MODE_AUTO;
@@ -1042,6 +1054,22 @@ export default {
       const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
+    enablePlotInsertion() {
+      this.canvas.isDrawingMode = false;
+      this.canvas.selection = false;
+      this.canvas.discardActiveObject();
+      this.setObjectsSelectable(false);
+      this.canvas.on('mouse:down', this.requestPlotInput);
+      this.canvas.requestRenderAll();
+    },
+    disablePlotInsertion() {
+      this.canvas.off('mouse:down', this.requestPlotInput);
+    },
+    requestPlotInput(opt) {
+      if (this.selectedTool !== 'graph' || (opt.e?.button !== undefined && opt.e.button !== 0)) return;
+      const point = opt.scenePoint || this.canvas.getScenePoint(opt.e);
+      this.$emit('request-plot', { x: point.x, y: point.y });
+    },
     async _buildFormulaObject(formulaData, position) {
       this._pendingFormulaRenders += 1;
       try {
@@ -1058,6 +1086,23 @@ export default {
       } finally {
         this._pendingFormulaRenders -= 1;
       }
+    },
+    requestPlotEdit(object) {
+      this.$emit('edit-plot', { spec: plotSemanticProps(object.plotSpec), id: getMathBoardObjectId(object) });
+    },
+    async savePlot(spec, id, position) {
+      const controller = this._ensureBoardController('ui');
+      const props = plotSemanticProps(spec);
+      if (id) return controller.update(id, props, { select: true });
+      if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+        throw new Error('Choose a point on the board before inserting a graph.');
+      }
+      const safe = workspaceSafeArea(this.canvas, this.$el.closest('#app'));
+      const zoom = this.canvas.getZoom();
+      const scale = Math.min(1, Math.max(0.05, (safe.width - 32) / (spec.frame.width * zoom)),
+        Math.max(0.05, (safe.height - 32) / (spec.frame.height * zoom)));
+      return controller.create({ type: 'plot', ...props, scaleX: scale, scaleY: scale,
+        left: position.x, top: position.y }, { select: true });
     },
     async addFormulaToCanvas(formulaData, position) {
       try {
@@ -1383,10 +1428,13 @@ export default {
 
       // Enable double-click editing for text objects and formulas
       this.canvas.on('mouse:dblclick', (opt) => {
+        if (this.selectedTool === 'graph') return;
         const target = opt.target;
         if (target && target.isType(...FILL_INK_TYPES) && target.editable) {
           target.enterEditing();
           target.selectAll();
+        } else if (this._boardObjectPolicy.isPlot(target)) {
+          this.requestPlotEdit(target);
         } else if (target && this._boardObjectPolicy.isFormula(target)) {
           // Edit formula
           this.$emit('edit-formula', { 
@@ -1504,6 +1552,7 @@ export default {
   },
   beforeUnmount() {
     this._boardLifecycle.dispose();
+    this.disablePlotInsertion();
     this._clearGeometryEditing();
     this._shapeGesture?.dispose();
     this._textInsertion?.dispose();
@@ -1574,6 +1623,7 @@ export default {
       this.disableTextInsertion();
       this.disableShapeDrawing();
       this.disableFormulaInsertion();
+      this.disablePlotInsertion();
       
       switch(newTool) {
         case 'select':
@@ -1601,6 +1651,9 @@ export default {
         case 'formula':
           this.canvas.isDrawingMode = false;
           this.enableFormulaInsertion();
+          break;
+        case 'graph':
+          this.enablePlotInsertion();
           break;
         case 'shapes':
           this.enableShapeDrawing();

@@ -23,7 +23,7 @@ import { clickOnCanvas, getBoardState } from './helpers/canvas.js'
 
 const tools = [
   ['Select', 'V'], ['Pan', 'H'], ['Pen', 'P'],
-  ['Text', 'T'], ['Formula', 'F'], ['Shapes', 'S'],
+  ['Text', 'T'], ['Formula', 'F'], ['Graph', 'G'], ['Shapes', 'S'],
 ]
 
 test('desktop hints preserve accessible names, tab order and board state', async ({ page }) => {
@@ -47,7 +47,8 @@ test('desktop hints preserve accessible names, tab order and board state', async
   }
   await expect(page.getByRole('button', { name: 'Stamps', exact: true }).locator('span')).toHaveCount(0)
   await page.getByRole('button', { name: 'Select', exact: true }).focus()
-  for (const [name] of tools.slice(1)) {
+  const keyboardTools = tools.map(([name]) => name)
+  for (const name of keyboardTools.slice(1)) {
     await page.keyboard.press('Tab')
     await expect(page.getByRole('button', { name, exact: true })).toBeFocused()
   }
