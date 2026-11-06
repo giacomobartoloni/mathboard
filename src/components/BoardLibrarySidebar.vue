@@ -17,9 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="board-library-layer" :class="{ 'is-pinned': pinned }" @click.self="!pinned && $emit('close', 'backdrop')" @keydown.esc.stop.prevent="onOverlayEscape"
+  <div class="library-sidebar-layer" :class="{ 'is-pinned': pinned }" @click.self="!pinned && $emit('close', 'backdrop')" @keydown.esc.stop.prevent="onOverlayEscape"
     @keydown.tab="trapTab">
-    <aside ref="sidebarRef" class="board-library-sidebar" :role="pinned ? null : 'dialog'" :aria-modal="pinned ? null : 'true'"
+    <aside ref="sidebarRef" class="library-sidebar-panel" :role="pinned ? null : 'dialog'" :aria-modal="pinned ? null : 'true'"
       aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
       <header class="board-library-header">
         <span class="board-library-heading-icon" aria-hidden="true">
@@ -32,7 +32,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           aria-label="Close board library" @click="$emit('close', 'close_button')">
           <font-awesome-icon :icon="['fas', 'xmark']" aria-hidden="true" />
         </button>
-        <button class="board-library-icon-button board-library-pin-button" type="button"
+        <button class="board-library-icon-button library-sidebar-pin-button" type="button"
           :disabled="busy || (!pinned && !canPin)" :aria-pressed="pinned"
           :aria-label="pinned ? 'Unpin sidebar' : 'Pin sidebar'"
           :title="!canPin && !pinned ? 'Pin available on wider screens' : pinned ? 'Unpin sidebar' : 'Pin sidebar'"
@@ -339,7 +339,7 @@ export default {
 </script>
 
 <style scoped>
-.board-library-layer {
+.library-sidebar-layer {
   position: fixed;
   inset: 0;
   z-index: 1800;
@@ -349,11 +349,11 @@ export default {
   background: rgba(0, 0, 0, .22);
   transition: background-color 200ms ease;
 }
-.board-library-layer.is-pinned {
+.library-sidebar-layer.is-pinned {
   background: transparent;
   pointer-events: none;
 }
-.board-library-sidebar {
+.library-sidebar-panel {
   box-sizing: border-box;
   width: min(400px, 100vw);
   height: 100vh;
@@ -368,32 +368,32 @@ export default {
   box-shadow: -8px 0 32px rgba(0, 0, 0, .14);
   text-align: left;
 }
-.board-library-layer.is-pinned .board-library-sidebar {
+.library-sidebar-layer.is-pinned .library-sidebar-panel {
   pointer-events: auto;
   box-shadow: none;
 }
 /* The same CSS transition handles both opening and closing. */
-.board-library-enter-active, .board-library-leave-active {
+.library-sidebar-enter-active, .board-library-leave-active {
   transition: background-color 220ms ease;
 }
-.board-library-enter-active .board-library-sidebar,
-.board-library-leave-active .board-library-sidebar {
+.library-sidebar-enter-active .library-sidebar-panel,
+.board-library-leave-active .library-sidebar-panel {
   transition: transform 220ms ease, opacity 220ms ease;
 }
-.board-library-enter-from, .board-library-leave-to {
+.library-sidebar-enter-from, .board-library-leave-to {
   background-color: transparent;
 }
-.board-library-enter-from .board-library-sidebar,
-.board-library-leave-to .board-library-sidebar {
+.library-sidebar-enter-from .library-sidebar-panel,
+.board-library-leave-to .library-sidebar-panel {
   transform: translateX(100%);
   opacity: .9;
 }
 @media (prefers-reduced-motion: reduce) {
-  .board-library-layer,
-  .board-library-enter-active,
+  .library-sidebar-layer,
+  .library-sidebar-enter-active,
   .board-library-leave-active,
-  .board-library-enter-active .board-library-sidebar,
-  .board-library-leave-active .board-library-sidebar { transition-duration: 0.01ms; }
+  .library-sidebar-enter-active .library-sidebar-panel,
+  .board-library-leave-active .library-sidebar-panel { transition-duration: 0.01ms; }
 }
 .board-library-header {
   display: flex;
@@ -427,7 +427,7 @@ export default {
   cursor: pointer;
 }
 .board-library-icon-button:hover:enabled { background: var(--hover-bg); }
-.board-library-pin-button[aria-pressed="true"] { background: var(--surface-tertiary); color: var(--text-primary); }
+.library-sidebar-pin-button[aria-pressed="true"] { background: var(--surface-tertiary); color: var(--text-primary); }
 .board-library-search {
   display: flex;
   align-items: center;
@@ -474,7 +474,7 @@ export default {
   pointer-events: none;
 }
 .board-library-rename > div { display: flex; gap: 8px; }
-.board-library-sidebar input {
+.library-sidebar-panel input {
   box-sizing: border-box;
   min-width: 0;
   min-height: 44px;
@@ -496,8 +496,8 @@ export default {
   font-size: 13px;
   line-height: 1.4;
 }
-.board-library-sidebar input::placeholder { color: var(--text-placeholder); }
-.board-library-sidebar button { font: inherit; }
+.library-sidebar-panel input::placeholder { color: var(--text-placeholder); }
+.library-sidebar-panel button { font: inherit; }
 .board-library-rename button,
 .board-library-delete-confirm button {
   min-height: 40px;
@@ -639,13 +639,13 @@ export default {
 .board-library-empty > svg { color: var(--text-muted); font-size: 22px; }
 .board-library-empty strong { color: var(--text-primary); font-size: 15px; }
 .board-library-empty p { max-width: 35ch; margin: 0; font-size: 13px; line-height: 1.4; }
-.board-library-sidebar button:disabled { opacity: .55; cursor: default; }
-.board-library-sidebar button:focus-visible, .board-library-sidebar input:focus-visible {
+.library-sidebar-panel button:disabled { opacity: .55; cursor: default; }
+.library-sidebar-panel button:focus-visible, .library-sidebar-panel input:focus-visible {
   outline: 2px solid var(--selected-bg);
   outline-offset: 2px;
 }
 @media (max-width: 600px) {
-  .board-library-sidebar { width: 100%; }
+  .library-sidebar-panel { width: 100%; }
   .board-library-header { padding: max(20px, env(safe-area-inset-top)) 16px 16px; }
   .board-library-icon-button, .board-library-glyph, .board-library-row-actions button { width: 44px; height: 44px; }
   .board-library-search { padding: 0 16px 12px; }
