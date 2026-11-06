@@ -81,7 +81,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <BoardLibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
-        @toggle-pin="toggleLibrarySidebarPin" @close="closeBoardLibrary" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
+        @toggle-pin="toggleLibrarySidebarPin" @close="closeLibrarySidebar" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
     </Transition>
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
@@ -316,7 +316,7 @@ export default {
       librarySidebarMode.value = 'closed'
       boardLibraryAnalytics.closed(mode, reason)
     }
-    const closeBoardLibrary = (reason = 'close_button') => {
+    const closeLibrarySidebar = (reason = 'close_button') => {
       if (boardLibraryBusy.value) return
       dismissBoardLibrary(reason)
     }
@@ -639,7 +639,7 @@ export default {
         }
         if (librarySidebarMode.value === 'overlay'
           || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.library-sidebar-panel'))) {
-          closeBoardLibrary('escape')
+          closeLibrarySidebar('escape')
           event.preventDefault()
           return
         }
@@ -938,7 +938,7 @@ export default {
       boardLibraryLoading,
       boardLibraryError,
       openBoardLibrary,
-      closeBoardLibrary,
+      closeLibrarySidebar,
       restoreLibrarySidebarFocus,
       onBoardLibraryAction,
       onRequestFormula,
