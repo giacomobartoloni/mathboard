@@ -86,10 +86,15 @@ export function computePlot(spec) {
   }
   const sx = step(w.xMax - w.xMin),
     sy = step(w.yMax - w.yMin)
-  for (let n = Math.ceil(w.xMin / sx); n * sx <= w.xMax && grid.length < 64; n++) {
+  // Keep one-pixel grid strokes off the perimeter, including decimal roundoff.
+  const gridInset = 0.5
+  // Bound attempts independently of emitted strokes and stop unrepresentable tick increments.
+  for (let n = Math.ceil(w.xMin / sx), ticks = 0; n * sx <= w.xMax && ticks < 64; n++, ticks++) {
+    if (n + 1 === n) break
     const value = n * sx,
       x = t.toFrame({ x: value, y: 0 }).x
-    grid.push(`M ${x} 0 L ${x} ${spec.frame.height}`)
+    if (x > gridInset && x < spec.frame.width - gridInset)
+      grid.push(`M ${x} 0 L ${x} ${spec.frame.height}`)
     if (value !== 0 && spec.axes)
       labels.push({
         text: Number(value.toPrecision(4)).toString(),
@@ -97,10 +102,12 @@ export function computePlot(spec) {
         y: Math.max(16, Math.min(spec.frame.height - 8, yZero + 16))
       })
   }
-  for (let n = Math.ceil(w.yMin / sy); n * sy <= w.yMax && grid.length < 128; n++) {
+  for (let n = Math.ceil(w.yMin / sy), ticks = 0; n * sy <= w.yMax && ticks < 64; n++, ticks++) {
+    if (n + 1 === n) break
     const value = n * sy,
       y = t.toFrame({ x: 0, y: value }).y
-    grid.push(`M 0 ${y} L ${spec.frame.width} ${y}`)
+    if (y > gridInset && y < spec.frame.height - gridInset)
+      grid.push(`M 0 ${y} L ${spec.frame.width} ${y}`)
     if (value !== 0 && spec.axes)
       labels.push({
         text: Number(value.toPrecision(4)).toString(),

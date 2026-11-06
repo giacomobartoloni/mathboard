@@ -19,13 +19,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { Group } from 'fabric'
 import { BOARD_THEMES } from '../src/config/themes.js'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js'
 import { buildPlotObject } from '../src/plots/buildPlotObject.js'
 import { computePlot } from '../src/plots/computePlot.js'
-import { validatePlotSpec } from '../src/plots/plotSpec.js'
+import { DEFAULT_PLOT, validatePlotSpec } from '../src/plots/plotSpec.js'
 import { readSemanticBoardObject } from '../src/board/objects/serialize.js'
 installFabricDomStub()
 export const plot = {
@@ -204,4 +205,39 @@ test('optional border removes only the frame while retaining an opaque graph sur
 
 test('graph border option rejects nonboolean values', () => {
   for (const border of [null, 'false', 0, {}]) assert.throws(() => validatePlotSpec({ ...plot, border }))
+})
+
+test('grid lines leave the perimeter clear with aligned bounds and decimal roundoff', () => {
+  for (const [mathWindow, expectedCount] of [
+    [{ xMin: -6, xMax: 6, yMin: -4, yMax: 4 }, 12],
+    [{ xMin: 0.3, xMax: 1.1, yMin: 0.3, yMax: 1.1 }, 14]
+  ]) {
+    for (const border of [false, true]) {
+      const { grid } = computePlot({ ...DEFAULT_PLOT, frame: { width: 480, height: 320 }, mathWindow, axes: false, border })
+      assert.equal(grid.length, expectedCount)
+      for (const line of grid) {
+        const [, x1, y1, , x2, y2] = line.split(' ').map(Number)
+        if (x1 === x2) assert.ok(x1 > 0.5 && x1 < 479.5, `Vertical grid line forms a border: ${line}`)
+        else assert.ok(y1 === y2 && y1 > 0.5 && y1 < 319.5, `Horizontal grid line forms a border: ${line}`)
+      }
+    }
+  }
+})
+
+test('grid generation terminates when narrow bounds make the tick index stop advancing', () => {
+  const fixtures = [
+    { xMin: 1, xMax: 1.0000000000000002, yMin: -1, yMax: 1 },
+    { xMin: -1, xMax: 1, yMin: 1, yMax: 1.0000000000000002 },
+    { xMin: 1e10, xMax: 10000000000.000002, yMin: -1, yMax: 1 }
+  ].map(mathWindow => ({ ...DEFAULT_PLOT, latex: '0', mathWindow, border: false }))
+  const moduleUrl = new URL('../src/plots/computePlot.js', import.meta.url).href
+  // Isolate a potentially stuck computation so this regression cannot hang the suite.
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import { computePlot } from ${JSON.stringify(moduleUrl)}
+    for (const spec of ${JSON.stringify(fixtures)}) computePlot(spec)
+    console.log('completed')
+  `], { timeout: 10000, encoding: 'utf8' })
+  assert.equal(result.error, undefined, 'Grid computation must finish within the child deadline')
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.stdout.trim(), 'completed')
 })

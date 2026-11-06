@@ -71,6 +71,7 @@ colors preserve the curve while decorations continue following board theme.
 A solid surface in the board background color masks the underlying board grid,
 even when the graph grid or border is disabled. Border is enabled by default for
 new graphs and older plot nodes without the optional boolean `border` field.
+The mathematical grid omits perimeter strokes, so enabling it cannot add a border.
 `applyTheme` updates this surface separately from ink; preview and board use the
 same theme colors.
 The runtime-only plotBoardInk and plotBoardBackground fields preserve theme
