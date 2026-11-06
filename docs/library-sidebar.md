@@ -20,7 +20,7 @@ The ProductPlan already tracks F031 as **proposed**. When a second library has a
 2. Keep the F005 UI as a **Boards** content component, with its own search, recent/archived views and BoardWorkspaceService operations. Implement a separate **Stamps** content component with its own service. Do not use a type-discriminated mega-component or route Stamp actions through BoardWorkspaceService.
 3. Add top-level **Boards / Stamps** navigation *only when Stamps exists*. Keep the Boards-only Recent/Archived selection subordinate to Boards; preserve focus and in-progress state when switching as appropriate. Review whether the top-right trigger should then say **Libraries** instead of **Boards**.
 4. Reuse the single sidebar mode and canvas-resize contract rather than mounting two independent sidebars. Keep the storage disclosure accurate for each library and preserve confirmed deletion semantics.
-5. Extend `library` analytics taxonomy to `stamps` **only with real Stamp interactions** and a matching closed allowlist in the desktop Rust transport. Keep identifiers, user-authored titles, Stamp payloads and search queries out of analytics.
+5. Extend `library` analytics taxonomy to `stamps` **only with real Stamp interactions**. Keep identifiers, user-authored titles, Stamp payloads and search queries out of analytics at the JavaScript event owners; the desktop Rust transport does not validate event names or metadata.
 
 This is a refactor-on-demand path, **not** authorization to implement F031. No placeholder tab, speculative plugin registry, generalized repository, new Stamp storage schema, or empty content view belongs in PR #149. Avoid coupling board domain actions to presentation now so extraction stays mechanical later.
 
