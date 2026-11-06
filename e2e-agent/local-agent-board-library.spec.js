@@ -382,9 +382,7 @@ test('compact sidebar moves Rename and Archive into the existing menu at actual 
   await send(request, 'boards.create', { title: 'Another active board' })
   await page.getByRole('button', { name: 'Open Board library' }).click()
   const sidebar = page.getByRole('dialog', { name: 'Board library' })
-  const row = sidebar.locator('.board-library-list li').filter({
-    has: sidebar.locator(`#more-action-${target.id}`),
-  })
+  const row = sidebar.locator(`#more-action-${target.id}`).locator('xpath=ancestor::li')
   const more = row.getByRole('button', { name: 'More actions for Compact actions' })
   const resize = sidebar.getByRole('separator', { name: 'Resize library sidebar' })
   await expect(resize).toHaveAttribute('aria-valuenow', '400')
