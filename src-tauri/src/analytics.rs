@@ -71,248 +71,6 @@ fn may_send(is_dev: bool, webview_label: &str) -> bool {
     !is_dev && webview_label == "main"
 }
 
-fn fields(metadata: &Map<String, Value>, allowed: &[&str], required: &[&str]) -> bool {
-    metadata.len() <= allowed.len()
-        && metadata.keys().all(|key| allowed.contains(&key.as_str()))
-        && required.iter().all(|key| metadata.contains_key(*key))
-}
-
-fn category(metadata: &Map<String, Value>, key: &str, allowed: &[&str]) -> bool {
-    metadata
-        .get(key)
-        .and_then(Value::as_str)
-        .is_some_and(|value| allowed.contains(&value))
-}
-
-fn count(metadata: &Map<String, Value>, key: &str, minimum: u64, maximum: u64) -> Option<u64> {
-    metadata
-        .get(key)
-        .and_then(Value::as_u64)
-        .filter(|value| (minimum..=maximum).contains(value))
-}
-
-fn valid_mcp_channel(metadata: &Map<String, Value>) -> bool {
-    !metadata.contains_key("interaction_channel")
-        || category(metadata, "interaction_channel", &["mcp"])
-}
-
-fn valid_creation(metadata: &Map<String, Value>) -> bool {
-    const TYPES: &[&str] = &[
-        "path",
-        "shape",
-        "text",
-        "formula",
-        "group",
-        "unknown",
-        "mixed",
-        "stamp",
-        "stamp_template",
-    ];
-    fields(
-        metadata,
-        &["object_type", "shape", "interaction_channel"],
-        &["object_type"],
-    ) && valid_mcp_channel(metadata)
-        && category(metadata, "object_type", TYPES)
-        && match metadata.get("shape") {
-            None => true,
-            Some(_) => {
-                metadata.get("object_type").and_then(Value::as_str) == Some("shape")
-                    && category(metadata, "shape", &["rectangle", "circle", "arrow"])
-            }
-        }
-}
-
-fn valid_deletion(metadata: &Map<String, Value>) -> bool {
-    const COUNTS: [(&str, &str); 6] = [
-        ("path_count", "path"),
-        ("shape_count", "shape"),
-        ("text_count", "text"),
-        ("formula_count", "formula"),
-        ("group_count", "group"),
-        ("unknown_count", "unknown"),
-    ];
-    const REQUIRED: &[&str] = &[
-        "object_type",
-        "selection_count",
-        "path_count",
-        "shape_count",
-        "text_count",
-        "formula_count",
-        "group_count",
-        "unknown_count",
-    ];
-    let mut allowed = REQUIRED.to_vec();
-    allowed.push("interaction_channel");
-    if !fields(metadata, &allowed, REQUIRED) || !valid_mcp_channel(metadata) {
-        return false;
-    }
-    let Some(selection_count) = count(metadata, "selection_count", 1, 10_000) else {
-        return false;
-    };
-    let mut total = 0;
-    let mut present = None;
-    let mut mixed = false;
-    for (key, kind) in COUNTS {
-        let Some(value) = count(metadata, key, 0, 10_000) else {
-            return false;
-        };
-        total += value;
-        if value > 0 {
-            if present.is_some() {
-                mixed = true;
-            } else {
-                present = Some(kind);
-            }
-        }
-    }
-    let expected_type = if mixed { Some("mixed") } else { present };
-    total == selection_count && metadata.get("object_type").and_then(Value::as_str) == expected_type
-}
-
-fn valid_assist(metadata: &Map<String, Value>) -> bool {
-    if !fields(metadata, &["mode", "source", "group"], &["mode", "source"])
-        || !category(metadata, "mode", &["create", "edit"])
-    {
-        return false;
-    }
-    match metadata.get("source").and_then(Value::as_str) {
-        Some("quick_insert") => !metadata.contains_key("group"),
-        Some("palette") => category(metadata, "group", &["symbols", "greek", "relations"]),
-        _ => false,
-    }
-}
-
-fn validate_event(name: &str, metadata: &Map<String, Value>) -> Result<(), &'static str> {
-    let valid = match name {
-        "object_created" => valid_creation(metadata),
-        "object_deleted" => valid_deletion(metadata),
-        "formula_modal_opened" | "formula_submitted" | "formula_render_failed" => {
-            fields(metadata, &["mode"], &["mode"])
-                && category(metadata, "mode", &["create", "edit"])
-        }
-        "formula_modal_cancelled" => {
-            fields(metadata, &["mode", "reason"], &["mode", "reason"])
-                && category(metadata, "mode", &["create", "edit"])
-                && category(
-                    metadata,
-                    "reason",
-                    &["cancel_button", "close_button", "backdrop", "escape"],
-                )
-        }
-        "formula_assist_used" => valid_assist(metadata),
-        "stamp_share_failed" => {
-            fields(metadata, &["stage"], &["stage"])
-                && category(
-                    metadata,
-                    "stage",
-                    &["export_selection", "build_url", "copy", "open"],
-                )
-        }
-        "undo_used" | "redo_used" => {
-            fields(metadata, &["command_type"], &["command_type"])
-                && category(
-                    metadata,
-                    "command_type",
-                    &[
-                        "add",
-                        "batch-add",
-                        "modify",
-                        "replace",
-                        "delete",
-                        "duplicate",
-                        "group",
-                        "ungroup",
-                        "recolor",
-                    ],
-                )
-        }
-        "formula_edited" => {
-            fields(metadata, &["interaction_channel"], &[]) && valid_mcp_channel(metadata)
-        }
-        "theme_changed" => {
-            fields(metadata, &["theme"], &["theme"])
-                && category(metadata, "theme", &["light", "dark", "chalkboard"])
-        }
-        "usage_milestone" => {
-            fields(metadata, &["actions"], &["actions"])
-                && matches!(count(metadata, "actions", 5, 50), Some(5 | 20 | 50))
-        }
-        "library_opened" => {
-            fields(metadata, &["library"], &["library"])
-                && category(metadata, "library", &["boards"])
-        }
-        "library_closed" => {
-            fields(
-                metadata,
-                &["library", "mode", "reason"],
-                &["library", "mode", "reason"],
-            ) && category(metadata, "library", &["boards"])
-                && category(metadata, "mode", &["overlay", "pinned"])
-                && category(
-                    metadata,
-                    "reason",
-                    &["close_button", "escape", "backdrop", "board_action"],
-                )
-        }
-        "library_mode_changed" => {
-            fields(
-                metadata,
-                &["library", "mode", "reason"],
-                &["library", "mode", "reason"],
-            ) && category(metadata, "library", &["boards"])
-                && category(metadata, "mode", &["overlay", "pinned"])
-                && category(metadata, "reason", &["user", "viewport"])
-        }
-        "library_browsed" => {
-            fields(metadata, &["library", "action"], &["library", "action"])
-                && category(metadata, "library", &["boards"])
-                && category(metadata, "action", &["recent", "archived", "search"])
-        }
-        "library_action" => {
-            fields(
-                metadata,
-                &["library", "action", "outcome", "mode"],
-                &["library", "action", "outcome", "mode"],
-            ) && category(metadata, "library", &["boards"])
-                && category(
-                    metadata,
-                    "action",
-                    &[
-                        "create",
-                        "open",
-                        "rename",
-                        "archive",
-                        "unarchive",
-                        "unarchive_open",
-                        "delete",
-                    ],
-                )
-                && category(metadata, "outcome", &["success", "failure"])
-                && category(metadata, "mode", &["overlay", "pinned"])
-        }
-        "board_engaged"
-        | "text_tool_selected"
-        | "text_creation_started"
-        | "text_creation_cancelled"
-        | "text_edit_started"
-        | "text_edited"
-        | "formula_tool_selected"
-        | "stamp_share_created"
-        | "stamp_share_copied"
-        | "stamp_share_opened"
-        | "fullscreen_entered"
-        | "fullscreen_exited"
-        | "support_opened"
-        | "external_link_opened"
-        | "document_saved"
-        | "document_opened"
-        | "document_exported" => metadata.is_empty(),
-        _ => false,
-    };
-    valid.then_some(()).ok_or("invalid analytics event")
-}
-
 fn build_payload(name: &str, mut metadata: Map<String, Value>, version: &str) -> Value {
     metadata.insert("runtime".into(), Value::String("desktop".into()));
     metadata.insert("app_version".into(), Value::String(version.into()));
@@ -341,7 +99,6 @@ pub(crate) async fn track_desktop_analytics(
             Err("Analytics unavailable".into())
         };
     }
-    validate_event(&event, &metadata).map_err(|_| "Invalid analytics event".to_string())?;
     let _permit =
         RequestPermit::try_acquire(&ACTIVE_REQUESTS).ok_or_else(|| "Analytics busy".to_string())?;
     let client = HTTP_CLIENT
@@ -360,336 +117,12 @@ mod tests {
     use serde_json::json;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
-    use std::process::Command;
     use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::{Duration, Instant};
 
     fn metadata(value: Value) -> Map<String, Value> {
         value.as_object().expect("object fixture").clone()
-    }
-
-    #[test]
-    fn accepts_a_known_creation_with_approved_shape() {
-        assert!(
-            validate_event(
-                "object_created",
-                &metadata(json!({
-                    "object_type": "shape",
-                    "shape": "rectangle"
-                }))
-            )
-            .is_ok()
-        );
-    }
-
-    #[test]
-    fn mcp_provenance_accepts_only_the_fixed_channel_and_existing_event_fields() {
-        let creation = metadata(json!({
-            "object_type": "formula", "interaction_channel": "mcp"
-        }));
-        assert!(validate_event("object_created", &creation).is_ok());
-        let deletion = metadata(json!({
-            "object_type": "path", "selection_count": 1,
-            "path_count": 1, "shape_count": 0, "text_count": 0,
-            "formula_count": 0, "group_count": 0, "unknown_count": 0,
-            "interaction_channel": "mcp"
-        }));
-        assert!(validate_event("object_deleted", &deletion).is_ok());
-        let edit = metadata(json!({ "interaction_channel": "mcp" }));
-        assert!(validate_event("formula_edited", &edit).is_ok());
-        for value in ["ui", "local_agent", "client_provided"] {
-            let invalid = metadata(json!({
-                "object_type": "text", "interaction_channel": value
-            }));
-            assert!(validate_event("object_created", &invalid).is_err());
-        }
-        let leaked = metadata(json!({
-            "interaction_channel": "mcp", "latex": "secret"
-        }));
-        assert!(validate_event("formula_edited", &leaked).is_err());
-    }
-
-    #[test]
-    fn accepts_a_known_event_without_metadata() {
-        assert!(validate_event("board_engaged", &metadata(json!({}))).is_ok());
-    }
-
-    #[test]
-    fn creation_accepts_semantic_roots_and_rejects_content_shaped_categories() {
-        for kind in [
-            "path",
-            "shape",
-            "text",
-            "formula",
-            "group",
-            "unknown",
-            "mixed",
-            "stamp",
-            "stamp_template",
-        ] {
-            assert!(
-                validate_event("object_created", &metadata(json!({ "object_type": kind }))).is_ok(),
-                "{kind}"
-            );
-        }
-        for shape in ["rectangle", "circle", "arrow"] {
-            assert!(
-                validate_event(
-                    "object_created",
-                    &metadata(json!({ "object_type": "shape", "shape": shape }))
-                )
-                .is_ok(),
-                "{shape}"
-            );
-        }
-        for rejected in [
-            json!({ "object_type": "private_note" }),
-            json!({ "object_type": "formula", "shape": "circle" }),
-            json!({ "object_type": "shape", "shape": "private_note" }),
-            json!({ "object_type": "shape", "latex": "x^2" }),
-            json!({ "object_type": "shape", "runtime": "web" }),
-            json!({ "object_type": "shape", "app_version": "spoofed" }),
-        ] {
-            assert!(validate_event("object_created", &metadata(rejected)).is_err());
-        }
-    }
-
-    #[test]
-    fn deletion_requires_complete_bounded_counts_and_consistent_type() {
-        let mixed = json!({
-            "selection_count": 2, "object_type": "mixed", "path_count": 1,
-            "shape_count": 0, "text_count": 0, "formula_count": 1,
-            "group_count": 0, "unknown_count": 0
-        });
-        assert!(validate_event("object_deleted", &metadata(mixed.clone())).is_ok());
-        let homogeneous = json!({
-            "selection_count": 2, "object_type": "path", "path_count": 2,
-            "shape_count": 0, "text_count": 0, "formula_count": 0,
-            "group_count": 0, "unknown_count": 0
-        });
-        assert!(validate_event("object_deleted", &metadata(homogeneous)).is_ok());
-        for (key, value) in [
-            ("selection_count", json!(0)),
-            ("selection_count", json!(10001)),
-            ("selection_count", json!(3)),
-            ("object_type", json!("formula")),
-            ("path_count", json!(-1)),
-            ("path_count", json!("1")),
-        ] {
-            let mut invalid = mixed.clone();
-            invalid[key] = value;
-            assert!(
-                validate_event("object_deleted", &metadata(invalid)).is_err(),
-                "{key}"
-            );
-        }
-        let mut missing = metadata(mixed);
-        missing.remove("unknown_count");
-        assert!(validate_event("object_deleted", &missing).is_err());
-    }
-
-    #[test]
-    fn formula_metadata_is_closed_by_event_and_assist_source() {
-        for name in [
-            "formula_modal_opened",
-            "formula_submitted",
-            "formula_render_failed",
-        ] {
-            assert!(
-                validate_event(name, &metadata(json!({ "mode": "create" }))).is_ok(),
-                "{name}"
-            );
-            assert!(
-                validate_event(name, &metadata(json!({ "mode": "private_note" }))).is_err(),
-                "{name}"
-            );
-        }
-        assert!(
-            validate_event(
-                "formula_modal_cancelled",
-                &metadata(json!({ "mode": "edit", "reason": "escape" }))
-            )
-            .is_ok()
-        );
-        assert!(
-            validate_event(
-                "formula_assist_used",
-                &metadata(json!({ "mode": "create", "source": "quick_insert" }))
-            )
-            .is_ok()
-        );
-        assert!(
-            validate_event(
-                "formula_assist_used",
-                &metadata(json!({ "mode": "edit", "source": "palette", "group": "greek" }))
-            )
-            .is_ok()
-        );
-        assert!(
-            validate_event(
-                "formula_assist_used",
-                &metadata(json!({ "mode": "edit", "source": "quick_insert", "group": "greek" }))
-            )
-            .is_err()
-        );
-        assert!(
-            validate_event(
-                "formula_assist_used",
-                &metadata(json!({ "mode": "edit", "source": "palette" }))
-            )
-            .is_err()
-        );
-        assert!(
-            validate_event(
-                "formula_modal_cancelled",
-                &metadata(json!({ "mode": "edit", "reason": "private_note" }))
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn other_metadata_families_reject_wrong_values_and_keys() {
-        assert!(
-            validate_event("stamp_share_failed", &metadata(json!({ "stage": "copy" }))).is_ok()
-        );
-        assert!(
-            validate_event("theme_changed", &metadata(json!({ "theme": "chalkboard" }))).is_ok()
-        );
-        assert!(
-            validate_event(
-                "undo_used",
-                &metadata(json!({ "command_type": "batch-add" }))
-            )
-            .is_ok()
-        );
-        assert!(
-            validate_event("redo_used", &metadata(json!({ "command_type": "recolor" }))).is_ok()
-        );
-        for count in [5, 20, 50] {
-            assert!(
-                validate_event("usage_milestone", &metadata(json!({ "actions": count }))).is_ok()
-            );
-        }
-        for (name, bad) in [
-            ("stamp_share_failed", json!({ "stage": "private_note" })),
-            ("theme_changed", json!({ "theme": "private_note" })),
-            ("undo_used", json!({ "command_type": "private_note" })),
-            ("usage_milestone", json!({ "actions": 6 })),
-            ("board_engaged", json!({ "board_text": "private note" })),
-        ] {
-            assert!(validate_event(name, &metadata(bad)).is_err(), "{name}");
-        }
-        assert!(validate_event("custom_user_event", &metadata(json!({}))).is_err());
-    }
-
-    #[test]
-    fn library_ux_events_allow_only_closed_categories_and_no_user_content() {
-        for (name, approved) in [
-            ("library_opened", json!({ "library": "boards" })),
-            (
-                "library_closed",
-                json!({ "library": "boards", "mode": "pinned", "reason": "close_button" }),
-            ),
-            (
-                "library_mode_changed",
-                json!({ "library": "boards", "mode": "overlay", "reason": "viewport" }),
-            ),
-            (
-                "library_browsed",
-                json!({ "library": "boards", "action": "archived" }),
-            ),
-            (
-                "library_action",
-                json!({ "library": "boards", "action": "unarchive_open", "outcome": "failure", "mode": "pinned" }),
-            ),
-        ] {
-            assert!(
-                validate_event(name, &metadata(approved.clone())).is_ok(),
-                "{name}"
-            );
-            let mut with_content = approved.clone();
-            with_content["board_title"] = json!("private board");
-            assert!(
-                validate_event(name, &metadata(with_content)).is_err(),
-                "{name}"
-            );
-            let mut unknown_library = approved;
-            unknown_library["library"] = json!("private collection");
-            assert!(
-                validate_event(name, &metadata(unknown_library)).is_err(),
-                "{name}"
-            );
-        }
-        for (name, invalid) in [
-            (
-                "library_closed",
-                json!({ "library": "boards", "mode": "overlay", "reason": "click: private" }),
-            ),
-            (
-                "library_mode_changed",
-                json!({ "library": "boards", "mode": "pinned", "reason": "scripted" }),
-            ),
-            (
-                "library_browsed",
-                json!({ "library": "boards", "action": "private-query" }),
-            ),
-            (
-                "library_action",
-                json!({ "library": "boards", "action": "create", "outcome": "no", "mode": "overlay" }),
-            ),
-        ] {
-            assert!(validate_event(name, &metadata(invalid)).is_err(), "{name}");
-        }
-    }
-
-    #[test]
-    fn native_policy_accepts_the_actual_js_event_catalog() {
-        let output = Command::new("node")
-            .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .args([
-                "--input-type=module", "-e",
-                "import { ANALYTICS_EVENTS } from '../src/analytics/events.js'; console.log(JSON.stringify(Object.values(ANALYTICS_EVENTS)))",
-            ])
-            .output()
-            .expect("Node.js is required by this repository");
-        assert!(output.status.success());
-        let names: Vec<String> =
-            serde_json::from_slice(&output.stdout).expect("analytics event names");
-        assert_eq!(names.len(), 35);
-        for name in names {
-            let sample = match name.as_str() {
-                "object_created" => json!({ "object_type": "formula" }),
-                "object_deleted" => json!({
-                    "selection_count": 1, "object_type": "formula", "path_count": 0,
-                    "shape_count": 0, "text_count": 0, "formula_count": 1,
-                    "group_count": 0, "unknown_count": 0
-                }),
-                "formula_modal_opened" | "formula_submitted" | "formula_render_failed" => {
-                    json!({ "mode": "create" })
-                }
-                "formula_modal_cancelled" => json!({ "mode": "create", "reason": "escape" }),
-                "formula_assist_used" => json!({ "mode": "create", "source": "quick_insert" }),
-                "stamp_share_failed" => json!({ "stage": "copy" }),
-                "undo_used" | "redo_used" => json!({ "command_type": "add" }),
-                "theme_changed" => json!({ "theme": "light" }),
-                "usage_milestone" => json!({ "actions": 5 }),
-                "library_opened" => json!({ "library": "boards" }),
-                "library_closed" => {
-                    json!({ "library": "boards", "mode": "overlay", "reason": "escape" })
-                }
-                "library_mode_changed" => {
-                    json!({ "library": "boards", "mode": "pinned", "reason": "user" })
-                }
-                "library_browsed" => json!({ "library": "boards", "action": "search" }),
-                "library_action" => {
-                    json!({ "library": "boards", "action": "create", "outcome": "success", "mode": "overlay" })
-                }
-                _ => json!({}),
-            };
-            assert!(validate_event(&name, &metadata(sample)).is_ok(), "{name}");
-        }
     }
 
     #[test]
@@ -712,6 +145,30 @@ mod tests {
                     "runtime": "desktop",
                     "app_version": "1.10.0"
                 }
+            })
+        );
+    }
+
+    #[test]
+    fn native_payload_forwards_events_and_metadata_without_schema_validation() {
+        let payload = build_payload(
+            "custom_event",
+            metadata(json!({
+                "category": "sample",
+                "extra": { "nested": true },
+                "runtime": "web",
+                "app_version": "untrusted"
+            })),
+            "1.10.0",
+        );
+        assert_eq!(payload["event"], "custom_event");
+        assert_eq!(
+            payload["metadata"],
+            json!({
+                "category": "sample",
+                "extra": { "nested": true },
+                "runtime": "desktop",
+                "app_version": "1.10.0"
             })
         );
     }
@@ -775,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn native_http_request_contains_only_approved_event_fields() {
+    fn native_http_request_preserves_supplied_metadata() {
         let listener = TcpListener::bind("127.0.0.1:0").expect("test listener");
         let endpoint = format!(
             "http://{}/events",
@@ -813,7 +270,6 @@ mod tests {
         });
 
         let event_metadata = metadata(json!({ "object_type": "shape", "shape": "arrow" }));
-        validate_event("object_created", &event_metadata).expect("approved event");
         let payload = build_payload("object_created", event_metadata, "1.10.0");
         let client = create_client().expect("native client");
         tauri::async_runtime::block_on(post_payload_to(&client, &endpoint, &payload))
