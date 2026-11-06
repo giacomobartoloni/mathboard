@@ -82,6 +82,7 @@ const plotInput = {
 }
 const plotPublicProperties = {
   type: { const: 'plot' }, id: common.id, ...transformProperties,
+  originX: common.originX, originY: common.originY,
   opacity: { type: 'number', minimum: 0, maximum: 1 }, ...plotInput,
 }
 const plotCreate = objectSchema(plotPublicProperties,
