@@ -50,6 +50,12 @@ export const ANALYTICS_EVENTS = Object.freeze({
   SUPPORT_OPENED: 'support_opened',
   USAGE_MILESTONE: 'usage_milestone',
 
+  LIBRARY_OPENED: 'library_opened',
+  LIBRARY_CLOSED: 'library_closed',
+  LIBRARY_MODE_CHANGED: 'library_mode_changed',
+  LIBRARY_BROWSED: 'library_browsed',
+  LIBRARY_ACTION: 'library_action',
+
   // P1 — constants only; not wired yet
   EXTERNAL_LINK_OPENED: 'external_link_opened',
   DOCUMENT_SAVED: 'document_saved',
