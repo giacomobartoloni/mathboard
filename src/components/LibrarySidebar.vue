@@ -393,8 +393,9 @@ export default {
       renameId.value = null
       confirmDeleteId.value = null
       await nextTick()
-      (document.getElementById(actionId + boardId)
-        || document.getElementById('more-action-' + boardId))?.focus()
+      const focusTarget = document.getElementById(actionId + boardId)
+        || document.getElementById('more-action-' + boardId)
+      focusTarget?.focus()
     }
     const submitDelete = (boardId) => {
       confirmDeleteId.value = null
