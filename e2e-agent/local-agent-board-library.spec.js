@@ -27,6 +27,11 @@ async function send(request, method, params = {}) {
   return (await response.json()).result
 }
 
+async function viewportTransform(page) {
+  return page.evaluate(() => document.querySelector('#app').__vue_app__._instance.proxy
+    .drawBoardRef.canvas.viewportTransform.slice())
+}
+
 test('autosaved local board archive, unarchive and confirmed irreversible delete', async ({ page, request }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
@@ -486,6 +491,10 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
   const sceneBefore = (await send(request, 'observe')).objects
   const canvas = page.locator('canvas.upper-canvas')
   const before = await canvas.boundingBox()
+  // Preserve the center at non-default zoom and a non-zero pan.
+  await page.evaluate(() => document.querySelector('#app').__vue_app__._instance.proxy
+    .drawBoardRef.canvas.setViewportTransform([1.5, 0, 0, 1.5, 80, -40]))
+  const viewportBefore = await viewportTransform(page)
 
   const trigger = page.getByRole('button', { name: 'Open Board library' })
   await trigger.click()
@@ -511,7 +520,12 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
   expect(pinnedBox.height).toBe(900)
   await expect(sidebar.getByRole('button', { name: 'Unpin sidebar' })).toHaveAttribute('aria-pressed', 'true')
   await expect.poll(async () => (await canvas.boundingBox()).width).toBe(before.width - pinnedBox.width)
+  const viewportPinned = await viewportTransform(page)
+  expect(viewportPinned.slice(0, 4)).toEqual(viewportBefore.slice(0, 4))
+  expect(viewportPinned[4]).toBeCloseTo(viewportBefore[4] - pinnedBox.width / 2, 1)
+  expect(viewportPinned[5]).toBe(viewportBefore[5])
   expect((await send(request, 'observe')).objects).toEqual(sceneBefore)
+  expect(await sidebar.evaluate(node => getComputedStyle(node).boxShadow)).not.toBe('none')
 
   // In docked mode document transitions do not dismiss the sidebar.
   await sidebar.getByRole('button', { name: 'New board' }).click()
@@ -525,11 +539,67 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
   await expect(overlayAgain).toBeVisible()
   await expect(overlayAgain).toHaveAttribute('aria-modal', 'true')
   await expect.poll(async () => (await canvas.boundingBox()).width).toBe(before.width)
+  const viewportRestored = await viewportTransform(page)
+  expect(viewportRestored[4]).toBeCloseTo(viewportBefore[4], 1)
+  expect(viewportRestored[5]).toBe(viewportBefore[5])
   await overlayAgain.getByRole('button', { name: 'Close board library' }).click()
   await expect(trigger).toBeFocused()
   await trigger.click()
   await expect(page.getByRole('dialog', { name: 'Board library' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Unpin sidebar' })).toHaveCount(0)
+})
+
+test('sidebar has clamped pointer and keyboard resizing in both presentation modes', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+  const overlay = page.getByRole('dialog', { name: 'Board library' })
+  const splitter = overlay.getByRole('separator', { name: 'Resize library sidebar' })
+  await expect(splitter).toHaveAttribute('aria-orientation', 'vertical')
+  await expect(splitter).toHaveAttribute('aria-valuemin', '320')
+  await expect(splitter).toHaveAttribute('aria-valuemax', '560')
+  await expect(splitter).toHaveAttribute('aria-valuenow', '400')
+
+  const grip = await splitter.boundingBox()
+  const startX = grip.x + grip.width / 2
+  const y = grip.y + grip.height / 2
+  await page.mouse.move(startX, y)
+  await page.mouse.down()
+  await page.mouse.move(startX - 100, y, { steps: 6 })
+  await page.mouse.up()
+  await expect(splitter).toHaveAttribute('aria-valuenow', '500')
+  expect(Math.round((await overlay.boundingBox()).width)).toBe(500)
+
+  await splitter.focus()
+  await page.keyboard.press('Home')
+  await expect(splitter).toHaveAttribute('aria-valuenow', '320')
+  await page.keyboard.press('End')
+  await expect(splitter).toHaveAttribute('aria-valuenow', '560')
+
+  const canvas = page.locator('canvas.upper-canvas')
+  await overlay.getByRole('button', { name: 'Pin sidebar' }).click()
+  const pinned = page.getByRole('complementary', { name: 'Board library' })
+  const dockSplitter = pinned.getByRole('separator', { name: 'Resize library sidebar' })
+  await expect.poll(async () => (await canvas.boundingBox()).width).toBe(880)
+  const beforeResize = await viewportTransform(page)
+  await dockSplitter.focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(dockSplitter).toHaveAttribute('aria-valuenow', '544')
+  await expect.poll(async () => (await canvas.boundingBox()).width).toBe(896)
+  expect((await viewportTransform(page))[4]).toBeCloseTo(beforeResize[4] + 8, 1)
+
+  // Reserve at least 600px for drawing even when the window shrinks.
+  await page.setViewportSize({ width: 1000, height: 900 })
+  await expect(dockSplitter).toHaveAttribute('aria-valuemax', '400')
+  await expect(dockSplitter).toHaveAttribute('aria-valuenow', '400')
+  await expect.poll(async () => (await canvas.boundingBox()).width).toBe(600)
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  const mobile = page.getByRole('dialog', { name: 'Board library' })
+  await expect(mobile).toBeVisible()
+  await expect(mobile.getByRole('separator', { name: 'Resize library sidebar' })).toHaveCount(0)
+  await expect.poll(async () => Math.round((await mobile.boundingBox()).width)).toBe(390)
 })
 
 test('pin is unavailable when a usable drawing viewport cannot be reserved', async ({ page }) => {
