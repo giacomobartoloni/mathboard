@@ -532,6 +532,7 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
   await expect(sidebar).toBeVisible()
   await expect(sidebar.getByText('Current board')).toBeVisible()
   await canvas.click({ position: { x: 250, y: 180 } })
+  const viewportBeforeUnpin = await viewportTransform(page)
   await sidebar.getByRole('button', { name: 'Unpin sidebar' }).click()
   await expect(page.locator('#app[data-theme]')).not.toHaveClass(/library-sidebar-pinned/)
 
@@ -540,8 +541,10 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
   await expect(overlayAgain).toHaveAttribute('aria-modal', 'true')
   await expect.poll(async () => (await canvas.boundingBox()).width).toBe(before.width)
   const viewportRestored = await viewportTransform(page)
-  expect(viewportRestored[4]).toBeCloseTo(viewportBefore[4], 1)
-  expect(viewportRestored[5]).toBe(viewportBefore[5])
+  // A board switch may have reset its viewport while pinned; unpin still
+  // preserves the center of whichever board is currently active.
+  expect(viewportRestored[4]).toBeCloseTo(viewportBeforeUnpin[4] + pinnedBox.width / 2, 1)
+  expect(viewportRestored[5]).toBe(viewportBeforeUnpin[5])
   await overlayAgain.getByRole('button', { name: 'Close board library' }).click()
   await expect(trigger).toBeFocused()
   await trigger.click()
