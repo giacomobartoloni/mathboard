@@ -500,6 +500,7 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
 
   const sidebar = page.getByRole('complementary', { name: 'Board library' })
   await expect(sidebar).toBeVisible()
+  await expect(page.locator('#app')).toHaveClass(/library-sidebar-pinned/)
   await expect(sidebar).toHaveJSProperty('tagName', 'ASIDE')
   await expect(sidebar).not.toHaveAttribute('role')
   await expect(sidebar).not.toHaveAttribute('aria-modal')
