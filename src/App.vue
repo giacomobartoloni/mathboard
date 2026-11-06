@@ -77,7 +77,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       />
 
     </div>
-    <Transition name="library-sidebar" @after-leave="restoreBoardLibraryFocus">
+    <Transition name="library-sidebar" @after-leave="restoreLibrarySidebarFocus">
       <BoardLibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
@@ -321,7 +321,7 @@ export default {
       dismissBoardLibrary(reason)
     }
     // The trigger receives focus only after the closing slide has finished.
-    const restoreBoardLibraryFocus = () => boardLibraryTriggerRef.value?.focus()
+    const restoreLibrarySidebarFocus = () => boardLibraryTriggerRef.value?.focus()
     const toggleLibrarySidebarPin = () => {
       if (boardLibraryBusy.value) return
       if (librarySidebarMode.value === 'overlay' && canPinLibrarySidebar.value) {
@@ -939,7 +939,7 @@ export default {
       boardLibraryError,
       openBoardLibrary,
       closeBoardLibrary,
-      restoreBoardLibraryFocus,
+      restoreLibrarySidebarFocus,
       onBoardLibraryAction,
       onRequestFormula,
       onEditFormula,
