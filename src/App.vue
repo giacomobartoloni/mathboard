@@ -59,6 +59,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @request-formula="onRequestFormula"
         @edit-formula="onEditFormula"
         @edit-plot="onEditPlot"
+        @request-plot="onOpenPlot"
         @text-editing-completed="onTextEditingCompleted"
         @shape-drawing-completed="onShapeDrawingCompleted"
         @zoom-changed="updateZoomLevel"
@@ -77,7 +78,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @shape-selected="onShapeSelected"
         @color-selected="onColorSelected"
         @insert-kit="onInsertKit"
-        @request-plot="onOpenPlot"
       />
 
     </div>
@@ -261,21 +261,25 @@ export default {
     const drawBoardRef = ref(null)
     const fullscreenRootRef = ref(null)
     const showPlotModal = ref(false), editingPlotSpec = ref(null), editingPlotId = ref(null)
-    const plotBusy = ref(false), plotError = ref('')
+    const plotBusy = ref(false), plotError = ref(''), plotPosition = ref(null)
     let plotReturnFocus = null
     const closePlotModal = async () => {
       if (plotBusy.value) return
       showPlotModal.value = false
+      plotPosition.value = null
+      selectedTool.value = 'select'
       await nextTick()
       const target = plotReturnFocus?.isConnected && plotReturnFocus.matches('button,a[href],input,textarea,select,[tabindex]') ? plotReturnFocus : document.querySelector('button[aria-label="Graph"]')
       target?.focus()
     }
-    const onOpenPlot = () => {
+    const onOpenPlot = (position) => {
+      plotPosition.value = position
       plotReturnFocus = document.activeElement
       editingPlotSpec.value = null; editingPlotId.value = null; plotError.value = ''
-      selectedTool.value = 'select'; showPlotModal.value = true
+      showPlotModal.value = true
     }
     const onEditPlot = ({spec,id}) => {
+      plotPosition.value = null
       plotReturnFocus = document.activeElement
       editingPlotSpec.value = spec; editingPlotId.value = id; plotError.value = ''
       showPlotModal.value = true
@@ -283,7 +287,7 @@ export default {
     const onSubmitPlot = async (spec) => {
       plotBusy.value = true; plotError.value = ''
       try {
-        await drawBoardRef.value.savePlot(spec, editingPlotId.value)
+        await drawBoardRef.value.savePlot(spec, editingPlotId.value, plotPosition.value)
         plotBusy.value = false
         selectedTool.value = 'select'
         await closePlotModal()
@@ -604,6 +608,11 @@ export default {
           return
         }
         if (shouldIgnoreGlobalShortcut(event)) return
+        if (selectedTool.value === 'graph') {
+          selectedTool.value = 'select'
+          event.preventDefault()
+          return
+        }
         drawBoardRef.value?.cancelTransientAction()
         event.preventDefault()
         return

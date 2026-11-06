@@ -81,8 +81,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('formula') }}</span>
       </button>
 
-      <button type="button" class="tool-button tool-secondary" aria-label="Graph" title="Graph" @click="$emit('request-plot')">
+      <button type="button" class="tool-button tool-button--shortcut tool-secondary"
+        :class="{ selected: selected === 'graph' }" :aria-pressed="selected === 'graph'"
+        aria-label="Graph" title="Graph (G)" @click="select('graph')">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3v18h18M5 8c3 0 3 9 7 9s4-12 9-12" /></svg>
+        <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('graph') }}</span>
       </button>
       <div
         class="tool-menu tool-secondary"
@@ -288,7 +291,6 @@ export default {
     'shape-selected',
     'color-selected',
     'insert-kit',
-    'request-plot',
   ],
   data() {
     return {

@@ -526,7 +526,7 @@ export default {
         this.setCursor(CURSOR_TYPES.text);
         return;
       }
-      if (tool === 'formula') {
+      if (tool === 'formula' || tool === 'graph') {
         this.setCursor(CURSOR_TYPES.crosshair);
         return;
       }
@@ -1054,6 +1054,22 @@ export default {
       const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
+    enablePlotInsertion() {
+      this.canvas.isDrawingMode = false;
+      this.canvas.selection = false;
+      this.canvas.discardActiveObject();
+      this.setObjectsSelectable(false);
+      this.canvas.on('mouse:down', this.requestPlotInput);
+      this.canvas.requestRenderAll();
+    },
+    disablePlotInsertion() {
+      this.canvas.off('mouse:down', this.requestPlotInput);
+    },
+    requestPlotInput(opt) {
+      if (this.selectedTool !== 'graph' || (opt.e?.button !== undefined && opt.e.button !== 0)) return;
+      const point = opt.scenePoint || this.canvas.getScenePoint(opt.e);
+      this.$emit('request-plot', { x: point.x, y: point.y });
+    },
     async _buildFormulaObject(formulaData, position) {
       this._pendingFormulaRenders += 1;
       try {
@@ -1074,20 +1090,19 @@ export default {
     requestPlotEdit(object) {
       this.$emit('edit-plot', { spec: plotSemanticProps(object.plotSpec), id: getMathBoardObjectId(object) });
     },
-    async savePlot(spec, id) {
+    async savePlot(spec, id, position) {
       const controller = this._ensureBoardController('ui');
       const props = plotSemanticProps(spec);
       if (id) return controller.update(id, props, { select: true });
+      if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+        throw new Error('Choose a point on the board before inserting a graph.');
+      }
       const safe = workspaceSafeArea(this.canvas, this.$el.closest('#app'));
-      const vpt = this.canvas.viewportTransform;
       const zoom = this.canvas.getZoom();
       const scale = Math.min(1, Math.max(0.05, (safe.width - 32) / (spec.frame.width * zoom)),
         Math.max(0.05, (safe.height - 32) / (spec.frame.height * zoom)));
-      const center = { x: (safe.left + safe.width / 2 - vpt[4]) / zoom,
-        y: (safe.top + safe.height / 2 - vpt[5]) / zoom };
       return controller.create({ type: 'plot', ...props, scaleX: scale, scaleY: scale,
-        left: center.x - spec.frame.width * scale / 2,
-        top: center.y - spec.frame.height * scale / 2 }, { select: true });
+        left: position.x, top: position.y }, { select: true });
     },
     async addFormulaToCanvas(formulaData, position) {
       try {
@@ -1413,6 +1428,7 @@ export default {
 
       // Enable double-click editing for text objects and formulas
       this.canvas.on('mouse:dblclick', (opt) => {
+        if (this.selectedTool === 'graph') return;
         const target = opt.target;
         if (target && target.isType(...FILL_INK_TYPES) && target.editable) {
           target.enterEditing();
@@ -1536,6 +1552,7 @@ export default {
   },
   beforeUnmount() {
     this._boardLifecycle.dispose();
+    this.disablePlotInsertion();
     this._clearGeometryEditing();
     this._shapeGesture?.dispose();
     this._textInsertion?.dispose();
@@ -1606,6 +1623,7 @@ export default {
       this.disableTextInsertion();
       this.disableShapeDrawing();
       this.disableFormulaInsertion();
+      this.disablePlotInsertion();
       
       switch(newTool) {
         case 'select':
@@ -1633,6 +1651,9 @@ export default {
         case 'formula':
           this.canvas.isDrawingMode = false;
           this.enableFormulaInsertion();
+          break;
+        case 'graph':
+          this.enablePlotInsertion();
           break;
         case 'shapes':
           this.enableShapeDrawing();

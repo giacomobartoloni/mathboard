@@ -1,7 +1,9 @@
 # Editable function plots
 
-The Graph toolbar action opens the lazy `PlotModal` editor. It previews LaTeX,
+Press G or select Graph, then click the board to choose the upper-left origin.
+That click opens the lazy `PlotModal` editor. It previews LaTeX,
 axis ranges, axes/grid and curve color, then awaits an atomic board commit.
+Successful insertion returns to Select; Escape cancels placement or the editor.
 Double-click a plot or use Edit graph to change it. Board zoom leaves its math
 window unchanged. Plot authoring through MCP is a separate increment.
 

@@ -203,7 +203,7 @@ test('plain color digits map to COLOR_PRESETS order', () => {
 
 
 test('visible tool hints round-trip to the executable shortcut', () => {
-  const expected = { select: 'V', pan: 'H', pencil: 'P', font: 'T', formula: 'F', shapes: 'S' }
+  const expected = { select: 'V', pan: 'H', pencil: 'P', font: 'T', formula: 'F', graph: 'G', shapes: 'S' }
   for (const [tool, hint] of Object.entries(expected)) {
     assert.equal(getToolShortcutHint(tool), hint)
     assert.equal(isPlainToolKey({ key: hint.toLowerCase() }), tool)
@@ -212,4 +212,14 @@ test('visible tool hints round-trip to the executable shortcut', () => {
   for (const unsupported of ['stamps', 'rectangle', 'unknown', '', null, undefined]) {
     assert.equal(getToolShortcutHint(unsupported), null)
   }
+})
+
+test('G activates graph placement while command-G remains grouping', () => {
+  assert.equal(isPlainToolKey({ key: 'g' }), 'graph')
+  assert.equal(getToolShortcutHint('graph'), 'G')
+  assert.equal(isPlainToolKey({ key: 'g', ctrlKey: true }), null)
+  assert.equal(isPlainToolKey({ key: 'g', metaKey: true }), null)
+  assert.equal(isGroupShortcut({ key: 'g', ctrlKey: true }), true)
+  assert.equal(isUngroupShortcut({ key: 'g', metaKey: true, shiftKey: true }), true)
+  assert.equal(SHORTCUT_HELP.find(section => section.group === 'Tools').items.find(item => item.id === 'graph').keys, 'G')
 })
