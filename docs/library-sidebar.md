@@ -25,6 +25,12 @@ The sidebar uses the familiar desktop split-pane pattern: a subtle **left-edge d
 
 The earlier overlay-only plan that demanded no viewport-transform changes is superseded **only for pinned resizing** by the owner's explicit center-pan requirement. This remains presentation behavior, not a document edit or undoable object operation.
 
+## Compact Board actions
+
+The Boards content adapts to the **sidebar's rendered width**, not the browser window. Below 400 CSS px (measured with a panel `ResizeObserver`), recent-board rows keep only the `···` action visible; the existing native popover contains **Rename**, **Archive**, and **Delete**. At 400px and above, Rename and Archive are immediate row controls while Delete stays in the popover. Archived boards always expose **Unarchive** directly, with only Delete in the popover; they cannot be renamed until restored.
+
+The same `beginRename`, `submitAction`, and confirmed-delete handlers serve both layouts. The popup remains keyboard-operable, focuses the first available action, and returns focus to the visible `···` trigger on cancelling or completing inline Rename in compact mode. A narrow desktop sidebar must behave like a narrow mobile sidebar even when the desktop window is wide. No new menu component, storage behavior, action registry, or analytics event is needed.
+
 ## Extension seam for F031: personal Stamp library (not implemented)
 
 The ProductPlan already tracks F031 as **proposed**. When a second library has approved product scope and actual data/action semantics:
