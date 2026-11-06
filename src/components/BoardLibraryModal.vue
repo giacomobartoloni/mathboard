@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="board-library-overlay" :class="{ 'is-pinned': pinned }" @click.self="!pinned && $emit('close')" @keydown.esc.stop.prevent="onOverlayEscape"
+  <div class="board-library-overlay" :class="{ 'is-pinned': pinned }" @click.self="!pinned && $emit('close', 'backdrop')" @keydown.esc.stop.prevent="onOverlayEscape"
     @keydown.tab="trapTab">
     <section ref="dialogPanel" class="board-library-panel" :role="pinned ? 'complementary' : 'dialog'" :aria-modal="pinned ? null : 'true'"
       aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
@@ -29,7 +29,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           <h2 id="board-library-heading">Board library</h2>
         </div>
         <button ref="closeButton" class="board-library-icon-button" type="button" :disabled="busy"
-          aria-label="Close board library" @click="$emit('close')">
+          aria-label="Close board library" @click="$emit('close', 'close_button')">
           <font-awesome-icon :icon="['fas', 'xmark']" aria-hidden="true" />
         </button>
         <button class="board-library-icon-button board-library-pin-button" type="button"
@@ -49,7 +49,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <label for="board-library-search-input">Find or create a board</label>
         <div class="board-library-search-field">
           <input id="board-library-search-input" v-model="boardQuery" type="text" inputmode="search"
-            maxlength="120" autocomplete="off" placeholder="Find or create a board" :disabled="busy || loading">
+            maxlength="120" autocomplete="off" placeholder="Find or create a board" :disabled="busy || loading"
+            @input="onSearchInput">
           <font-awesome-icon :icon="['fas', 'search']" aria-hidden="true" />
         </div>
       </div>
@@ -175,9 +176,10 @@ export default {
     loading: { type: Boolean, default: false },
     error: { type: String, default: null },
   },
-  emits: ['close', 'action', 'toggle-pin'],
+  emits: ['close', 'action', 'toggle-pin', 'browse'],
   setup(props, { emit }) {
     const boardQuery = ref('')
+    const searchTracked = ref(false)
     const renameId = ref(null)
     const renameTitle = ref('')
     const confirmDeleteId = ref(null)
@@ -233,7 +235,15 @@ export default {
       const date = new Date(value)
       return Number.isNaN(date.getTime()) ? 'Saved locally' : dateFormatter.format(date)
     }
+    const onSearchInput = () => {
+      // One intent event per sidebar open, never a keystroke or query value.
+      if (!searchTracked.value && boardQuery.value.trim()) {
+        searchTracked.value = true
+        emit('browse', 'search')
+      }
+    }
     const selectView = (archived) => {
+      if (showArchived.value !== archived) emit('browse', archived ? 'archived' : 'recent')
       showArchived.value = archived
       renameId.value = null
       confirmDeleteId.value = null
@@ -246,7 +256,7 @@ export default {
       if (popover) {
         popover.hidePopover()
         document.getElementById('more-action-' + popover.id.slice('more-menu-'.length))?.focus()
-      } else emit('close')
+      } else emit('close', 'escape')
     }
     const onMoreMenuToggle = async (event, boardId) => {
       if (event.newState !== 'open') return
@@ -276,7 +286,7 @@ export default {
     }
     const selectBoard = (board) => {
       if (board.isActive) {
-        if (!props.pinned) emit('close')
+        if (!props.pinned) emit('close', 'board_action')
       }
       else {
         awaitActionFocus('close')
@@ -322,7 +332,7 @@ export default {
     }
     return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, dialogPanel,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
-      submitRename, beginRename, beginDelete, cancelInline, submitDelete, trapTab,
+      submitRename, beginRename, beginDelete, cancelInline, submitDelete, onSearchInput, trapTab,
       hideOpenPopover, onOverlayEscape, onMoreMenuToggle }
   },
 }
