@@ -519,6 +519,7 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
   await expect(sidebar.getByText('Current board')).toBeVisible()
   await canvas.click({ position: { x: 250, y: 180 } })
   await sidebar.getByRole('button', { name: 'Unpin sidebar' }).click()
+  await expect(page.locator('#app')).not.toHaveClass(/library-sidebar-pinned/)
 
   const overlayAgain = page.getByRole('dialog', { name: 'Board library' })
   await expect(overlayAgain).toBeVisible()
