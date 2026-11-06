@@ -81,7 +81,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <BoardLibraryModal v-if="showBoardLibrary" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="boardLibraryMode === 'pinned'" :can-pin="canPinBoardLibrary"
-        @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @action="onBoardLibraryAction" />
+        @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
     </Transition>
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
@@ -180,6 +180,7 @@ import { createTemporaryPanController } from './board/interactions/TemporaryPanC
 import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
 import { trackEvent } from './analytics'
+import { createBoardLibraryAnalytics } from './analytics/boardLibrary.js'
 import {
   ANALYTICS_EVENTS,
   ANALYTICS_FORMULA_MODES,
@@ -279,6 +280,7 @@ export default {
     }
     // Overlay is the default on every open. Pinning is explicit and session-local.
     const boardLibraryMode = ref('closed')
+    const boardLibraryAnalytics = createBoardLibraryAnalytics(trackEvent)
     const showBoardLibrary = computed(() => boardLibraryMode.value !== 'closed')
     const canPinBoardLibrary = ref(window.innerWidth >= 1000)
     const syncPinEligibility = () => {
@@ -288,6 +290,7 @@ export default {
         // Capture it before Vue updates the DOM, since browsers may blur it.
         const pinHadFocus = document.activeElement?.matches?.('.board-library-pin-button')
         boardLibraryMode.value = 'overlay'
+        boardLibraryAnalytics.modeChanged('overlay', 'viewport')
         // A nonmodal region has become a modal dialog. Keep valid sidebar
         // input focus, but move focus from the board or disabled pin to Close.
         void nextTick(() => {
@@ -307,17 +310,29 @@ export default {
     const boardLibraryBusy = ref(false)
     const boardLibraryLoading = ref(false)
     const boardLibraryError = ref(null)
-    const closeBoardLibrary = () => {
-      if (boardLibraryBusy.value) return
+    const dismissBoardLibrary = (reason) => {
+      const mode = boardLibraryMode.value
+      if (mode === 'closed') return
       boardLibraryMode.value = 'closed'
+      boardLibraryAnalytics.closed(mode, reason)
+    }
+    const closeBoardLibrary = (reason = 'close_button') => {
+      if (boardLibraryBusy.value) return
+      dismissBoardLibrary(reason)
     }
     // The trigger receives focus only after the closing slide has finished.
     const restoreBoardLibraryFocus = () => boardLibraryTriggerRef.value?.focus()
     const toggleBoardLibraryPin = () => {
       if (boardLibraryBusy.value) return
-      if (boardLibraryMode.value === 'overlay' && canPinBoardLibrary.value) boardLibraryMode.value = 'pinned'
-      else if (boardLibraryMode.value === 'pinned') boardLibraryMode.value = 'overlay'
+      if (boardLibraryMode.value === 'overlay' && canPinBoardLibrary.value) {
+        boardLibraryMode.value = 'pinned'
+        boardLibraryAnalytics.modeChanged('pinned', 'user')
+      } else if (boardLibraryMode.value === 'pinned') {
+        boardLibraryMode.value = 'overlay'
+        boardLibraryAnalytics.modeChanged('overlay', 'user')
+      }
     }
+    const onBoardLibraryBrowse = (action) => boardLibraryAnalytics.browsed(action)
     const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
     const refreshBoardLibrary = async () => {
       const workspace = boardWorkspace()
@@ -327,17 +342,19 @@ export default {
       archivedList.value = archived
     }
     const openBoardLibrary = async () => {
-      if (!boardSessionReady.value) return
+      if (!boardSessionReady.value || showBoardLibrary.value) return
       boardLibraryError.value = null
       boardList.value = []
       archivedList.value = []
       boardLibraryLoading.value = true
       boardLibraryMode.value = 'overlay'
+      boardLibraryAnalytics.opened()
       try { await refreshBoardLibrary() } catch (error) { boardLibraryError.value = error.message }
       finally { boardLibraryLoading.value = false }
     }
     const onBoardLibraryAction = async ({ action, boardId, title }) => {
       if (boardLibraryBusy.value) return
+      const modeAtAction = boardLibraryMode.value
       const switchedAwayFromActive = (action === 'archive' || action === 'delete')
         && boardList.value.some(board => board.id === boardId && board.isActive)
       boardLibraryError.value = null
@@ -358,14 +375,14 @@ export default {
         else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
         else throw new Error('Unsupported board library action.')
         await refreshBoardLibrary()
+        boardLibraryAnalytics.actionFinished(action, 'success', modeAtAction)
         if (switchedAwayFromActive) selectedTool.value = 'select'
         if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
           selectedTool.value = 'select'
-          if (boardLibraryMode.value === 'overlay') {
-            boardLibraryMode.value = 'closed'
-          }
+          if (boardLibraryMode.value === 'overlay') dismissBoardLibrary('board_action')
         }
       } catch (error) {
+        boardLibraryAnalytics.actionFinished(action, 'failure', modeAtAction)
         boardLibraryError.value = error?.message || 'Board library operation failed.'
         // A failed post-transition metadata write may still leave a new active board.
         try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
@@ -622,7 +639,7 @@ export default {
         }
         if (boardLibraryMode.value === 'overlay'
           || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-panel'))) {
-          closeBoardLibrary()
+          closeBoardLibrary('escape')
           event.preventDefault()
           return
         }
@@ -912,6 +929,7 @@ export default {
       boardLibraryMode,
       canPinBoardLibrary,
       toggleBoardLibraryPin,
+      onBoardLibraryBrowse,
       onActiveBoardChanged,
       boardLibraryTriggerRef,
       boardList,
