@@ -6,6 +6,12 @@ The top-right **Boards** button opens the only implemented library: locally save
 
 `BoardLibrarySidebar.vue` deliberately represents the current single-library sidebar. Its HTML root is an `<aside>` landmark in pinned mode. When opened as a blocking overlay, that **same aside** has `role="dialog"` and `aria-modal="true"` for correct accessible modal semantics; the board is inert. There is no separate modal component, native `<dialog>` lifecycle, or third-party drawer abstraction. The component currently contains both the sidebar frame and Boards-only content; it is not yet a generic library host, and its board-specific search/list/actions are not a reusable interface.
 
+## Naming and ownership
+
+Sidebar presentation uses `librarySidebarMode`, `isLibrarySidebarOpen`, `canPinLibrarySidebar`, `toggleLibrarySidebarPin`, and `library-sidebar-*` CSS names. Its overlay, pinned state, focus and canvas dimensions are not Boards domain concepts.
+
+Boards behavior deliberately keeps `boardLibrary*` names: board lists, lifecycle loading/errors, `openBoardLibrary`, `onBoardLibraryAction` and analytics constrained to `library=boards`. `BoardLibrarySidebar.vue` is a Boards-specific view, not yet a reusable sidebar host. Extract a shared shell only when the proposed F031 Stamp library is actually implemented.
+
 ## Extension seam for F031: personal Stamp library (not implemented)
 
 The ProductPlan already tracks F031 as **proposed**. When a second library has approved product scope and actual data/action semantics:
