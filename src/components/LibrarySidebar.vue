@@ -262,8 +262,9 @@ export default {
     onMounted(() => {
       closeButton.value?.focus()
       if (typeof ResizeObserver !== 'undefined') {
-        sidebarResizeObserver = new ResizeObserver(([entry]) => {
-          isCompact.value = entry.contentRect.width < 400
+        sidebarResizeObserver = new ResizeObserver(() => {
+          // The threshold applies to border-box width, not contentRect minus borders.
+          isCompact.value = sidebarRef.value.getBoundingClientRect().width < 400
         })
         sidebarResizeObserver.observe(sidebarRef.value)
       }
