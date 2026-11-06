@@ -732,7 +732,7 @@ export default {
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
   padding: 0 10px;
   border: 0;
   border-radius: 6px;
