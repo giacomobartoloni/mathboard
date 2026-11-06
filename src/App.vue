@@ -283,7 +283,7 @@ export default {
     const boardLibraryAnalytics = createBoardLibraryAnalytics(trackEvent)
     const isLibrarySidebarOpen = computed(() => librarySidebarMode.value !== 'closed')
     const canPinLibrarySidebar = ref(window.innerWidth >= 1000)
-    const syncPinEligibility = () => {
+    const syncLibrarySidebarPinEligibility = () => {
       canPinLibrarySidebar.value = window.innerWidth >= 1000
       if (!canPinLibrarySidebar.value && librarySidebarMode.value === 'pinned') {
         // The focused pin control becomes disabled when docking is unavailable.
@@ -302,15 +302,15 @@ export default {
         })
       }
     }
-    onMounted(() => window.addEventListener('resize', syncPinEligibility))
-    onBeforeUnmount(() => window.removeEventListener('resize', syncPinEligibility))
+    onMounted(() => window.addEventListener('resize', syncLibrarySidebarPinEligibility))
+    onBeforeUnmount(() => window.removeEventListener('resize', syncLibrarySidebarPinEligibility))
     const boardLibraryTriggerRef = ref(null)
     const boardList = ref([])
     const archivedList = ref([])
     const boardLibraryBusy = ref(false)
     const boardLibraryLoading = ref(false)
     const boardLibraryError = ref(null)
-    const dismissBoardLibrary = (reason) => {
+    const dismissLibrarySidebar = (reason) => {
       const mode = librarySidebarMode.value
       if (mode === 'closed') return
       librarySidebarMode.value = 'closed'
@@ -318,7 +318,7 @@ export default {
     }
     const closeLibrarySidebar = (reason = 'close_button') => {
       if (boardLibraryBusy.value) return
-      dismissBoardLibrary(reason)
+      dismissLibrarySidebar(reason)
     }
     // The trigger receives focus only after the closing slide has finished.
     const restoreLibrarySidebarFocus = () => boardLibraryTriggerRef.value?.focus()
@@ -379,7 +379,7 @@ export default {
         if (switchedAwayFromActive) selectedTool.value = 'select'
         if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
           selectedTool.value = 'select'
-          if (librarySidebarMode.value === 'overlay') dismissBoardLibrary('board_action')
+          if (librarySidebarMode.value === 'overlay') dismissLibrarySidebar('board_action')
         }
       } catch (error) {
         boardLibraryAnalytics.actionFinished(action, 'failure', modeAtAction)
