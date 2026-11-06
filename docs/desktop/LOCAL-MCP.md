@@ -184,3 +184,25 @@ The advertised F033 `paramsSchema` and `options` objects are closed
 (`additionalProperties:false`), and native MCP parsing uses the
 generated schemas rather than a duplicate list of operation arguments.
 `dryRun` is **not** implemented; it must not be interpreted as a preview.
+
+## F039 G4 — semantic Plot authoring (source increment)
+
+The existing `mathboard_create`, `mathboard_create_many`, `mathboard_update`,
+`mathboard_observe` and generic `mathboard_command` support a `plot` semantic
+type when the installed client reports it through `tools/list` and `mathboard_help`.
+Use `detail:"full"` to obtain mathematical source and all plot options before
+editing. A Plot uses LaTeX (`latex-v1`), complete `mathWindow` and `frame`,
+boolean `axes`/`grid` and optional `axisNumbers`, `border`, `color`.
+Use `color`, not generic Fabric fill/stroke. Derived `plotStatus` does not persist.
+
+Plots render with the same engine as the UI; native request cancellation and
+the existing 10-second total request deadline include lazy import, compute,
+inactive-board hydration and durable acknowledgement. No new Plot tools,
+permissions, protocol versions, transport or public timeout options were added.
+The two-job API limit applies to in-flight Plot materialization, independent of
+the UI preview Worker. Inactive board mutations retain the CAS rules; Stamp v1
+still rejects plots. On `execution_unknown`, observe before retrying.
+
+**Acceptance status:** this section describes source implementation on the G4
+feature branch. Real packaged-client `tools/list`/`tools/call`, MCP Off during
+rendering and durable reload must be verified before claiming installed support.

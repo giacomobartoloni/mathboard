@@ -46,3 +46,18 @@ New plot documents require a current client. Sharing plots as stamps is deferred
 The Cortex package remains a substantial lazy worker asset; first-use transfer and
 slow-device behavior need release-level observation. Finite sampling is conservative
 and may miss narrow domains or oscillation; unresolved intervals remain gaps.
+
+## Follow-up — 2026-11-06 (F039 G4 source implementation)
+
+The separate F039 G4 branch extends the existing agent/MCP command registry to
+advertise semantic `plot` in `create`, `createMany`, `update` and `observe`,
+without creating Plot-specific methods. A closed public input boundary separates
+new agent-created Plot fields from historical BoardDocument nodes. A shared,
+request-scoped rendering seam carries cancellation and the remaining native/dev
+deadline through active and inactive materialization.
+
+This is an additive follow-up, **not** a reversal of the original UI increment
+or a new document/IPC version: conditional BoardDocument v2, Stamp v1 rejection,
+semantic history and persisted mathematical source remain unchanged. Native
+packaged-client acceptance is a separate G4.4 gate; source changes alone do not
+establish a shipped capability. See the G4 AgentWorklog implementation plan.
