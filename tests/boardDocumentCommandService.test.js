@@ -29,6 +29,9 @@ import { FormulaObject } from '../src/formulas/FormulaObject.js'
 import { IndexedDbBoardRepository, createBoardRecord } from '../src/storage/local/IndexedDbBoardRepository.js'
 import { openMathBoardDb } from '../src/storage/local/indexedDb.js'
 import { BoardDocumentCommandService } from '../src/board/BoardDocumentCommandService.js'
+import { DEFAULT_PLOT } from '../src/plots/plotSpec.js'
+import { buildPlotObject } from '../src/plots/buildPlotObject.js'
+import { createPlotRenderCoordinator } from '../src/plots/PlotRenderCoordinator.js'
 
 installFabricDomStub()
 
@@ -340,4 +343,68 @@ test('durability policy is absent from public board command discovery and reject
     params: { spec: { type: 'rect', width: 10, height: 10 }, awaitPersistence: true } },
   { expiresAtMs: Date.now() + 10_000, awaitPersistence: true }), /Invalid board command parameters/)
   assert.equal((await repository.get(targetId)).revision, 1)
+})
+
+test('inactive Plot creation, readback, update and reload stay isolated from the visible board', async () => {
+  const { repository, activeId, targetId, visible, service } = await fixture()
+  service._plotRenderCoordinator = createPlotRenderCoordinator(async () => buildPlotObject)
+  const before = visible.getObjects()
+  const run = (method, params = {}) => service.executeOnBoard({ boardId: targetId, method, params },
+    { expiresAtMs: Date.now() + 10000, interactionChannel: 'mcp' })
+  const created = await run('create', { spec: {
+    ...DEFAULT_PLOT, latex: '1/x', left: 120, top: 140,
+  } })
+  assert.equal(created.type, 'plot')
+  assert.equal(created.latex, '1/x')
+  assert.ok(['ok', 'partial'].includes(created.plotStatus))
+  assert.equal((await repository.get(targetId)).document.version, 2)
+  let observed = await run('observe', { detail: 'full' })
+  assert.equal(observed.objects[0].id, created.id)
+  assert.deepEqual(observed.objects[0].mathWindow, DEFAULT_PLOT.mathWindow)
+  assert.equal(observed.objects[0].plotStatus, created.plotStatus)
+  const changed = await run('update', { id: created.id,
+    patch: { latex: 'x^2', border: false, grid: false, axisNumbers: false } })
+  assert.equal(changed.id, created.id)
+  assert.equal(changed.border, false)
+  assert.equal(changed.grid, false)
+  assert.equal(changed.axisNumbers, false)
+  observed = await run('observe', { detail: 'full' })
+  assert.equal(observed.objects[0].latex, 'x^2')
+  assert.equal(observed.objects[0].border, false)
+  const saved = await repository.get(targetId)
+  assert.equal(saved.revision, 3)
+  assert.equal(saved.document.version, 2)
+  assert.equal(saved.document.objects[0].plotStatus, undefined)
+  assert.equal(saved.document.objects[0].latex, 'x^2')
+  assert.deepEqual(visible.getObjects(), before)
+  assert.equal((await repository.get(activeId)).revision, 1)
+})
+
+test('inactive Plot hydration obeys deadline and does not launch a late render', { timeout: 3000 }, async () => {
+  const { repository, targetId, service, disposed } = await fixture()
+  service._plotRenderCoordinator = createPlotRenderCoordinator(async () => buildPlotObject)
+  await service.executeOnBoard({ boardId: targetId, method: 'create',
+    params: { spec: DEFAULT_PLOT } }, { expiresAtMs: Date.now() + 10000 })
+  const before = await repository.get(targetId)
+  let unblock, started
+  const loaded = new Promise(resolve => { unblock = resolve })
+  const wasStarted = new Promise(resolve => { started = resolve })
+  let lateRenders = 0
+  service._plotRenderCoordinator = createPlotRenderCoordinator(() => {
+    started()
+    return loaded
+  })
+  const pending = service.executeOnBoard({ boardId: targetId, method: 'observe',
+    params: { detail: 'full' } }, { expiresAtMs: Date.now() + 100 })
+  await wasStarted
+  await assert.rejects(pending, { code: 'command_timeout' })
+  unblock(async spec => { lateRenders++; return buildPlotObject(spec) })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(lateRenders, 0)
+  assert.equal((await repository.get(targetId)).revision, before.revision)
+  assert.ok(disposed() >= 2)
+  service._plotRenderCoordinator = createPlotRenderCoordinator(async () => buildPlotObject)
+  const recovered = await service.executeOnBoard({ boardId: targetId, method: 'observe',
+    params: { detail: 'full' } }, { expiresAtMs: Date.now() + 10000 })
+  assert.equal(recovered.objects[0].type, 'plot')
 })

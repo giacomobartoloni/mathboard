@@ -47,7 +47,8 @@ export async function materializeBoardDocument(rawDoc, options = {}) {
     doc = validateBoardDocument(migrateBoardDocument(rawDoc))
   } catch (error) {
     if (error instanceof BoardDocumentError) throw error
-    if (['command_timeout', 'board_context_changed', 'board_busy'].includes(error?.code)) throw error
+    if (['command_timeout', 'board_context_changed', 'board_busy'].includes(error?.code)
+      || error?.code?.startsWith?.('plot_')) throw error
     throw new BoardDocumentError(
       BOARD_DOCUMENT_ERROR_CODES.INVALID,
       error?.message || String(error),
@@ -64,7 +65,8 @@ export async function materializeBoardDocument(rawDoc, options = {}) {
     return { document: doc, objects }
   } catch (error) {
     if (error instanceof BoardDocumentError) throw error
-    if (['command_timeout', 'board_context_changed', 'board_busy'].includes(error?.code)) throw error
+    if (['command_timeout', 'board_context_changed', 'board_busy'].includes(error?.code)
+      || error?.code?.startsWith?.('plot_')) throw error
     if (error?.message === 'Formula render failed.') {
       throw new BoardDocumentError(BOARD_DOCUMENT_ERROR_CODES.FORMULA_RENDER_FAILED)
     }
