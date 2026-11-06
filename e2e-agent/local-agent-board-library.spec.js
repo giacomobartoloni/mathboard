@@ -500,7 +500,7 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
 
   const sidebar = page.getByRole('complementary', { name: 'Board library' })
   await expect(sidebar).toBeVisible()
-  await expect(page.locator('#app')).toHaveClass(/library-sidebar-pinned/)
+  await expect(page.locator('#app[data-theme]')).toHaveClass(/library-sidebar-pinned/)
   await expect(sidebar).toHaveJSProperty('tagName', 'ASIDE')
   await expect(sidebar).not.toHaveAttribute('role')
   await expect(sidebar).not.toHaveAttribute('aria-modal')
@@ -519,7 +519,7 @@ test('pin and unpin preserve Fabric scene while switching between modal and dock
   await expect(sidebar.getByText('Current board')).toBeVisible()
   await canvas.click({ position: { x: 250, y: 180 } })
   await sidebar.getByRole('button', { name: 'Unpin sidebar' }).click()
-  await expect(page.locator('#app')).not.toHaveClass(/library-sidebar-pinned/)
+  await expect(page.locator('#app[data-theme]')).not.toHaveClass(/library-sidebar-pinned/)
 
   const overlayAgain = page.getByRole('dialog', { name: 'Board library' })
   await expect(overlayAgain).toBeVisible()
