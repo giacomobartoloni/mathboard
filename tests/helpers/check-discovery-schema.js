@@ -32,7 +32,9 @@ export function acceptsSchema(schema, value, root = schema) {
     || (schema.maximum !== undefined && value > schema.maximum)
     || (schema.exclusiveMinimum !== undefined && value <= schema.exclusiveMinimum)
     || (schema.exclusiveMaximum !== undefined && value >= schema.exclusiveMaximum))) return false
-  if (typeof value === 'string' && (value.length < (schema.minLength || 0) || (schema.pattern && !new RegExp(schema.pattern).test(value)))) return false
+  if (typeof value === 'string' && (value.length < (schema.minLength || 0)
+    || (schema.maxLength !== undefined && value.length > schema.maxLength)
+    || (schema.pattern && !new RegExp(schema.pattern).test(value)))) return false
   if (Array.isArray(value) && (value.length < (schema.minItems || 0)
     || (schema.maxItems !== undefined && value.length > schema.maxItems)
     || !Array.from(value).every(item => acceptsSchema(schema.items || {}, item, root)))) return false

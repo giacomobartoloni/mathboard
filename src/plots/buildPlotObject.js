@@ -25,6 +25,9 @@ import { plotSemanticProps } from './plotSpec.js'
 import { TRANSFORM_KEYS } from '../board/objects/constants.js'
 export async function buildPlotObject(spec, options = {}) {
   const data = await computePlotAsync(spec, options)
+  if (options.signal?.aborted || (options.expiresAtMs !== undefined && Date.now() >= options.expiresAtMs)) {
+    throw Object.assign(new Error('Plot request timed out.'), { code: 'command_timeout' })
+  }
   const ink = spec.plotBoardInk || '#333333'
   const background = spec.plotBoardBackground || BOARD_THEMES.light.background
   const color = spec.color && spec.color !== 'auto' ? spec.color : ink,

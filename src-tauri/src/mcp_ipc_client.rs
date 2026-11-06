@@ -48,6 +48,12 @@ fn safe_error(code: &str) -> McpReadError {
             McpReadError::Domain("nested_object_mutation_not_supported")
         }
         "formula_render_failed" => McpReadError::Domain("formula_render_failed"),
+        "board_conflict" => McpReadError::Domain("board_conflict"),
+        "plot_invalid_expression" => McpReadError::Domain("plot_invalid_expression"),
+        "plot_unsupported_expression" => McpReadError::Domain("plot_unsupported_expression"),
+        "plot_no_real_samples" => McpReadError::Domain("plot_no_real_samples"),
+        "plot_computation_limit" => McpReadError::Domain("plot_computation_limit"),
+        "plot_render_failed" => McpReadError::Domain("plot_render_failed"),
         "board_commit_failed" => McpReadError::Domain("board_commit_failed"),
         "board_not_found" => McpReadError::Domain("board_not_found"),
         "board_archived" => McpReadError::Domain("board_archived"),

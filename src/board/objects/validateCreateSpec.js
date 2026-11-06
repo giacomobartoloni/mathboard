@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { PLOT_KEYS, validatePlotSpec } from '../../plots/plotSpec.js'
+import { DEFAULT_PLOT, PLOT_KEYS, validatePlotSpec } from '../../plots/plotSpec.js'
 import { BOARD_SEMANTIC_TYPES as BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from './constants.js'
 import { hasValidShapeGeometry, invalidPathField } from './shapeGeometry.js'
 import { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES as C } from '../BoardControllerError.js'
@@ -111,6 +111,10 @@ export function validateObjectPatch(patch, kind) {
   ]
   if (Object.keys(patch).some((key) => !allowed.includes(key))) invalid(C.INVALID_PATCH)
   validateValues(patch, C.INVALID_PATCH)
+  if (kind === 'plot') {
+    try { validatePlotSpec({ ...DEFAULT_PLOT, ...patch }) }
+    catch { invalid(C.INVALID_PATCH) }
+  }
   for (const key of ['stroke', 'fill']) {
     if (!(key in patch)) continue
     const paint = patch[key]

@@ -17,6 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { DEFAULT_PLOT } from '../src/plots/plotSpec.js'
 import {
   getBoardCommandDescriptors, getBoardDiscoveryTypes,
   hasBoardCommandMethod, boardCommandMutatesBoard, executeBoardCommand,
@@ -27,7 +28,9 @@ const { objectTypes, patchSchemas } = getBoardDiscoveryTypes()
 const errors = [
   { status: 400, codes: ['invalid_command'], description: 'Invalid method or JSON.' },
   { status: 409, codes: ['board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
-    'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed', 'local_agent_bridge_error'],
+    'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed',
+    'plot_invalid_expression', 'plot_unsupported_expression', 'plot_no_real_samples',
+    'plot_computation_limit', 'plot_render_failed', 'board_conflict', 'local_agent_bridge_error'],
   description: 'Board/domain rejected; re-observe.' },
   { status: 503, codes: ['board_unavailable', 'board_disconnected'], description: 'Browser unavailable; reconnect.' },
   { status: 504, codes: ['command_timeout'], description: 'Timeout; observe before retry.' },
@@ -81,6 +84,7 @@ export function getLocalAgentHelp() {
       path: { type: 'path', path: [['M', 200, 200], ['L', 300, 250]], fill: null },
       text: { type: 'text', text: 'Synthetic title' },
       formula: { type: 'formula', latex: 'x=2' },
+      plot: { ...DEFAULT_PLOT, color: 'auto', left: 240, top: 160 },
       group: { type: 'group', objects: [{ type: 'rect', width: 40, height: 40 }] },
     },
     workflow: [
@@ -99,7 +103,10 @@ export function getLocalAgentHelp() {
       'measure is read-only; layout is atomic, scene-based, with a CSS-pixel margin.',
       'Scene coordinates ignore pan/zoom; create/createMany default omitted origins to left/top recursively. Stamps and UI creation are unchanged.',
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
-      'Update schemas vary by kind: bounded style for shapes/text, opacity for groups, paint/ink for formulas. Geometry patches reject.',
+      'Update schemas vary by kind: bounded style for shapes/text, opacity for groups, paint/ink for formulas, and full mathematical fields for plots.',
+      'Plot authoring uses syntax latex-v1, finite ordered mathWindow, intrinsic frame and approved real scalar LaTeX only; radians, no arbitrary evaluation.',
+      'Plot color controls the curve, not generic fill/stroke; axes, axisNumbers, grid and border are independent. Replace mathWindow/frame as complete objects.',
+      'Use observe detail=full before updating plot options. Plot source is semantic; Stamp v1 does not export plots. After execution_unknown, observe before retrying create.',
       'Path commands undergo runtime validation.',
       'Examples are synthetic; replace example IDs. Discovery does not authorize changes.',
       'Undo/Redo are UI actions, not bridge methods. Normal dev/production builds do not expose this bridge.',

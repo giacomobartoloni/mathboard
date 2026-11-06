@@ -27,6 +27,9 @@ fn main() {
     println!("cargo:rerun-if-changed=../tools/generate-mcp-discovery.mjs");
     println!("cargo:rerun-if-changed=../dev-agent/command-contract.js");
     println!("cargo:rerun-if-changed=../src/board/agent/command-registry.js");
+    println!("cargo:rerun-if-changed=../src/board/agent/plotPublicContract.js");
+    println!("cargo:rerun-if-changed=../src/plots/plotSpec.js");
+    println!("cargo:rerun-if-changed=../src/plots/PlotGeometry.js");
     println!("cargo:rerun-if-changed=../src/board/objects/constants.js");
     println!("cargo:rerun-if-changed=../src/board/capture/discovery.js");
     println!("cargo:rerun-if-changed=../src/board/capture/contract.js");
