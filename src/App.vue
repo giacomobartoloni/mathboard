@@ -184,7 +184,7 @@ import { createTemporaryPanController } from './board/interactions/TemporaryPanC
 import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
 import { trackEvent } from './analytics'
-import { createBoardLibraryAnalytics } from './analytics/boardLibrary.js'
+import { useBoardLibrary } from './composables/useBoardLibrary.js'
 import { useLibrarySidebar } from './composables/useLibrarySidebar.js'
 import {
   ANALYTICS_EVENTS,
@@ -283,8 +283,23 @@ export default {
         recoveringConflict.value = false
       }
     }
-    const boardLibraryAnalytics = createBoardLibraryAnalytics(trackEvent)
-    const boardLibraryBusy = ref(false)
+    const {
+      boardList, archivedList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
+      openBoardLibrary, onBoardLibraryAction, onActiveBoardChanged, onBoardLibraryBrowse,
+      onSidebarClosed, onSidebarModeChanged,
+    } = useBoardLibrary({
+      isReady: boardSessionReady,
+      getWorkspace: () => drawBoardRef.value?.getBoardWorkspace(),
+      // Resolved only on interaction, after useLibrarySidebar initializes below.
+      getSidebar: () => librarySidebar,
+      resetSelectedTool: () => { selectedTool.value = 'select' },
+      trackEvent,
+    })
+    const librarySidebar = useLibrarySidebar({
+      isBusy: () => boardLibraryBusy.value,
+      onClosed: onSidebarClosed,
+      onModeChanged: onSidebarModeChanged,
+    })
     const {
       mode: librarySidebarMode,
       width: librarySidebarWidth,
@@ -295,84 +310,10 @@ export default {
       isOpen: isLibrarySidebarOpen,
       triggerRef: boardLibraryTriggerRef,
       setWidth: setLibrarySidebarWidth,
-      open: showLibrarySidebar,
-      dismiss: dismissLibrarySidebar,
       close: closeLibrarySidebar,
       restoreFocus: restoreLibrarySidebarFocus,
       togglePin: toggleLibrarySidebarPin,
-    } = useLibrarySidebar({
-      isBusy: () => boardLibraryBusy.value,
-      onClosed: (mode, reason) => boardLibraryAnalytics.closed(mode, reason),
-      onModeChanged: (mode, reason) => boardLibraryAnalytics.modeChanged(mode, reason),
-    })
-    const boardList = ref([])
-    const archivedList = ref([])
-    const boardLibraryLoading = ref(false)
-    const boardLibraryError = ref(null)
-    const onBoardLibraryBrowse = (action) => boardLibraryAnalytics.browsed(action)
-    const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
-    const refreshBoardLibrary = async () => {
-      const workspace = boardWorkspace()
-      if (!workspace) throw new Error('Board workspace is not ready.')
-      const [boards, archived] = await Promise.all([workspace.list(), workspace.listArchived()])
-      boardList.value = boards
-      archivedList.value = archived
-    }
-    const openBoardLibrary = async () => {
-      if (!boardSessionReady.value || isLibrarySidebarOpen.value) return
-      boardLibraryError.value = null
-      boardList.value = []
-      archivedList.value = []
-      boardLibraryLoading.value = true
-      showLibrarySidebar()
-      boardLibraryAnalytics.opened()
-      try { await refreshBoardLibrary() } catch (error) { boardLibraryError.value = error.message }
-      finally { boardLibraryLoading.value = false }
-    }
-    const onBoardLibraryAction = async ({ action, boardId, title }) => {
-      if (boardLibraryBusy.value) return
-      const modeAtAction = librarySidebarMode.value
-      const switchedAwayFromActive = (action === 'archive' || action === 'delete')
-        && boardList.value.some(board => board.id === boardId && board.isActive)
-      boardLibraryError.value = null
-      boardLibraryBusy.value = true
-      try {
-        const workspace = boardWorkspace()
-        if (!workspace) throw new Error('Board workspace is not ready.')
-        if (action === 'create') await workspace.create({ title })
-        else if (action === 'open') await workspace.open({ boardId })
-        else if (action === 'unarchive-open') {
-          await workspace.unarchive({ boardId })
-          try { await workspace.open({ boardId }) }
-          catch (error) { throw new Error(`Board restored but could not be opened. ${error?.message || ''}`.trim()) }
-        }
-        else if (action === 'rename') await workspace.rename({ boardId, title })
-        else if (action === 'archive') await workspace.archive({ boardId })
-        else if (action === 'unarchive') await workspace.unarchive({ boardId })
-        else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
-        else throw new Error('Unsupported board library action.')
-        await refreshBoardLibrary()
-        boardLibraryAnalytics.actionFinished(action, 'success', modeAtAction)
-        if (switchedAwayFromActive) selectedTool.value = 'select'
-        if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
-          selectedTool.value = 'select'
-          if (librarySidebarMode.value === 'overlay') dismissLibrarySidebar('board_action')
-        }
-      } catch (error) {
-        boardLibraryAnalytics.actionFinished(action, 'failure', modeAtAction)
-        boardLibraryError.value = error?.message || 'Board library operation failed.'
-        // A failed post-transition metadata write may still leave a new active board.
-        try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
-      } finally {
-        boardLibraryBusy.value = false
-      }
-    }
-    const onActiveBoardChanged = () => {
-      // Keep a pinned library in sync with agent-originated board transitions.
-      if (isLibrarySidebarOpen.value && !boardLibraryBusy.value) {
-        void refreshBoardLibrary().catch(error => { boardLibraryError.value = error?.message || 'Board list could not be refreshed.' })
-      }
-    }
+    } = librarySidebar
     let fullscreenInitialized = false
     let previousFullscreen = false
     let disconnectDesktopWindow = null
