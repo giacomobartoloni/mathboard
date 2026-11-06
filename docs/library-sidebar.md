@@ -12,6 +12,19 @@ Sidebar presentation uses `librarySidebarMode`, `isLibrarySidebarOpen`, `canPinL
 
 Boards behavior deliberately keeps `boardLibrary*` names: board lists, lifecycle loading/errors, `openBoardLibrary`, `onBoardLibraryAction` and analytics constrained to `library=boards`. `LibrarySidebar.vue` is named for its presentation responsibility but still renders only the Boards view; it is not yet a reusable host with independent library content. Extract a shared shell only when the proposed F031 Stamp library is actually implemented.
 
+## Adjustable width and centered board viewport
+
+The sidebar uses the familiar desktop split-pane pattern: a subtle **left-edge drag handle** (12px hit area) changes its width, while the same focusable separator supports keyboard `ArrowLeft` (expand), `ArrowRight` (shrink), `Home` (minimum) and `End` (maximum). It exposes the current size and bounds through `aria-valuenow/min/max`. There is no resizer on phone layouts (<=600px); the overlay remains full-width there.
+
+- Default: **400 CSS px**, adjustable from **320–560 px** on desktop. Width is kept only for this running app session; no local preference or persistence schema was added.
+- Overlay: resize the sidebar without changing the board canvas or its viewport transform.
+- Pinned: reserve the selected width in the workspace and leave **at least 600 CSS px** for drawing. Pin is available from 920px viewport width, and any overwide overlay selection is clamped when pinning. Resizing the browser below the dockable threshold returns to overlay.
+- Visual boundary: retain the 1px divider and a modest shadow to the **left** of the pinned sidebar. Do not add a second floating panel or scroll the application.
+- **Center-preserving pan:** when a pinned sidebar changes the usable drawing viewport width, `DrawBoard.updateCanvasSize()` adjusts Fabric's viewport X translation by `(newCanvasWidth - previousCanvasWidth) / 2`, including pin, drag resizing, unpin and close. The world point previously at the center stays centered at any zoom. The Y translation, zoom, scene object coordinates, history and saved board document are unchanged. Overlay-only resizing does **not** pan the board.
+- Avoid CSS width tweening on every drag frame: Fabric already resizes via `ResizeObserver`. Dragging should feel direct, and pan follows the actual measured canvas width rather than a guessed sidebar dimension.
+
+The earlier overlay-only plan that demanded no viewport-transform changes is superseded **only for pinned resizing** by the owner's explicit center-pan requirement. This remains presentation behavior, not a document edit or undoable object operation.
+
 ## Extension seam for F031: personal Stamp library (not implemented)
 
 The ProductPlan already tracks F031 as **proposed**. When a second library has approved product scope and actual data/action semantics:
