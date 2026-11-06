@@ -83,7 +83,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <LibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
-        :width="librarySidebarWidth" :min-width="320" :max-width="librarySidebarMaxWidth"
+        :width="librarySidebarWidth" :min-width="librarySidebarMinWidth" :max-width="librarySidebarMaxWidth"
         :resizable="librarySidebarResizable" @resize="setLibrarySidebarWidth"
         @toggle-pin="toggleLibrarySidebarPin" @close="closeLibrarySidebar" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
     </Transition>
@@ -185,6 +185,7 @@ import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
 import { trackEvent } from './analytics'
 import { createBoardLibraryAnalytics } from './analytics/boardLibrary.js'
+import { useLibrarySidebar } from './composables/useLibrarySidebar.js'
 import {
   ANALYTICS_EVENTS,
   ANALYTICS_FORMULA_MODES,
@@ -282,73 +283,32 @@ export default {
         recoveringConflict.value = false
       }
     }
-    // Overlay is the default on every open. Pinning is explicit and session-local.
-    const librarySidebarMode = ref('closed')
-    const librarySidebarWidth = ref(400)
-    const librarySidebarViewportWidth = ref(window.innerWidth)
-    const librarySidebarMaxWidth = computed(() =>
-      Math.min(560, Math.max(320, librarySidebarViewportWidth.value -
-        (librarySidebarMode.value === 'pinned' ? 600 : 24))))
-    const librarySidebarResizable = computed(() => librarySidebarViewportWidth.value > 600 &&
-      librarySidebarMaxWidth.value > 320)
-    const setLibrarySidebarWidth = (width) => {
-      librarySidebarWidth.value = Math.min(librarySidebarMaxWidth.value,
-        Math.max(320, Math.round(width)))
-    }
     const boardLibraryAnalytics = createBoardLibraryAnalytics(trackEvent)
-    const isLibrarySidebarOpen = computed(() => librarySidebarMode.value !== 'closed')
-    const canPinLibrarySidebar = computed(() => librarySidebarViewportWidth.value >= 920) // 320px sidebar + 600px canvas
-    const syncLibrarySidebarPinEligibility = () => {
-      librarySidebarViewportWidth.value = window.innerWidth
-      if (!canPinLibrarySidebar.value && librarySidebarMode.value === 'pinned') {
-        // The focused pin control becomes disabled when docking is unavailable.
-        // Capture it before Vue updates the DOM, since browsers may blur it.
-        const pinHadFocus = document.activeElement?.matches?.('.library-sidebar-pin-button')
-        librarySidebarMode.value = 'overlay'
-        boardLibraryAnalytics.modeChanged('overlay', 'viewport')
-        // A nonmodal region has become a modal dialog. Keep valid sidebar
-        // input focus, but move focus from the board or disabled pin to Close.
-        void nextTick(() => {
-          if (librarySidebarMode.value !== 'overlay') return
-          const focused = document.activeElement
-          if (pinHadFocus || !focused?.closest?.('.library-sidebar-panel') || focused?.matches?.(':disabled')) {
-            document.querySelector('.library-sidebar-panel [aria-label="Close board library"]')?.focus()
-          }
-        })
-      }
-      setLibrarySidebarWidth(librarySidebarWidth.value)
-    }
-    onMounted(() => window.addEventListener('resize', syncLibrarySidebarPinEligibility))
-    onBeforeUnmount(() => window.removeEventListener('resize', syncLibrarySidebarPinEligibility))
-    const boardLibraryTriggerRef = ref(null)
+    const boardLibraryBusy = ref(false)
+    const {
+      mode: librarySidebarMode,
+      width: librarySidebarWidth,
+      minWidth: librarySidebarMinWidth,
+      maxWidth: librarySidebarMaxWidth,
+      resizable: librarySidebarResizable,
+      canPin: canPinLibrarySidebar,
+      isOpen: isLibrarySidebarOpen,
+      triggerRef: boardLibraryTriggerRef,
+      setWidth: setLibrarySidebarWidth,
+      open: showLibrarySidebar,
+      dismiss: dismissLibrarySidebar,
+      close: closeLibrarySidebar,
+      restoreFocus: restoreLibrarySidebarFocus,
+      togglePin: toggleLibrarySidebarPin,
+    } = useLibrarySidebar({
+      isBusy: () => boardLibraryBusy.value,
+      onClosed: (mode, reason) => boardLibraryAnalytics.closed(mode, reason),
+      onModeChanged: (mode, reason) => boardLibraryAnalytics.modeChanged(mode, reason),
+    })
     const boardList = ref([])
     const archivedList = ref([])
-    const boardLibraryBusy = ref(false)
     const boardLibraryLoading = ref(false)
     const boardLibraryError = ref(null)
-    const dismissLibrarySidebar = (reason) => {
-      const mode = librarySidebarMode.value
-      if (mode === 'closed') return
-      librarySidebarMode.value = 'closed'
-      boardLibraryAnalytics.closed(mode, reason)
-    }
-    const closeLibrarySidebar = (reason = 'close_button') => {
-      if (boardLibraryBusy.value) return
-      dismissLibrarySidebar(reason)
-    }
-    // The trigger receives focus only after the closing slide has finished.
-    const restoreLibrarySidebarFocus = () => boardLibraryTriggerRef.value?.focus()
-    const toggleLibrarySidebarPin = () => {
-      if (boardLibraryBusy.value) return
-      if (librarySidebarMode.value === 'overlay' && canPinLibrarySidebar.value) {
-        librarySidebarWidth.value = Math.min(librarySidebarWidth.value, window.innerWidth - 600)
-        librarySidebarMode.value = 'pinned'
-        boardLibraryAnalytics.modeChanged('pinned', 'user')
-      } else if (librarySidebarMode.value === 'pinned') {
-        librarySidebarMode.value = 'overlay'
-        boardLibraryAnalytics.modeChanged('overlay', 'user')
-      }
-    }
     const onBoardLibraryBrowse = (action) => boardLibraryAnalytics.browsed(action)
     const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
     const refreshBoardLibrary = async () => {
@@ -364,7 +324,7 @@ export default {
       boardList.value = []
       archivedList.value = []
       boardLibraryLoading.value = true
-      librarySidebarMode.value = 'overlay'
+      showLibrarySidebar()
       boardLibraryAnalytics.opened()
       try { await refreshBoardLibrary() } catch (error) { boardLibraryError.value = error.message }
       finally { boardLibraryLoading.value = false }
@@ -946,6 +906,7 @@ export default {
       librarySidebarMode,
       canPinLibrarySidebar,
       librarySidebarWidth,
+      librarySidebarMinWidth,
       librarySidebarMaxWidth,
       librarySidebarResizable,
       setLibrarySidebarWidth,
