@@ -2,7 +2,7 @@
 
 Press G or select Graph, then click the board to choose the upper-left origin.
 That click opens the lazy `PlotModal` editor. It previews LaTeX,
-axis ranges, axes/grid/border and curve color, then awaits an atomic board commit.
+axis ranges, axis lines and numbers, grid, border and curve color, then awaits an atomic board commit.
 Successful insertion returns to Select; Escape cancels placement or the editor.
 Double-click a plot or use Edit graph to change it. Board zoom leaves its math
 window unchanged. Plot authoring through MCP is a separate increment.
@@ -47,7 +47,7 @@ and points. Tolerance is midpoint error divided by fixed mathematical y-span
 +/-1e12. The mathematical transform accepts positive finite dimensions <=16384; persisted
 plot frames are restricted to 80..2048 with representable scales.
 Typed `PlotError.code` distinguishes invalid/unsupported expression, invalid
-domain, computation limit and evaluator failure. The plot schema also fixes syntax to latex-v1 and validates axes/grid/color.
+domain, computation limit and evaluator failure. The plot schema also fixes syntax to latex-v1 and validates the display flags and curve color.
 
 ## Known limitations
 
@@ -72,6 +72,9 @@ A solid surface in the board background color masks the underlying board grid,
 even when the graph grid or border is disabled. Border is enabled by default for
 new graphs and older plot nodes without the optional boolean `border` field.
 The mathematical grid omits perimeter strokes, so enabling it cannot add a border.
+Axis numbers can be hidden independently while keeping the axis lines. The optional
+boolean `axisNumbers` defaults to true for older plots. Hiding Axes also hides the
+numbers while retaining the stored preference for when Axes is enabled again.
 `applyTheme` updates this surface separately from ink; preview and board use the
 same theme colors.
 The runtime-only plotBoardInk and plotBoardBackground fields preserve theme

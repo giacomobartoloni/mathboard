@@ -90,6 +90,7 @@ function snapshotForE2e(obj, { includeChildren = true } = {}) {
     objectKind: obj.objectKind || null,
     plotSpec: obj.objectKind === 'plot' ? structuredClone(obj.plotSpec) : null,
     plotBorder: obj.objectKind === 'plot' ? obj.getObjects().some(child => child.isType('Rect') && Boolean(child.stroke)) : null,
+    plotAxisNumberCount: obj.objectKind === 'plot' ? obj.getObjects().filter(child => child.isType('Text')).length : null,
     plotBackground: obj.objectKind === 'plot' ? { fill: obj.getObjects()[0].fill, opacity: obj.getObjects()[0].opacity } : null,
     left: Number(layout.left) || 0,
     top: Number(layout.top) || 0,

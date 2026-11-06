@@ -241,3 +241,26 @@ test('grid generation terminates when narrow bounds make the tick index stop adv
   assert.equal(result.status, 0, result.stderr)
   assert.equal(result.stdout.trim(), 'completed')
 })
+
+test('axis numbers can hide labels while preserving axes, grid and curve', async () => {
+  for (const axisNumbers of [undefined, true, false]) {
+    const spec = { ...DEFAULT_PLOT, ...(axisNumbers === undefined ? {} : { axisNumbers }) }
+    const data = computePlot(spec)
+    assert.equal(data.axes.length, 2)
+    assert.equal(data.grid.length, 12)
+    assert.equal(data.curves.length, 1)
+    assert.equal(data.labels.length > 0, axisNumbers !== false)
+    const object = await buildPlotObject(spec)
+    assert.equal(object.getObjects().some(child => child.isType('Text')), axisNumbers !== false)
+    assert.equal(object.plotSpec.axisNumbers, axisNumbers !== false)
+    const clone = await object.clone()
+    assert.equal(clone.plotSpec.axisNumbers, axisNumbers !== false)
+    assert.equal(clone.getObjects().some(child => child.isType('Text')), axisNumbers !== false)
+  }
+  assert.deepEqual(computePlot({ ...DEFAULT_PLOT, axes: false, axisNumbers: true }).labels, [])
+})
+
+test('axis numbers option rejects nonboolean values', () => {
+  for (const axisNumbers of [null, 'false', 0, {}])
+    assert.throws(() => validatePlotSpec({ ...DEFAULT_PLOT, axisNumbers }), { code: 'invalid_plot' })
+})

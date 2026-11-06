@@ -86,6 +86,7 @@ export function computePlot(spec) {
   }
   const sx = step(w.xMax - w.xMin),
     sy = step(w.yMax - w.yMin)
+  const showNumbers = spec.axes && spec.axisNumbers !== false
   // Keep one-pixel grid strokes off the perimeter, including decimal roundoff.
   const gridInset = 0.5
   // Bound attempts independently of emitted strokes and stop unrepresentable tick increments.
@@ -95,7 +96,7 @@ export function computePlot(spec) {
       x = t.toFrame({ x: value, y: 0 }).x
     if (x > gridInset && x < spec.frame.width - gridInset)
       grid.push(`M ${x} 0 L ${x} ${spec.frame.height}`)
-    if (value !== 0 && spec.axes)
+    if (value !== 0 && showNumbers)
       labels.push({
         text: Number(value.toPrecision(4)).toString(),
         x: Math.max(16, Math.min(spec.frame.width - 16, x)),
@@ -108,7 +109,7 @@ export function computePlot(spec) {
       y = t.toFrame({ x: 0, y: value }).y
     if (y > gridInset && y < spec.frame.height - gridInset)
       grid.push(`M 0 ${y} L ${spec.frame.width} ${y}`)
-    if (value !== 0 && spec.axes)
+    if (value !== 0 && showNumbers)
       labels.push({
         text: Number(value.toPrecision(4)).toString(),
         x: Math.max(16, Math.min(spec.frame.width - 16, xZero + 18)),

@@ -197,3 +197,22 @@ test('border edits persist atomically and older plot nodes default to a visible 
   const legacy = await materializeBoardDocument(doc, { buildFormula })
   assert.equal(legacy.objects[0].plotSpec.border, true)
 })
+
+test('axis numbers edits persist and older plot nodes default to visible labels', async () => {
+  const { controller, canvas, history } = setup()
+  const before = await controller.create(spec)
+  const after = await controller.update(before.id, { axisNumbers: false })
+  assert.equal(after.id, before.id)
+  assert.equal(after.axisNumbers, false)
+  assert.equal(history.at(-1).type, 'replace')
+  assert.equal(history.at(-1).removed.plotSpec.axisNumbers, true)
+  const doc = serializeBoardDocument({ canvas, boardObjectPolicy: policy })
+  assert.equal(doc.objects[0].axisNumbers, false)
+  const restored = await materializeBoardDocument(doc, { buildFormula })
+  assert.equal(restored.objects[0].plotSpec.axisNumbers, false)
+  assert.equal(restored.objects[0].getObjects().some(child => child.isType('Text')), false)
+  delete doc.objects[0].axisNumbers
+  const legacy = await materializeBoardDocument(doc, { buildFormula })
+  assert.equal(legacy.objects[0].plotSpec.axisNumbers, true)
+  assert.ok(legacy.objects[0].getObjects().some(child => child.isType('Text')))
+})

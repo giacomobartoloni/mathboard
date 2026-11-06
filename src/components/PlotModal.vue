@@ -82,6 +82,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             </fieldset>
             <div class="plot-options">
               <label><input v-model="form.axes" type="checkbox" :disabled="busy" /> Axes</label>
+              <label><input v-model="form.axisNumbers" type="checkbox" :disabled="busy || !form.axes" /> Axis numbers</label>
               <label><input v-model="form.grid" type="checkbox" :disabled="busy" /> Grid</label>
               <label><input v-model="form.border" type="checkbox" :disabled="busy" /> Border</label>
               <label
