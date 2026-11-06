@@ -2,9 +2,9 @@
 
 ## Current implementation (PR #149)
 
-The top-right **Boards** button opens the only implemented library: locally saved editable boards (F005). The application owns the `closed | overlay | pinned` presentation state, BoardWorkspaceService calls, and analytics for user-driven board actions. `BoardLibraryModal.vue` owns the currently board-specific list, search, recent/archived views, creation, and safe lifecycle controls. `DrawBoard.vue` resizes its Fabric viewport when the sidebar is pinned.
+The top-right **Boards** button opens the only implemented library: locally saved editable boards (F005). The application owns the `closed | overlay | pinned` presentation state, BoardWorkspaceService calls, and analytics for user-driven board actions. `BoardLibrarySidebar.vue` owns the currently board-specific list, search, recent/archived views, creation, and safe lifecycle controls. `DrawBoard.vue` resizes its Fabric viewport when the sidebar is pinned.
 
-Despite its historical filename, `BoardLibraryModal.vue` currently contains both the right-edge frame and the Boards content. This is deliberate while there is **one** library; it is not a generic library host, and its board-specific search/list/actions are not a reusable interface.
+`BoardLibrarySidebar.vue` deliberately represents the current single-library sidebar. Its HTML root is an `<aside>` landmark in pinned mode. When opened as a blocking overlay, that **same aside** has `role="dialog"` and `aria-modal="true"` for correct accessible modal semantics; the board is inert. There is no separate modal component, native `<dialog>` lifecycle, or third-party drawer abstraction. The component currently contains both the sidebar frame and Boards-only content; it is not yet a generic library host, and its board-specific search/list/actions are not a reusable interface.
 
 ## Extension seam for F031: personal Stamp library (not implemented)
 
