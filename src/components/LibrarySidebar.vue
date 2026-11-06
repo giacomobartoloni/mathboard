@@ -23,7 +23,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
       aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
       <header class="board-library-header">
         <span class="board-library-heading-icon" aria-hidden="true">
-          <font-awesome-icon :icon="['fas', 'chalkboard']" />
+          <!-- Same Lucide Library Big icon as the Boards trigger (ISC): https://lucide.dev/icons/library-big -->
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="8" height="18" x="3" y="3" rx="1" />
+            <path d="M7 3v18" />
+            <path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" />
+          </svg>
         </span>
         <div class="board-library-heading-copy">
           <h2 id="board-library-heading">Board library</h2>
