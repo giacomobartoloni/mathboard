@@ -24,13 +24,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
-    :class="{ 'board-library-pinned': boardLibraryMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal }"
+    :class="{ 'board-library-pinned': librarySidebarMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal }"
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
       <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
         aria-label="Open Board library" title="Open Board library"
-        :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="boardLibraryMode === 'overlay'" @click="openBoardLibrary">
+        :aria-expanded="isLibrarySidebarOpen" aria-haspopup="dialog" :inert="librarySidebarMode === 'overlay'" @click="openBoardLibrary">
         <!-- Lucide Library Big icon, ISC license: https://lucide.dev/icons/library-big -->
         <svg class="board-library-trigger-icon" width="20" height="20" viewBox="0 0 24 24"
           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -44,7 +44,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || boardLibraryMode === 'overlay'">
+    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || librarySidebarMode === 'overlay'">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
@@ -78,9 +78,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     </div>
     <Transition name="board-library" @after-leave="restoreBoardLibraryFocus">
-      <BoardLibrarySidebar v-if="showBoardLibrary" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
+      <BoardLibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
-        :pinned="boardLibraryMode === 'pinned'" :can-pin="canPinBoardLibrary"
+        :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinBoardLibrary"
         @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
     </Transition>
 
@@ -117,7 +117,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     />
     
     <ZoomPanel 
-      :inert="boardLibraryMode === 'overlay'"
+      :inert="librarySidebarMode === 'overlay'"
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
       :is-fullscreen="isFullscreen"
@@ -131,7 +131,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @toggle-fullscreen="toggleFullscreen"
     />
     
-    <SupportPanel class="secondary-chrome" :inert="boardLibraryMode === 'overlay'" />
+    <SupportPanel class="secondary-chrome" :inert="librarySidebarMode === 'overlay'" />
     
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
@@ -279,22 +279,22 @@ export default {
       }
     }
     // Overlay is the default on every open. Pinning is explicit and session-local.
-    const boardLibraryMode = ref('closed')
+    const librarySidebarMode = ref('closed')
     const boardLibraryAnalytics = createBoardLibraryAnalytics(trackEvent)
-    const showBoardLibrary = computed(() => boardLibraryMode.value !== 'closed')
+    const isLibrarySidebarOpen = computed(() => librarySidebarMode.value !== 'closed')
     const canPinBoardLibrary = ref(window.innerWidth >= 1000)
     const syncPinEligibility = () => {
       canPinBoardLibrary.value = window.innerWidth >= 1000
-      if (!canPinBoardLibrary.value && boardLibraryMode.value === 'pinned') {
+      if (!canPinBoardLibrary.value && librarySidebarMode.value === 'pinned') {
         // The focused pin control becomes disabled when docking is unavailable.
         // Capture it before Vue updates the DOM, since browsers may blur it.
         const pinHadFocus = document.activeElement?.matches?.('.board-library-pin-button')
-        boardLibraryMode.value = 'overlay'
+        librarySidebarMode.value = 'overlay'
         boardLibraryAnalytics.modeChanged('overlay', 'viewport')
         // A nonmodal region has become a modal dialog. Keep valid sidebar
         // input focus, but move focus from the board or disabled pin to Close.
         void nextTick(() => {
-          if (boardLibraryMode.value !== 'overlay') return
+          if (librarySidebarMode.value !== 'overlay') return
           const focused = document.activeElement
           if (pinHadFocus || !focused?.closest?.('.board-library-sidebar') || focused?.matches?.(':disabled')) {
             document.querySelector('.board-library-sidebar [aria-label="Close board library"]')?.focus()
@@ -311,9 +311,9 @@ export default {
     const boardLibraryLoading = ref(false)
     const boardLibraryError = ref(null)
     const dismissBoardLibrary = (reason) => {
-      const mode = boardLibraryMode.value
+      const mode = librarySidebarMode.value
       if (mode === 'closed') return
-      boardLibraryMode.value = 'closed'
+      librarySidebarMode.value = 'closed'
       boardLibraryAnalytics.closed(mode, reason)
     }
     const closeBoardLibrary = (reason = 'close_button') => {
@@ -324,11 +324,11 @@ export default {
     const restoreBoardLibraryFocus = () => boardLibraryTriggerRef.value?.focus()
     const toggleBoardLibraryPin = () => {
       if (boardLibraryBusy.value) return
-      if (boardLibraryMode.value === 'overlay' && canPinBoardLibrary.value) {
-        boardLibraryMode.value = 'pinned'
+      if (librarySidebarMode.value === 'overlay' && canPinBoardLibrary.value) {
+        librarySidebarMode.value = 'pinned'
         boardLibraryAnalytics.modeChanged('pinned', 'user')
-      } else if (boardLibraryMode.value === 'pinned') {
-        boardLibraryMode.value = 'overlay'
+      } else if (librarySidebarMode.value === 'pinned') {
+        librarySidebarMode.value = 'overlay'
         boardLibraryAnalytics.modeChanged('overlay', 'user')
       }
     }
@@ -342,19 +342,19 @@ export default {
       archivedList.value = archived
     }
     const openBoardLibrary = async () => {
-      if (!boardSessionReady.value || showBoardLibrary.value) return
+      if (!boardSessionReady.value || isLibrarySidebarOpen.value) return
       boardLibraryError.value = null
       boardList.value = []
       archivedList.value = []
       boardLibraryLoading.value = true
-      boardLibraryMode.value = 'overlay'
+      librarySidebarMode.value = 'overlay'
       boardLibraryAnalytics.opened()
       try { await refreshBoardLibrary() } catch (error) { boardLibraryError.value = error.message }
       finally { boardLibraryLoading.value = false }
     }
     const onBoardLibraryAction = async ({ action, boardId, title }) => {
       if (boardLibraryBusy.value) return
-      const modeAtAction = boardLibraryMode.value
+      const modeAtAction = librarySidebarMode.value
       const switchedAwayFromActive = (action === 'archive' || action === 'delete')
         && boardList.value.some(board => board.id === boardId && board.isActive)
       boardLibraryError.value = null
@@ -379,7 +379,7 @@ export default {
         if (switchedAwayFromActive) selectedTool.value = 'select'
         if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
           selectedTool.value = 'select'
-          if (boardLibraryMode.value === 'overlay') dismissBoardLibrary('board_action')
+          if (librarySidebarMode.value === 'overlay') dismissBoardLibrary('board_action')
         }
       } catch (error) {
         boardLibraryAnalytics.actionFinished(action, 'failure', modeAtAction)
@@ -392,7 +392,7 @@ export default {
     }
     const onActiveBoardChanged = () => {
       // Keep a pinned library in sync with agent-originated board transitions.
-      if (showBoardLibrary.value && !boardLibraryBusy.value) {
+      if (isLibrarySidebarOpen.value && !boardLibraryBusy.value) {
         void refreshBoardLibrary().catch(error => { boardLibraryError.value = error?.message || 'Board list could not be refreshed.' })
       }
     }
@@ -501,12 +501,12 @@ export default {
         try {
           const disconnect = await connectDesktopWindow({
             onUndo: () => {
-              if (boardSessionReady.value && boardLibraryMode.value !== 'overlay'
+              if (boardSessionReady.value && librarySidebarMode.value !== 'overlay'
                 && !document.activeElement?.closest?.('.board-library-sidebar')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
             },
             onRedo: () => {
-              if (boardSessionReady.value && boardLibraryMode.value !== 'overlay'
+              if (boardSessionReady.value && librarySidebarMode.value !== 'overlay'
                 && !document.activeElement?.closest?.('.board-library-sidebar')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
             },
@@ -637,8 +637,8 @@ export default {
           event.preventDefault()
           return
         }
-        if (boardLibraryMode.value === 'overlay'
-          || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-sidebar'))) {
+        if (librarySidebarMode.value === 'overlay'
+          || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.board-library-sidebar'))) {
           closeBoardLibrary('escape')
           event.preventDefault()
           return
@@ -657,8 +657,8 @@ export default {
       if (
         showFormulaModal.value
         || showShareStampModal.value
-        || boardLibraryMode.value === 'overlay'
-        || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-sidebar'))
+        || librarySidebarMode.value === 'overlay'
+        || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.board-library-sidebar'))
         || shouldIgnoreGlobalShortcut(event)
         || drawBoardRef.value?.isTextEditing()
       ) return
@@ -925,8 +925,8 @@ export default {
       recoveringConflict,
       onPersistenceStatus,
       recoverConflict,
-      showBoardLibrary,
-      boardLibraryMode,
+      isLibrarySidebarOpen,
+      librarySidebarMode,
       canPinBoardLibrary,
       toggleBoardLibraryPin,
       onBoardLibraryBrowse,
