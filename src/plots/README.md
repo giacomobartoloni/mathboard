@@ -2,7 +2,7 @@
 
 Press G or select Graph, then click the board to choose the upper-left origin.
 That click opens the lazy `PlotModal` editor. It previews LaTeX,
-axis ranges, axes/grid and curve color, then awaits an atomic board commit.
+axis ranges, axes/grid/border and curve color, then awaits an atomic board commit.
 Successful insertion returns to Select; Escape cancels placement or the editor.
 Double-click a plot or use Edit graph to change it. Board zoom leaves its math
 window unchanged. Plot authoring through MCP is a separate increment.
@@ -69,8 +69,10 @@ and Fabric renderer. `PlotObject` is an atomic registered Fabric Group; clones
 rebuild from semantics. AUTO curve/decorations follow board ink; fixed curve
 colors preserve the curve while decorations continue following board theme.
 A solid surface in the board background color masks the underlying board grid,
-even when the graph grid is disabled. `applyTheme` updates this surface separately
-from ink; preview and board use the same theme colors.
+even when the graph grid or border is disabled. Border is enabled by default for
+new graphs and older plot nodes without the optional boolean `border` field.
+`applyTheme` updates this surface separately from ink; preview and board use the
+same theme colors.
 The runtime-only plotBoardInk and plotBoardBackground fields preserve theme
 presentation through clone; both are excluded from BoardDocument source semantics
 and derived again from the destination board theme on reload.

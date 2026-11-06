@@ -38,8 +38,8 @@ export async function buildPlotObject(spec, options = {}) {
   const path = (d, opacity, strokeWidth, stroke = ink) =>
     new Path(d, { fill: null, stroke, strokeWidth, opacity, strokeUniform: true })
   if (data.grid.length) objects.push(path(data.grid.join(' '), 0.14, 1))
-  // Visible frame makes bounds clear even when both axes are outside the window.
-  objects.push(
+  // The outline is optional; the opaque surface always remains.
+  if (spec.border !== false) objects.push(
     new Rect({
       left: 0,
       top: 0,

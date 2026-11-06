@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { PlotError } from './PlotError.js'
 import { createPlotTransform } from './PlotGeometry.js'
-export const PLOT_KEYS = ['syntax', 'latex', 'mathWindow', 'frame', 'axes', 'grid', 'color']
+export const PLOT_KEYS = ['syntax', 'latex', 'mathWindow', 'frame', 'axes', 'grid', 'border', 'color']
 export const DEFAULT_PLOT = Object.freeze({
   type: 'plot',
   syntax: 'latex-v1',
@@ -27,10 +27,13 @@ export const DEFAULT_PLOT = Object.freeze({
   mathWindow: { xMin: -6, xMax: 6, yMin: -4, yMax: 4 },
   frame: { width: 480, height: 320 },
   axes: true,
-  grid: true
+  grid: true,
+  border: true
 })
 export const PLOT_COLORS = ['auto', '#2563eb', '#dc2626', '#16a34a', '#9333ea']
 export function validatePlotSpec(spec) {
+  if (spec?.border !== undefined && typeof spec.border !== 'boolean')
+    throw new PlotError('invalid_plot', 'Graph border must be enabled or disabled.')
   if (spec?.color !== undefined && !PLOT_COLORS.includes(spec.color))
     throw new PlotError('invalid_plot', 'Unsupported graph color.')
   if (
@@ -61,7 +64,6 @@ export function validatePlotSpec(spec) {
   return spec
 }
 export function plotSemanticProps(spec) {
-  return Object.fromEntries(
-    PLOT_KEYS.map((k) => [k, k === 'color' ? spec.color || 'auto' : structuredClone(spec[k])])
-  )
+  const normalized = { ...spec, color: spec.color || 'auto', border: spec.border === undefined ? true : spec.border }
+  return Object.fromEntries(PLOT_KEYS.map(k => [k, structuredClone(normalized[k])]))
 }

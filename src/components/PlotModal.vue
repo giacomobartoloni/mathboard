@@ -83,6 +83,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <div class="plot-options">
               <label><input v-model="form.axes" type="checkbox" :disabled="busy" /> Axes</label>
               <label><input v-model="form.grid" type="checkbox" :disabled="busy" /> Grid</label>
+              <label><input v-model="form.border" type="checkbox" :disabled="busy" /> Border</label>
               <label
                 >Curve color
                 <select v-model="form.color" :disabled="busy">
@@ -99,7 +100,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <span class="plot-preview-label">Preview</span>
             <div
               class="plot-preview"
-              :style="{ aspectRatio: form.frame.width + '/' + form.frame.height, background: graphTheme.background, color: graphTheme.defaultInk }"
+              :style="{ aspectRatio: form.frame.width + '/' + form.frame.height, background: graphTheme.background, color: graphTheme.defaultInk, borderColor: form.border ? undefined : 'transparent' }"
             >
               <svg
                 v-if="preview"
@@ -452,8 +453,12 @@ select {
   color: var(--danger);
 }
 footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   justify-content: flex-end;
   border-top: 1px solid var(--border-color);
+  background: var(--surface-secondary);
 }
 button {
   font: inherit;

@@ -187,3 +187,21 @@ test('standalone and grouped graph clones retain the current opaque theme surfac
   restored.applyTheme(BOARD_THEMES.dark)
   assert.equal(restored.getObjects()[0].fill, '#1e1e22')
 })
+
+test('optional border removes only the frame while retaining an opaque graph surface', async () => {
+  for (const border of [undefined, true, false]) {
+    const object = await buildPlotObject({ ...plot, grid: false, axes: false, ...(border === undefined ? {} : { border }) })
+    const outlines = object.getObjects().filter(o => o.isType('Rect') && o.stroke)
+    assert.equal(outlines.length, border === false ? 0 : 1)
+    assert.equal(object.getObjects()[0].fill, '#f9f9f9')
+    assert.equal(object.getObjects()[0].opacity, 1)
+    assert.equal(object.plotSpec.border, border !== false)
+    const clone = await object.clone()
+    assert.equal(clone.plotSpec.border, border !== false)
+    assert.equal(clone.getObjects().filter(o => o.isType('Rect') && o.stroke).length, outlines.length)
+  }
+})
+
+test('graph border option rejects nonboolean values', () => {
+  for (const border of [null, 'false', 0, {}]) assert.throws(() => validatePlotSpec({ ...plot, border }))
+})

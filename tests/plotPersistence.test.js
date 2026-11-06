@@ -180,3 +180,20 @@ test('board changes during plot rendering never commit into the new scene', asyn
   assert.equal(canvas.getObjects()[0], old)
   assert.equal(history.length, 1)
 })
+
+test('border edits persist atomically and older plot nodes default to a visible border', async () => {
+  const { controller, canvas, history } = setup()
+  const before = await controller.create(spec)
+  const after = await controller.update(before.id, { border: false })
+  assert.equal(after.id, before.id)
+  assert.equal(after.border, false)
+  assert.equal(history.at(-1).type, 'replace')
+  assert.equal(history.at(-1).removed.plotSpec.border, true)
+  const doc = serializeBoardDocument({ canvas, boardObjectPolicy: policy })
+  assert.equal(doc.objects[0].border, false)
+  const restored = await materializeBoardDocument(doc, { buildFormula })
+  assert.equal(restored.objects[0].plotSpec.border, false)
+  delete doc.objects[0].border
+  const legacy = await materializeBoardDocument(doc, { buildFormula })
+  assert.equal(legacy.objects[0].plotSpec.border, true)
+})
