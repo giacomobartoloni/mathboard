@@ -103,7 +103,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                 </span>
               </div>
               <div class="board-library-row-actions" role="group" :aria-label="'Actions for ' + board.title">
-                <button :id="'rename-action-' + board.id" type="button" :disabled="busy || showArchived"
+                <button v-if="!isCompact" :id="'rename-action-' + board.id" type="button" :disabled="busy || showArchived"
                   :aria-label="'Rename ' + board.title + (showArchived ? ' (unarchive first)' : '')"
                   :title="showArchived ? 'Unarchive before renaming' : 'Rename ' + board.title"
                   @click="beginRename(board)">
@@ -114,7 +114,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                   @click="submitAction('unarchive', board.id)">
                   <font-awesome-icon :icon="['fas', 'undo']" aria-hidden="true" />
                 </button>
-                <button v-else type="button" :disabled="busy"
+                <button v-else-if="!isCompact" type="button" :disabled="busy"
                   :aria-label="'Archive ' + board.title" :title="'Archive ' + board.title"
                   @click="submitAction('archive', board.id)">
                   <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" />
@@ -127,13 +127,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
               </div>
             </div>
 
-            <div :id="'more-menu-' + board.id" class="board-library-more-menu" popover="auto"
+            <div :id="'more-menu-' + board.id" class="board-library-more-menu"
+              :class="{ 'is-compact': isCompact }" popover="auto"
               role="group" :aria-label="'More actions for ' + board.title"
               @toggle="onMoreMenuToggle($event, board.id)">
+              <template v-if="isCompact && !showArchived">
+                <button :id="'rename-menu-action-' + board.id" class="board-library-more-option" type="button"
+                  :disabled="busy" :aria-label="'Rename ' + board.title" @click="beginRename(board)">
+                  <font-awesome-icon :icon="['fas', 'pen-to-square']" aria-hidden="true" />
+                  <span>Rename</span>
+                </button>
+                <button class="board-library-more-option" type="button"
+                  :disabled="busy" :aria-label="'Archive ' + board.title"
+                  @click="hideOpenPopover(); submitAction('archive', board.id)">
+                  <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" />
+                  <span>Archive</span>
+                </button>
+              </template>
               <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
                 :disabled="busy" :aria-label="'Delete ' + board.title" :title="'Delete ' + board.title"
                 @click="beginDelete(board)">
                 <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
+                <span v-if="isCompact">Delete</span>
               </button>
             </div>
 
@@ -172,7 +187,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 </template>
 
 <script>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BoardStorageNotice from './BoardStorageNotice.vue'
 
 export default {
@@ -202,6 +217,9 @@ export default {
     const showArchived = ref(false)
     const closeButton = ref(null)
     const sidebarRef = ref(null)
+    // Measure the actual panel: desktop window width does not indicate sidebar width.
+    const isCompact = ref(Math.min(props.width, window.innerWidth) < 400)
+    let sidebarResizeObserver = null
     let resizeDrag = null
     const startResize = (event) => {
       if (event.button !== 0) return
@@ -241,13 +259,23 @@ export default {
     const createLabel = computed(() => boardQuery.value.trim() ? `Create “${boardQuery.value.trim()}”` : 'New board')
     const dateFormatter = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 
-    onMounted(() => closeButton.value?.focus())
+    onMounted(() => {
+      closeButton.value?.focus()
+      if (typeof ResizeObserver !== 'undefined') {
+        sidebarResizeObserver = new ResizeObserver(([entry]) => {
+          isCompact.value = entry.contentRect.width < 400
+        })
+        sidebarResizeObserver.observe(sidebarRef.value)
+      }
+    })
+    onBeforeUnmount(() => sidebarResizeObserver?.disconnect())
     watch(() => props.busy, async (busy) => {
       if (busy || !pendingFocus.value) return
       await nextTick()
       const target = pendingFocus.value === 'close'
         ? closeButton.value
-        : document.getElementById('rename-action-' + pendingFocus.value)
+        : (document.getElementById('rename-action-' + pendingFocus.value)
+          || document.getElementById('more-action-' + pendingFocus.value))
       const focusTarget = target || closeButton.value
       focusTarget?.focus()
       pendingFocus.value = null
@@ -297,6 +325,7 @@ export default {
     const hideOpenPopover = () => {
       sidebarRef.value?.querySelector('.board-library-more-menu:popover-open')?.hidePopover()
     }
+    watch(isCompact, hideOpenPopover)
     const onOverlayEscape = () => {
       const popover = sidebarRef.value?.querySelector('.board-library-more-menu:popover-open')
       if (popover) {
@@ -321,7 +350,8 @@ export default {
         popover.style.top = Math.max(8, top) + 'px'
         popover.style.left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8)) + 'px'
       }
-      document.getElementById('delete-action-' + boardId)?.focus()
+      const firstAction = isCompact.value && !showArchived.value ? 'rename-menu-action-' : 'delete-action-'
+      document.getElementById(firstAction + boardId)?.focus()
     }
     const createBoard = () => {
       emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
@@ -363,7 +393,8 @@ export default {
       renameId.value = null
       confirmDeleteId.value = null
       await nextTick()
-      document.getElementById(actionId + boardId)?.focus()
+      (document.getElementById(actionId + boardId)
+        || document.getElementById('more-action-' + boardId))?.focus()
     }
     const submitDelete = (boardId) => {
       confirmDeleteId.value = null
@@ -376,7 +407,7 @@ export default {
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, sidebarRef,
+    return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, isCompact, closeButton, sidebarRef,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
       submitRename, beginRename, beginDelete, cancelInline, submitDelete, onSearchInput, trapTab,
       startResize, moveResize, stopResize, resizeWithKeyboard,
@@ -693,6 +724,28 @@ export default {
   cursor: pointer;
 }
 .board-library-more-delete:hover:enabled { background: var(--hover-bg); }
+.board-library-more-menu.is-compact { min-width: 160px; }
+.board-library-more-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.board-library-more-option:hover:enabled { background: var(--hover-bg); }
+.board-library-more-menu.is-compact .board-library-more-delete {
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 0 10px;
+}
 .board-library-delete-confirm, .board-library-rename {
   margin: 2px 0 12px 54px;
   padding: 9px;
@@ -734,16 +787,5 @@ export default {
 }
 @media (max-height: 560px) and (min-width: 601px) {
   .board-library-content { min-height: 0; }
-}
-@media (max-width: 420px) {
-  .board-library-row {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
-    gap: 4px 12px;
-    padding: 6px 0;
-  }
-  .board-library-glyph { grid-column: 1; grid-row: 1; }
-  .board-library-details { grid-column: 2; grid-row: 1; }
-  .board-library-row-actions { grid-column: 2; grid-row: 2; justify-self: end; }
 }
 </style>
