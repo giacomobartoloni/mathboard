@@ -80,8 +80,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     <Transition name="board-library" @after-leave="restoreBoardLibraryFocus">
       <BoardLibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
-        :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinBoardLibrary"
-        @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
+        :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
+        @toggle-pin="toggleLibrarySidebarPin" @close="closeBoardLibrary" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
     </Transition>
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
@@ -282,10 +282,10 @@ export default {
     const librarySidebarMode = ref('closed')
     const boardLibraryAnalytics = createBoardLibraryAnalytics(trackEvent)
     const isLibrarySidebarOpen = computed(() => librarySidebarMode.value !== 'closed')
-    const canPinBoardLibrary = ref(window.innerWidth >= 1000)
+    const canPinLibrarySidebar = ref(window.innerWidth >= 1000)
     const syncPinEligibility = () => {
-      canPinBoardLibrary.value = window.innerWidth >= 1000
-      if (!canPinBoardLibrary.value && librarySidebarMode.value === 'pinned') {
+      canPinLibrarySidebar.value = window.innerWidth >= 1000
+      if (!canPinLibrarySidebar.value && librarySidebarMode.value === 'pinned') {
         // The focused pin control becomes disabled when docking is unavailable.
         // Capture it before Vue updates the DOM, since browsers may blur it.
         const pinHadFocus = document.activeElement?.matches?.('.board-library-pin-button')
@@ -322,9 +322,9 @@ export default {
     }
     // The trigger receives focus only after the closing slide has finished.
     const restoreBoardLibraryFocus = () => boardLibraryTriggerRef.value?.focus()
-    const toggleBoardLibraryPin = () => {
+    const toggleLibrarySidebarPin = () => {
       if (boardLibraryBusy.value) return
-      if (librarySidebarMode.value === 'overlay' && canPinBoardLibrary.value) {
+      if (librarySidebarMode.value === 'overlay' && canPinLibrarySidebar.value) {
         librarySidebarMode.value = 'pinned'
         boardLibraryAnalytics.modeChanged('pinned', 'user')
       } else if (librarySidebarMode.value === 'pinned') {
@@ -927,8 +927,8 @@ export default {
       recoverConflict,
       isLibrarySidebarOpen,
       librarySidebarMode,
-      canPinBoardLibrary,
-      toggleBoardLibraryPin,
+      canPinLibrarySidebar,
+      toggleLibrarySidebarPin,
       onBoardLibraryBrowse,
       onActiveBoardChanged,
       boardLibraryTriggerRef,
