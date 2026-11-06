@@ -563,6 +563,8 @@ test('sidebar has clamped pointer and keyboard resizing in both presentation mod
   await expect(splitter).toHaveAttribute('aria-valuemin', '320')
   await expect(splitter).toHaveAttribute('aria-valuemax', '560')
   await expect(splitter).toHaveAttribute('aria-valuenow', '400')
+  // Wait for the 220ms entrance slide before using absolute pointer coordinates.
+  await expect.poll(async () => Math.round((await overlay.boundingBox()).x)).toBe(1040)
 
   const grip = await splitter.boundingBox()
   const startX = grip.x + grip.width / 2
