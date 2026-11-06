@@ -14,6 +14,26 @@ One product-event API with separate web and desktop transports. Call sites must 
 
 Event name and payload constants live in `events.js` (`ANALYTICS_EVENTS`, `ANALYTICS_OBJECT_TYPES`, `ANALYTICS_SHAPES`, `ANALYTICS_FORMULA_MODES`, `ANALYTICS_FORMULA_CLOSE_REASONS`, `ANALYTICS_FORMULA_ASSIST_SOURCES`, `ANALYTICS_FORMULA_PALETTE_GROUPS`, `ANALYTICS_STAMP_SHARE_FAILURE_STAGES`, `ANALYTICS_MILESTONES`).
 
+## Board Library UX signals (PR #149)
+
+The Board Library is the currently implemented library (`library=boards`). These events measure **discrete UI interactions**, not individual people or sessions. The adapter is enabled only on the production website and packaged production desktop app. The native transport independently validates every value against a closed schema in `src-tauri/src/analytics.rs`.
+
+| Event | When | Allowed metadata |
+| --- | --- | --- |
+| `library_opened` | Sidebar enters its default overlay mode | `library=boards` |
+| `library_closed` | Sidebar is dismissed, including automatic dismissal after a successful board action | `library=boards`, `mode=overlay\|pinned`, `reason=close_button\|escape\|backdrop\|board_action` |
+| `library_mode_changed` | User pins/unpins, or viewport width forces automatic unpin | `library=boards`, `mode=overlay\|pinned` (new mode), `reason=user\|viewport` |
+| `library_browsed` | Switch between Recent and Archived, or first nonempty search input in one opening | `library=boards`, `action=recent\|archived\|search` |
+| `library_action` | User-driven create/open/rename/archive/unarchive/unarchive-open/confirmed delete finishes, including surfaced failures | `library=boards`, `action=create\|open\|rename\|archive\|unarchive\|unarchive_open\|delete`, `outcome=success\|failure`, `mode=overlay\|pinned` (mode when initiated) |
+
+The Board Library helper (`src/analytics/boardLibrary.js`) owns approved metadata categories and never accepts user content. The sidebar sends only categorical browsing intents; `App.vue` owns lifecycle and operation outcomes. Agent-initiated board operations do **not** masquerade as user library actions.
+
+Do not send board titles, document IDs, search queries, Stamp payloads, input length, errors, object contents, timestamps, fine-grained pointer interaction, keyboard input, or identifiers. The search event fires **once per sidebar opening**, at first nonempty input. No search-result contents/counts or personal session IDs are collected.
+
+These aggregate event counts can guide decisions such as whether search or archived navigation is discovered, how often pinning is chosen, and where board management errors occur. **They cannot identify users or reconstruct per-person funnels, durations or conversion paths.** Browser/adblock/DNT and offline conditions may reduce observed event counts; avoid treating missing events as proof that an interaction never happened.
+
+Do not add `stamps` as a library category before F031 actually exists. When that product is implemented, extend the event helper and the desktop closed schema together, as described in `docs/library-sidebar.md`.
+
 ## Board operation ownership
 
 `src/board/analytics/BoardOperationAnalytics.js` is the single translator from committed board effects to the existing product-event taxonomy. It receives only categorical root kinds, an approved shape when relevant, and a trusted invocation channel. It never sees Fabric objects, text, LaTeX, coordinates, IDs, or arbitrary metadata. `BoardController` reports an effect only after its injected history recorder accepts the command. Direct UI gestures report to the same translator after their own history boundary. Provider delivery errors cannot change an editor operation.
