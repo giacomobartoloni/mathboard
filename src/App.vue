@@ -190,6 +190,7 @@ import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
 import { trackEvent } from './analytics'
 import { useBoardLibrary } from './composables/useBoardLibrary.js'
+import { usePlotEditor } from './composables/usePlotEditor.js'
 import { useLibrarySidebar } from './composables/useLibrarySidebar.js'
 import {
   ANALYTICS_EVENTS,
@@ -260,40 +261,10 @@ export default {
     const selectedShape = ref('rectangle')
     const drawBoardRef = ref(null)
     const fullscreenRootRef = ref(null)
-    const showPlotModal = ref(false), editingPlotSpec = ref(null), editingPlotId = ref(null)
-    const plotBusy = ref(false), plotError = ref(''), plotPosition = ref(null)
-    let plotReturnFocus = null
-    const closePlotModal = async () => {
-      if (plotBusy.value) return
-      showPlotModal.value = false
-      plotPosition.value = null
-      selectedTool.value = 'select'
-      await nextTick()
-      const target = plotReturnFocus?.isConnected && plotReturnFocus.matches('button,a[href],input,textarea,select,[tabindex]') ? plotReturnFocus : document.querySelector('button[aria-label="Graph"]')
-      target?.focus()
-    }
-    const onOpenPlot = (position) => {
-      plotPosition.value = position
-      plotReturnFocus = document.activeElement
-      editingPlotSpec.value = null; editingPlotId.value = null; plotError.value = ''
-      showPlotModal.value = true
-    }
-    const onEditPlot = ({spec,id}) => {
-      plotPosition.value = null
-      plotReturnFocus = document.activeElement
-      editingPlotSpec.value = spec; editingPlotId.value = id; plotError.value = ''
-      showPlotModal.value = true
-    }
-    const onSubmitPlot = async (spec) => {
-      plotBusy.value = true; plotError.value = ''
-      try {
-        await drawBoardRef.value.savePlot(spec, editingPlotId.value, plotPosition.value)
-        plotBusy.value = false
-        selectedTool.value = 'select'
-        await closePlotModal()
-      } catch(error) { plotError.value = error.cause?.message || error.message || 'Could not save this graph. Please try again.' }
-      finally { plotBusy.value = false }
-    }
+    const {
+      showPlotModal, editingPlotSpec, plotBusy, plotError,
+      onOpenPlot, onEditPlot, onSubmitPlot, closePlotModal,
+    } = usePlotEditor({ drawBoardRef, selectedTool })
     const showFormulaModal = ref(false)
     const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
     const showShareStampModal = ref(false)
