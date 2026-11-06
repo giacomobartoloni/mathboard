@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
     :class="{ 'library-sidebar-pinned': librarySidebarMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal }"
+    :style="{ '--library-sidebar-width': librarySidebarWidth + 'px' }"
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
@@ -50,6 +51,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         :selectedTool="selectedTool"
         :selectedShape="selectedShape"
         :session-ready="boardSessionReady"
+        :sidebar-pinned="librarySidebarMode === 'pinned'"
         :board-theme="boardTheme"
         :selected-color="selectedColor"
         :selection-panel-suspended="showFormulaModal || showShareStampModal"
@@ -81,6 +83,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <LibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
+        :width="librarySidebarWidth" :min-width="320" :max-width="librarySidebarMaxWidth"
+        :resizable="librarySidebarResizable" @resize="setLibrarySidebarWidth"
         @toggle-pin="toggleLibrarySidebarPin" @close="closeLibrarySidebar" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
     </Transition>
 
@@ -280,10 +284,22 @@ export default {
     }
     // Overlay is the default on every open. Pinning is explicit and session-local.
     const librarySidebarMode = ref('closed')
+    const librarySidebarWidth = ref(400)
+    const librarySidebarViewportWidth = ref(window.innerWidth)
+    const librarySidebarMaxWidth = computed(() =>
+      Math.min(560, Math.max(320, librarySidebarViewportWidth.value -
+        (librarySidebarMode.value === 'pinned' ? 600 : 24))))
+    const librarySidebarResizable = computed(() => librarySidebarViewportWidth.value > 600 &&
+      librarySidebarMaxWidth.value > 320)
+    const setLibrarySidebarWidth = (width) => {
+      librarySidebarWidth.value = Math.min(librarySidebarMaxWidth.value,
+        Math.max(320, Math.round(width)))
+    }
     const boardLibraryAnalytics = createBoardLibraryAnalytics(trackEvent)
     const isLibrarySidebarOpen = computed(() => librarySidebarMode.value !== 'closed')
     const canPinLibrarySidebar = ref(window.innerWidth >= 1000)
     const syncLibrarySidebarPinEligibility = () => {
+      librarySidebarViewportWidth.value = window.innerWidth
       canPinLibrarySidebar.value = window.innerWidth >= 1000
       if (!canPinLibrarySidebar.value && librarySidebarMode.value === 'pinned') {
         // The focused pin control becomes disabled when docking is unavailable.
@@ -301,6 +317,7 @@ export default {
           }
         })
       }
+      setLibrarySidebarWidth(librarySidebarWidth.value)
     }
     onMounted(() => window.addEventListener('resize', syncLibrarySidebarPinEligibility))
     onBeforeUnmount(() => window.removeEventListener('resize', syncLibrarySidebarPinEligibility))
@@ -325,6 +342,7 @@ export default {
     const toggleLibrarySidebarPin = () => {
       if (boardLibraryBusy.value) return
       if (librarySidebarMode.value === 'overlay' && canPinLibrarySidebar.value) {
+        librarySidebarWidth.value = Math.min(librarySidebarWidth.value, window.innerWidth - 600)
         librarySidebarMode.value = 'pinned'
         boardLibraryAnalytics.modeChanged('pinned', 'user')
       } else if (librarySidebarMode.value === 'pinned') {
@@ -928,6 +946,10 @@ export default {
       isLibrarySidebarOpen,
       librarySidebarMode,
       canPinLibrarySidebar,
+      librarySidebarWidth,
+      librarySidebarMaxWidth,
+      librarySidebarResizable,
+      setLibrarySidebarWidth,
       toggleLibrarySidebarPin,
       onBoardLibraryBrowse,
       onActiveBoardChanged,
@@ -1093,8 +1115,7 @@ body {
 .board-library-trigger-label { white-space: nowrap; }
 .board-library-trigger:disabled { opacity: .6; cursor: default; }
 
-/* Docked mode narrows only the Fabric viewport, never its scene coordinates. */
-#app { --library-sidebar-width: 400px; }
+/* Docked mode reserves the user's sidebar width; Fabric keeps scene coordinates. */
 #app.library-sidebar-pinned #boardcontainer { right: var(--library-sidebar-width); }
 #app.library-sidebar-pinned .support-panel { right: calc(var(--library-sidebar-width) + 12px); }
 #app.library-sidebar-pinned .copyright { display: none; }
