@@ -2,7 +2,7 @@
 
 ## Current implementation (PR #149)
 
-The top-right **Boards** button opens the only implemented library: locally saved editable boards (F005). The application owns the `closed | overlay | pinned` presentation state, BoardWorkspaceService calls, and analytics for user-driven board actions. `LibrarySidebar.vue` owns the currently board-specific list, search, recent/archived views, creation, and safe lifecycle controls. `DrawBoard.vue` resizes its Fabric viewport when the sidebar is pinned.
+The top-right **Boards** button opens the only implemented library: locally saved editable boards (F005). `App.vue` uses `src/composables/useLibrarySidebar.js` for the `closed | overlay | pinned` presentation lifecycle and keeps BoardWorkspaceService calls and analytics for user-driven board actions. `LibrarySidebar.vue` owns the currently board-specific list, search, recent/archived views, creation, and safe lifecycle controls. `DrawBoard.vue` resizes its Fabric viewport when the sidebar is pinned.
 
 `LibrarySidebar.vue` deliberately represents the current single-library sidebar. Its HTML root is an `<aside>` landmark in pinned mode. When opened as a blocking overlay, that **same aside** has `role="dialog"` and `aria-modal="true"` for correct accessible modal semantics; the board is inert. There is no separate modal component, native `<dialog>` lifecycle, or third-party drawer abstraction. The component currently contains both the sidebar frame and Boards-only content; it is not yet a generic library host, and its board-specific search/list/actions are not a reusable interface.
 
@@ -11,6 +11,14 @@ The top-right **Boards** button opens the only implemented library: locally save
 Sidebar presentation uses `librarySidebarMode`, `isLibrarySidebarOpen`, `canPinLibrarySidebar`, `toggleLibrarySidebarPin`, and `library-sidebar-*` CSS names. Its overlay, pinned state, focus and canvas dimensions are not Boards domain concepts.
 
 Boards behavior deliberately keeps `boardLibrary*` names: board lists, lifecycle loading/errors, `openBoardLibrary`, `onBoardLibraryAction` and analytics constrained to `library=boards`. `LibrarySidebar.vue` is named for its presentation responsibility but still renders only the Boards view; it is not yet a reusable host with independent library content. Extract a shared shell only when the proposed F031 Stamp library is actually implemented.
+
+## Presentation composable boundary
+
+`src/composables/useLibrarySidebar.js` owns the current sidebar's mode, visibility, session-local width and limits, pin/unpin, viewport fallback, close guards and focus restoration after its exit animation. It registers and removes the browser resize listener with the owning Vue component's lifecycle. The composable exposes simple state/actions to `App.vue`; it does **not** access BoardWorkspaceService, inspect board data, emit analytics events directly or know about Stamps. Its small callback interface delegates analytics and busy-state policy to the caller.
+
+`App.vue` remains responsible for opening the Boards content, loading and refreshing saved board lists, handling create/open/rename/archive/restore/confirmed delete, maintaining the selected drawing tool, and recording Board Library analytics. `LibrarySidebar.vue` keeps its own UI-only list/search/compact actions and native popover. A stable `.library-sidebar-close-button` class lets the presentation controller restore keyboard focus after an automatic pinned-to-overlay fallback without depending on the current library's text label.
+
+This is a **logic extraction**, not a generic sidebar component or new library framework. The separate content-host refactor remains deferred until F031 is implemented. Continue to test overlay/pinned focus, mode changes, resized board centering, action busy state and library UX events through existing end-to-end coverage.
 
 ## Adjustable width and centered board viewport
 
