@@ -842,7 +842,9 @@ mod tests {
             listener.local_addr().expect("test address")
         );
         let server = thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(1);
+            // Allow the client's full timeout to reach the test listener.
+            // Only begin observing for an unexpected redirect after the first request.
+            let mut deadline = Instant::now() + Duration::from_secs(5);
             let mut requests = 0;
             while Instant::now() < deadline {
                 match listener.accept() {
@@ -850,6 +852,9 @@ mod tests {
                         let mut request = [0_u8; 2048];
                         let _ = stream.read(&mut request);
                         requests += 1;
+                        if requests == 1 {
+                            deadline = Instant::now() + Duration::from_secs(1);
+                        }
                         let response = if requests == 1 {
                             "HTTP/1.1 302 Found\r\nLocation: /next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
                         } else {
