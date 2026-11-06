@@ -238,6 +238,53 @@ fn validate_event(name: &str, metadata: &Map<String, Value>) -> Result<(), &'sta
             fields(metadata, &["actions"], &["actions"])
                 && matches!(count(metadata, "actions", 5, 50), Some(5 | 20 | 50))
         }
+        "library_opened" => {
+            fields(metadata, &["library"], &["library"])
+                && category(metadata, "library", &["boards"])
+        }
+        "library_closed" => {
+            fields(metadata, &["library", "mode", "reason"], &["library", "mode", "reason"])
+                && category(metadata, "library", &["boards"])
+                && category(metadata, "mode", &["overlay", "pinned"])
+                && category(
+                    metadata,
+                    "reason",
+                    &["close_button", "escape", "backdrop", "board_action"],
+                )
+        }
+        "library_mode_changed" => {
+            fields(metadata, &["library", "mode", "reason"], &["library", "mode", "reason"])
+                && category(metadata, "library", &["boards"])
+                && category(metadata, "mode", &["overlay", "pinned"])
+                && category(metadata, "reason", &["user", "viewport"])
+        }
+        "library_browsed" => {
+            fields(metadata, &["library", "action"], &["library", "action"])
+                && category(metadata, "library", &["boards"])
+                && category(metadata, "action", &["recent", "archived", "search"])
+        }
+        "library_action" => {
+            fields(
+                metadata,
+                &["library", "action", "outcome", "mode"],
+                &["library", "action", "outcome", "mode"],
+            ) && category(metadata, "library", &["boards"])
+                && category(
+                    metadata,
+                    "action",
+                    &[
+                        "create",
+                        "open",
+                        "rename",
+                        "archive",
+                        "unarchive",
+                        "unarchive_open",
+                        "delete",
+                    ],
+                )
+                && category(metadata, "outcome", &["success", "failure"])
+                && category(metadata, "mode", &["overlay", "pinned"])
+        }
         "board_engaged"
         | "text_tool_selected"
         | "text_creation_started"
@@ -532,6 +579,33 @@ mod tests {
     }
 
     #[test]
+    fn library_ux_events_allow_only_closed_categories_and_no_user_content() {
+        for (name, approved) in [
+            ("library_opened", json!({ "library": "boards" })),
+            ("library_closed", json!({ "library": "boards", "mode": "pinned", "reason": "close_button" })),
+            ("library_mode_changed", json!({ "library": "boards", "mode": "overlay", "reason": "viewport" })),
+            ("library_browsed", json!({ "library": "boards", "action": "archived" })),
+            ("library_action", json!({ "library": "boards", "action": "unarchive_open", "outcome": "failure", "mode": "pinned" })),
+        ] {
+            assert!(validate_event(name, &metadata(approved.clone())).is_ok(), "{name}");
+            let mut with_content = approved.clone();
+            with_content["board_title"] = json!("private board");
+            assert!(validate_event(name, &metadata(with_content)).is_err(), "{name}");
+            let mut unknown_library = approved;
+            unknown_library["library"] = json!("private collection");
+            assert!(validate_event(name, &metadata(unknown_library)).is_err(), "{name}");
+        }
+        for (name, invalid) in [
+            ("library_closed", json!({ "library": "boards", "mode": "overlay", "reason": "click: private" })),
+            ("library_mode_changed", json!({ "library": "boards", "mode": "pinned", "reason": "scripted" })),
+            ("library_browsed", json!({ "library": "boards", "action": "private-query" })),
+            ("library_action", json!({ "library": "boards", "action": "create", "outcome": "no", "mode": "overlay" })),
+        ] {
+            assert!(validate_event(name, &metadata(invalid)).is_err(), "{name}");
+        }
+    }
+
+    #[test]
     fn native_policy_accepts_the_actual_js_event_catalog() {
         let output = Command::new("node")
             .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -544,7 +618,7 @@ mod tests {
         assert!(output.status.success());
         let names: Vec<String> =
             serde_json::from_slice(&output.stdout).expect("analytics event names");
-        assert_eq!(names.len(), 30);
+        assert_eq!(names.len(), 35);
         for name in names {
             let sample = match name.as_str() {
                 "object_created" => json!({ "object_type": "formula" }),
@@ -562,6 +636,17 @@ mod tests {
                 "undo_used" | "redo_used" => json!({ "command_type": "add" }),
                 "theme_changed" => json!({ "theme": "light" }),
                 "usage_milestone" => json!({ "actions": 5 }),
+                "library_opened" => json!({ "library": "boards" }),
+                "library_closed" => {
+                    json!({ "library": "boards", "mode": "overlay", "reason": "escape" })
+                }
+                "library_mode_changed" => {
+                    json!({ "library": "boards", "mode": "pinned", "reason": "user" })
+                }
+                "library_browsed" => json!({ "library": "boards", "action": "search" }),
+                "library_action" => {
+                    json!({ "library": "boards", "action": "create", "outcome": "success", "mode": "overlay" })
+                }
                 _ => json!({}),
             };
             assert!(validate_event(&name, &metadata(sample)).is_ok(), "{name}");
