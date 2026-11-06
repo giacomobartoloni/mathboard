@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <template>
   <div class="library-sidebar-layer" :class="{ 'is-pinned': pinned }" @click.self="!pinned && $emit('close', 'backdrop')" @keydown.esc.stop.prevent="onOverlayEscape"
     @keydown.tab="trapTab">
-    <aside ref="sidebarRef" class="library-sidebar-panel" :role="pinned ? null : 'dialog'" :aria-modal="pinned ? null : 'true'"
+    <aside id="library-sidebar-panel" ref="sidebarRef" class="library-sidebar-panel" :role="pinned ? null : 'dialog'" :aria-modal="pinned ? null : 'true'"
       aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
       <header class="board-library-header">
         <span class="board-library-heading-icon" aria-hidden="true">
@@ -54,6 +54,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           <font-awesome-icon :icon="['fas', 'search']" aria-hidden="true" />
         </div>
       </div>
+      <div v-if="resizable" class="library-sidebar-resize-handle" role="separator" tabindex="0"
+        aria-label="Resize library sidebar" aria-orientation="vertical" aria-controls="library-sidebar-panel"
+        :aria-valuenow="width" :aria-valuemin="minWidth" :aria-valuemax="maxWidth"
+        title="Drag or use arrow keys to resize"
+        @pointerdown="startResize" @pointermove="moveResize" @pointerup="stopResize"
+        @pointercancel="stopResize" @keydown="resizeWithKeyboard"></div>
       <p v-if="error" class="board-library-error" role="alert">{{ error }}</p>
 
       <div class="board-library-tabs" role="group" aria-label="Board views">
@@ -170,13 +176,17 @@ export default {
     isDesktop: { type: Boolean, default: false },
     pinned: { type: Boolean, default: false },
     canPin: { type: Boolean, default: false },
+    width: { type: Number, default: 400 },
+    minWidth: { type: Number, default: 320 },
+    maxWidth: { type: Number, default: 560 },
+    resizable: { type: Boolean, default: false },
     boards: { type: Array, default: () => [] },
     archivedBoards: { type: Array, default: () => [] },
     busy: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
     error: { type: String, default: null },
   },
-  emits: ['close', 'action', 'toggle-pin', 'browse'],
+  emits: ['close', 'action', 'toggle-pin', 'browse', 'resize'],
   setup(props, { emit }) {
     const boardQuery = ref('')
     const searchTracked = ref(false)
@@ -186,6 +196,36 @@ export default {
     const showArchived = ref(false)
     const closeButton = ref(null)
     const sidebarRef = ref(null)
+    let resizeDrag = null
+    const startResize = (event) => {
+      if (event.button !== 0) return
+      resizeDrag = { pointerId: event.pointerId, x: event.clientX, width: props.width }
+      event.currentTarget.setPointerCapture(event.pointerId)
+      event.preventDefault()
+    }
+    const moveResize = (event) => {
+      if (resizeDrag?.pointerId !== event.pointerId) return
+      emit('resize', resizeDrag.width + resizeDrag.x - event.clientX)
+    }
+    const stopResize = (event) => {
+      if (resizeDrag?.pointerId !== event.pointerId) return
+      resizeDrag = null
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+    }
+    const resizeWithKeyboard = (event) => {
+      const widths = {
+        ArrowLeft: props.width + 16,
+        ArrowRight: props.width - 16,
+        Home: props.minWidth,
+        End: props.maxWidth,
+      }
+      if (!Object.hasOwn(widths, event.key)) return
+      event.preventDefault()
+      event.stopPropagation()
+      emit('resize', widths[event.key])
+    }
     const pendingFocus = ref(null)
     const visibleBoards = computed(() => {
       const boards = showArchived.value ? props.archivedBoards : props.boards
@@ -213,7 +253,7 @@ export default {
     }
     const trapTab = (event) => {
       if (props.pinned) return
-      const controls = [...sidebarRef.value.querySelectorAll('button:not(:disabled), input:not(:disabled)')]
+      const controls = [...sidebarRef.value.querySelectorAll('button:not(:disabled), input:not(:disabled), [role="separator"][tabindex="0"]')]
         .filter(element => element.getClientRects().length)
       if (!controls.length) {
         event.preventDefault()
@@ -333,6 +373,7 @@ export default {
     return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, sidebarRef,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
       submitRename, beginRename, beginDelete, cancelInline, submitDelete, onSearchInput, trapTab,
+      startResize, moveResize, stopResize, resizeWithKeyboard,
       hideOpenPopover, onOverlayEscape, onMoreMenuToggle }
   },
 }
@@ -355,7 +396,8 @@ export default {
 }
 .library-sidebar-panel {
   box-sizing: border-box;
-  width: min(400px, 100vw);
+  position: relative;
+  width: min(var(--library-sidebar-width, 400px), 100vw);
   height: 100vh;
   height: 100dvh;
   min-height: 0;
@@ -370,30 +412,59 @@ export default {
 }
 .library-sidebar-layer.is-pinned .library-sidebar-panel {
   pointer-events: auto;
-  box-shadow: none;
+  box-shadow: -4px 0 18px rgba(0, 0, 0, .16);
+}
+/* A 12px hit target keeps the visual divider subtle but easy to grab. */
+.library-sidebar-resize-handle {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.library-sidebar-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: calc(50% - 22px);
+  left: 3px;
+  width: 4px;
+  height: 44px;
+  border-radius: 4px;
+  background: var(--border-color);
+}
+.library-sidebar-resize-handle:hover::before,
+.library-sidebar-resize-handle:focus-visible::before {
+  background: var(--text-secondary);
+}
+.library-sidebar-resize-handle:focus-visible {
+  outline: 2px solid var(--selected-bg);
+  outline-offset: -2px;
 }
 /* The same CSS transition handles both opening and closing. */
-.library-sidebar-enter-active, .board-library-leave-active {
+.library-sidebar-enter-active, .library-sidebar-leave-active {
   transition: background-color 220ms ease;
 }
 .library-sidebar-enter-active .library-sidebar-panel,
-.board-library-leave-active .library-sidebar-panel {
+.library-sidebar-leave-active .library-sidebar-panel {
   transition: transform 220ms ease, opacity 220ms ease;
 }
-.library-sidebar-enter-from, .board-library-leave-to {
+.library-sidebar-enter-from, .library-sidebar-leave-to {
   background-color: transparent;
 }
 .library-sidebar-enter-from .library-sidebar-panel,
-.board-library-leave-to .library-sidebar-panel {
+.library-sidebar-leave-to .library-sidebar-panel {
   transform: translateX(100%);
   opacity: .9;
 }
 @media (prefers-reduced-motion: reduce) {
   .library-sidebar-layer,
   .library-sidebar-enter-active,
-  .board-library-leave-active,
+  .library-sidebar-leave-active,
   .library-sidebar-enter-active .library-sidebar-panel,
-  .board-library-leave-active .library-sidebar-panel { transition-duration: 0.01ms; }
+  .library-sidebar-leave-active .library-sidebar-panel { transition-duration: 0.01ms; }
 }
 .board-library-header {
   display: flex;
