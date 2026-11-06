@@ -38,6 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
+import { plotSemanticProps } from '../plots/plotSpec.js';
 import { Canvas, Pattern, PencilBrush, Shadow, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import { wheelZoomLevel } from "../board/viewport/wheelZoom.js";
 import * as fabric from "fabric";
@@ -415,7 +416,9 @@ export default {
      * Walks into permanent Groups (and ActiveSelection) so stamp kits follow theme.
      */
     _syncObjectAutoInk(object, config) {
-      if (!object || object.mathboardInkMode !== INK_MODE_AUTO) return;
+      if (!object) return;
+      if (this._boardObjectPolicy.isPlot(object)) { object.applyInk(config.defaultInk); return; }
+      if (object.mathboardInkMode !== INK_MODE_AUTO) return;
       if (this._boardObjectPolicy.isFormula(object)) {
         this._formulaRenderer.syncInk(object, config);
         return;
@@ -755,6 +758,7 @@ export default {
     },
     editSelection() {
       const active = this.canvas?.getActiveObject();
+      if (this._boardObjectPolicy.isPlot(active)) { this.requestPlotEdit(active); return; }
       if (!active || active.isEditing || !this._boardObjectPolicy.isFormula(active)) return;
       this.$emit("edit-formula", {
         latex: active.latex,
@@ -834,6 +838,10 @@ export default {
       const walk = (object) => {
         if (!object) return;
 
+        if (this._boardObjectPolicy.isPlot(object)) {
+          object.applyInk(ink);
+          return;
+        }
         if (this._boardObjectPolicy.isFormula(object)) {
           if (object.mathboardInkMode !== INK_MODE_FIXED) {
             object.mathboardInkMode = INK_MODE_AUTO;
@@ -1058,6 +1066,24 @@ export default {
       } finally {
         this._pendingFormulaRenders -= 1;
       }
+    },
+    requestPlotEdit(object) {
+      this.$emit('edit-plot', { spec: plotSemanticProps(object.plotSpec), id: getMathBoardObjectId(object) });
+    },
+    async savePlot(spec, id) {
+      const controller = this._ensureBoardController('ui');
+      const props = plotSemanticProps(spec);
+      if (id) return controller.update(id, props, { select: true });
+      const safe = workspaceSafeArea(this.canvas, this.$el.closest('#app'));
+      const vpt = this.canvas.viewportTransform;
+      const zoom = this.canvas.getZoom();
+      const scale = Math.min(1, Math.max(0.05, (safe.width - 32) / (spec.frame.width * zoom)),
+        Math.max(0.05, (safe.height - 32) / (spec.frame.height * zoom)));
+      const center = { x: (safe.left + safe.width / 2 - vpt[4]) / zoom,
+        y: (safe.top + safe.height / 2 - vpt[5]) / zoom };
+      return controller.create({ type: 'plot', ...props, scaleX: scale, scaleY: scale,
+        left: center.x - spec.frame.width * scale / 2,
+        top: center.y - spec.frame.height * scale / 2 }, { select: true });
     },
     async addFormulaToCanvas(formulaData, position) {
       try {
@@ -1387,6 +1413,8 @@ export default {
         if (target && target.isType(...FILL_INK_TYPES) && target.editable) {
           target.enterEditing();
           target.selectAll();
+        } else if (this._boardObjectPolicy.isPlot(target)) {
+          this.requestPlotEdit(target);
         } else if (target && this._boardObjectPolicy.isFormula(target)) {
           // Edit formula
           this.$emit('edit-formula', { 

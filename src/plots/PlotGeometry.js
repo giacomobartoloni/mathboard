@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { PlotError } from './PlotExpression.js'
+import { PlotError } from './PlotError.js'
 
 export function validateMathWindow(window) {
   if (!window || !['xMin', 'xMax', 'yMin', 'yMax'].every(k =>

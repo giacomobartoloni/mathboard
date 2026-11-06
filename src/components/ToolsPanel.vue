@@ -81,6 +81,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         <span class="tool-shortcut-hint" aria-hidden="true">{{ getToolShortcutHint('formula') }}</span>
       </button>
 
+      <button type="button" class="tool-button tool-secondary" aria-label="Graph" title="Graph" @click="$emit('request-plot')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 3v18h18M5 8c3 0 3 9 7 9s4-12 9-12" /></svg>
+      </button>
       <div
         class="tool-menu tool-secondary"
         @mouseenter="showShapesSubmenu = true"
@@ -285,6 +288,7 @@ export default {
     'shape-selected',
     'color-selected',
     'insert-kit',
+    'request-plot',
   ],
   data() {
     return {
@@ -336,10 +340,14 @@ export default {
       if (!rail?.isConnected) return;
 
       // Measure the full vertical rail before applying the fallback.
-      rail.classList.remove('tools-compact');
+      rail.classList.remove('tools-compact', 'tools-dense');
       const viewControls = document.querySelector('.zoom-panel');
       const availableBottom = viewControls?.getBoundingClientRect().top ?? window.innerHeight - 12;
-      const fullBottom = rail.getBoundingClientRect().bottom;
+      let fullBottom = rail.getBoundingClientRect().bottom;
+      if (fullBottom > availableBottom - 8 && window.matchMedia('(pointer: fine)').matches) {
+        rail.classList.add('tools-dense');
+        fullBottom = rail.getBoundingClientRect().bottom;
+      }
       const compact = fullBottom > availableBottom - 8;
       rail.classList.toggle('tools-compact', compact);
       if (compact) {
@@ -446,7 +454,7 @@ export default {
   cursor: pointer;
   padding: 8px 12px;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .tool-button--shortcut {
@@ -484,6 +492,13 @@ export default {
 /* Selected hints stay dimmer than their icons but legible on the dark highlight. */
 #app[data-theme="dark"] .tool-button.selected .tool-shortcut-hint {
   color: var(--text-secondary);
+}
+
+/* A desktop density step fits the extra Graph action before hiding tools.
+   Coarse pointers keep their incumbent hit targets. */
+@media (pointer: fine) and (max-height: 700px) {
+  .left-chrome.tools-dense .tools-panel { gap: 2px; padding-block: 6px; }
+  .left-chrome.tools-dense .tool-button { padding-block: 6px; }
 }
 
 /* Keep the original compact targets when hints would crowd the rail. */

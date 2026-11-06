@@ -1,8 +1,9 @@
-# F039 G1 plotting spike
+# Editable function plots
 
-This directory is an isolated Phase A/B prototype. It is not imported by the
-application. There is no Fabric renderer, persistent plot type, editor or MCP API.
-Review the G1 findings before adopting this contract.
+The Graph toolbar action opens the lazy `PlotModal` editor. It previews LaTeX,
+axis ranges, axes/grid and curve color, then awaits an atomic board commit.
+Double-click a plot or use Edit graph to change it. Board zoom leaves its math
+window unchanged. Plot authoring through MCP is a separate increment.
 
 - `parsePlotExpression(latex)` preserves `latex`, returns `normalizedLatex`,
   diagnostic `mathJson`, `evaluate(x)` and internal continuity guard values.
@@ -41,9 +42,10 @@ Default sampling: 64 initial intervals, 10 subdivision levels, 16385 evaluations
 and 16385 output points. Hard maxima: 1024 intervals, depth 12, 32769 evaluations
 and points. Tolerance is midpoint error divided by fixed mathematical y-span
 (default 0.001), independent of board zoom. Finite ordered bounds are within
-+/-1e12. Frames have positive finite dimensions <=16384 with representable scales.
++/-1e12. The mathematical transform accepts positive finite dimensions <=16384; persisted
+plot frames are restricted to 80..2048 with representable scales.
 Typed `PlotError.code` distinguishes invalid/unsupported expression, invalid
-domain, computation limit and evaluator failure. The public contract is provisional.
+domain, computation limit and evaluator failure. The plot schema also fixes syntax to latex-v1 and validates axes/grid/color.
 
 ## Known limitations
 
@@ -54,10 +56,22 @@ tangent cosine and sqrt/log/power domain factors; they may split continuous
 curves too. Unresolved intervals remain gaps, never guessed chords. Samples
 retain mathematical y values outside the window; rendering must clip them.
 
-Parsing remains synchronous. The diagnostic worker proves module loading,
-evaluation and termination, not a hard deadline/cancellation design or UI
-responsiveness. Production integration needs an explicit loading/worker decision:
-the full Cortex dependency has substantial standalone bundle cost.
+`computePlotAsync` owns a module Worker for each browser request. Cancelling a
+preview terminates its worker; a 10-second deadline terminates unfinished work.
+Parsing is synchronous within that worker. The full Cortex dependency remains a
+large lazy asset; slow-network and low-end-device acceptance remain release checks.
+Node tests use the same computation module directly.
+
+`computePlot` produces clipped paths and isolated points shared by the preview
+and Fabric renderer. `PlotObject` is an atomic registered Fabric Group; clones
+rebuild from semantics. AUTO curve/decorations follow board ink; fixed curve
+colors preserve the curve while decorations continue following board theme.
+The runtime-only plotBoardInk field preserves current theme paint through clone;
+it is deliberately excluded from BoardDocument source semantics.
+
+BoardDocument v2 is emitted only for scenes containing plots, including grouped
+plots; the reader still accepts v1 scenes. Stamp v1 rejects plot sharing explicitly.
+See [ADR 0012](../../docs/adr/0012-semantic-plots-and-document-v2.md).
 
 Run `node --test tests/plot*.test.js` for the mathematical corpus,
 `node --disallow-code-generation-from-strings --test tests/plot*.test.js` for the

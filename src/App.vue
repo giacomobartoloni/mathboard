@@ -31,7 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       <span class="logo">MathBoard</span>
       <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
         aria-label="Open Board library" title="Open Board library"
-        :aria-expanded="isLibrarySidebarOpen" aria-haspopup="dialog" :inert="librarySidebarMode === 'overlay'" @click="openBoardLibrary">
+        :aria-expanded="isLibrarySidebarOpen" aria-haspopup="dialog" :inert="librarySidebarMode === 'overlay' || showPlotModal" @click="openBoardLibrary">
         <!-- Lucide Library Big icon, ISC license: https://lucide.dev/icons/library-big -->
         <svg class="board-library-trigger-icon" width="20" height="20" viewBox="0 0 24 24"
           fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -45,7 +45,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || librarySidebarMode === 'overlay'">
+    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || librarySidebarMode === 'overlay' || showPlotModal">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
@@ -54,10 +54,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         :sidebar-pinned="librarySidebarMode === 'pinned'"
         :board-theme="boardTheme"
         :selected-color="selectedColor"
-        :selection-panel-suspended="showFormulaModal || showShareStampModal"
+        :selection-panel-suspended="showPlotModal || showFormulaModal || showShareStampModal"
         ref="drawBoardRef"
         @request-formula="onRequestFormula"
         @edit-formula="onEditFormula"
+        @edit-plot="onEditPlot"
         @text-editing-completed="onTextEditingCompleted"
         @shape-drawing-completed="onShapeDrawingCompleted"
         @zoom-changed="updateZoomLevel"
@@ -76,6 +77,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         @shape-selected="onShapeSelected"
         @color-selected="onColorSelected"
         @insert-kit="onInsertKit"
+        @request-plot="onOpenPlot"
       />
 
     </div>
@@ -111,6 +113,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @assist-used="onFormulaAssistUsed"
     />
 
+    <PlotModal v-if="showPlotModal" :initial-spec="editingPlotSpec" :busy="plotBusy" :commit-error="plotError"
+      @close="closePlotModal" @submit-plot="onSubmitPlot" />
     <ShareStampModal
       v-if="showShareStampModal"
       :isVisible="showShareStampModal"
@@ -121,7 +125,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     />
     
     <ZoomPanel 
-      :inert="librarySidebarMode === 'overlay'"
+      :inert="librarySidebarMode === 'overlay' || showPlotModal"
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
       :is-fullscreen="isFullscreen"
@@ -135,7 +139,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @toggle-fullscreen="toggleFullscreen"
     />
     
-    <SupportPanel class="secondary-chrome" :inert="librarySidebarMode === 'overlay'" />
+    <SupportPanel class="secondary-chrome" :inert="librarySidebarMode === 'overlay' || showPlotModal" />
     
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
@@ -148,6 +152,7 @@ import LibrarySidebar from './components/LibrarySidebar.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 // Deferred until opened: FormulaModal brings the KaTeX preview renderer.
 const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
+const PlotModal = defineAsyncComponent(() => import('./components/PlotModal.vue'))
 const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
@@ -211,6 +216,7 @@ export default {
     LibrarySidebar,
     ToolsPanel,
     FormulaModal,
+    PlotModal,
     ShareStampModal,
     SupportPanel,
     ZoomPanel,
@@ -254,6 +260,36 @@ export default {
     const selectedShape = ref('rectangle')
     const drawBoardRef = ref(null)
     const fullscreenRootRef = ref(null)
+    const showPlotModal = ref(false), editingPlotSpec = ref(null), editingPlotId = ref(null)
+    const plotBusy = ref(false), plotError = ref('')
+    let plotReturnFocus = null
+    const closePlotModal = async () => {
+      if (plotBusy.value) return
+      showPlotModal.value = false
+      await nextTick()
+      const target = plotReturnFocus?.isConnected && plotReturnFocus.matches('button,a[href],input,textarea,select,[tabindex]') ? plotReturnFocus : document.querySelector('button[aria-label="Graph"]')
+      target?.focus()
+    }
+    const onOpenPlot = () => {
+      plotReturnFocus = document.activeElement
+      editingPlotSpec.value = null; editingPlotId.value = null; plotError.value = ''
+      selectedTool.value = 'select'; showPlotModal.value = true
+    }
+    const onEditPlot = ({spec,id}) => {
+      plotReturnFocus = document.activeElement
+      editingPlotSpec.value = spec; editingPlotId.value = id; plotError.value = ''
+      showPlotModal.value = true
+    }
+    const onSubmitPlot = async (spec) => {
+      plotBusy.value = true; plotError.value = ''
+      try {
+        await drawBoardRef.value.savePlot(spec, editingPlotId.value)
+        plotBusy.value = false
+        selectedTool.value = 'select'
+        await closePlotModal()
+      } catch(error) { plotError.value = error.cause?.message || error.message || 'Could not save this graph. Please try again.' }
+      finally { plotBusy.value = false }
+    }
     const showFormulaModal = ref(false)
     const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
     const showShareStampModal = ref(false)
@@ -542,6 +578,7 @@ export default {
 
     const onKeyDown = (event) => {
       if (!boardSessionReady.value) return
+      if (showPlotModal.value) return
       if (isEscapeShortcut(event)) {
         // The browser uses Escape to leave fullscreen. Do not cancel that.
         if (document.fullscreenElement) return
@@ -821,6 +858,7 @@ export default {
       selectedShape,
       drawBoardRef,
       fullscreenRootRef,
+      showPlotModal, editingPlotSpec, plotBusy, plotError, onOpenPlot, onEditPlot, onSubmitPlot, closePlotModal,
       showFormulaModal,
       formulaModalMode,
       showShareStampModal,

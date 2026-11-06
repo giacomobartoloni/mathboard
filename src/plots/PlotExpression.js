@@ -19,13 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { ComputeEngine } from '@cortex-js/compute-engine'
 
-export class PlotError extends Error {
-  constructor(code, message) {
-    super(message)
-    this.name = 'PlotError'
-    this.code = code
-  }
-}
+import { PlotError } from './PlotError.js'
+export { PlotError } from './PlotError.js'
 
 const fail = (code, message) => { throw new PlotError(code, message) }
 let engine

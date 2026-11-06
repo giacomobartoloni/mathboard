@@ -47,7 +47,9 @@ test('desktop hints preserve accessible names, tab order and board state', async
   }
   await expect(page.getByRole('button', { name: 'Stamps', exact: true }).locator('span')).toHaveCount(0)
   await page.getByRole('button', { name: 'Select', exact: true }).focus()
-  for (const [name] of tools.slice(1)) {
+  const keyboardTools = tools.map(([name]) => name)
+  keyboardTools.splice(keyboardTools.indexOf('Shapes'), 0, 'Graph')
+  for (const name of keyboardTools.slice(1)) {
     await page.keyboard.press('Tab')
     await expect(page.getByRole('button', { name, exact: true })).toBeFocused()
   }

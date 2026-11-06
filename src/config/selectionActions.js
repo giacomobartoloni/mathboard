@@ -58,7 +58,7 @@ export function selectionKind(object) {
 
 export function selectionActions(kind) {
   if (!kind) return []
-  if (kind === 'formula') return [ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE]
+  if (kind === 'formula' || kind === 'plot') return [ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE]
   if (kind === 'activeSelection') return [ACTION_GROUP, ACTION_DUPLICATE, ACTION_DELETE]
   if (kind === 'group') return [ACTION_UNGROUP, ACTION_DUPLICATE, ACTION_DELETE]
   return [ACTION_DUPLICATE, ACTION_DELETE]
