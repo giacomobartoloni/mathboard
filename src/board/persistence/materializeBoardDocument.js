@@ -57,6 +57,7 @@ export async function materializeBoardDocument(rawDoc, options = {}) {
   try {
     const objects = await materializeBoardObjects(doc.objects, {
       buildFormula,
+      buildPlot: options.buildPlot,
       restoreIds: true,
       beforeNode: options.beforeNode,
     })

@@ -43,7 +43,7 @@ function findNode(nodes, id) {
 
 /** Canvas-bound local application API. Mutations commit through the injected history boundary. */
 export class BoardController {
-  constructor({ getCanvas, boardObjectPolicy, buildFormula, pushHistoryCommand,
+  constructor({ getCanvas, boardObjectPolicy, buildFormula, buildPlot, pushHistoryCommand,
     runWithoutHistory = (fn) => fn(), prepareCreatedObject = () => {},
     afterMutation = () => {}, prepareUpdatedObject = () => {}, getBoardId = () => null, isMutationStable,
     onCommittedOperation = () => {}, lifecycle = null,
@@ -53,6 +53,7 @@ export class BoardController {
     this._getCanvas = getCanvas
     this._policy = boardObjectPolicy
     this._buildFormula = buildFormula
+    this._buildPlot = buildPlot
     this._pushHistoryCommand = pushHistoryCommand
     this._runWithoutHistory = runWithoutHistory
     this._prepareCreatedObject = prepareCreatedObject
@@ -95,6 +96,7 @@ export class BoardController {
     try {
       return await materializeBoardObjects(specs, {
         restoreIds: false,
+        buildPlot: this._buildPlot,
         beforeNode: () => this._commitGuard(),
         buildFormula: async (spec) => {
           try {
@@ -109,7 +111,8 @@ export class BoardController {
       })
     } catch (cause) {
       if (cause instanceof BoardControllerError) throw cause
-      if (['command_timeout', 'board_context_changed', 'board_busy'].includes(cause?.code)) throw cause
+      if (['command_timeout', 'board_context_changed', 'board_busy'].includes(cause?.code)
+        || cause?.code?.startsWith?.('plot_')) throw cause
       throw new BoardControllerError(C.INVALID_SPEC, 'Cannot materialize object spec.', { cause })
     }
   }

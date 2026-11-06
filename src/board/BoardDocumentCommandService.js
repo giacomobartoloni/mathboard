@@ -69,7 +69,7 @@ export class BoardDocumentCommandService {
     getActiveController, getActiveRevision = () => null,
     getActiveChangeVersion = () => null, getActiveCommitSequence = () => null,
     flushActiveThrough = async () => {},
-    buildFormula, createCanvas = defaultCanvas,
+    buildFormula, plotRenderCoordinator, createCanvas = defaultCanvas,
     prepareCreatedObject = () => {}, prepareUpdatedObject = () => {},
     onCommittedOperation = () => {}, now = () => new Date().toISOString() }) {
     this._repository = repository
@@ -82,6 +82,7 @@ export class BoardDocumentCommandService {
     this._getActiveCommitSequence = getActiveCommitSequence
     this._flushActiveThrough = flushActiveThrough
     this._buildFormula = buildFormula
+    this._plotRenderCoordinator = plotRenderCoordinator
     this._createCanvas = createCanvas
     this._prepareCreatedObject = prepareCreatedObject
     this._prepareUpdatedObject = prepareUpdatedObject
@@ -164,6 +165,7 @@ export class BoardDocumentCommandService {
       }
     }
     guard()
+    const buildPlot = this._plotRenderCoordinator?.forRequest({ signal: context.signal, expiresAtMs, guard })
     const record = await this._repository.get(boardId)
     guard()
     if (!record?.document) throw new BoardTargetError('board_not_found')
@@ -177,7 +179,7 @@ export class BoardDocumentCommandService {
       const beforeVersion = waitForPersistence ? this._getActiveChangeVersion() : null
       const beforeCommit = waitForPersistence ? this._getActiveCommitSequence() : null
       const result = await executeDesktopBoardCommand(this._getActiveController(guard,
-        spec => this._renderFormula(spec, guard, context, expiresAtMs), interactionChannel), request,
+        spec => this._renderFormula(spec, guard, context, expiresAtMs), interactionChannel, buildPlot), request,
         context.capture)
       if (waitForPersistence) {
         try {
@@ -213,6 +215,7 @@ export class BoardDocumentCommandService {
     try {
       const materialized = await materializeBoardDocument(record.document, {
         buildFormula: spec => this._renderFormula(spec, guard, context, expiresAtMs),
+        buildPlot,
         beforeNode: guard,
       })
       materialized.objects.forEach(object => collectObject(owned, object))
@@ -222,6 +225,7 @@ export class BoardDocumentCommandService {
         getCanvas: () => canvas,
         boardObjectPolicy: this._policy,
         buildFormula: spec => this._renderFormula(spec, guard, context, expiresAtMs),
+        buildPlot,
         pushHistoryCommand: commandEntry => { history.push(commandEntry); return true },
         prepareCreatedObject: this._prepareCreatedObject,
         prepareUpdatedObject: this._prepareUpdatedObject,

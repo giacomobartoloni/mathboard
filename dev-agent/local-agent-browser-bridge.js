@@ -34,20 +34,48 @@ export function installLocalAgentBrowserBridge(getBoard, capture) {
   let reportedPostFailure = false
 
   let commandQueue = Promise.resolve()
+  let replaced = false
+  const active = new Map()
+  const cancelled = new Set()
+  const onCancel = (event) => {
+    const { id } = JSON.parse(event.data)
+    cancelled.add(id)
+    if (cancelled.size > 256) cancelled.delete(cancelled.values().next().value)
+    active.get(id)?.abort()
+  }
   const dispatchCommand = async (event) => {
     const command = JSON.parse(event.data)
+    if (replaced || cancelled.has(command.id)) return
+    const owner = new AbortController()
+    active.set(command.id, owner)
     let payload
 
     try {
       const board = getBoard?.()
       if (!board) throw new Error('DrawBoard is not available.')
+      const guard = () => {
+        if (replaced || cancelled.has(command.id) || owner.signal.aborted
+          || Date.now() >= command.expiresAtMs || getBoard?.() !== board) {
+          throw Object.assign(new Error('The local agent request timed out.'), { code: 'command_timeout' })
+        }
+      }
+      guard()
       const finish = localAgentMethodMutatesBoard(command.method) ? capture.beginMutation() : () => {}
       let result
-      try {result=await executeLocalAgentCommand(board.getBoardController(), command, capture, board.getBoardWorkspace())} finally {finish()}
+      try {
+        const controller = board.getBoardController({
+          signal: owner.signal, expiresAtMs: command.expiresAtMs, guard,
+        })
+        result = await executeLocalAgentCommand(controller, command, capture, board.getBoardWorkspace())
+      } finally { finish() }
+      guard()
       payload = { id: command.id, ok: true, result }
     } catch (error) {
       payload = { id: command.id, ok: false, error: errorPayload(error) }
+    } finally {
+      active.delete(command.id)
     }
+    if (replaced || cancelled.has(command.id)) return
 
     try {
       const response = await fetch('/__mathboard_agent/result', {
@@ -72,12 +100,18 @@ export function installLocalAgentBrowserBridge(getBoard, capture) {
     })
   }
 
-  const onReplaced = () => events.close()
+  const onReplaced = () => {
+    replaced = true
+    for (const owner of active.values()) owner.abort()
+    events.close()
+  }
   events.addEventListener('command', onCommand)
+  events.addEventListener('cancel', onCancel)
   events.addEventListener('replaced', onReplaced)
   return () => {
+    onReplaced()
     events.removeEventListener('command', onCommand)
+    events.removeEventListener('cancel', onCancel)
     events.removeEventListener('replaced', onReplaced)
-    events.close()
   }
 }

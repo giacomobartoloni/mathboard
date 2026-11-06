@@ -167,8 +167,9 @@ export async function materializeBoardObject(node, options = {}) {
       break
     }
     case 'plot': {
-      const { buildPlotObject } = await import('../../plots/buildPlotObject.js')
-      object = await buildPlotObject(node)
+      const buildPlot = options.buildPlot
+        || (await import('../../plots/buildPlotObject.js')).buildPlotObject
+      object = await buildPlot(node)
       break
     }
     case 'formula': {
