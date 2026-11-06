@@ -297,10 +297,10 @@ export default {
     }
     const boardLibraryAnalytics = createBoardLibraryAnalytics(trackEvent)
     const isLibrarySidebarOpen = computed(() => librarySidebarMode.value !== 'closed')
-    const canPinLibrarySidebar = ref(window.innerWidth >= 1000)
+    const canPinLibrarySidebar = ref(window.innerWidth >= 920) // 320px sidebar + 600px canvas
     const syncLibrarySidebarPinEligibility = () => {
       librarySidebarViewportWidth.value = window.innerWidth
-      canPinLibrarySidebar.value = window.innerWidth >= 1000
+      canPinLibrarySidebar.value = window.innerWidth >= 920
       if (!canPinLibrarySidebar.value && librarySidebarMode.value === 'pinned') {
         // The focused pin control becomes disabled when docking is unavailable.
         // Capture it before Vue updates the DOM, since browsers may blur it.
