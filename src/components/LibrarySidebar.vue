@@ -34,7 +34,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <div class="board-library-heading-copy">
           <h2 id="board-library-heading">Board library</h2>
         </div>
-        <button ref="closeButton" class="board-library-icon-button" type="button" :disabled="busy"
+        <button ref="closeButton" class="board-library-icon-button library-sidebar-close-button" type="button" :disabled="busy"
           aria-label="Close board library" @click="$emit('close', 'close_button')">
           <font-awesome-icon :icon="['fas', 'xmark']" aria-hidden="true" />
         </button>
