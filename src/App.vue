@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
-    :class="{ 'board-library-pinned': boardLibraryMode === 'pinned', 'board-library-dialog-open': showFormulaModal || showShareStampModal }"
+    :class="{ 'board-library-pinned': boardLibraryMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal }"
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
@@ -78,7 +78,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     </div>
     <Transition name="board-library" @after-leave="restoreBoardLibraryFocus">
-      <BoardLibraryModal v-if="showBoardLibrary" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
+      <BoardLibrarySidebar v-if="showBoardLibrary" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="boardLibraryMode === 'pinned'" :can-pin="canPinBoardLibrary"
         @toggle-pin="toggleBoardLibraryPin" @close="closeBoardLibrary" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
@@ -140,7 +140,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
-import BoardLibraryModal from './components/BoardLibraryModal.vue'
+import BoardLibrarySidebar from './components/BoardLibrarySidebar.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 // Deferred until opened: FormulaModal brings the KaTeX preview renderer.
 const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
@@ -203,7 +203,7 @@ export default {
   name: 'App',
   components: {
     DrawBoard,
-    BoardLibraryModal,
+    BoardLibrarySidebar,
     ToolsPanel,
     FormulaModal,
     ShareStampModal,
@@ -296,8 +296,8 @@ export default {
         void nextTick(() => {
           if (boardLibraryMode.value !== 'overlay') return
           const focused = document.activeElement
-          if (pinHadFocus || !focused?.closest?.('.board-library-panel') || focused?.matches?.(':disabled')) {
-            document.querySelector('.board-library-panel [aria-label="Close board library"]')?.focus()
+          if (pinHadFocus || !focused?.closest?.('.board-library-sidebar') || focused?.matches?.(':disabled')) {
+            document.querySelector('.board-library-sidebar [aria-label="Close board library"]')?.focus()
           }
         })
       }
@@ -502,12 +502,12 @@ export default {
           const disconnect = await connectDesktopWindow({
             onUndo: () => {
               if (boardSessionReady.value && boardLibraryMode.value !== 'overlay'
-                && !document.activeElement?.closest?.('.board-library-panel')
+                && !document.activeElement?.closest?.('.board-library-sidebar')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
             },
             onRedo: () => {
               if (boardSessionReady.value && boardLibraryMode.value !== 'overlay'
-                && !document.activeElement?.closest?.('.board-library-panel')
+                && !document.activeElement?.closest?.('.board-library-sidebar')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
             },
             onFullscreenChange: setFullscreenState,
@@ -638,7 +638,7 @@ export default {
           return
         }
         if (boardLibraryMode.value === 'overlay'
-          || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-panel'))) {
+          || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-sidebar'))) {
           closeBoardLibrary('escape')
           event.preventDefault()
           return
@@ -658,7 +658,7 @@ export default {
         showFormulaModal.value
         || showShareStampModal.value
         || boardLibraryMode.value === 'overlay'
-        || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-panel'))
+        || (boardLibraryMode.value === 'pinned' && event.target?.closest?.('.board-library-sidebar'))
         || shouldIgnoreGlobalShortcut(event)
         || drawBoardRef.value?.isTextEditing()
       ) return
@@ -1099,7 +1099,7 @@ body {
 #app.board-library-pinned .support-panel { right: calc(var(--board-library-width) + 12px); }
 #app.board-library-pinned .copyright { display: none; }
 /* Editing dialogs must remain above an open pinned sidebar. */
-#app.board-library-dialog-open .board-library-overlay.is-pinned { z-index: 500; }
+#app.foreground-dialog-open .board-library-layer.is-pinned { z-index: 500; }
 
 .copyright {
   position: absolute;
