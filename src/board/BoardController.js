@@ -241,8 +241,12 @@ export class BoardController {
     const hasPaint = 'fill' in patch || 'stroke' in patch
     if (hasPaint && !('mathboardInkMode' in patch)) patch.mathboardInkMode = 'fixed'
     if (this._policy.isPlot(object)) {
-      const merged = {...this._read(object), ...patch}
-      validateCreateSpec(merged)
+      const merged = { ...this._read(object), ...patch }
+      try { validateCreateSpec(merged) }
+      catch (cause) {
+        if (cause?.code !== C.INVALID_SPEC) throw cause
+        throw new BoardControllerError(C.INVALID_PATCH, 'Invalid plot update.', { cause })
+      }
       return this._replaceFormula(canvas, object, patch, options)
     }
     if (this._policy.isFormula(object)) {

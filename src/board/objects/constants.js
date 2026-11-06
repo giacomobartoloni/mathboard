@@ -28,10 +28,11 @@ export const BOARD_OBJECT_TYPES = Object.freeze([
   'text',
   'formula',
   'group',
+  'plot',
 ])
 
-// Plot authoring is UI-only until the separate agent/API increment.
-export const BOARD_SEMANTIC_TYPES = Object.freeze([...BOARD_OBJECT_TYPES, 'plot'])
+// Public and persisted semantic object types share the same canonical inventory.
+export const BOARD_SEMANTIC_TYPES = BOARD_OBJECT_TYPES
 
 export const TRANSFORM_KEYS = Object.freeze([
   'left',
