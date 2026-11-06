@@ -441,7 +441,7 @@ test('compact sidebar moves Rename and Archive into the existing menu at actual 
   await expect(archivedMore).toBeFocused()
 
   // Expanding restores the existing direct actions and Delete-only menu.
-  await sidebar.getByRole('button', { name: 'Recent (1)' }).click()
+  await sidebar.getByRole('button', { name: /^Recent \(/ }).click()
   await resize.focus()
   await page.keyboard.press('End')
   await expect(resize).toHaveAttribute('aria-valuenow', '560')
