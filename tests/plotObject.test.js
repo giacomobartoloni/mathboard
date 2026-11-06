@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Group } from 'fabric'
+import { BOARD_THEMES } from '../src/config/themes.js'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js'
 import { buildPlotObject } from '../src/plots/buildPlotObject.js'
@@ -84,10 +85,10 @@ test('plot schema bounds and flags reject malformed inputs without heavy parsing
   ])
     assert.throws(() => validatePlotSpec(spec))
 })
-test('plot ink follows AUTO without painting the transparent frame', async () => {
+test('plot ink follows AUTO without repainting the opaque surface', async () => {
   const object = await buildPlotObject(plot)
   object.applyInk('#ffffff')
-  assert.equal(object.getObjects()[0].fill, null)
+  assert.equal(object.getObjects()[0].fill, '#f9f9f9')
   assert.ok(
     object
       .getObjects()
@@ -148,4 +149,41 @@ test('Fabric frame and sampled geometry share the same local origin and dimensio
  const object=await buildPlotObject({...plot,frame:{width:480,height:320}})
  assert.ok(object.width>=480&&object.width<=483,`Unexpected width ${object.width}`)
  assert.ok(object.height>=320&&object.height<=323,`Unexpected height ${object.height}`)
+})
+
+
+test('graph surface stays opaque with mathematical grid enabled or disabled', async () => {
+  for (const grid of [true, false]) {
+    const object = await buildPlotObject({ ...plot, grid })
+    const surface = object.getObjects()[0]
+    assert.equal(surface.fill, '#f9f9f9')
+    assert.equal(surface.opacity, 1)
+    assert.equal(surface.stroke, null)
+  }
+})
+
+test('theme updates change the graph surface independently of a fixed curve color', async () => {
+  const object = await buildPlotObject({ ...plot, color: '#2563eb' })
+  for (const [name, background] of [['dark','#1e1e22'],['chalkboard','#244a3b'],['light','#f9f9f9']]) {
+    object.applyTheme(BOARD_THEMES[name])
+    assert.equal(object.getObjects()[0].fill, background)
+    assert.equal(object.getObjects()[0].opacity, 1)
+    assert.ok(object.getObjects().filter(o => o.plotCurve).every(o => o.stroke === '#2563eb' || o.fill === '#2563eb'))
+  }
+})
+
+test('standalone and grouped graph clones retain the current opaque theme surface', async () => {
+  const object = await buildPlotObject(plot)
+  object.applyTheme(BOARD_THEMES.chalkboard)
+  for (const source of [object, new Group([object])]) {
+    const clone = await source.clone()
+    const graph = clone.objectKind === 'plot' ? clone : clone.getObjects()[0]
+    assert.equal(graph.getObjects()[0].fill, '#244a3b')
+    assert.equal(graph.getObjects()[0].opacity, 1)
+  }
+  const semantic = readSemanticBoardObject(object)
+  assert.equal('plotBoardBackground' in semantic, false)
+  const restored = await buildPlotObject(semantic)
+  restored.applyTheme(BOARD_THEMES.dark)
+  assert.equal(restored.getObjects()[0].fill, '#1e1e22')
 })

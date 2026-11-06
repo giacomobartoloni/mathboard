@@ -257,7 +257,11 @@ export default {
         boardObjectPolicy: this._boardObjectPolicy,
         getCanvas: () => this.canvas,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
-        resetHistory: () => this._resetHistory(),
+        resetHistory: () => {
+          this._resetHistory();
+          // Loaded AUTO ink and graph surfaces belong to the destination board theme.
+          this.syncAutoInk(this.boardThemeConfig);
+        },
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
         onActiveBoardChanged: (board) => this.$emit('active-board-changed', board),
@@ -417,7 +421,7 @@ export default {
      */
     _syncObjectAutoInk(object, config) {
       if (!object) return;
-      if (this._boardObjectPolicy.isPlot(object)) { object.applyInk(config.defaultInk); return; }
+      if (this._boardObjectPolicy.isPlot(object)) { object.applyTheme(config); return; }
       if (object.mathboardInkMode !== INK_MODE_AUTO) return;
       if (this._boardObjectPolicy.isFormula(object)) {
         this._formulaRenderer.syncInk(object, config);
@@ -839,7 +843,7 @@ export default {
         if (!object) return;
 
         if (this._boardObjectPolicy.isPlot(object)) {
-          object.applyInk(ink);
+          object.applyTheme(this.boardThemeConfig);
           return;
         }
         if (this._boardObjectPolicy.isFormula(object)) {

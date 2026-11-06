@@ -157,3 +157,46 @@ for (const [theme, width, height] of [
     await page.screenshot({ path: testInfo.outputPath(`graph-board-${theme}.png`) })
   })
 }
+
+
+for (const [theme, background, cssColor] of [
+  ['light', '#f9f9f9', 'rgb(249, 249, 249)'],
+  ['dark', '#1e1e22', 'rgb(30, 30, 34)'],
+  ['chalkboard', '#244a3b', 'rgb(36, 74, 59)']
+]) {
+  for (const grid of [true, false]) {
+    test(`opaque graph surface ${theme}, grid ${grid}`, async ({ page }, testInfo) => {
+      await gotoBoard(page, '/', { boardTheme: theme })
+      await openGraph(page)
+      if (!grid) await page.getByLabel('Grid', { exact: true }).uncheck()
+      await expect(page.getByRole('button', { name: 'Insert graph', exact: true })).toBeEnabled({ timeout: 20000 })
+      await expect(page.getByRole('img', { name: 'Graph of x^2-5x+6' }).locator('..')).toHaveCSS('background-color', cssColor)
+      await page.getByRole('button', { name: 'Insert graph', exact: true }).click()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+      const state = await waitForState(page, s => s.objects.some(o => o.objectKind === 'plot'))
+      expect(state.objects[0].plotBackground).toEqual({ fill: background, opacity: 1 })
+      expect(state.objects[0].plotSpec.grid).toBe(grid)
+      await page.screenshot({ path: testInfo.outputPath(`opaque-${theme}-${grid}.png`) })
+    })
+  }
+}
+
+test('opaque graph follows live themes, duplication and reload without an internal grid', async ({ page }) => {
+  // The fixture reapplies its seeded theme on reload; finish the cycle on that theme.
+  await gotoBoard(page, '/', { boardTheme: 'chalkboard' })
+  await openGraph(page)
+  await page.getByLabel('Grid', { exact: true }).uncheck()
+  await expect(page.getByRole('button', { name: 'Insert graph', exact: true })).toBeEnabled({ timeout: 20000 })
+  await page.getByRole('button', { name: 'Insert graph', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  for (const [name, color] of [['Chalkboard','#f9f9f9'],['Light','#1e1e22'],['Dark','#244a3b']]) {
+    await page.getByRole('button', { name: new RegExp('Theme: '+name) }).click()
+    await waitForState(page, s => s.objects[0]?.plotBackground?.fill === color)
+  }
+  await page.getByRole('button', { name: 'Duplicate', exact: true }).click()
+  await waitForState(page, s => s.objects.length === 2 && s.objects.every(o => o.plotBackground?.fill === '#244a3b'))
+  await expect.poll(async () => (await getBoardState(page)).persistence.state).toBe('clean')
+  await page.reload()
+  const restored = await waitForState(page, s => s.objects.length === 2)
+  expect(restored.objects.every(o => o.plotBackground?.fill === '#244a3b' && o.plotBackground.opacity === 1 && o.plotSpec.grid === false)).toBe(true)
+})

@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { Rect, Path, Text, Circle } from 'fabric'
+import { BOARD_THEMES } from '../config/themes.js'
 import { PlotObject } from './PlotObject.js'
 import { computePlotAsync } from './PlotComputation.js'
 import { plotSemanticProps } from './plotSpec.js'
@@ -25,12 +26,15 @@ import { TRANSFORM_KEYS } from '../board/objects/constants.js'
 export async function buildPlotObject(spec, options = {}) {
   const data = await computePlotAsync(spec, options)
   const ink = spec.plotBoardInk || '#333333'
+  const background = spec.plotBoardBackground || BOARD_THEMES.light.background
   const color = spec.color && spec.color !== 'auto' ? spec.color : ink,
     width = spec.frame.width,
     height = spec.frame.height
-  const objects = [
-    new Rect({ left: 0, top: 0, originX: 'left', originY: 'top', width, height, fill: null, stroke: null, strokeWidth: 0 })
-  ]
+  // The surface masks the board grid; only the graph's mathematical grid is drawn above it.
+  const surface = new Rect({ left: 0, top: 0, originX: 'left', originY: 'top', width, height,
+    fill: background, opacity: 1, stroke: null, strokeWidth: 0 })
+  surface.plotBackground = true
+  const objects = [surface]
   const path = (d, opacity, strokeWidth, stroke = ink) =>
     new Path(d, { fill: null, stroke, strokeWidth, opacity, strokeUniform: true })
   if (data.grid.length) objects.push(path(data.grid.join(' '), 0.14, 1))
@@ -90,6 +94,7 @@ export async function buildPlotObject(spec, options = {}) {
     ...transform,
     plotSpec: plotSemanticProps(spec),
     plotBoardInk: ink,
+    plotBoardBackground: background,
     mathboardInkMode: spec.color && spec.color !== 'auto' ? 'fixed' : 'auto'
   })
   object.plotStatus = data.status

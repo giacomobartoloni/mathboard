@@ -27,11 +27,13 @@ export class PlotObject extends Group {
     this.plotSpec = plotSemanticProps(plotSpec)
     this.mathboardInkMode = options.mathboardInkMode || 'auto'
     this.plotBoardInk = options.plotBoardInk || '#333333'
+    this.plotBoardBackground = options.plotBoardBackground
     this.getObjects().forEach((o) => o.set({ selectable: false, evented: false }))
   }
   applyInk(color) {
     this.plotBoardInk = color
     this.getObjects().forEach((o) => {
+      if (o.plotBackground) return
       if (o.plotCurve && this.plotSpec.color !== 'auto') return
       const patch = {}
       if (o.stroke && o.stroke !== 'transparent') patch.stroke = color
@@ -41,8 +43,18 @@ export class PlotObject extends Group {
     })
     this.dirty = true
   }
+  applyTheme(config) {
+    this.applyInk(config.defaultInk)
+    this.plotBoardBackground = config.background
+    const surface = this.getObjects().find(o => o.plotBackground)
+    if (surface) {
+      surface.set({ fill: config.background, opacity: 1 })
+      surface.dirty = true
+    }
+    this.dirty = true
+  }
   toObject(props = []) {
-    return super.toObject([...props, 'objectKind', 'plotSpec', 'mathboardInkMode', 'plotBoardInk'])
+    return super.toObject([...props, 'objectKind', 'plotSpec', 'mathboardInkMode', 'plotBoardInk', 'plotBoardBackground'])
   }
   static async fromObject(serialized) {
     const { buildPlotObject } = await import('./buildPlotObject.js')

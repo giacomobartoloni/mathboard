@@ -66,8 +66,12 @@ Node tests use the same computation module directly.
 and Fabric renderer. `PlotObject` is an atomic registered Fabric Group; clones
 rebuild from semantics. AUTO curve/decorations follow board ink; fixed curve
 colors preserve the curve while decorations continue following board theme.
-The runtime-only plotBoardInk field preserves current theme paint through clone;
-it is deliberately excluded from BoardDocument source semantics.
+A solid surface in the board background color masks the underlying board grid,
+even when the graph grid is disabled. `applyTheme` updates this surface separately
+from ink; preview and board use the same theme colors.
+The runtime-only plotBoardInk and plotBoardBackground fields preserve theme
+presentation through clone; both are excluded from BoardDocument source semantics
+and derived again from the destination board theme on reload.
 
 BoardDocument v2 is emitted only for scenes containing plots, including grouped
 plots; the reader still accepts v1 scenes. Stamp v1 rejects plot sharing explicitly.

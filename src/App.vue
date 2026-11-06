@@ -113,7 +113,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @assist-used="onFormulaAssistUsed"
     />
 
-    <PlotModal v-if="showPlotModal" :initial-spec="editingPlotSpec" :busy="plotBusy" :commit-error="plotError"
+    <PlotModal v-if="showPlotModal" :board-theme="boardTheme" :initial-spec="editingPlotSpec" :busy="plotBusy" :commit-error="plotError"
       @close="closePlotModal" @submit-plot="onSubmitPlot" />
     <ShareStampModal
       v-if="showShareStampModal"

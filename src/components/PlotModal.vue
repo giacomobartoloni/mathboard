@@ -99,7 +99,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
             <span class="plot-preview-label">Preview</span>
             <div
               class="plot-preview"
-              :style="{ aspectRatio: form.frame.width + '/' + form.frame.height }"
+              :style="{ aspectRatio: form.frame.width + '/' + form.frame.height, background: graphTheme.background, color: graphTheme.defaultInk }"
             >
               <svg
                 v-if="preview"
@@ -198,12 +198,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
+import { BOARD_THEMES } from '../config/themes.js'
 import { DEFAULT_PLOT } from '../plots/plotSpec.js'
 import { computePlotAsync } from '../plots/PlotComputation.js'
 
 export default {
   name: 'PlotModal',
   props: {
+    boardTheme: { type: String, default: 'light' },
     initialSpec: { type: Object, default: null },
     busy: Boolean,
     commitError: { type: String, default: '' }
@@ -224,6 +226,7 @@ export default {
     }
   },
   computed: {
+    graphTheme() { return BOARD_THEMES[this.boardTheme] || BOARD_THEMES.light },
     formulaHtml() {
       try {
         return katex.renderToString(this.form.latex, {
