@@ -160,6 +160,7 @@ export default {
     boardTheme: { type: String, default: "light" },
     selectedColor: { type: String, default: null },
     sessionReady: { type: Boolean, default: true },
+    sidebarPinned: { type: Boolean, default: false },
     selectionPanelSuspended: { type: Boolean, default: false },
   },
   data() {
@@ -201,6 +202,7 @@ export default {
     this._shapeGesture = null;
     this._panGesture = null;
     this._textInsertion = null;
+    this._wasSidebarPinned = false;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._pendingFormulaRenders = 0;
@@ -461,13 +463,25 @@ export default {
       });
     },
     updateCanvasSize() {
-      this.windowWidth = document.documentElement.clientWidth;
-      this.windowHeight = document.documentElement.clientHeight;
+      if (!this.canvas || !this.$refs.boardRoot) return;
+      // Measure the actual drawing viewport; pinning may resize it without window.resize.
+      const { width, height } = this.$refs.boardRoot.getBoundingClientRect();
+      const nextWidth = Math.max(1, Math.round(width));
+      const nextHeight = Math.max(1, Math.round(height));
+      const previousWidth = this.canvas.getWidth();
+      if (previousWidth === nextWidth && this.canvas.getHeight() === nextHeight) return;
+      this.windowWidth = nextWidth;
+      this.windowHeight = nextHeight;
       // Fabric 7 removed setWidth/setHeight; use setDimensions.
-      this.canvas.setDimensions({
-        width: this.windowWidth,
-        height: this.windowHeight
-      });
+      this.canvas.setDimensions({ width: nextWidth, height: nextHeight });
+      if (nextWidth !== previousWidth && (this.sidebarPinned || this._wasSidebarPinned)) {
+        // Keep the same scene point at the horizontal center as the usable
+        // viewport grows/shrinks. Scene objects, zoom and history stay intact.
+        const vpt = this.canvas.viewportTransform.slice();
+        vpt[4] += (nextWidth - previousWidth) / 2;
+        this.canvas.setViewportTransform(vpt);
+      }
+      this._wasSidebarPinned = this.sidebarPinned;
       this.canvas.renderAll();
       this.canvas.calcOffset();
       this.refreshSelectionPanel();
@@ -1461,6 +1475,7 @@ export default {
       delete obj.boardTheme;
       delete obj.selectedColor;
       delete obj.selectionPanelSuspended;
+      delete obj.sidebarPinned;
       Object.keys(obj).forEach((key) => {
         if (obj[key] === undefined) {
           delete obj[key];
@@ -1471,6 +1486,11 @@ export default {
   },
   mounted() {
     this.initializeCanvas();
+    // Layout changes from pin/unpin do not emit a window resize.
+    if (typeof ResizeObserver !== 'undefined') {
+      this._boardResizeObserver = new ResizeObserver(() => this.updateCanvasSize());
+      this._boardResizeObserver.observe(this.$refs.boardRoot);
+    }
     this.$refs.boardRoot.addEventListener('wheel', this.onWheelZoom, { passive: false });
     
     this.$nextTick(() => {
@@ -1489,6 +1509,7 @@ export default {
     this._textInsertion?.dispose();
     this._panGesture?.dispose();
     this.$refs.boardRoot.removeEventListener('wheel', this.onWheelZoom);
+    this._boardResizeObserver?.disconnect();
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);

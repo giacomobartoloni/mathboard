@@ -17,31 +17,55 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <template>
-  <div class="board-library-overlay" @click.self="$emit('close')" @keydown.esc.stop.prevent="onOverlayEscape"
+  <div class="library-sidebar-layer" :class="{ 'is-pinned': pinned }" @click.self="!pinned && $emit('close', 'backdrop')" @keydown.esc.stop.prevent="onOverlayEscape"
     @keydown.tab="trapTab">
-    <section ref="dialogPanel" class="board-library-panel" role="dialog" aria-modal="true"
+    <aside id="library-sidebar-panel" ref="sidebarRef" class="library-sidebar-panel" :role="pinned ? null : 'dialog'" :aria-modal="pinned ? null : 'true'"
       aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
       <header class="board-library-header">
         <span class="board-library-heading-icon" aria-hidden="true">
-          <font-awesome-icon :icon="['fas', 'chalkboard']" />
+          <!-- Same Lucide Library Big icon as the Boards trigger (ISC): https://lucide.dev/icons/library-big -->
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="8" height="18" x="3" y="3" rx="1" />
+            <path d="M7 3v18" />
+            <path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" />
+          </svg>
         </span>
         <div class="board-library-heading-copy">
           <h2 id="board-library-heading">Board library</h2>
         </div>
-        <button ref="closeButton" class="board-library-icon-button" type="button" :disabled="busy"
-          aria-label="Close board library" @click="$emit('close')">
+        <button ref="closeButton" class="board-library-icon-button library-sidebar-close-button" type="button" :disabled="busy"
+          aria-label="Close board library" @click="$emit('close', 'close_button')">
           <font-awesome-icon :icon="['fas', 'xmark']" aria-hidden="true" />
+        </button>
+        <button class="board-library-icon-button library-sidebar-pin-button" type="button"
+          :disabled="busy || (!pinned && !canPin)" :aria-pressed="pinned"
+          :aria-label="pinned ? 'Unpin sidebar' : 'Pin sidebar'"
+          :title="!canPin && !pinned ? 'Pin available on wider screens' : pinned ? 'Unpin sidebar' : 'Pin sidebar'"
+          @click="$emit('toggle-pin')">
+          <font-awesome-icon :icon="['fas', 'thumbtack']" aria-hidden="true" />
         </button>
       </header>
 
       <div class="board-library-search">
+        <button class="board-library-create-button" type="button" :disabled="busy || loading"
+          :aria-label="createLabel" :title="createLabel" @click="createBoard">
+          <font-awesome-icon :icon="['fas', 'plus']" aria-hidden="true" />
+        </button>
         <label for="board-library-search-input">Find or create a board</label>
         <div class="board-library-search-field">
           <input id="board-library-search-input" v-model="boardQuery" type="text" inputmode="search"
-            maxlength="120" autocomplete="off" placeholder="Find or create a board" :disabled="busy || loading">
+            maxlength="120" autocomplete="off" placeholder="Find or create a board" :disabled="busy || loading"
+            @input="onSearchInput">
           <font-awesome-icon :icon="['fas', 'search']" aria-hidden="true" />
         </div>
       </div>
+      <div v-if="resizable" class="library-sidebar-resize-handle" role="separator" tabindex="0"
+        aria-label="Resize library sidebar" aria-orientation="vertical" aria-controls="library-sidebar-panel"
+        :aria-valuenow="width" :aria-valuemin="minWidth" :aria-valuemax="maxWidth"
+        title="Drag or use arrow keys to resize"
+        @pointerdown="startResize" @pointermove="moveResize" @pointerup="stopResize"
+        @pointercancel="stopResize" @keydown="resizeWithKeyboard"></div>
       <p v-if="error" class="board-library-error" role="alert">{{ error }}</p>
 
       <div class="board-library-tabs" role="group" aria-label="Board views">
@@ -79,7 +103,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                 </span>
               </div>
               <div class="board-library-row-actions" role="group" :aria-label="'Actions for ' + board.title">
-                <button :id="'rename-action-' + board.id" type="button" :disabled="busy || showArchived"
+                <button v-if="!isCompact" :id="'rename-action-' + board.id" type="button" :disabled="busy || showArchived"
                   :aria-label="'Rename ' + board.title + (showArchived ? ' (unarchive first)' : '')"
                   :title="showArchived ? 'Unarchive before renaming' : 'Rename ' + board.title"
                   @click="beginRename(board)">
@@ -90,7 +114,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                   @click="submitAction('unarchive', board.id)">
                   <font-awesome-icon :icon="['fas', 'undo']" aria-hidden="true" />
                 </button>
-                <button v-else type="button" :disabled="busy"
+                <button v-else-if="!isCompact" type="button" :disabled="busy"
                   :aria-label="'Archive ' + board.title" :title="'Archive ' + board.title"
                   @click="submitAction('archive', board.id)">
                   <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" />
@@ -103,13 +127,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
               </div>
             </div>
 
-            <div :id="'more-menu-' + board.id" class="board-library-more-menu" popover="auto"
+            <div :id="'more-menu-' + board.id" class="board-library-more-menu"
+              :class="{ 'is-compact': isCompact }" popover="auto"
               role="group" :aria-label="'More actions for ' + board.title"
               @toggle="onMoreMenuToggle($event, board.id)">
+              <template v-if="isCompact && !showArchived">
+                <button :id="'rename-menu-action-' + board.id" class="board-library-more-option" type="button"
+                  :disabled="busy" :aria-label="'Rename ' + board.title" @click="beginRename(board)">
+                  <font-awesome-icon :icon="['fas', 'pen-to-square']" aria-hidden="true" />
+                  <span>Rename</span>
+                </button>
+                <button class="board-library-more-option" type="button"
+                  :disabled="busy" :aria-label="'Archive ' + board.title"
+                  @click="hideOpenPopover(); submitAction('archive', board.id)">
+                  <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" />
+                  <span>Archive</span>
+                </button>
+              </template>
               <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
                 :disabled="busy" :aria-label="'Delete ' + board.title" :title="'Delete ' + board.title"
                 @click="beginDelete(board)">
                 <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
+                <span v-if="isCompact">Delete</span>
               </button>
             </div>
 
@@ -137,45 +176,80 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <div v-else class="board-library-empty" role="status">
           <font-awesome-icon :icon="['fas', showArchived ? 'box-archive' : 'chalkboard']" aria-hidden="true" />
           <strong>{{ boardQuery.trim() ? 'No matching boards' : showArchived ? 'No archived boards' : 'No saved boards yet' }}</strong>
-          <p>{{ boardQuery.trim() ? 'Try another name or create a board below.' : showArchived ? 'Boards you archive will appear here.' : 'Your current board will appear after its first edit.' }}</p>
+          <p>{{ boardQuery.trim() ? 'Try another name or use the + button beside search.' : showArchived ? 'Boards you archive will appear here.' : 'Your current board will appear after its first edit.' }}</p>
         </div>
       </div>
-      <div class="board-library-create">
-        <button class="board-library-create-button" type="button" :disabled="busy || loading"
-          :title="createLabel" @click="createBoard">
-          <font-awesome-icon :icon="['fas', 'plus']" aria-hidden="true" />
-          <span>{{ createLabel }}</span>
-        </button>
+      <div class="board-library-footer">
         <BoardStorageNotice :is-desktop="isDesktop" />
       </div>
-    </section>
+    </aside>
   </div>
 </template>
 
 <script>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BoardStorageNotice from './BoardStorageNotice.vue'
 
 export default {
-  name: 'BoardLibraryModal',
+  name: 'LibrarySidebar',
   components: { BoardStorageNotice },
   props: {
     isDesktop: { type: Boolean, default: false },
+    pinned: { type: Boolean, default: false },
+    canPin: { type: Boolean, default: false },
+    width: { type: Number, default: 400 },
+    minWidth: { type: Number, default: 320 },
+    maxWidth: { type: Number, default: 560 },
+    resizable: { type: Boolean, default: false },
     boards: { type: Array, default: () => [] },
     archivedBoards: { type: Array, default: () => [] },
     busy: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
     error: { type: String, default: null },
   },
-  emits: ['close', 'action'],
+  emits: ['close', 'action', 'toggle-pin', 'browse', 'resize'],
   setup(props, { emit }) {
     const boardQuery = ref('')
+    const searchTracked = ref(false)
     const renameId = ref(null)
     const renameTitle = ref('')
     const confirmDeleteId = ref(null)
     const showArchived = ref(false)
     const closeButton = ref(null)
-    const dialogPanel = ref(null)
+    const sidebarRef = ref(null)
+    // Measure the actual panel: desktop window width does not indicate sidebar width.
+    const isCompact = ref(Math.min(props.width, window.innerWidth) < 400)
+    let sidebarResizeObserver = null
+    let resizeDrag = null
+    const startResize = (event) => {
+      if (event.button !== 0) return
+      resizeDrag = { pointerId: event.pointerId, x: event.clientX, width: props.width }
+      event.currentTarget.setPointerCapture(event.pointerId)
+      event.preventDefault()
+    }
+    const moveResize = (event) => {
+      if (resizeDrag?.pointerId !== event.pointerId) return
+      emit('resize', resizeDrag.width + resizeDrag.x - event.clientX)
+    }
+    const stopResize = (event) => {
+      if (resizeDrag?.pointerId !== event.pointerId) return
+      resizeDrag = null
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+    }
+    const resizeWithKeyboard = (event) => {
+      const widths = {
+        ArrowLeft: props.width + 16,
+        ArrowRight: props.width - 16,
+        Home: props.minWidth,
+        End: props.maxWidth,
+      }
+      if (!Object.hasOwn(widths, event.key)) return
+      event.preventDefault()
+      event.stopPropagation()
+      emit('resize', widths[event.key])
+    }
     const pendingFocus = ref(null)
     const visibleBoards = computed(() => {
       const boards = showArchived.value ? props.archivedBoards : props.boards
@@ -185,13 +259,24 @@ export default {
     const createLabel = computed(() => boardQuery.value.trim() ? `Create “${boardQuery.value.trim()}”` : 'New board')
     const dateFormatter = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 
-    onMounted(() => closeButton.value?.focus())
+    onMounted(() => {
+      closeButton.value?.focus()
+      if (typeof ResizeObserver !== 'undefined') {
+        sidebarResizeObserver = new ResizeObserver(() => {
+          // The threshold applies to border-box width, not contentRect minus borders.
+          isCompact.value = sidebarRef.value.getBoundingClientRect().width < 400
+        })
+        sidebarResizeObserver.observe(sidebarRef.value)
+      }
+    })
+    onBeforeUnmount(() => sidebarResizeObserver?.disconnect())
     watch(() => props.busy, async (busy) => {
       if (busy || !pendingFocus.value) return
       await nextTick()
       const target = pendingFocus.value === 'close'
         ? closeButton.value
-        : document.getElementById('rename-action-' + pendingFocus.value)
+        : (document.getElementById('rename-action-' + pendingFocus.value)
+          || document.getElementById('more-action-' + pendingFocus.value))
       const focusTarget = target || closeButton.value
       focusTarget?.focus()
       pendingFocus.value = null
@@ -199,22 +284,23 @@ export default {
 
     const awaitActionFocus = (target) => {
       pendingFocus.value = target
-      dialogPanel.value?.focus()
+      sidebarRef.value?.focus()
     }
     const trapTab = (event) => {
-      const controls = [...dialogPanel.value.querySelectorAll('button:not(:disabled), input:not(:disabled)')]
+      if (props.pinned) return
+      const controls = [...sidebarRef.value.querySelectorAll('button:not(:disabled), input:not(:disabled), [role="separator"][tabindex="0"]')]
         .filter(element => element.getClientRects().length)
       if (!controls.length) {
         event.preventDefault()
-        dialogPanel.value.focus()
+        sidebarRef.value.focus()
         return
       }
       const first = controls[0]
       const last = controls[controls.length - 1]
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogPanel.value)) {
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === sidebarRef.value)) {
         event.preventDefault()
         last.focus()
-      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === dialogPanel.value)) {
+      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === sidebarRef.value)) {
         event.preventDefault()
         first.focus()
       }
@@ -224,20 +310,29 @@ export default {
       const date = new Date(value)
       return Number.isNaN(date.getTime()) ? 'Saved locally' : dateFormatter.format(date)
     }
+    const onSearchInput = () => {
+      // One intent event per sidebar open, never a keystroke or query value.
+      if (!searchTracked.value && boardQuery.value.trim()) {
+        searchTracked.value = true
+        emit('browse', 'search')
+      }
+    }
     const selectView = (archived) => {
+      if (showArchived.value !== archived) emit('browse', archived ? 'archived' : 'recent')
       showArchived.value = archived
       renameId.value = null
       confirmDeleteId.value = null
     }
     const hideOpenPopover = () => {
-      dialogPanel.value?.querySelector('.board-library-more-menu:popover-open')?.hidePopover()
+      sidebarRef.value?.querySelector('.board-library-more-menu:popover-open')?.hidePopover()
     }
+    watch(isCompact, hideOpenPopover)
     const onOverlayEscape = () => {
-      const popover = dialogPanel.value?.querySelector('.board-library-more-menu:popover-open')
+      const popover = sidebarRef.value?.querySelector('.board-library-more-menu:popover-open')
       if (popover) {
         popover.hidePopover()
         document.getElementById('more-action-' + popover.id.slice('more-menu-'.length))?.focus()
-      } else emit('close')
+      } else emit('close', 'escape')
     }
     const onMoreMenuToggle = async (event, boardId) => {
       if (event.newState !== 'open') return
@@ -256,7 +351,8 @@ export default {
         popover.style.top = Math.max(8, top) + 'px'
         popover.style.left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8)) + 'px'
       }
-      document.getElementById('delete-action-' + boardId)?.focus()
+      const firstAction = isCompact.value && !showArchived.value ? 'rename-menu-action-' : 'delete-action-'
+      document.getElementById(firstAction + boardId)?.focus()
     }
     const createBoard = () => {
       emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
@@ -266,7 +362,9 @@ export default {
       return `${action} ${board.title}`
     }
     const selectBoard = (board) => {
-      if (board.isActive) emit('close')
+      if (board.isActive) {
+        if (!props.pinned) emit('close', 'board_action')
+      }
       else {
         awaitActionFocus('close')
         emit('action', { action: showArchived.value ? 'unarchive-open' : 'open', boardId: board.id })
@@ -296,7 +394,9 @@ export default {
       renameId.value = null
       confirmDeleteId.value = null
       await nextTick()
-      document.getElementById(actionId + boardId)?.focus()
+      const focusTarget = document.getElementById(actionId + boardId)
+        || document.getElementById('more-action-' + boardId)
+      focusTarget?.focus()
     }
     const submitDelete = (boardId) => {
       confirmDeleteId.value = null
@@ -309,37 +409,101 @@ export default {
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, closeButton, dialogPanel,
+    return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, isCompact, closeButton, sidebarRef,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
-      submitRename, beginRename, beginDelete, cancelInline, submitDelete, trapTab,
+      submitRename, beginRename, beginDelete, cancelInline, submitDelete, onSearchInput, trapTab,
+      startResize, moveResize, stopResize, resizeWithKeyboard,
       hideOpenPopover, onOverlayEscape, onMoreMenuToggle }
   },
 }
 </script>
 
 <style scoped>
-.board-library-overlay {
+.library-sidebar-layer {
   position: fixed;
   inset: 0;
   z-index: 1800;
   display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 68px 16px 16px;
+  align-items: stretch;
+  justify-content: flex-end;
   background: rgba(0, 0, 0, .22);
+  transition: background-color 200ms ease;
 }
-.board-library-panel {
+.library-sidebar-layer.is-pinned {
+  background: transparent;
+  pointer-events: none;
+}
+.library-sidebar-panel {
   box-sizing: border-box;
-  width: min(560px, 100%);
-  max-height: calc(100dvh - 84px);
+  position: relative;
+  width: min(var(--library-sidebar-width, 400px), 100vw);
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 14px;
+  border-left: 1px solid var(--border-color);
   background: var(--surface-secondary);
   color: var(--text-primary);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, .22);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, .14);
   text-align: left;
+}
+.library-sidebar-layer.is-pinned .library-sidebar-panel {
+  pointer-events: auto;
+  box-shadow: -4px 0 18px rgba(0, 0, 0, .16);
+}
+/* A 12px hit target keeps the visual divider subtle but easy to grab. */
+.library-sidebar-resize-handle {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.library-sidebar-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: calc(50% - 22px);
+  left: 3px;
+  width: 4px;
+  height: 44px;
+  border-radius: 4px;
+  background: var(--border-color);
+}
+.library-sidebar-resize-handle:hover::before,
+.library-sidebar-resize-handle:focus-visible::before {
+  background: var(--text-secondary);
+}
+.library-sidebar-resize-handle:focus-visible {
+  outline: 2px solid var(--selected-bg);
+  outline-offset: -2px;
+}
+/* The same CSS transition handles both opening and closing. */
+.library-sidebar-enter-active, .library-sidebar-leave-active {
+  transition: background-color 220ms ease;
+}
+.library-sidebar-enter-active .library-sidebar-panel,
+.library-sidebar-leave-active .library-sidebar-panel {
+  transition: transform 220ms ease, opacity 220ms ease;
+}
+.library-sidebar-enter-from, .library-sidebar-leave-to {
+  background-color: transparent;
+}
+.library-sidebar-enter-from .library-sidebar-panel,
+.library-sidebar-leave-to .library-sidebar-panel {
+  transform: translateX(100%);
+  opacity: .9;
+}
+@media (prefers-reduced-motion: reduce) {
+  .library-sidebar-layer,
+  .library-sidebar-enter-active,
+  .library-sidebar-leave-active,
+  .library-sidebar-enter-active .library-sidebar-panel,
+  .library-sidebar-leave-active .library-sidebar-panel { transition-duration: 0.01ms; }
 }
 .board-library-header {
   display: flex;
@@ -373,7 +537,27 @@ export default {
   cursor: pointer;
 }
 .board-library-icon-button:hover:enabled { background: var(--hover-bg); }
-.board-library-search { padding: 0 20px 12px; }
+.library-sidebar-pin-button[aria-pressed="true"] { background: var(--surface-tertiary); color: var(--text-primary); }
+.board-library-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 12px;
+}
+.board-library-create-button {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.board-library-create-button:hover:not(:disabled) { background: var(--hover-bg); }
 .board-library-search label {
   position: absolute;
   width: 1px;
@@ -390,7 +574,7 @@ export default {
   font-size: 12px;
   font-weight: 600;
 }
-.board-library-search-field { position: relative; }
+.board-library-search-field { position: relative; flex: 1 1 auto; min-width: 0; }
 .board-library-search-field > svg {
   position: absolute;
   right: 14px;
@@ -400,7 +584,7 @@ export default {
   pointer-events: none;
 }
 .board-library-rename > div { display: flex; gap: 8px; }
-.board-library-panel input {
+.library-sidebar-panel input {
   box-sizing: border-box;
   min-width: 0;
   min-height: 44px;
@@ -422,8 +606,8 @@ export default {
   font-size: 13px;
   line-height: 1.4;
 }
-.board-library-panel input::placeholder { color: var(--text-placeholder); }
-.board-library-panel button { font: inherit; }
+.library-sidebar-panel input::placeholder { color: var(--text-placeholder); }
+.library-sidebar-panel button { font: inherit; }
 .board-library-rename button,
 .board-library-delete-confirm button {
   min-height: 40px;
@@ -438,25 +622,7 @@ export default {
 .board-library-delete-confirm button:hover:enabled {
   box-shadow: inset 0 0 0 1px var(--border-color);
 }
-.board-library-create { flex: none; padding: 10px 20px 14px; border-top: 1px solid var(--border-color); }
-.board-library-create p { margin: 4px 12px 0; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
-.board-library-create-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-primary);
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-.board-library-create-button:hover:enabled { background: var(--hover-bg); }
-.board-library-create-button > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-library-footer { flex: none; padding: 10px 20px 14px; border-top: 1px solid var(--border-color); }
 .board-library-tabs {
   display: flex;
   gap: 18px;
@@ -560,6 +726,28 @@ export default {
   cursor: pointer;
 }
 .board-library-more-delete:hover:enabled { background: var(--hover-bg); }
+.board-library-more-menu.is-compact { min-width: 160px; }
+.board-library-more-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.board-library-more-option:hover:enabled { background: var(--hover-bg); }
+.board-library-more-menu.is-compact .board-library-more-delete {
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 0 10px;
+}
 .board-library-delete-confirm, .board-library-rename {
   margin: 2px 0 12px 54px;
   padding: 9px;
@@ -583,37 +771,23 @@ export default {
 .board-library-empty > svg { color: var(--text-muted); font-size: 22px; }
 .board-library-empty strong { color: var(--text-primary); font-size: 15px; }
 .board-library-empty p { max-width: 35ch; margin: 0; font-size: 13px; line-height: 1.4; }
-.board-library-panel button:disabled { opacity: .55; cursor: default; }
-.board-library-panel button:focus-visible, .board-library-panel input:focus-visible {
+.library-sidebar-panel button:disabled { opacity: .55; cursor: default; }
+.library-sidebar-panel button:focus-visible, .library-sidebar-panel input:focus-visible {
   outline: 2px solid var(--selected-bg);
   outline-offset: 2px;
 }
 @media (max-width: 600px) {
-  .board-library-overlay { padding: 0; }
-  .board-library-panel { width: 100%; max-height: none; height: 100vh; height: 100dvh; border-radius: 0; }
+  .library-sidebar-panel { width: 100%; }
   .board-library-header { padding: max(20px, env(safe-area-inset-top)) 16px 16px; }
   .board-library-icon-button, .board-library-glyph, .board-library-row-actions button { width: 44px; height: 44px; }
   .board-library-search { padding: 0 16px 12px; }
   .board-library-error { margin: 0 16px 12px; }
-  .board-library-create { padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
+  .board-library-footer { padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
   .board-library-tabs { padding: 0 16px; }
   .board-library-content { min-height: 0; padding: 4px 16px 12px; }
   .board-library-delete-confirm, .board-library-rename { margin-left: 0; }
 }
 @media (max-height: 560px) and (min-width: 601px) {
-  .board-library-overlay { padding: 0; }
-  .board-library-panel { height: 100dvh; max-height: none; border-radius: 0; }
   .board-library-content { min-height: 0; }
-}
-@media (max-width: 420px) {
-  .board-library-row {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
-    gap: 4px 12px;
-    padding: 6px 0;
-  }
-  .board-library-glyph { grid-column: 1; grid-row: 1; }
-  .board-library-details { grid-column: 2; grid-row: 1; }
-  .board-library-row-actions { grid-column: 2; grid-row: 2; justify-self: end; }
 }
 </style>

@@ -77,3 +77,28 @@ Group, layout, update and board-library commands do not yet have dedicated
 provider events; extending that taxonomy requires a separate product/privacy
 decision. No board content, ID, title, coordinates or prompt is transmitted.
 The established DNT, drop-on-failure and no-retry rules remain unchanged.
+
+## Follow-up: remove the desktop event schema (2026-11-06)
+
+The product owner explicitly chose to remove `validate_event` and the duplicated
+event-name/metadata allowlists in `src-tauri/src/analytics.rs` for YAGNI. This
+**supersedes the original native event-schema requirements** above, including
+their rejection guarantees and the rule that every taxonomy change must update
+Rust. The earlier decision is preserved here for provenance, not as a current
+implementation requirement.
+
+The native command now forwards event names and JSON-object metadata without
+checking their keys, values, categories or types. Direct Tauri callers can
+bypass `trackEvent` and its flat-primitive normalization, so Rust no longer
+guarantees the exclusion of user-authored content or unexpected metadata.
+Event ownership, category selection and data minimization are the JavaScript
+call sites' responsibility; this is a deliberate reduction in defense in
+depth, **not** equivalent privacy enforcement.
+
+The existing protections remain: main-WebView admission, no delivery from
+development builds, four concurrent native requests at most, the fixed HTTPS
+destination, a three-second timeout, no redirects, and native overriding of
+`runtime` and `app_version`. Desktop JavaScript retains DNT/offline checks
+and its volatile bounded queue. A future event taxonomy change no longer
+requires edits to a Rust validator, but must still receive a privacy review.
+Validate real packaged-app behavior and provider ingestion before distribution.
