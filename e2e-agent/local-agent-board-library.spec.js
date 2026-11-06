@@ -650,6 +650,12 @@ test('Board library heading is vertically centered with its icon at mobile and d
     const dialog = page.getByRole('dialog', { name: 'Board library' })
     const heading = await dialog.getByRole('heading', { name: 'Board library' }).boundingBox()
     const icon = await dialog.locator('.board-library-heading-icon').boundingBox()
+    // The sidebar and the Boards trigger use the same Library Big artwork.
+    const triggerPaths = await selector.locator('svg path').evaluateAll(nodes => nodes.map(node => node.getAttribute('d')))
+    const headingPaths = await dialog.locator('.board-library-heading-icon svg path')
+      .evaluateAll(nodes => nodes.map(node => node.getAttribute('d')))
+    expect(headingPaths).toEqual(triggerPaths)
+    await expect(dialog.locator('.board-library-heading-icon svg rect')).toHaveCount(1)
 
     expect(heading).not.toBeNull()
     expect(icon).not.toBeNull()
