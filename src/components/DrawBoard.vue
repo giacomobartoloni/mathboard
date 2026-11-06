@@ -160,6 +160,7 @@ export default {
     boardTheme: { type: String, default: "light" },
     selectedColor: { type: String, default: null },
     sessionReady: { type: Boolean, default: true },
+    sidebarPinned: { type: Boolean, default: false },
     selectionPanelSuspended: { type: Boolean, default: false },
   },
   data() {
@@ -201,6 +202,7 @@ export default {
     this._shapeGesture = null;
     this._panGesture = null;
     this._textInsertion = null;
+    this._wasSidebarPinned = false;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._pendingFormulaRenders = 0;
@@ -462,16 +464,24 @@ export default {
     },
     updateCanvasSize() {
       if (!this.canvas || !this.$refs.boardRoot) return;
-      // The sidebar may resize the board without resizing the window.
-      // Measure its actual viewport; never move objects or alter scene zoom/pan.
+      // Measure the actual drawing viewport; pinning may resize it without window.resize.
       const { width, height } = this.$refs.boardRoot.getBoundingClientRect();
       const nextWidth = Math.max(1, Math.round(width));
       const nextHeight = Math.max(1, Math.round(height));
-      if (this.canvas.getWidth() === nextWidth && this.canvas.getHeight() === nextHeight) return;
+      const previousWidth = this.canvas.getWidth();
+      if (previousWidth === nextWidth && this.canvas.getHeight() === nextHeight) return;
       this.windowWidth = nextWidth;
       this.windowHeight = nextHeight;
       // Fabric 7 removed setWidth/setHeight; use setDimensions.
       this.canvas.setDimensions({ width: nextWidth, height: nextHeight });
+      if (nextWidth !== previousWidth && (this.sidebarPinned || this._wasSidebarPinned)) {
+        // Keep the same scene point at the horizontal center as the usable
+        // viewport grows/shrinks. Scene objects, zoom and history stay intact.
+        const vpt = this.canvas.viewportTransform.slice();
+        vpt[4] += (nextWidth - previousWidth) / 2;
+        this.canvas.setViewportTransform(vpt);
+      }
+      this._wasSidebarPinned = this.sidebarPinned;
       this.canvas.renderAll();
       this.canvas.calcOffset();
       this.refreshSelectionPanel();
@@ -1465,6 +1475,7 @@ export default {
       delete obj.boardTheme;
       delete obj.selectedColor;
       delete obj.selectionPanelSuspended;
+      delete obj.sidebarPinned;
       Object.keys(obj).forEach((key) => {
         if (obj[key] === undefined) {
           delete obj[key];
