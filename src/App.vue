@@ -78,7 +78,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     </div>
     <Transition name="library-sidebar" @after-leave="restoreLibrarySidebarFocus">
-      <BoardLibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
+      <LibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
         @toggle-pin="toggleLibrarySidebarPin" @close="closeLibrarySidebar" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
@@ -140,7 +140,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
-import BoardLibrarySidebar from './components/BoardLibrarySidebar.vue'
+import LibrarySidebar from './components/LibrarySidebar.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 // Deferred until opened: FormulaModal brings the KaTeX preview renderer.
 const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
@@ -203,7 +203,7 @@ export default {
   name: 'App',
   components: {
     DrawBoard,
-    BoardLibrarySidebar,
+    LibrarySidebar,
     ToolsPanel,
     FormulaModal,
     ShareStampModal,
