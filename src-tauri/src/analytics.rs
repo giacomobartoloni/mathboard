@@ -243,8 +243,11 @@ fn validate_event(name: &str, metadata: &Map<String, Value>) -> Result<(), &'sta
                 && category(metadata, "library", &["boards"])
         }
         "library_closed" => {
-            fields(metadata, &["library", "mode", "reason"], &["library", "mode", "reason"])
-                && category(metadata, "library", &["boards"])
+            fields(
+                metadata,
+                &["library", "mode", "reason"],
+                &["library", "mode", "reason"],
+            ) && category(metadata, "library", &["boards"])
                 && category(metadata, "mode", &["overlay", "pinned"])
                 && category(
                     metadata,
@@ -253,8 +256,11 @@ fn validate_event(name: &str, metadata: &Map<String, Value>) -> Result<(), &'sta
                 )
         }
         "library_mode_changed" => {
-            fields(metadata, &["library", "mode", "reason"], &["library", "mode", "reason"])
-                && category(metadata, "library", &["boards"])
+            fields(
+                metadata,
+                &["library", "mode", "reason"],
+                &["library", "mode", "reason"],
+            ) && category(metadata, "library", &["boards"])
                 && category(metadata, "mode", &["overlay", "pinned"])
                 && category(metadata, "reason", &["user", "viewport"])
         }
@@ -582,24 +588,57 @@ mod tests {
     fn library_ux_events_allow_only_closed_categories_and_no_user_content() {
         for (name, approved) in [
             ("library_opened", json!({ "library": "boards" })),
-            ("library_closed", json!({ "library": "boards", "mode": "pinned", "reason": "close_button" })),
-            ("library_mode_changed", json!({ "library": "boards", "mode": "overlay", "reason": "viewport" })),
-            ("library_browsed", json!({ "library": "boards", "action": "archived" })),
-            ("library_action", json!({ "library": "boards", "action": "unarchive_open", "outcome": "failure", "mode": "pinned" })),
+            (
+                "library_closed",
+                json!({ "library": "boards", "mode": "pinned", "reason": "close_button" }),
+            ),
+            (
+                "library_mode_changed",
+                json!({ "library": "boards", "mode": "overlay", "reason": "viewport" }),
+            ),
+            (
+                "library_browsed",
+                json!({ "library": "boards", "action": "archived" }),
+            ),
+            (
+                "library_action",
+                json!({ "library": "boards", "action": "unarchive_open", "outcome": "failure", "mode": "pinned" }),
+            ),
         ] {
-            assert!(validate_event(name, &metadata(approved.clone())).is_ok(), "{name}");
+            assert!(
+                validate_event(name, &metadata(approved.clone())).is_ok(),
+                "{name}"
+            );
             let mut with_content = approved.clone();
             with_content["board_title"] = json!("private board");
-            assert!(validate_event(name, &metadata(with_content)).is_err(), "{name}");
+            assert!(
+                validate_event(name, &metadata(with_content)).is_err(),
+                "{name}"
+            );
             let mut unknown_library = approved;
             unknown_library["library"] = json!("private collection");
-            assert!(validate_event(name, &metadata(unknown_library)).is_err(), "{name}");
+            assert!(
+                validate_event(name, &metadata(unknown_library)).is_err(),
+                "{name}"
+            );
         }
         for (name, invalid) in [
-            ("library_closed", json!({ "library": "boards", "mode": "overlay", "reason": "click: private" })),
-            ("library_mode_changed", json!({ "library": "boards", "mode": "pinned", "reason": "scripted" })),
-            ("library_browsed", json!({ "library": "boards", "action": "private-query" })),
-            ("library_action", json!({ "library": "boards", "action": "create", "outcome": "no", "mode": "overlay" })),
+            (
+                "library_closed",
+                json!({ "library": "boards", "mode": "overlay", "reason": "click: private" }),
+            ),
+            (
+                "library_mode_changed",
+                json!({ "library": "boards", "mode": "pinned", "reason": "scripted" }),
+            ),
+            (
+                "library_browsed",
+                json!({ "library": "boards", "action": "private-query" }),
+            ),
+            (
+                "library_action",
+                json!({ "library": "boards", "action": "create", "outcome": "no", "mode": "overlay" }),
+            ),
         ] {
             assert!(validate_event(name, &metadata(invalid)).is_err(), "{name}");
         }
