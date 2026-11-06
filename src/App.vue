@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
-    :class="{ 'board-library-pinned': librarySidebarMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal }"
+    :class="{ 'library-sidebar-pinned': librarySidebarMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal }"
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
@@ -77,7 +77,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       />
 
     </div>
-    <Transition name="board-library" @after-leave="restoreBoardLibraryFocus">
+    <Transition name="library-sidebar" @after-leave="restoreBoardLibraryFocus">
       <BoardLibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
@@ -288,7 +288,7 @@ export default {
       if (!canPinLibrarySidebar.value && librarySidebarMode.value === 'pinned') {
         // The focused pin control becomes disabled when docking is unavailable.
         // Capture it before Vue updates the DOM, since browsers may blur it.
-        const pinHadFocus = document.activeElement?.matches?.('.board-library-pin-button')
+        const pinHadFocus = document.activeElement?.matches?.('.library-sidebar-pin-button')
         librarySidebarMode.value = 'overlay'
         boardLibraryAnalytics.modeChanged('overlay', 'viewport')
         // A nonmodal region has become a modal dialog. Keep valid sidebar
@@ -296,8 +296,8 @@ export default {
         void nextTick(() => {
           if (librarySidebarMode.value !== 'overlay') return
           const focused = document.activeElement
-          if (pinHadFocus || !focused?.closest?.('.board-library-sidebar') || focused?.matches?.(':disabled')) {
-            document.querySelector('.board-library-sidebar [aria-label="Close board library"]')?.focus()
+          if (pinHadFocus || !focused?.closest?.('.library-sidebar-panel') || focused?.matches?.(':disabled')) {
+            document.querySelector('.library-sidebar-panel [aria-label="Close board library"]')?.focus()
           }
         })
       }
@@ -502,12 +502,12 @@ export default {
           const disconnect = await connectDesktopWindow({
             onUndo: () => {
               if (boardSessionReady.value && librarySidebarMode.value !== 'overlay'
-                && !document.activeElement?.closest?.('.board-library-sidebar')
+                && !document.activeElement?.closest?.('.library-sidebar-panel')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
             },
             onRedo: () => {
               if (boardSessionReady.value && librarySidebarMode.value !== 'overlay'
-                && !document.activeElement?.closest?.('.board-library-sidebar')
+                && !document.activeElement?.closest?.('.library-sidebar-panel')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
             },
             onFullscreenChange: setFullscreenState,
@@ -638,7 +638,7 @@ export default {
           return
         }
         if (librarySidebarMode.value === 'overlay'
-          || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.board-library-sidebar'))) {
+          || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.library-sidebar-panel'))) {
           closeBoardLibrary('escape')
           event.preventDefault()
           return
@@ -658,7 +658,7 @@ export default {
         showFormulaModal.value
         || showShareStampModal.value
         || librarySidebarMode.value === 'overlay'
-        || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.board-library-sidebar'))
+        || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.library-sidebar-panel'))
         || shouldIgnoreGlobalShortcut(event)
         || drawBoardRef.value?.isTextEditing()
       ) return
@@ -1094,12 +1094,12 @@ body {
 .board-library-trigger:disabled { opacity: .6; cursor: default; }
 
 /* Docked mode narrows only the Fabric viewport, never its scene coordinates. */
-#app { --board-library-width: 400px; }
-#app.board-library-pinned #boardcontainer { right: var(--board-library-width); }
-#app.board-library-pinned .support-panel { right: calc(var(--board-library-width) + 12px); }
-#app.board-library-pinned .copyright { display: none; }
+#app { --library-sidebar-width: 400px; }
+#app.library-sidebar-pinned #boardcontainer { right: var(--library-sidebar-width); }
+#app.library-sidebar-pinned .support-panel { right: calc(var(--library-sidebar-width) + 12px); }
+#app.library-sidebar-pinned .copyright { display: none; }
 /* Editing dialogs must remain above an open pinned sidebar. */
-#app.foreground-dialog-open .board-library-layer.is-pinned { z-index: 500; }
+#app.foreground-dialog-open .library-sidebar-layer.is-pinned { z-index: 500; }
 
 .copyright {
   position: absolute;
