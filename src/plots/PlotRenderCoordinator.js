@@ -21,6 +21,18 @@ import { disposeMaterializedObject } from '../board/objects/materialize.js'
 
 const requestError = () => Object.assign(new Error('Plot request timed out.'), { code: 'command_timeout' })
 const busyError = () => Object.assign(new Error('Plot rendering is busy.'), { code: 'board_busy' })
+const plotErrorCodes = Object.freeze({
+  invalid_expression: ['plot_invalid_expression', 'Invalid plot expression.'],
+  unsupported_expression: ['plot_unsupported_expression', 'Unsupported plot expression.'],
+  no_real_samples: ['plot_no_real_samples', 'No real plot samples were found in this interval.'],
+  computation_limit: ['plot_computation_limit', 'Plot computation exceeded its limits.'],
+  evaluator_failure: ['plot_render_failed', 'Plot rendering failed.'],
+})
+function classifyPlotError(error) {
+  const result = plotErrorCodes[error?.code]
+  if (!result) return error
+  return Object.assign(new Error(result[1]), { code: result[0] })
+}
 
 /**
  * One application-level bound for API rendering. UI preview and ordinary document
@@ -64,7 +76,7 @@ export function createPlotRenderCoordinator(
             return object
           } catch (error) {
             if (object) disposeMaterializedObject(object)
-            throw error
+            throw classifyPlotError(error)
           }
         })()
         // Keep the physical admission slot until loading/rendering stops, not until

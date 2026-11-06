@@ -28,6 +28,7 @@ import { validateCreateSpec, validateObjectPatch } from './objects/validateCreat
 import { TRANSFORM_KEYS } from './objects/constants.js'
 import { snapshotObject, snapshotsEqual, applySnapshot } from '../history/commandLog.js'
 import { serializeBoardState } from './observe/serializeBoardState.js'
+import { withPlotStatus } from './observe/publicPlotStatus.js'
 import { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES as C } from './BoardControllerError.js'
 
 export { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES } from './BoardControllerError.js'
@@ -75,6 +76,10 @@ export class BoardController {
 
   _read(object) {
     return structuredClone(toBoardDocumentNode(readSemanticBoardObject(object, { boardObjectPolicy: this._policy })))
+  }
+
+  _readForResult(object) {
+    return withPlotStatus(this._read(object), object, this._policy)
   }
 
   getObjects() {
@@ -216,7 +221,7 @@ export class BoardController {
       }, () => this._rollback([
         () => { if (objects.some((object) => this._selectionContains(canvas, object))) canvas.discardActiveObject() },
         ...objects.map((object) => () => canvas.remove(object)),
-      ]), command, () => objects.map((object) => this._read(object)),
+      ]), command, () => objects.map((object) => this._readForResult(object)),
       { kind: 'create', objectKinds: objects.map((object) => this._policy.kindOf(object)) }, lease)
     } catch (error) {
       objects.filter(object => !canvas.getObjects().includes(object)).forEach(object => disposeMaterializedObject(object))
@@ -275,7 +280,7 @@ export class BoardController {
       after = snapshotObject(object)
     }, () => applySnapshot(object, before), () => snapshotsEqual(before, after) ? null : {
       type: 'modify', entries: [{ object, before, after }],
-    }, () => this._read(object), { kind: 'update' })
+    }, () => this._readForResult(object), { kind: 'update' })
   }
 
   async _replaceFormula(canvas, existing, patch, options) {
@@ -301,7 +306,7 @@ export class BoardController {
       next.setCoords()
       ensureMathBoardObjectId(next, getMathBoardObjectId(existing))
       this._prepareCreatedObject(next, { ...current, ...patch })
-      if (snapshotsEqual(current, this._read(next))) return current
+      if (snapshotsEqual(current, this._read(next))) return this._readForResult(existing)
       const selected = this._selectionContains(canvas, existing)
       if (this._policy.isActiveSelection(existing.group)) canvas.discardActiveObject()
       const index = canvas.getObjects().indexOf(existing)
@@ -316,7 +321,7 @@ export class BoardController {
         () => canvas.remove(next),
         () => { if (!canvas.getObjects().includes(existing)) canvas.insertAt(index, existing) },
         () => { if (selected) canvas.setActiveObject(existing) },
-      ]), { type: 'replace', index, removed: existing, added: next }, () => this._read(next),
+      ]), { type: 'replace', index, removed: existing, added: next }, () => this._readForResult(next),
       { kind: this._policy.isPlot(existing) ? 'plot_edit' : 'formula_edit' }, lease)
       committed = true
       return result
@@ -380,7 +385,7 @@ export class BoardController {
         }
         if (active) canvas.setActiveObject(active)
       },
-    ]), () => ({ type: 'group', group, index, members }), () => this._read(group),
+    ]), () => ({ type: 'group', group, index, members }), () => this._readForResult(group),
     { kind: 'group' })
   }
 
@@ -388,7 +393,7 @@ export class BoardController {
     const canvas = this._canvas()
     this._assertCanMutate()
     const object = this._target(canvas, id)
-    const node = this._read(object)
+    const node = this._readForResult(object)
     const index = canvas.getObjects().indexOf(object)
     return this._commit(canvas, () => {
       if (this._selectionContains(canvas, object)) canvas.discardActiveObject()
@@ -421,7 +426,7 @@ export class BoardController {
   _deleteRoots(canvas, targets) {
     const entries = canvas.getObjects().flatMap((object, index) => targets.has(object) ? [{ object, index }] : [])
     if (!entries.length) return []
-    const nodes = entries.map(({ object }) => this._read(object))
+    const nodes = entries.map(({ object }) => this._readForResult(object))
     const active = canvas.getActiveObject()
     const selected = canvas.getActiveObjects()
     const discardSelection = selected.some((object) => targets.has(object))

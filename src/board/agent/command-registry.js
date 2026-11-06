@@ -120,7 +120,9 @@ const patchSchemas = {
 }
 const options = { type: 'object', properties: { select: boolean }, additionalProperties: false,
   description: 'Optional boolean selection.' }
-const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty, type: { enum: [...BOARD_OBJECT_TYPES] } },
+const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty,
+  type: { enum: [...BOARD_OBJECT_TYPES] },
+  plotStatus: { enum: ['ok', 'partial'], description: 'Derived sampling quality; not persisted.' } },
   additionalProperties: true, description: 'Detached semantic node; formula retains LaTeX.' }
 const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: false,
   ...(defs ? { $defs: defs } : {}) })

@@ -31,6 +31,8 @@ const BOARD_TRANSITION_METHODS = new Set(['boards.create', 'boards.open', 'board
 const safeCodes = new Set([
   'board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
   'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed',
+  'plot_invalid_expression', 'plot_unsupported_expression', 'plot_no_real_samples',
+  'plot_computation_limit', 'plot_render_failed',
   'invalid_capture_request', 'capture_too_large', 'capture_failed',
   'invalid_board_id', 'board_conflict', 'board_not_found', 'board_archived',
   'board_context_changed', 'board_context_required', 'command_timeout',

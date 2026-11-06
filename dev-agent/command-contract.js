@@ -28,7 +28,9 @@ const { objectTypes, patchSchemas } = getBoardDiscoveryTypes()
 const errors = [
   { status: 400, codes: ['invalid_command'], description: 'Invalid method or JSON.' },
   { status: 409, codes: ['board_not_ready', 'invalid_object_spec', 'invalid_object_patch', 'object_not_found',
-    'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed', 'local_agent_bridge_error'],
+    'nested_object_mutation_not_supported', 'formula_render_failed', 'board_commit_failed',
+    'plot_invalid_expression', 'plot_unsupported_expression', 'plot_no_real_samples',
+    'plot_computation_limit', 'plot_render_failed', 'board_conflict', 'local_agent_bridge_error'],
   description: 'Board/domain rejected; re-observe.' },
   { status: 503, codes: ['board_unavailable', 'board_disconnected'], description: 'Browser unavailable; reconnect.' },
   { status: 504, codes: ['command_timeout'], description: 'Timeout; observe before retry.' },
