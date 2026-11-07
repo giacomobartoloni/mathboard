@@ -185,6 +185,23 @@ async function call(name, args = {}) {
   return unwrap(response, name)
 }
 
+async function waitForWebViewBridge() {
+  // The MCP listener can accept initialize/tools-list before the desktop
+  // WebView has joined the native board broker. Probe only a read-only tool;
+  // never retry boards.create after an unknown mutation outcome.
+  for (let attempt = 0; attempt < 45; attempt++) {
+    try {
+      const response = await call('mathboard_boards_list')
+      assert.ok(Array.isArray(response.boards), 'Unexpected board-library read envelope')
+      return { boardCount: response.boards.length }
+    } catch (error) {
+      if (!/MCP tool mathboard_boards_list failed: (mcp_unavailable|board_not_ready|read_cancelled)/.test(error.message)) throw error
+      await sleep(1000)
+    }
+  }
+  throw new Error('Packaged WebView never connected to the native MCP board broker')
+}
+
 async function observe(id) {
   return call('mathboard_observe', { boardId: id, detail: 'full' })
 }
@@ -236,6 +253,7 @@ async function main() {
       assert.ok(JSON.stringify(create.inputSchema).includes('mathWindow'))
       return { toolCount: tools.length, hasPlot: true }
     })
+    await step('native-mcp-webview-readiness', waitForWebViewBridge)
     await step('create-isolated-test-board', async () => {
       const board = await call('mathboard_boards_create', { title: `F039 Native MCP CI ${buildSha.slice(0, 8)}` })
       assert.match(board.id, /^mb_[A-Za-z0-9_-]+$/)
