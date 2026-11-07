@@ -208,8 +208,8 @@ jobs:
           export MATHBOARD_MCP_ARTIFACT_DIR="$RUNNER_TEMP/mathboard-native-mcp-artifacts"
           export MATHBOARD_MCP_PROFILE_DIR="$RUNNER_TEMP/mathboard-native-mcp-profile"
           mkdir -p "$MATHBOARD_MCP_ARTIFACT_DIR"
-          dbus-run-session -- xvfb-run -a -s '-screen 0 1365x900x24' \
-            node "$RUNNER_TEMP/mathboard-mcp-sdk/native-mcp-smoke.mjs"
+          xvfb-run -a -s '-screen 0 1365x900x24' \
+            dbus-run-session -- node "$RUNNER_TEMP/mathboard-mcp-sdk/native-mcp-smoke.mjs"
 
       - name: Upload native MCP acceptance evidence
         if: always()

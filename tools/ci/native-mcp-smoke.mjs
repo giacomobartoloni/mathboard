@@ -227,8 +227,10 @@ async function main() {
     await step('native-mcp-discovery', async () => {
       await connect()
       const tools = await catalog()
-      const help = await call('mathboard_help', {})
-      assert.ok(help.objectTypes?.includes('plot'), 'Plot missing from native help')
+      // Native help without a method lists names only. The detailed form
+      // includes objectTypes, field schemas and examples.
+      const help = await call('mathboard_help', { method: 'create' })
+      assert.ok(help.objectTypes?.includes('plot'), 'Plot missing from detailed native help')
       const create = tools.find(tool => tool.name === 'mathboard_create')
       assert.ok(JSON.stringify(create.inputSchema).includes('latex-v1'))
       assert.ok(JSON.stringify(create.inputSchema).includes('mathWindow'))
