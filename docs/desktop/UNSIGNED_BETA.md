@@ -37,6 +37,37 @@ https://mathboard.app/ or wait for signed builds.
 
 ## macOS
 
+### Install using Homebrew
+
+The [MathBoard Homebrew tap](https://github.com/giacomobartoloni/homebrew-tap)
+installs the published DMG for your Mac's architecture (Apple Silicon or Intel).
+Homebrew verifies the downloaded DMG against the SHA-256 digest pinned in the
+tap; the checksum does not independently authenticate the publisher.
+
+```sh
+brew install --cask giacomobartoloni/tap/mathboard
+```
+
+The app is installed in `/Applications/MathBoard.app`. Homebrew installation
+does **not** sign or notarize the beta or bypass Gatekeeper. If the first launch
+is blocked, prefer [Apple's per-app Open Anyway procedure](https://support.apple.com/en-us/102445)
+in **System Settings > Privacy & Security**, only after checking the source.
+
+**Optional, security-reducing alternative:** If you explicitly trust the installed
+MathBoard app and accept bypassing its macOS quarantine-based checks, you can
+remove the quarantine attribute from that app:
+
+```sh
+sudo xattr -r -d com.apple.quarantine "/Applications/MathBoard.app"
+```
+
+This recursively removes the attribute for MathBoard; it is **not** required
+for Homebrew installation and is not equivalent to a verified Apple Developer ID
+signature or notarization. Do not use it for untrusted files, after a malware
+or damaged-app warning, or against a managed-device security policy.
+
+### Install from a DMG
+
 1. Open the correct DMG for your chip and drag MathBoard into Applications.
 2. Launch MathBoard from Applications. Because this beta is not notarized,
    macOS Gatekeeper may prevent the first launch.
@@ -47,7 +78,7 @@ https://mathboard.app/ or wait for signed builds.
    **System Settings > Privacy & Security > Open Anyway** if it is offered.
 4. If macOS reports that the file contains malware, is damaged, or the system
    remains unable to open it, **stop** and report the message. Do not globally
-   disable Gatekeeper, remove quarantine attributes, or weaken Mac security.
+   disable Gatekeeper or bypass malware warnings or managed-device protections.
 
 ## Windows
 
