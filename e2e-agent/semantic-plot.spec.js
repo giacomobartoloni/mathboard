@@ -109,3 +109,60 @@ test('public Plot boundaries reject malformed creates/patches and preserve the b
   expect(observed.objects).toHaveLength(before.objects.length + 1)
   expect(observed.objects.at(-1).id).toBe(added.id)
 })
+
+test('Plot screenshot captures rendered geometry at root, nested and after reload', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await expect.poll(async () => (await command(request, 'observe')).stable).toBe(true)
+  const help = await (await request.get('/__mathboard_agent/help')).json()
+  const spec = { ...help.examplesByType.plot, latex: '1/x', left: 320, top: 220 }
+  const graph = await command(request, 'create', { spec })
+  const png = image => {
+    expect(image.mimeType).toBe('image/png')
+    expect(image.encoding).toBe('base64')
+    expect(image.widthPx).toBeGreaterThan(0)
+    expect(image.heightPx).toBeGreaterThan(0)
+    expect(Buffer.from(image.data, 'base64').subarray(0, 8)).toEqual(
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  }
+
+  const viewport = await command(request, 'screenshot', { target: { kind: 'viewport' } })
+  png(viewport)
+  const before = await command(request, 'screenshot', {
+    target: { kind: 'objectIds', ids: [graph.id], padding: 20 },
+  })
+  png(before)
+  png(await command(request, 'screenshot', {
+    target: { kind: 'sceneRect', rect: { x: 280, y: 180, width: 580, height: 400 } },
+  }))
+
+  await command(request, 'update', { id: graph.id, patch: {
+    latex: 'x^2', color: '#2563eb', grid: false, border: false,
+  } })
+  const after = await command(request, 'screenshot', {
+    target: { kind: 'objectIds', ids: [graph.id], padding: 20 },
+  })
+  png(after)
+  expect(after.data).not.toBe(before.data)
+
+  const group = await command(request, 'create', { spec: {
+    type: 'group', left: 190, top: 100, angle: 17,
+    objects: [
+      { ...spec, latex: 'x^3', left: 0, top: 0 },
+      { type: 'rect', left: 500, top: 0, width: 40, height: 30 },
+    ],
+  } })
+  const nested = await command(request, 'screenshot', {
+    target: { kind: 'objectIds', ids: [group.id], padding: 12 },
+  })
+  png(nested)
+  expect((await command(request, 'observe', { detail: 'full' })).objects[1].objects[0].type).toBe('plot')
+  await page.evaluate(async () => {
+    await document.querySelector('#app').__vue_app__._instance.proxy.drawBoardRef.flushPersistence()
+  })
+  await page.reload()
+  await expect.poll(async () => (await command(request, 'observe')).objects.length).toBe(2)
+  png(await command(request, 'screenshot', { target: { kind: 'viewport' } }))
+  png(await command(request, 'screenshot', { target: { kind: 'objectIds', ids: [group.id] } }))
+})

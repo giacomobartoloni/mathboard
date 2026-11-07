@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { FabricObject, util } from 'fabric'
+import { FabricObject, Group, util } from 'fabric'
 import { getMathBoardObjectId } from '../ids.js'
 import { CAPTURE_LIMITS, captureError } from './contract.js'
 
@@ -31,6 +31,10 @@ function serializeRenderedObject(object,budget,depth=0) {
   const fields=['mathboardId','latex','formulaType','mathboardInkMode']
   const data=children ? {...FabricObject.prototype.toObject.call(object,fields),
     objects:children.map(child=>serializeRenderedObject(child,budget,depth+1))} : object.toObject(fields)
+  // Capture already has the painted Plot children. Rehydrate them as a plain
+  // Fabric Group, not MathBoardPlot.fromObject (which rebuilds from LaTeX).
+  // This is capture-only: board persistence and semantic cloning stay unchanged.
+  if(children && object.objectKind==='plot' && object.plotSpec) data.type=Group.type
   for(const key of ['left','top','width','height','scaleX','scaleY','skewX','skewY','angle','strokeWidth']) {
     if(typeof object[key]==='number') data[key]=object[key]
   }
