@@ -149,3 +149,27 @@ test('editorial download hero keeps a single h1, anchor navigation and browser a
   assert.ok(hub.includes('class="download-section-eyebrow"'))
   assert.ok(css.includes('@media (prefers-reduced-motion: reduce)'))
 })
+
+test('Homebrew install commands are discoverable with explicit beta security warnings', () => {
+  const install = 'brew install --cask giacomobartoloni/tap/mathboard'
+  const quarantine = 'sudo xattr -r -d com.apple.quarantine "/Applications/MathBoard.app"'
+  const guide = renderLayout(macos)
+  const hub = renderLayout(download)
+  const securityPage = renderLayout(security)
+  const betaDoc = readFileSync(new URL('../docs/desktop/UNSIGNED_BETA.md', import.meta.url), 'utf8')
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+
+  assert.ok(hub.includes(install))
+  assert.ok(hub.includes('href="/download/macos/#homebrew"'))
+  assert.ok(guide.includes('id="homebrew"'))
+  assert.ok(guide.includes(install))
+  assert.ok(guide.includes(quarantine))
+  assert.match(guide, /not required for installation/)
+  assert.match(guide, /quarantine-based checks/)
+  assert.match(guide, /Apple's per-app Open Anyway process/)
+  assert.match(securityPage, /optional, app-specific command/)
+  assert.match(securityPage, /bypasses macOS quarantine-based checks/)
+  assert.ok(betaDoc.includes(install))
+  assert.ok(betaDoc.includes(quarantine))
+  assert.ok(readme.includes('/download/macos/#homebrew'))
+})

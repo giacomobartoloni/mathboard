@@ -14,7 +14,7 @@ import {
 } from '../lib/desktop-downloads.mjs'
 
 export default {
-  lastmod: '2026-10-23',
+  lastmod: '2026-11-07',
   path: '/download/',
   title: 'Download MathBoard Desktop for Mac, Windows and Linux',
   description:
@@ -73,6 +73,9 @@ export default {
           ${renderDownloadLink('macosIntel', 'Intel (DMG)', 'hub-macos', { primary: false })}
         </p>
         <a href="/download/macos/">Mac installation guide →</a>
+        <p class="download-status-note">Prefer Homebrew? Use
+          <code>brew install --cask giacomobartoloni/tap/mathboard</code>.
+          <a href="/download/macos/#homebrew">Homebrew instructions and macOS security notes →</a></p>
       </section>
       <section class="download-card" aria-labelledby="windows-download">
         <p class="download-platform">Windows</p>

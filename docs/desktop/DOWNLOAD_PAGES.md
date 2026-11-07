@@ -17,6 +17,13 @@ Platform-specific manual QA remains recorded separately in `testedPlatforms`.
 No installer or checksum is hosted on MathBoard's web origin. Each link points
 directly to an official GitHub Release asset.
 
+The macOS guide also documents the separate
+[MathBoard Homebrew tap](https://github.com/giacomobartoloni/homebrew-tap).
+Its cask pins release URLs and architecture-specific SHA-256 hashes.
+The tap is maintained independently of the site release manifest: after a
+public release is approved, update and verify the cask separately. Do not
+suggest that publishing a MathBoard release automatically updates Homebrew.
+
 The build checks that the release is explicitly marked as an unsigned public
 prerelease, the version matches the tag, every expected format exists in the
 manifest, and filenames agree with the version. These checks do **not** prove
@@ -60,5 +67,5 @@ No individual, board content or persistent identifier is sent.
 - macOS is not Apple Developer ID-signed or notarized; Windows is not
   Authenticode-signed; Linux has no signed package-repository identity.
 - The SHA-256 manifest checks integrity, not verified publisher identity.
-- Do not advise disabling security controls or bypassing organization policies.
+- Do not present quarantine removal as a required installation step or as equivalent to Apple signing/notarization. If the optional app-specific `xattr` override is documented, state clearly that it bypasses macOS quarantine checks, prefer Apple's per-app procedure, and never recommend it after malware/damaged-app warnings or on managed devices.
 - The desktop updater is not implemented; browser access remains available.

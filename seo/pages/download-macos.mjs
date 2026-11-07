@@ -11,7 +11,7 @@ import {
 } from '../lib/desktop-downloads.mjs'
 
 export default {
-  lastmod: '2026-10-22',
+  lastmod: '2026-11-07',
   path: '/download/macos/',
   title: 'Download MathBoard for Mac — Apple Silicon and Intel',
   description:
@@ -47,6 +47,24 @@ export default {
       <p>From the Apple menu, open <strong>About This Mac</strong>. Look for “Chip”
         (Apple M-series) or “Processor” (Intel), then choose the matching DMG above.</p>
     </section>
+    <section id="homebrew">
+      <h2>Install with Homebrew</h2>
+      <p>MathBoard is available through its
+        <a href="https://github.com/giacomobartoloni/homebrew-tap">official Homebrew tap</a>.
+        Homebrew chooses the correct Apple Silicon or Intel DMG and checks its pinned SHA-256 hash.</p>
+      <pre><code>brew install --cask giacomobartoloni/tap/mathboard</code></pre>
+      <p>MathBoard is installed at <code>/Applications/MathBoard.app</code>.
+        This is still an unsigned, unnotarized beta: Homebrew does not bypass Gatekeeper.
+        If launch is blocked, prefer
+        <a href="https://support.apple.com/en-us/102445">Apple's per-app Open Anyway process</a>.</p>
+      <p><strong>Optional quarantine override:</strong> If you trust the installed app and
+        explicitly choose to bypass its macOS quarantine-based checks, you can run:</p>
+      <pre><code>sudo xattr -r -d com.apple.quarantine "/Applications/MathBoard.app"</code></pre>
+      <p>This recursively removes the quarantine attribute from MathBoard.
+        It is not required for installation and does not sign or notarize the app.
+        Do not use it on untrusted downloads, after a malware or damaged-app warning,
+        or on a device whose security policy forbids it.</p>
+    </section>
     <section>
       <h2>Install on macOS</h2>
       <ol>
@@ -57,7 +75,8 @@ export default {
           or notarized, Gatekeeper may block the first launch.</li>
         <li>If you trust the source and accept the unsigned beta risks, consult
           <a href="https://support.apple.com/en-us/102445">Apple's per-app guidance</a>.
-          Do not globally disable Gatekeeper or strip quarantine attributes.</li>
+          Do not globally disable Gatekeeper. The optional app-specific quarantine
+          override is described in the Homebrew section with its security trade-off.</li>
       </ol>
       <p>If macOS reports malware, a damaged app, or a block you cannot resolve safely,
         stop the installation and <a href="https://github.com/giacomobartoloni/mathboard/issues">report the issue</a>.</p>
