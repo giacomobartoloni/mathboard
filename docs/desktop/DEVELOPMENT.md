@@ -148,3 +148,46 @@ memory. Session-scoped active board identity may be lost across a full applicati
 restart, so verify saved-board access and recovery on each native platform rather
 than assuming the last scratch board automatically reopens. UI preferences may
 persist independently through `localStorage`.
+
+## Packaged native MCP Plot smoke (F039 G4.4)
+
+The Desktop CI workflow has an **opt-in** Linux packaged-app acceptance job.
+On GitHub, open **Actions → Desktop CI → Run workflow**, select the
+`feat/f039-agent-mcp-plots` branch and enable `native_mcp_smoke`. The
+equivalent GitHub CLI command is:
+
+```sh
+gh workflow run desktop.yml --repo giacomobartoloni/mathboard \
+  --ref feat/f039-agent-mcp-plots -f native_mcp_smoke=true
+```
+
+The job builds a real Linux `.deb` with Tauri (not `--no-bundle`), installs
+it into an ephemeral runner, launches the GUI under Xvfb and a private D-Bus
+session, and connects using a pinned `@modelcontextprotocol/sdk@1.32.2`
+Streamable HTTP client. It uses the documented native
+`--mathboard-mcp-http` startup flag and reads the actual endpoint from stdout.
+The board database and process home are isolated under the runner's temporary
+directory; a disposable board is removed after the tests.
+
+The smoke covers native discovery, empty-board PNG control, Plot create and
+semantic readback, **Plot-containing PNG capture**, edit and visual-change PNG,
+and durable readback plus capture after a full application restart. PNG files,
+sanitized startup logs, package SHA-256 and structured PASS/FAIL test results
+are retained as a GitHub artifact for 14 days. A failed assertion fails the
+job; the test never substitutes the development bridge or a mock MCP server.
+A transient SDK package is installed in a separate temporary directory, not
+added to the application's dependency tree.
+
+For PRs targeting `develop` or `main`, changing the smoke harness or its
+workflow also triggers this job; regular application-only PRs do **not** pay
+the packaging cost. Scheduled Desktop CI still runs the native compilation
+matrix without smoke. Manual workflow dispatch always runs the existing
+desktop compilation matrix and runs this smoke only when the input is enabled.
+
+**Limits:** Xvfb is a virtual Linux GUI, not installed macOS or Windows
+acceptance. The job does not automate the native MCP settings On/Off toggle,
+prove toggle acknowledgement ordering, exercise GUI undo/redo or demonstrate
+the two-job `board_busy` path through serialized native requests. Keep
+these as separate G4.4 acceptance items; do not mark them PASS merely because
+the Linux smoke is green. A real installed macOS client must independently
+retest the original Plot screenshot defect before claiming it fixed there.
