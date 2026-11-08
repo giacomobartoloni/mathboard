@@ -59,9 +59,10 @@ jobs:
           # Always run this lightweight job so path-only PRs get a completed check.
           git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/desktop-changed-files.txt"
           cat "$RUNNER_TEMP/desktop-changed-files.txt"
-          # Only the smoke harness/workflow changes request this expensive CI
-          # path for PRs. Manual dispatch can request it independently.
-          if grep -Eq '^(tools/ci/native-mcp-smoke\.mjs|\.github/workflows/desktop\.yml)$' "$RUNNER_TEMP/desktop-changed-files.txt"; then
+          # Run packaged MCP acceptance for changes to the public Plot contract,
+          # board capture/persistence, desktop bridge or native MCP runtime.
+          # Keep unrelated web/UI changes on the lightweight CI path.
+          if grep -Eq '^(tools/ci/native-mcp-smoke\.mjs$|\.github/workflows/desktop\.yml$|src/plots/|src/board/(agent/|capture/|observe/|persistence/|objects/|BoardController\.js$|BoardDocumentCommandService\.js$)|src/platform/desktopBoardBridge\.js$|src/components/(DrawBoard|PlotModal)\.vue$|src/core/createMathBoardServices\.js$|src-tauri/(src/(mcp_|board_|lib\.rs$)|build\.rs$|tauri\.conf\.json$|Cargo\.(toml|lock)$)|package(-lock)?\.json$)' "$RUNNER_TEMP/desktop-changed-files.txt"; then
             echo "native_mcp=true" >> "$GITHUB_OUTPUT"
           else
             echo "native_mcp=false" >> "$GITHUB_OUTPUT"
