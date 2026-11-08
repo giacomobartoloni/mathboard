@@ -235,7 +235,7 @@ const plot = Object.freeze({
   type: 'plot', syntax: 'latex-v1', latex: 'x^2',
   mathWindow: { xMin: -6, xMax: 6, yMin: -4, yMax: 10 },
   frame: { width: 480, height: 320 }, axes: true, grid: true,
-  axisNumbers: true, border: true, color: 'auto', left: 300, top: 200,
+  axisNumbers: true, border: true, transparentBackground: true, color: 'auto', left: 300, top: 200,
 })
 
 async function main() {
@@ -251,6 +251,7 @@ async function main() {
       const create = tools.find(tool => tool.name === 'mathboard_create')
       assert.ok(JSON.stringify(create.inputSchema).includes('latex-v1'))
       assert.ok(JSON.stringify(create.inputSchema).includes('mathWindow'))
+      assert.ok(JSON.stringify(create.inputSchema).includes('transparentBackground'))
       return { toolCount: tools.length, hasPlot: true }
     })
     await step('native-mcp-webview-readiness', waitForWebViewBridge)
@@ -272,19 +273,21 @@ async function main() {
       assert.equal(view.objects.length, 1)
       assert.equal(view.objects[0].id, node.id)
       assert.deepEqual(view.objects[0].mathWindow, plot.mathWindow)
+      assert.equal(view.objects[0].transparentBackground, true)
       return { id: node.id }
     })
     const first = await step('native-plot-screenshot-png', () => screenshot('plot-board'))
     assert.notEqual(first.hash, empty.hash, 'Plot screenshot matches the empty board PNG')
     await step('native-plot-update', async () => {
       const node = await call('mathboard_update', { boardId, id: created.id,
-        patch: { latex: '1/x', color: '#2563eb', grid: false, border: false, axisNumbers: false } })
+        patch: { latex: '1/x', color: '#2563eb', grid: false, border: false, axisNumbers: false, transparentBackground: false } })
       assert.equal(node.id, created.id)
       const view = await waitForBoard(boardId)
       const current = view.objects[0]
       assert.equal(current.latex, '1/x')
       assert.equal(current.grid, false)
       assert.equal(current.color, '#2563eb')
+      assert.equal(current.transparentBackground, false)
     })
     const modified = await step('native-updated-plot-screenshot-png', () => screenshot('updated-plot-board'))
     assert.notEqual(modified.hash, first.hash, 'Updated Plot screenshot matches the original PNG')
@@ -302,6 +305,7 @@ async function main() {
       assert.equal(view.objects[0].color, '#2563eb')
       assert.equal(view.objects[0].border, false)
       assert.equal(view.objects[0].axisNumbers, false)
+      assert.equal(view.objects[0].transparentBackground, false)
     })
     await step('native-plot-post-restart-screenshot-png', async () => {
       await call('mathboard_boards_open', { boardId })

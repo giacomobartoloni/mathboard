@@ -41,6 +41,7 @@ test('public Plot discovery creates, edits and persists semantic source', async 
   const graph = await command(request, 'create', { spec: {
     ...specimen,
     latex: '1/x',
+    transparentBackground: true,
     left: 260,
     top: 170,
   } })
@@ -52,23 +53,26 @@ test('public Plot discovery creates, edits and persists semantic source', async 
   expect(full.mathWindow).toEqual(specimen.mathWindow)
   expect(full.frame).toEqual(specimen.frame)
   expect(full.plotStatus).toBe(graph.plotStatus)
+  expect(full.transparentBackground).toBe(true)
   const summary = (await command(request, 'observe', { detail: 'summary' })).objects[0]
   expect(summary.mathWindow).toBeUndefined()
   expect(summary.latex).toBe('1/x')
   const edited = await command(request, 'update', { id: graph.id, patch: {
-    latex: '\\sin(x)', grid: false, border: false, axisNumbers: false,
+    latex: '\\sin(x)', grid: false, border: false, axisNumbers: false, transparentBackground: false,
     color: '#2563eb', mathWindow: { xMin: -3, xMax: 3, yMin: -2, yMax: 2 },
   } })
   expect(edited.id).toBe(graph.id)
   expect(edited).toMatchObject({
-    latex: '\\sin(x)', grid: false, border: false, axisNumbers: false, color: '#2563eb',
+    latex: '\\sin(x)', grid: false, border: false, axisNumbers: false, transparentBackground: false, color: '#2563eb',
   })
   await page.keyboard.press('ControlOrMeta+z')
   await expect.poll(async () =>
     (await command(request, 'observe', { detail: 'full' })).objects[0]?.latex).toBe('1/x')
+  expect((await command(request, 'observe', { detail: 'full' })).objects[0].transparentBackground).toBe(true)
   await page.keyboard.press('ControlOrMeta+Shift+z')
   await expect.poll(async () =>
     (await command(request, 'observe', { detail: 'full' })).objects[0]?.latex).toBe('\\sin(x)')
+  expect((await command(request, 'observe', { detail: 'full' })).objects[0].transparentBackground).toBe(false)
   await page.evaluate(async () => {
     await document.querySelector('#app').__vue_app__._instance.proxy.drawBoardRef.flushPersistence()
   })
@@ -76,7 +80,7 @@ test('public Plot discovery creates, edits and persists semantic source', async 
   await expect.poll(async () =>
     (await command(request, 'observe', { detail: 'full' })).objects[0]?.id).toBe(graph.id)
   const persisted = (await command(request, 'observe', { detail: 'full' })).objects[0]
-  expect(persisted).toMatchObject({ border: false, axisNumbers: false, grid: false })
+  expect(persisted).toMatchObject({ border: false, axisNumbers: false, grid: false, transparentBackground: false })
   expect(persisted.mathWindow).toEqual({ xMin: -3, xMax: 3, yMin: -2, yMax: 2 })
 })
 
@@ -89,6 +93,7 @@ test('public Plot boundaries reject malformed creates/patches and preserve the b
   const before = await command(request, 'observe')
   for (const spec of [
     { ...plot, fill: '#ffffff' }, { ...plot, plotStatus: 'ok' },
+    { ...plot, transparentBackground: 'true' },
     { ...plot, mathWindow: { xMin: -3 } },
   ]) {
     const failure = await invoke(request, 'create', { spec })
@@ -99,6 +104,10 @@ test('public Plot boundaries reject malformed creates/patches and preserve the b
   const badPatch = await invoke(request, 'update', { id: added.id, patch: { mathWindow: { xMin: -2 } } })
   expect(badPatch.status).toBe(409)
   expect(badPatch.error.code).toBe('invalid_object_patch')
+  const invalidTransparency = await invoke(request, 'update', { id: added.id,
+    patch: { transparentBackground: null } })
+  expect(invalidTransparency.status).toBe(409)
+  expect(invalidTransparency.error.code).toBe('invalid_object_patch')
   const rejected = await invoke(request, 'createMany', { specs: [
     { type: 'rect', width: 40, height: 50 },
     { ...plot, latex: '\\sqrt{-1}' },
