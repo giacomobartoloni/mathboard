@@ -5,7 +5,8 @@ That click opens the lazy `PlotModal` editor. It previews LaTeX,
 axis ranges, axis lines and numbers, grid, border, transparent background and curve color, then awaits an atomic board commit.
 Successful insertion returns to Select; Escape cancels placement or the editor.
 Double-click a plot or use Edit graph to change it. Board zoom leaves its math
-window unchanged. Plot authoring through MCP is a separate increment.
+window unchanged. Local-agent and MCP authoring reuse the same semantic Plot contract
+through the stacked G4 implementation.
 
 - `parsePlotExpression(latex)` preserves `latex`, returns `normalizedLatex`,
   diagnostic `mathJson`, `evaluate(x)` and internal continuity guard values.

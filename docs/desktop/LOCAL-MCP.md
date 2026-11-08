@@ -192,7 +192,10 @@ The existing `mathboard_create`, `mathboard_create_many`, `mathboard_update`,
 type when the installed client reports it through `tools/list` and `mathboard_help`.
 Use `detail:"full"` to obtain mathematical source and all plot options before
 editing. A Plot uses LaTeX (`latex-v1`), complete `mathWindow` and `frame`,
-boolean `axes`/`grid` and optional `axisNumbers`, `border`, `color`.
+boolean `axes`/`grid` and optional `axisNumbers`, `border`, `transparentBackground`, `color`.
+`transparentBackground` defaults to `false`; set it to `true` to reveal the
+underlying board and its grid, independently of plot Grid/Border/Axes. Update
+this flag through a normal plot patch and observe it with `detail:"full"`.
 Use `color`, not generic Fabric fill/stroke. Derived `plotStatus` does not persist.
 
 Plots render with the same engine as the UI; native request cancellation and
