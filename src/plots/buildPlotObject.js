@@ -33,15 +33,15 @@ export async function buildPlotObject(spec, options = {}) {
   const color = spec.color && spec.color !== 'auto' ? spec.color : ink,
     width = spec.frame.width,
     height = spec.frame.height
-  // The surface masks the board grid; only the graph's mathematical grid is drawn above it.
+  // Keep the frame-sized surface for consistent bounds; transparency reveals the board grid.
   const surface = new Rect({ left: 0, top: 0, originX: 'left', originY: 'top', width, height,
-    fill: background, opacity: 1, stroke: null, strokeWidth: 0 })
+    fill: spec.transparentBackground === true ? 'transparent' : background, opacity: 1, stroke: null, strokeWidth: 0 })
   surface.plotBackground = true
   const objects = [surface]
   const path = (d, opacity, strokeWidth, stroke = ink) =>
     new Path(d, { fill: null, stroke, strokeWidth, opacity, strokeUniform: true })
   if (data.grid.length) objects.push(path(data.grid.join(' '), 0.14, 1))
-  // The outline is optional; the opaque surface always remains.
+  // Border and surface transparency are independent presentation options.
   if (spec.border !== false) objects.push(
     new Rect({
       left: 0,

@@ -2,7 +2,7 @@
 
 Press G or select Graph, then click the board to choose the upper-left origin.
 That click opens the lazy `PlotModal` editor. It previews LaTeX,
-axis ranges, axis lines and numbers, grid, border and curve color, then awaits an atomic board commit.
+axis ranges, axis lines and numbers, grid, border, transparent background and curve color, then awaits an atomic board commit.
 Successful insertion returns to Select; Escape cancels placement or the editor.
 Double-click a plot or use Edit graph to change it. Board zoom leaves its math
 window unchanged. Plot authoring through MCP is a separate increment.
@@ -68,8 +68,11 @@ Node tests use the same computation module directly.
 and Fabric renderer. `PlotObject` is an atomic registered Fabric Group; clones
 rebuild from semantics. AUTO curve/decorations follow board ink; fixed curve
 colors preserve the curve while decorations continue following board theme.
-A solid surface in the board background color masks the underlying board grid,
-even when the graph grid or border is disabled. Border is enabled by default for
+By default a solid surface in the board background color masks the underlying board grid,
+even when the graph grid or border is disabled. Selecting Transparent background reveals
+the underlying board (including its grid), independently of the graph's Axes, Grid and Border.
+The boolean `transparentBackground` is stored semantically and defaults to false for older
+plots; theme changes never make a transparent plot opaque. Border is enabled by default for
 new graphs and older plot nodes without the optional boolean `border` field.
 The mathematical grid omits perimeter strokes, so enabling it cannot add a border.
 Axis numbers can be hidden independently while keeping the axis lines. The optional
