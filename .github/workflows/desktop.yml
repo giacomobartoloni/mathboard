@@ -62,7 +62,7 @@ jobs:
           # Run packaged MCP acceptance for changes to the public Plot contract,
           # board capture/persistence, desktop bridge or native MCP runtime.
           # Keep unrelated web/UI changes on the lightweight CI path.
-          if grep -Eq '^(tools/ci/native-mcp-smoke\.mjs$|\.github/workflows/desktop\.yml$|src/plots/|src/board/(agent/|capture/|observe/|persistence/|objects/|BoardController\.js$|BoardDocumentCommandService\.js$)|src/platform/desktopBoardBridge\.js$|src/components/(DrawBoard|PlotModal)\.vue$|src/core/createMathBoardServices\.js$|src-tauri/(src/(mcp_|board_|lib\.rs$)|build\.rs$|tauri\.conf\.json$|Cargo\.(toml|lock)$)|package(-lock)?\.json$)' "$RUNNER_TEMP/desktop-changed-files.txt"; then
+          if grep -Eq '^(tools/ci/native-mcp-smoke\.mjs$|\.github/workflows/desktop\.yml$|src/plots/|src/board/(agent/|capture/|observe/|persistence/|objects/|BoardController\.js$|BoardDocumentCommandService\.js$)|src/platform/desktopBoardBridge\.js$|src/components/(DrawBoard|PlotModal)\.vue$|src/core/createMathBoardServices\.js$|src-tauri/(src/|build\.rs$|tauri\.conf\.json$|Cargo\.(toml|lock)$)|package(-lock)?\.json$)' "$RUNNER_TEMP/desktop-changed-files.txt"; then
             echo "native_mcp=true" >> "$GITHUB_OUTPUT"
           else
             echo "native_mcp=false" >> "$GITHUB_OUTPUT"
