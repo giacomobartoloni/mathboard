@@ -171,7 +171,12 @@ directory; a disposable board is removed after the tests.
 
 The smoke covers native discovery, empty-board PNG control, Plot create and
 semantic readback, **Plot-containing PNG capture**, edit and visual-change PNG,
-and durable readback plus capture after a full application restart. PNG files,
+and **real GUI Undo/Redo via X11 keyboard events** (`Ctrl+Z` /
+`Ctrl+Shift+Z`). The keyboard sequence exercises undo/redo of both Plot edits
+and creation; the installed MCP client checks semantic state and stable IDs
+after each keypress, with separate PNG evidence for an undone/redone edit.
+The suite then verifies durable readback plus capture after an application
+restart. PNG files,
 sanitized startup logs, package SHA-256 and structured PASS/FAIL test results
 are retained as a GitHub artifact for 14 days. A failed assertion fails the
 job; the test never substitutes the development bridge or a mock MCP server.
@@ -187,10 +192,14 @@ runs the native compilation matrix without smoke. Manual workflow dispatch
 always runs the existing desktop compilation matrix and runs this smoke only
 when the input is enabled.
 
-**Limits:** Xvfb is a virtual Linux GUI, not installed macOS or Windows
-acceptance. The job does not automate the native MCP settings On/Off toggle,
-prove toggle acknowledgement ordering, exercise GUI undo/redo or demonstrate
-the two-job `board_busy` path through serialized native requests. Keep
-these as separate G4.4 acceptance items; do not mark them PASS merely because
-the Linux smoke is green. A real installed macOS client must independently
-retest the original Plot screenshot defect before claiming it fixed there.
+**Limits:** Xvfb is a virtual installed Linux GUI, not macOS or Windows
+acceptance. GUI Undo/Redo uses `xdotool` with real X11 key events and does not
+inject JavaScript, invoke WebView history methods or bypass MCP transport.
+The job still does **not** automate the native MCP settings On/Off toggle,
+prove Off acknowledgement ordering or demonstrate the two-job `board_busy`
+path through serialized native requests. Linux keyboard acceptance is not a
+substitute for verifying GUI shortcuts on installed macOS/Windows. The macOS
+Plot screenshot regression was independently retested successfully with a
+real installed app at source commit `d18b214` (see the F039 G4.4 AgentWorklog);
+its earlier failure is resolved, but Off/Undo/Redo environment gates remain
+open unless separately evidenced.
