@@ -178,11 +178,14 @@ job; the test never substitutes the development bridge or a mock MCP server.
 A transient SDK package is installed in a separate temporary directory, not
 added to the application's dependency tree.
 
-For PRs targeting `develop` or `main`, changing the smoke harness or its
-workflow also triggers this job; regular application-only PRs do **not** pay
-the packaging cost. Scheduled Desktop CI still runs the native compilation
-matrix without smoke. Manual workflow dispatch always runs the existing
-desktop compilation matrix and runs this smoke only when the input is enabled.
+For PRs targeting `develop` or `main`, the packaged smoke is triggered
+automatically when the diff touches the smoke harness/workflow, Plot engine,
+public board agent contract, capture/observation/persistence, desktop bridge,
+Graph/board integration, native MCP runtime or relevant build configuration.
+Unrelated web-only changes stay on lightweight CI. Scheduled Desktop CI still
+runs the native compilation matrix without smoke. Manual workflow dispatch
+always runs the existing desktop compilation matrix and runs this smoke only
+when the input is enabled.
 
 **Limits:** Xvfb is a virtual Linux GUI, not installed macOS or Windows
 acceptance. The job does not automate the native MCP settings On/Off toggle,
