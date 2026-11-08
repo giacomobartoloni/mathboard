@@ -198,6 +198,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/mathboard-mcp-sdk" \
             --no-save --package-lock=false --ignore-scripts --no-audit --no-fund \
             @modelcontextprotocol/sdk@1.32.2
+          node --check tools/ci/native-mcp-smoke.mjs
+          xdotool --version
           cp tools/ci/native-mcp-smoke.mjs "$RUNNER_TEMP/mathboard-mcp-sdk/native-mcp-smoke.mjs"
 
       - name: Run packaged MCP Plot acceptance in virtual desktop
