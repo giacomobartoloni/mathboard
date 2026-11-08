@@ -151,7 +151,18 @@ This is a **source implementation, not verified release acceptance**. It protect
 
 See [PR #121](https://github.com/giacomobartoloni/mathboard/pull/121) for current implementation and CI. The application WebView carries no MCP settings or transport configuration.
 
-## Native acceptance checklist (not yet executed)
+## Native acceptance checklist (partially executed; release gates remain)
+
+A packaged macOS acceptance pass was attempted on 2026-11-07 with a real
+Streamable HTTP client and recorded partial success: discovery, semantic Plot
+mutations, validation, durability and transport security passed, but Plot PNG
+capture failed on that build and native GUI On/Off and Undo/Redo were blocked by
+macOS Accessibility permission. A later source fix and the packaged Linux
+acceptance at commit `730129a49f1c8c0b8baedbfcca1e33df5ac3b889` passed
+Plot PNG screenshot and durable restart through an installed `.deb`
+([Desktop CI evidence](https://github.com/giacomobartoloni/mathboard/actions/runs/42476206134)).
+This Linux result does not prove the original macOS defect is resolved in a
+rebuilt macOS app, nor native Off acknowledgment ordering or GUI Undo/Redo.
 
 For each installed Windows, macOS and Linux build, record exact application version, OS, client configuration and MCP traces:
 
@@ -206,6 +217,8 @@ The two-job API limit applies to in-flight Plot materialization, independent of
 the UI preview Worker. Inactive board mutations retain the CAS rules; Stamp v1
 still rejects plots. On `execution_unknown`, observe before retrying.
 
-**Acceptance status:** this section describes source implementation on the G4
-feature branch. Real packaged-client `tools/list`/`tools/call`, MCP Off during
-rendering and durable reload must be verified before claiming installed support.
+**Acceptance status:** the packaged Linux MCP smoke has verified
+`tools/list`, Plot `tools/call`, screenshots and durable reload at the
+G4 source head. Installed macOS/Windows GUI MCP Off/revocation during pending
+rendering, Undo/Redo and cross-platform client interoperability remain
+unverified acceptance gates. Do not treat Linux CI as a release sign-off.
