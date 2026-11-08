@@ -48,7 +48,7 @@ export class PlotObject extends Group {
     this.plotBoardBackground = config.background
     const surface = this.getObjects().find(o => o.plotBackground)
     if (surface) {
-      surface.set({ fill: config.background, opacity: 1 })
+      surface.set({ fill: this.plotSpec.transparentBackground ? 'transparent' : config.background, opacity: 1 })
       surface.dirty = true
     }
     this.dirty = true

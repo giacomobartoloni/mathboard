@@ -207,6 +207,44 @@ test('graph border option rejects nonboolean values', () => {
   for (const border of [null, 'false', 0, {}]) assert.throws(() => validatePlotSpec({ ...plot, border }))
 })
 
+test('transparent graph surface keeps frame bounds, theme paint and semantic state across clones', async () => {
+  for (const transparentBackground of [undefined, false, true]) {
+    const spec = { ...plot, grid: false, axes: false, border: false,
+      ...(transparentBackground === undefined ? {} : { transparentBackground }) }
+    const object = await buildPlotObject(spec)
+    const expectedFill = transparentBackground === true ? 'transparent' : '#f9f9f9'
+    assert.equal(object.getObjects()[0].fill, expectedFill)
+    assert.equal(object.getObjects()[0].opacity, 1)
+    assert.equal(object.getObjects()[0].plotBackground, true)
+    assert.equal(object.getObjects()[0].width, 480)
+    assert.equal(object.getObjects()[0].height, 320)
+    assert.equal(object.plotSpec.transparentBackground, transparentBackground === true)
+    const serialized = readSemanticBoardObject(object)
+    assert.equal(serialized.transparentBackground, transparentBackground === true)
+
+    object.applyTheme(BOARD_THEMES.dark)
+    assert.equal(object.getObjects()[0].fill,
+      transparentBackground === true ? 'transparent' : BOARD_THEMES.dark.background)
+    object.applyInk('#eeeeee')
+    assert.equal(object.getObjects()[0].fill,
+      transparentBackground === true ? 'transparent' : BOARD_THEMES.dark.background)
+
+    for (const source of [object, new Group([object])]) {
+      const clone = await source.clone()
+      const graph = clone.objectKind === 'plot' ? clone : clone.getObjects()[0]
+      assert.equal(graph.plotSpec.transparentBackground, transparentBackground === true)
+      assert.equal(graph.getObjects()[0].fill,
+        transparentBackground === true ? 'transparent' : BOARD_THEMES.dark.background)
+    }
+  }
+})
+
+test('transparent graph background rejects nonboolean values', () => {
+  for (const transparentBackground of [null, 'true', 1, {}]) {
+    assert.throws(() => validatePlotSpec({ ...plot, transparentBackground }))
+  }
+})
+
 test('grid lines leave the perimeter clear with aligned bounds and decimal roundoff', () => {
   for (const [mathWindow, expectedCount] of [
     [{ xMin: -6, xMax: 6, yMin: -4, yMax: 4 }, 12],
