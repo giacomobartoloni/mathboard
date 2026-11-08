@@ -30,6 +30,9 @@ export const BOARD_OBJECT_TYPES = Object.freeze([
   'group',
 ])
 
+// Plot authoring is UI-only until the separate agent/API increment.
+export const BOARD_SEMANTIC_TYPES = Object.freeze([...BOARD_OBJECT_TYPES, 'plot'])
+
 export const TRANSFORM_KEYS = Object.freeze([
   'left',
   'top',

@@ -18,14 +18,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import {
-  BOARD_DOCUMENT_VERSION,
+  BOARD_DOCUMENT_SUPPORTED_VERSIONS,
   BOARD_DOCUMENT_ERROR_CODES,
   BoardDocumentError,
 } from './schema.js'
 
 /**
  * Migrate a BoardDocument JSON to the current version.
- * V1 is identity. Future: v1 → v2 → current on semantic JSON only.
+ * V1 and V2 retain their explicit format version; adding plots requires V2.
  */
 export function migrateBoardDocument(doc) {
   if (!doc || typeof doc !== 'object') {
@@ -34,7 +34,7 @@ export function migrateBoardDocument(doc) {
       'Root must be an object.',
     )
   }
-  if (doc.version === BOARD_DOCUMENT_VERSION) {
+  if (BOARD_DOCUMENT_SUPPORTED_VERSIONS.includes(doc.version)) {
     return doc
   }
   throw new BoardDocumentError(

@@ -30,6 +30,7 @@ export const TOOL_SHORTCUTS = {
   h: 'pan',
   t: 'font',
   f: 'formula',
+  g: 'graph',
   s: 'shapes',
 }
 
@@ -189,6 +190,7 @@ export const SHORTCUT_HELP = [
       { id: 'pen', label: 'Pen', keys: 'P' },
       { id: 'text', label: 'Text', keys: 'T' },
       { id: 'formula', label: 'Formula', keys: 'F' },
+      { id: 'graph', label: 'Graph', keys: 'G' },
       { id: 'shapes', label: 'Shapes', keys: 'S' },
       { id: 'rectangle', label: 'Rectangle', keys: 'R' },
       { id: 'circle', label: 'Circle', keys: 'C' },

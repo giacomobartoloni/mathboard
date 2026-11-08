@@ -32,6 +32,7 @@ import {
  */
 export const BOARD_OBJECT_KINDS = Object.freeze({
   FORMULA: 'formula',
+  PLOT: 'plot',
   GROUP: 'group',
   ACTIVE_SELECTION: 'activeSelection',
   TEXT: 'text',
@@ -75,6 +76,8 @@ export class BoardObjectPolicy {
     )
   }
 
+  isPlot(object) { return Boolean(object && object.objectKind === 'plot' && object.plotSpec) }
+
   isArrow(object) {
     return Boolean(object && object.mathboardShapeType === 'arrow')
   }
@@ -84,6 +87,7 @@ export class BoardObjectPolicy {
       object
       && !this.isActiveSelection(object)
       && !this.isFormula(object)
+      && !this.isPlot(object)
       && !this.isArrow(object)
       && isFabricType(object, 'Group', 'group'),
     )
@@ -125,6 +129,8 @@ export class BoardObjectPolicy {
       return BOARD_OBJECT_KINDS.FORMULA
     }
 
+    if (this.isPlot(object)) return BOARD_OBJECT_KINDS.PLOT
+
     if (this.isArrow(object)) {
       return BOARD_OBJECT_KINDS.SHAPE
     }
@@ -150,6 +156,7 @@ export class BoardObjectPolicy {
 
   capabilitiesOf(object) {
     switch (this.kindOf(object)) {
+      case BOARD_OBJECT_KINDS.PLOT:
       case BOARD_OBJECT_KINDS.FORMULA:
         return FORMULA_CAPABILITIES
 

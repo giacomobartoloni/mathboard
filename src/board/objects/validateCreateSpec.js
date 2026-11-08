@@ -17,13 +17,14 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from './constants.js'
+import { PLOT_KEYS, validatePlotSpec } from '../../plots/plotSpec.js'
+import { BOARD_SEMANTIC_TYPES as BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from './constants.js'
 import { hasValidShapeGeometry, invalidPathField } from './shapeGeometry.js'
 import { BoardControllerError, BOARD_CONTROLLER_ERROR_CODES as C } from '../BoardControllerError.js'
 
 const TYPE_KEYS = { rect: ['width', 'height', 'rx', 'ry'], circle: ['radius'], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2', 'headLength', 'headWidth'],
   line: ['x1', 'y1', 'x2', 'y2'], path: ['path'], text: ['text', 'width', ...TEXT_KEYS],
-  formula: ['latex'], group: ['objects'] }
+  plot: PLOT_KEYS, formula: ['latex'], group: ['objects'] }
 
 const NUMERIC_TRANSFORMS = TRANSFORM_KEYS.filter((key) => !['flipX', 'flipY', 'originX', 'originY'].includes(key))
 const NUMERIC_TEXT = ['fontSize', 'lineHeight', 'charSpacing']
@@ -66,6 +67,7 @@ export function validateCreateSpec(spec, ancestors = new Set()) {
     && (!Array.isArray(spec.strokeDashArray) || !Array.from(spec.strokeDashArray).every(Number.isFinite))) invalid(C.INVALID_SPEC)
   if ('mathboardInkMode' in spec && !['auto', 'fixed'].includes(spec.mathboardInkMode)) invalid(C.INVALID_SPEC)
   validateValues(spec, C.INVALID_SPEC)
+  if (spec.type === 'plot') { try { validatePlotSpec(spec) } catch { invalid(C.INVALID_SPEC) } }
   // New objects must have paintable geometry. Historical documents keep their
   // own permissive loader so legacy zero-sized nodes remain readable.
   if (spec.type === 'rect' && (!Number.isFinite(spec.width) || spec.width <= 0
@@ -102,6 +104,7 @@ export function validateObjectPatch(patch, kind) {
   if (!isPlainObject(patch)) invalid(C.INVALID_PATCH)
   const allowed = [...TRANSFORM_KEYS,
     ...(kind === 'text' ? ['text', ...TEXT_KEYS] : []),
+    ...(kind === 'plot' ? [...PLOT_KEYS, 'opacity'] : []),
     ...(kind === 'formula' ? ['latex', 'fill', 'stroke', 'opacity', 'mathboardInkMode'] : []),
     ...(kind === 'group' ? ['opacity'] : []),
     ...(['shape', 'path', 'text'].includes(kind) ? [...STYLE_KEYS, 'mathboardInkMode'] : []),

@@ -237,6 +237,11 @@ export class BoardController {
     patch = structuredClone(patch)
     const hasPaint = 'fill' in patch || 'stroke' in patch
     if (hasPaint && !('mathboardInkMode' in patch)) patch.mathboardInkMode = 'fixed'
+    if (this._policy.isPlot(object)) {
+      const merged = {...this._read(object), ...patch}
+      validateCreateSpec(merged)
+      return this._replaceFormula(canvas, object, patch, options)
+    }
     if (this._policy.isFormula(object)) {
       // Canonicalize the patch before merging with the retained semantic node:
       // a new stroke must replace an older fill, rather than lose precedence.
@@ -305,7 +310,7 @@ export class BoardController {
         () => { if (!canvas.getObjects().includes(existing)) canvas.insertAt(index, existing) },
         () => { if (selected) canvas.setActiveObject(existing) },
       ]), { type: 'replace', index, removed: existing, added: next }, () => this._read(next),
-      { kind: 'formula_edit' }, lease)
+      { kind: this._policy.isPlot(existing) ? 'plot_edit' : 'formula_edit' }, lease)
       committed = true
       return result
     } finally {

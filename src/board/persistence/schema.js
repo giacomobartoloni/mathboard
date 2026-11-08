@@ -17,12 +17,19 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { validatePlotSpec } from '../../plots/plotSpec.js'
 import { hasValidShapeGeometry, invalidPathField } from '../objects/shapeGeometry.js'
 
-import { BOARD_OBJECT_TYPES, STYLE_KEYS, TRANSFORM_KEYS } from '../objects/constants.js'
+import { BOARD_SEMANTIC_TYPES as BOARD_OBJECT_TYPES, STYLE_KEYS, TRANSFORM_KEYS } from '../objects/constants.js'
 
 export const BOARD_DOCUMENT_FORMAT = 'mathboard-board'
 export const BOARD_DOCUMENT_VERSION = 1
+export const BOARD_DOCUMENT_PLOT_VERSION = 2
+export const BOARD_DOCUMENT_SUPPORTED_VERSIONS = [1, 2]
+
+export function boardDocumentVersionForObjects(objects) {
+  return objects.some(node => node.type === 'plot' || (node.type === 'group' && boardDocumentVersionForObjects(node.objects || []) === 2)) ? 2 : 1
+}
 
 export const BOARD_DOCUMENT_MAX_BYTES = 8 * 1024 * 1024
 export const BOARD_DOCUMENT_MAX_OBJECTS = 10000
@@ -232,6 +239,9 @@ function validateNode(node, path, depth, seenIds, counters) {
       assertOptionalBoolean(node, 'linethrough', path)
       assertOptionalBoolean(node, 'overline', path)
       break
+    case 'plot':
+      try { validatePlotSpec(node) } catch (error) { throw new BoardDocumentError(BOARD_DOCUMENT_ERROR_CODES.INVALID, error.message) }
+      break
     case 'formula':
       if (typeof node.latex !== 'string' || !node.latex.trim()) {
         throw new BoardDocumentError(
@@ -286,7 +296,7 @@ export function validateBoardDocument(doc) {
       `Expected format "${BOARD_DOCUMENT_FORMAT}".`,
     )
   }
-  if (doc.version !== BOARD_DOCUMENT_VERSION) {
+  if (!BOARD_DOCUMENT_SUPPORTED_VERSIONS.includes(doc.version)) {
     throw new BoardDocumentError(
       BOARD_DOCUMENT_ERROR_CODES.UNSUPPORTED_VERSION,
       `Got version ${JSON.stringify(doc.version)}.`,
@@ -315,6 +325,7 @@ export function validateBoardDocument(doc) {
   doc.objects.forEach((node, index) => {
     validateNode(node, `objects[${index}]`, 0, seenIds, counters)
   })
+  if (doc.version === 1 && boardDocumentVersionForObjects(doc.objects) === 2) throw new BoardDocumentError(BOARD_DOCUMENT_ERROR_CODES.UNSUPPORTED_VERSION, 'Graphs require BoardDocument v2.')
   return doc
 }
 
