@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 */
 
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -213,6 +213,204 @@ async function waitForBoard(id) {
     await sleep(500)
   }
   throw new Error('Board did not become stable')
+}
+
+// Linux/Xvfb delivers real X11 keyboard and pointer events to the packaged GUI.
+// No WebView injection, remote eval, board IPC or application test hooks are used.
+function x11(...args) {
+  return execFileSync('xdotool', args, { encoding: 'utf8', timeout: 8000 }).trim()
+}
+
+async function pressGuiShortcut(combo) {
+  assert.equal(process.platform, 'linux', 'X11 shortcut acceptance requires the Linux packaged smoke runner')
+  const deadline = Date.now() + 10000
+  let windowId
+  while (!windowId && Date.now() < deadline) {
+    try {
+      const candidates = x11('search', '--onlyvisible', '--name', '^MathBoard
+    arguments: { target: { kind: 'viewport' }, scale: 1 } }), 25000, 'Native screenshot')
+  if (response.isError) return unwrap(response, 'mathboard_screenshot')
+  const images = response.content?.filter(block => block.type === 'image') || []
+  assert.equal(images.length, 1, 'MCP screenshot must return exactly one image content block')
+  assert.equal(images[0].mimeType, 'image/png')
+  const bytes = Buffer.from(images[0].data, 'base64')
+  assert.ok(bytes.length > 32 && bytes.length <= 5 * 1024 * 1024)
+  assert.deepEqual(bytes.subarray(0, 8), pngSignature)
+  const width = bytes.readUInt32BE(16), height = bytes.readUInt32BE(20)
+  assert.ok(width > 0 && height > 0 && width <= 2048 && height <= 2048)
+  writeFileSync(join(artifactDir, `${name}.png`), bytes)
+  return { hash: sha256(bytes), byteCount: bytes.length, width, height }
+}
+
+const plot = Object.freeze({
+  type: 'plot', syntax: 'latex-v1', latex: 'x^2',
+  mathWindow: { xMin: -6, xMax: 6, yMin: -4, yMax: 10 },
+  frame: { width: 480, height: 320 }, axes: true, grid: true,
+  axisNumbers: true, border: true, transparentBackground: true, color: 'auto', left: 300, top: 200,
+})
+
+async function main() {
+  try {
+    await step('packaged-startup', async () => ({ endpoint: await launch() }))
+    await step('native-mcp-discovery', async () => {
+      await connect()
+      const tools = await catalog()
+      // Native help without a method lists names only. The detailed form
+      // includes objectTypes, field schemas and examples.
+      const help = await call('mathboard_help', { method: 'create' })
+      assert.ok(help.objectTypes?.includes('plot'), 'Plot missing from detailed native help')
+      const create = tools.find(tool => tool.name === 'mathboard_create')
+      assert.ok(JSON.stringify(create.inputSchema).includes('latex-v1'))
+      assert.ok(JSON.stringify(create.inputSchema).includes('mathWindow'))
+      assert.ok(JSON.stringify(create.inputSchema).includes('transparentBackground'))
+      return { toolCount: tools.length, hasPlot: true }
+    })
+    await step('native-mcp-webview-readiness', waitForWebViewBridge)
+    await step('create-isolated-test-board', async () => {
+      const board = await call('mathboard_boards_create', { title: `F039 Native MCP CI ${buildSha.slice(0, 8)}` })
+      assert.match(board.id, /^mb_[A-Za-z0-9_-]+$/)
+      boardId = board.id
+      const observed = await waitForBoard(boardId)
+      assert.equal(observed.objects.length, 0, 'Disposable board was not empty')
+      return { boardId }
+    })
+    const empty = await step('native-empty-board-png', () => screenshot('empty-board'))
+    const created = await step('native-plot-create-and-observe', async () => {
+      const node = await call('mathboard_create', { boardId, spec: plot })
+      assert.equal(node.type, 'plot')
+      assert.equal(node.latex, plot.latex)
+      assert.ok(typeof node.id === 'string' && node.id.length > 0)
+      const view = await waitForBoard(boardId)
+      assert.equal(view.objects.length, 1)
+      assert.equal(view.objects[0].id, node.id)
+      assert.deepEqual(view.objects[0].mathWindow, plot.mathWindow)
+      assert.equal(view.objects[0].transparentBackground, true)
+      return { id: node.id }
+    })
+    const first = await step('native-plot-screenshot-png', () => screenshot('plot-board'))
+    assert.notEqual(first.hash, empty.hash, 'Plot screenshot matches the empty board PNG')
+    await step('native-plot-update', async () => {
+      const node = await call('mathboard_update', { boardId, id: created.id,
+        patch: { latex: '1/x', color: '#2563eb', grid: false, border: false, axisNumbers: false, transparentBackground: false } })
+      assert.equal(node.id, created.id)
+      const view = await waitForBoard(boardId)
+      const current = view.objects[0]
+      assert.equal(current.latex, '1/x')
+      assert.equal(current.grid, false)
+      assert.equal(current.color, '#2563eb')
+      assert.equal(current.transparentBackground, false)
+    })
+    const modified = await step('native-updated-plot-screenshot-png', () => screenshot('updated-plot-board'))
+    assert.notEqual(modified.hash, first.hash, 'Updated Plot screenshot matches the original PNG')
+    const originalPlot = objects => objects.length === 1
+      && objects[0].id === created.id && objects[0].latex === plot.latex
+      && objects[0].grid === true && objects[0].transparentBackground === true
+    const editedPlot = objects => objects.length === 1
+      && objects[0].id === created.id && objects[0].latex === '1/x'
+      && objects[0].color === '#2563eb' && objects[0].grid === false
+      && objects[0].transparentBackground === false
+    await step('native-gui-undo-redo-plot-update', async () => {
+      // Keyboard events go through WebKit -> App.vue -> BoardHistory; readback is MCP.
+      await pressGuiShortcut('ctrl+z')
+      await waitForGuiBoardState('undo Plot update', originalPlot)
+      const undoPng = await screenshot('gui-undo-plot-edit')
+      await pressGuiShortcut('ctrl+shift+z')
+      await waitForGuiBoardState('redo Plot update', editedPlot)
+      const redoPng = await screenshot('gui-redo-plot-edit')
+      assert.notEqual(undoPng.hash, redoPng.hash, 'GUI Undo and Redo produced identical PNGs')
+      return { objectId: created.id, undoPng: undoPng.hash, redoPng: redoPng.hash }
+    })
+    await step('native-gui-undo-redo-plot-create', async () => {
+      await pressGuiShortcut('ctrl+z')
+      await waitForGuiBoardState('undo update before undo create', originalPlot)
+      await pressGuiShortcut('ctrl+z')
+      await waitForGuiBoardState('undo Plot creation', objects => objects.length === 0)
+      await pressGuiShortcut('ctrl+shift+z')
+      await waitForGuiBoardState('redo Plot creation', originalPlot)
+      await pressGuiShortcut('ctrl+shift+z')
+      await waitForGuiBoardState('redo Plot update', editedPlot)
+      // Let ordinary UI autosave complete before the packaged restart gate.
+      await sleep(1500)
+      return { objectId: created.id, originalIdPreserved: true }
+    })
+    await step('native-plot-durable-restart', async () => {
+      await closeSession()
+      await terminate()
+      endpoint = null
+      await launch()
+      await connect()
+      await catalog()
+      // A new listener can advertise tools before its WebView is ready to serve board reads.
+      await waitForWebViewBridge()
+      const view = await waitForBoard(boardId)
+      assert.equal(view.objects.length, 1)
+      assert.equal(view.objects[0].id, created.id)
+      assert.equal(view.objects[0].latex, '1/x')
+      assert.equal(view.objects[0].color, '#2563eb')
+      assert.equal(view.objects[0].border, false)
+      assert.equal(view.objects[0].axisNumbers, false)
+      assert.equal(view.objects[0].transparentBackground, false)
+    })
+    await step('native-plot-post-restart-screenshot-png', async () => {
+      await call('mathboard_boards_open', { boardId })
+      await waitForBoard(boardId)
+      return screenshot('reopened-plot-board')
+    })
+    await step('delete-disposable-test-board', async () => {
+      const deleted = await call('mathboard_boards_delete', { boardId, confirm: true })
+      assert.equal(deleted.deleted, true)
+    })
+  } finally {
+    await closeSession()
+    await terminate()
+    writeFileSync(join(artifactDir, 'app-stdout.log'), stdout.replaceAll(root, '[test-profile]'))
+    writeFileSync(join(artifactDir, 'app-stderr.log'), stderr.replaceAll(root, '[test-profile]'))
+    json('results.json', { sourceSha: buildSha, platform: process.platform, arch: process.arch,
+      executable: executable ? basename(executable) : null,
+      packageSha256: process.env.MATHBOARD_MCP_PACKAGE_SHA256 || null,
+      verdict: tests.every(test => test.status === 'PASS') && tests.at(-1)?.name === 'delete-disposable-test-board'
+        ? 'PASS' : 'FAIL', tests })
+  }
+}
+
+main().catch(error => {
+  process.stderr.write(`Native MCP acceptance failed: ${failureMessage(error)}\n`)
+  process.exitCode = 1
+})
+)
+        .split(/\r?\n/).filter(Boolean)
+      windowId = candidates.find(id => {
+        try { return Number(x11('getwindowpid', id)) === app?.pid }
+        catch { return false }
+      })
+    } catch { /* Wait for the installed GUI to map its X11 window. */ }
+    if (!windowId) await sleep(250)
+  }
+  assert.ok(windowId, 'Installed MathBoard main X11 window was not found for GUI shortcut')
+  const geometry = x11('getwindowgeometry', '--shell', windowId)
+  const entries = [...geometry.matchAll(/^([A-Z]+)=(-?\d+)$/gm)]
+  const values = Object.fromEntries(entries.map(([, key, value]) => [key, Number(value)]))
+  assert.ok([values.X, values.Y, values.WIDTH, values.HEIGHT].every(Number.isFinite),
+    'Could not determine installed GUI window geometry')
+  // windowfocus works without a window manager; the real click focuses WebKit.
+  x11('windowfocus', '--sync', windowId)
+  x11('mousemove', '--sync', String(values.X + Math.floor(values.WIDTH * 0.6)),
+    String(values.Y + Math.floor(values.HEIGHT * 0.75)))
+  x11('click', '1')
+  await sleep(150)
+  x11('key', '--clearmodifiers', '--delay', '80', combo)
+}
+
+async function waitForGuiBoardState(label, matches) {
+  const deadline = Date.now() + 12000
+  let last = null
+  while (Date.now() < deadline) {
+    const view = await observe(boardId)
+    last = { stable: view.stable, objects: view.objects?.map(({ id, type, latex }) => ({ id, type, latex })) }
+    if (view.stable !== false && matches(view.objects || [])) return view
+    await sleep(300)
+  }
+  throw new Error('GUI ' + label + ' did not change native MCP board readback: ' + JSON.stringify(last))
 }
 
 async function screenshot(name) {
