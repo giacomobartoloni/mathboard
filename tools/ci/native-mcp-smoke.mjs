@@ -298,6 +298,8 @@ async function main() {
       await launch()
       await connect()
       await catalog()
+      // A new listener can advertise tools before its WebView is ready to serve board reads.
+      await waitForWebViewBridge()
       const view = await waitForBoard(boardId)
       assert.equal(view.objects.length, 1)
       assert.equal(view.objects[0].id, created.id)

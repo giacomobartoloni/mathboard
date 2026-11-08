@@ -339,14 +339,16 @@ test('transparent background toggles in the editor and survives theme, clone, hi
   await transparency.uncheck()
   await expect(page.getByRole('button', { name: 'Update graph', exact: true })).toBeEnabled({ timeout: 20000 })
   await page.getByRole('button', { name: 'Update graph', exact: true }).click()
+  // The duplicate may be the topmost hit target; verify the edited plot regardless of scene order.
   await waitForState(page, s => s.history.tipType === 'replace' &&
-    s.objects[0].plotSpec.transparentBackground === false &&
-    s.objects[0].plotBackground?.fill !== 'transparent')
+    s.objects.some(o => o.plotSpec.transparentBackground === false &&
+      o.plotBackground?.fill !== 'transparent'))
   await clickUndo(page)
-  await waitForState(page, s => s.objects[0].plotSpec.transparentBackground === true &&
-    s.objects[0].plotBackground?.fill === 'transparent')
+  await waitForState(page, s => s.objects.every(o =>
+    o.plotSpec.transparentBackground === true && o.plotBackground?.fill === 'transparent'))
   await clickRedo(page)
-  await waitForState(page, s => s.objects[0].plotSpec.transparentBackground === false)
+  await waitForState(page, s => s.objects.some(o =>
+    o.plotSpec.transparentBackground === false && o.plotBackground?.fill !== 'transparent'))
 })
 
 for (const [theme, width, height] of [['light', 1280, 800], ['dark', 390, 844]]) {
