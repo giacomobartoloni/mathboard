@@ -306,6 +306,49 @@ test('border option works in create/edit, preserves the opaque surface and survi
   expect(state.objects[0].plotBorder).toBe(true)
 })
 
+test('transparent background toggles in the editor and survives theme, clone, history and reload', async ({ page }, testInfo) => {
+  await gotoBoard(page, '/', { boardTheme: 'chalkboard' })
+  await openGraph(page)
+  const transparency = page.getByLabel('Transparent background', { exact: true })
+  await expect(transparency).not.toBeChecked()
+  await transparency.check()
+  const preview = page.getByRole('img', { name: 'Graph of x^2-5x+6' }).locator('..')
+  await expect(preview).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+  await expect(page.getByRole('button', { name: 'Insert graph', exact: true })).toBeEnabled({ timeout: 20000 })
+  await page.screenshot({ path: testInfo.outputPath('transparent-graph-editor.png') })
+  await page.getByRole('button', { name: 'Insert graph', exact: true }).click()
+  let state = await waitForState(page, s => s.objects.length === 1)
+  expect(state.objects[0].plotSpec.transparentBackground).toBe(true)
+  expect(state.objects[0].plotBackground).toEqual({ fill: 'transparent', opacity: 1 })
+
+  for (const name of ['Chalkboard', 'Light', 'Dark']) {
+    await page.getByRole('button', { name: new RegExp('Theme: ' + name) }).click()
+    await waitForState(page, s => s.objects[0]?.plotBackground?.fill === 'transparent')
+  }
+  await page.getByRole('button', { name: 'Duplicate', exact: true }).click()
+  await waitForState(page, s => s.objects.length === 2 &&
+    s.objects.every(o => o.plotBackground?.fill === 'transparent'))
+  await expect.poll(async () => (await getBoardState(page)).persistence.state).toBe('clean')
+  await page.reload()
+  state = await waitForState(page, s => s.objects.length === 2)
+  expect(state.objects.every(o =>
+    o.plotSpec.transparentBackground === true && o.plotBackground?.fill === 'transparent')).toBe(true)
+
+  await editGraph(page, state.objects[0])
+  await expect(transparency).toBeChecked()
+  await transparency.uncheck()
+  await expect(page.getByRole('button', { name: 'Update graph', exact: true })).toBeEnabled({ timeout: 20000 })
+  await page.getByRole('button', { name: 'Update graph', exact: true }).click()
+  await waitForState(page, s => s.history.tipType === 'replace' &&
+    s.objects[0].plotSpec.transparentBackground === false &&
+    s.objects[0].plotBackground?.fill !== 'transparent')
+  await clickUndo(page)
+  await waitForState(page, s => s.objects[0].plotSpec.transparentBackground === true &&
+    s.objects[0].plotBackground?.fill === 'transparent')
+  await clickRedo(page)
+  await waitForState(page, s => s.objects[0].plotSpec.transparentBackground === false)
+})
+
 for (const [theme, width, height] of [['light', 1280, 800], ['dark', 390, 844]]) {
   test(`axis numbers toggle preserves axes and survives create/edit/history/reload ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height })

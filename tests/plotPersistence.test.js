@@ -216,3 +216,31 @@ test('axis numbers edits persist and older plot nodes default to visible labels'
   assert.equal(legacy.objects[0].plotSpec.axisNumbers, true)
   assert.ok(legacy.objects[0].getObjects().some(child => child.isType('Text')))
 })
+
+test('transparent background edits persist, undo atomically and default opaque for legacy plots', async () => {
+  const { controller, canvas, history } = setup()
+  const before = await controller.create(spec)
+  assert.equal(before.transparentBackground, false)
+  const after = await controller.update(before.id, { transparentBackground: true })
+  assert.equal(after.id, before.id)
+  assert.equal(after.transparentBackground, true)
+  assert.equal(history.at(-1).type, 'replace')
+  assert.equal(history.at(-1).removed.plotSpec.transparentBackground, false)
+  assert.equal(history.at(-1).added.getObjects()[0].fill, 'transparent')
+
+  const doc = serializeBoardDocument({ canvas, boardObjectPolicy: policy })
+  assert.equal(doc.version, 2)
+  assert.equal(doc.objects[0].transparentBackground, true)
+  const restored = await materializeBoardDocument(doc, { buildFormula })
+  assert.equal(restored.objects[0].plotSpec.transparentBackground, true)
+  assert.equal(restored.objects[0].getObjects()[0].fill, 'transparent')
+
+  delete doc.objects[0].transparentBackground
+  const legacy = await materializeBoardDocument(doc, { buildFormula })
+  assert.equal(legacy.objects[0].plotSpec.transparentBackground, false)
+  assert.equal(legacy.objects[0].getObjects()[0].fill, '#f9f9f9')
+
+  const opaque = await controller.update(before.id, { transparentBackground: false })
+  assert.equal(opaque.transparentBackground, false)
+  assert.equal(canvas.getObjects()[0].getObjects()[0].fill, '#f9f9f9')
+})
