@@ -218,7 +218,11 @@ async function waitForBoard(id) {
 // Linux/Xvfb delivers real X11 keyboard and pointer events to the packaged GUI.
 // No WebView injection, remote eval, board IPC or application test hooks are used.
 function x11(...args) {
-  return execFileSync('xdotool', args, { encoding: 'utf8', timeout: 8000 }).trim()
+  try {
+    return execFileSync('xdotool', args, { encoding: 'utf8', timeout: 5000 }).trim()
+  } catch (error) {
+    throw new Error('X11 command failed (' + args[0] + '): ' + failureMessage(error))
+  }
 }
 
 async function pressGuiShortcut(combo) {
@@ -242,9 +246,11 @@ async function pressGuiShortcut(combo) {
   const values = Object.fromEntries(entries.map(([, key, value]) => [key, Number(value)]))
   assert.ok([values.X, values.Y, values.WIDTH, values.HEIGHT].every(Number.isFinite),
     'Could not determine installed GUI window geometry')
-  // windowfocus works without a window manager; the real click focuses WebKit.
-  x11('windowfocus', '--sync', windowId)
-  x11('mousemove', '--sync', String(values.X + Math.floor(values.WIDTH * 0.6)),
+  // Xvfb has no window manager. Avoid --sync, which can block waiting for WM state.
+  // The physical click is what focuses WebKit's canvas before actual key events.
+  x11('windowfocus', windowId)
+  await sleep(100)
+  x11('mousemove', String(values.X + Math.floor(values.WIDTH * 0.6)),
     String(values.Y + Math.floor(values.HEIGHT * 0.75)))
   x11('click', '1')
   await sleep(150)
