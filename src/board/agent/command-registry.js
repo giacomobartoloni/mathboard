@@ -78,6 +78,7 @@ const plotInput = {
   axes: boolean, grid: boolean,
   axisNumbers: { ...boolean, default: true },
   border: { ...boolean, default: true },
+  transparentBackground: { ...boolean, default: false },
   color: { enum: [...PLOT_COLORS], default: 'auto' },
 }
 const plotPublicProperties = {

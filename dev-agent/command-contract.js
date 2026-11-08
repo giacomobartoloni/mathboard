@@ -105,7 +105,7 @@ export function getLocalAgentHelp() {
       'Create IDs are regenerated, including group children. Group children use existing Fabric-local geometry; formulas remain atomic/editable.',
       'Update schemas vary by kind: bounded style for shapes/text, opacity for groups, paint/ink for formulas, and full mathematical fields for plots.',
       'Plot authoring uses syntax latex-v1, finite ordered mathWindow, intrinsic frame and approved real scalar LaTeX only; radians, no arbitrary evaluation.',
-      'Plot color controls the curve, not generic fill/stroke; axes, axisNumbers, grid and border are independent. Replace mathWindow/frame as complete objects.',
+      'Plot color controls the curve, not generic fill/stroke; axes, axisNumbers, grid, border and transparentBackground are independent. Transparent background defaults false and reveals the board beneath the plot. Replace mathWindow/frame as complete objects.',
       'Use observe detail=full before updating plot options. Plot source is semantic; Stamp v1 does not export plots. After execution_unknown, observe before retrying create.',
       'Path commands undergo runtime validation.',
       'Examples are synthetic; replace example IDs. Discovery does not authorize changes.',

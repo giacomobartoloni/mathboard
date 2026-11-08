@@ -38,6 +38,16 @@ test('public plot contracts cover create, nested createMany, update and results'
   assert.equal(help.objectTypes.filter(type => type === 'plot').length, 1)
   assert.ok(help.examplesByType.plot)
   assert.equal(acceptsSchema(create.paramsSchema, { spec: plot }), true)
+  for (const transparentBackground of [true, false]) {
+    assert.equal(acceptsSchema(create.paramsSchema, { spec: { ...plot, transparentBackground } }), true)
+    assert.equal(acceptsSchema(createMany.paramsSchema, { specs: [
+      { type: 'group', objects: [{ ...plot, transparentBackground }] }
+    ] }), true)
+    assert.equal(acceptsSchema(update.paramsSchema, { id: 'example',
+      patch: { transparentBackground } }), true)
+  }
+  assert.deepEqual(help.patchSchemas.plot.properties.transparentBackground,
+    { type: 'boolean', default: false })
   assert.equal(acceptsSchema(createMany.paramsSchema, { specs: [{ type: 'group', objects: [plot] }] }), true)
   assert.equal(acceptsSchema(update.paramsSchema, { id: 'example', patch: { color: 'auto', grid: false } }), true)
   assert.equal(acceptsSchema(create.resultSchema, { id: 'a', type: 'plot' }), true)
@@ -49,6 +59,7 @@ test('plot schema rejects ignored paint and malformed mathematical fields', () =
   const bad = [
     { ...plot, fill: '#000' }, { ...plot, mathboardInkMode: 'fixed' },
     { ...plot, axisNumbers: null }, { ...plot, color: 'purple' },
+    { ...plot, transparentBackground: null }, { ...plot, transparentBackground: 'true' },
     { ...plot, syntax: 'js' }, { ...plot, latex: 'x'.repeat(2049) },
     { ...plot, mathWindow: { xMin: -3 } },
     { ...plot, frame: { width: 79, height: 320 } },
@@ -68,6 +79,7 @@ test('public ingress rejects ignored fields before dispatch, recursively and in 
   for (const spec of [
     { ...plot, fill: 'red' },
     { ...plot, opacity: 2 },
+    { ...plot, transparentBackground: 1 },
     { type: 'group', objects: [{ ...plot, plotBoardInk: 'red' }] },
     { type: 'group', objects: [{ ...plot, plotStatus: 'ok' }] },
   ]) {
@@ -92,15 +104,20 @@ test('plot edits reject invalid nested patches without changing history', async 
   const original = canvas.getObjects()[0]
   for (const patch of [
     { mathWindow: { xMin: -2 } }, { frame: { width: 10, height: 160 } },
-    { color: 'invalid' }, { axes: 'false' },
+    { color: 'invalid' }, { axes: 'false' }, { transparentBackground: 'false' },
     { mathWindow: { ...plot.mathWindow, xMin: 7, xMax: -7 } },
   ]) {
     await assert.rejects(controller.update(created.id, patch), { code: 'invalid_object_patch' })
   }
   assert.equal(history.length, 1)
   assert.equal(canvas.getObjects()[0], original)
-  const edited = await controller.update(created.id, { border: false, grid: false })
+  const edited = await controller.update(created.id, { border: false, grid: false, transparentBackground: true })
   assert.equal(edited.id, created.id)
   assert.equal(edited.border, false)
   assert.equal(edited.grid, false)
+  assert.equal(edited.transparentBackground, true)
+  assert.equal(canvas.getObjects()[0].getObjects()[0].fill, 'transparent')
+  const reset = await controller.update(created.id, { transparentBackground: false })
+  assert.equal(reset.transparentBackground, false)
+  assert.notEqual(canvas.getObjects()[0].getObjects()[0].fill, 'transparent')
 })
