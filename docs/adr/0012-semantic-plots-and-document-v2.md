@@ -61,3 +61,19 @@ or a new document/IPC version: conditional BoardDocument v2, Stamp v1 rejection,
 semantic history and persisted mathematical source remain unchanged. Native
 packaged-client acceptance is a separate G4.4 gate; source changes alone do not
 establish a shipped capability. See the G4 AgentWorklog implementation plan.
+
+## Follow-up — 2026-11-08 (transparent graph background)
+
+The owner requested an opt-in transparent graph surface. The optional semantic
+boolean `transparentBackground` defaults to false for new and historical plots
+and does not change conditional BoardDocument v2 or Stamp v1. The runtime
+retains a frame-sized Fabric surface to preserve bounds; when enabled its fill
+is transparent so the board and its grid remain visible. Plot Axes, Grid and
+Border stay independent. Theme changes recolor ink but never make the transparent
+surface opaque. UI, local agent and native MCP use one canonical Plot property;
+public create/update discovery validates it without adding a new tool or
+allowing arbitrary background paint.
+
+Delivery is stacked as PR #150 (plot foundation), PR #156 (UI and persistence),
+then PR #152 (local-agent/MCP integration). This decision does not imply merge,
+deployment or installed-client acceptance.
