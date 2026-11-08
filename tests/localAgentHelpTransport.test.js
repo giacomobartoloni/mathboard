@@ -41,7 +41,7 @@ test('disconnected help is bounded, deterministic JSON without board contents or
   const text = await a.text()
   const help = JSON.parse(text)
   assert.equal(text, await (await fetch(url + 'help')).text())
-  assert.ok(text.length < 60000)
+  assert.ok(text.length < 80000)
   assert.equal(help.schemaVersion, 1)
   assert.deepEqual(help.methods.map(m => m.method), ['observe', 'create', 'createMany', 'update', 'delete', 'deleteMany', 'clear', 'group', 'measure', 'layout', 'screenshot', 'boards.list', 'boards.create', 'boards.open', 'boards.rename', 'boards.listArchived', 'boards.archive', 'boards.unarchive', 'boards.delete'])
   const capture = help.methods.find(m => m.method === 'screenshot')

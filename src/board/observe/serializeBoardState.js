@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { getMathBoardObjectId } from '../ids.js'
 import { readSemanticBoardObject, toBoardDocumentNode } from '../objects/serialize.js'
+import { withPlotStatus } from './publicPlotStatus.js'
 
 /** Read-only scene observation, independent of history and persistence format. */
 export function serializeBoardState({ canvas, boardObjectPolicy, boardId = null, detail = 'full' }) {
@@ -45,9 +46,11 @@ export function serializeBoardState({ canvas, boardObjectPolicy, boardId = null,
         return structuredClone({ id, type, bounds,
           ...(text !== undefined ? { text } : {}),
           ...(latex !== undefined ? { latex } : {}),
-          ...(mathboardInkMode !== undefined ? { mathboardInkMode } : {}) })
+          ...(mathboardInkMode !== undefined ? { mathboardInkMode } : {}),
+          ...(boardObjectPolicy.isPlot(object) && ['ok', 'partial'].includes(object.plotStatus)
+            ? { plotStatus: object.plotStatus } : {}) })
       }
-      return structuredClone({ ...semantic, bounds })
+      return { ...withPlotStatus(semantic, object, boardObjectPolicy), bounds }
     }),
   }
 }

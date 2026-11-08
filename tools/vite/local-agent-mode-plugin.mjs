@@ -134,17 +134,24 @@ export function localAgentModePlugin({ commandTimeoutMs = COMMAND_TIMEOUT_MS, bo
   let browserResponse = null
   const pending = new Map()
 
-  function settle(id, status, payload) {
+  function cancelBrowser(id) {
+    if (browserResponse && !browserResponse.writableEnded && !browserResponse.destroyed) {
+      browserResponse.write(`event: cancel\ndata: ${JSON.stringify({ id })}\n\n`)
+    }
+  }
+
+  function settle(id, status, payload, cancel = false) {
     const command = pending.get(id)
     if (!command) return
     clearTimeout(command.timeout)
     pending.delete(id)
+    if (cancel) cancelBrowser(id)
     sendJson(command.response, status, payload)
   }
 
   function failPending() {
     for (const id of pending.keys()) {
-      settle(id, 503, transportError('board_disconnected', 'The local MathBoard browser disconnected.'))
+      settle(id, 503, transportError('board_disconnected', 'The local MathBoard browser disconnected.'), true)
     }
   }
 
@@ -234,8 +241,9 @@ export function localAgentModePlugin({ commandTimeoutMs = COMMAND_TIMEOUT_MS, bo
             return sendJson(response, 429, transportError('local_agent_busy', 'The local agent relay has reached its concurrent command limit.'))
           }
           const id = randomUUID()
+          const expiresAtMs = Date.now() + commandTimeoutMs
           const timeout = setTimeout(() => {
-            settle(id, 504, transportError('command_timeout', 'The local MathBoard command timed out.'))
+            settle(id, 504, transportError('command_timeout', 'The local MathBoard command timed out.'), true)
           }, commandTimeoutMs)
           pending.set(id, { response, timeout, method: command.method })
           response.on('close', () => {
@@ -243,9 +251,12 @@ export function localAgentModePlugin({ commandTimeoutMs = COMMAND_TIMEOUT_MS, bo
             if (entry?.response === response) {
               clearTimeout(entry.timeout)
               pending.delete(id)
+              cancelBrowser(id)
             }
           })
-          browserResponse.write(`event: command\ndata: ${JSON.stringify({ id, method: command.method, params: command.params || {} })}\n\n`)
+          browserResponse.write(`event: command\ndata: ${JSON.stringify({
+            id, method: command.method, params: command.params || {}, expiresAtMs,
+          })}\n\n`)
           return
         }
 

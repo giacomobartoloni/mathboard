@@ -11,6 +11,12 @@ on:
   schedule:
     - cron: '17 2 * * *'
   workflow_dispatch:
+    inputs:
+      native_mcp_smoke:
+        description: 'Run packaged Linux desktop MCP Plot/screenshot acceptance'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -26,6 +32,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       build: ${{ steps.detect.outputs.build }}
+      native_mcp: ${{ steps.detect.outputs.native_mcp }}
     steps:
       - name: Check out PR merge commit
         if: github.event_name == 'pull_request'
@@ -52,6 +59,14 @@ jobs:
           # Always run this lightweight job so path-only PRs get a completed check.
           git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/desktop-changed-files.txt"
           cat "$RUNNER_TEMP/desktop-changed-files.txt"
+          # Run packaged MCP acceptance for changes to the public Plot contract,
+          # board capture/persistence, desktop bridge or native MCP runtime.
+          # Keep unrelated web/UI changes on the lightweight CI path.
+          if grep -Eq '^(tools/ci/native-mcp-smoke\.mjs$|\.github/workflows/desktop\.yml$|src/plots/|src/board/(agent/|capture/|observe/|persistence/|objects/|BoardController\.js$|BoardDocumentCommandService\.js$)|src/platform/desktopBoardBridge\.js$|src/components/(DrawBoard|PlotModal)\.vue$|src/core/createMathBoardServices\.js$|src-tauri/(src/|build\.rs$|tauri\.conf\.json$|Cargo\.(toml|lock)$)|package(-lock)?\.json$)' "$RUNNER_TEMP/desktop-changed-files.txt"; then
+            echo "native_mcp=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "native_mcp=false" >> "$GITHUB_OUTPUT"
+          fi
 
           # Native code, desktop-specific JS and build/dependency configuration.
           # All other shared-frontend changes remain covered by CI and the
@@ -121,3 +136,89 @@ jobs:
       # Web lint/tests/build are already enforced by main.yml on every PR.
       - name: Compile desktop without installers
         run: npm run desktop:build -- --no-bundle
+
+  native-mcp-smoke:
+    name: Packaged Linux MCP Plot smoke
+    needs: changes
+    if: ${{ (github.event_name == 'workflow_dispatch' && inputs.native_mcp_smoke) || (github.event_name == 'pull_request' && needs.changes.outputs.native_mcp == 'true') }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      # The PR case checks out the feature head rather than a synthetic merge
+      # ref, so the binary SHA in acceptance evidence is the actual source head.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.node-version'
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install packaging, WebKit and virtual-display prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential curl wget file libxdo-dev libssl-dev \
+            libayatana-appindicator3-dev librsvg2-dev patchelf \
+            xvfb dbus-x11 xdotool
+
+      - run: npm ci
+
+      - name: Build packaged Linux desktop (not --no-bundle)
+        run: npm run desktop:build -- --bundles deb
+
+      - name: Install the actual package
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$deb" && test -s "$deb"
+          sha256sum "$deb" | tee "$RUNNER_TEMP/mathboard-package-sha256.txt"
+          echo "MATHBOARD_MCP_PACKAGE_SHA256=$(sha256sum "$deb" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          sudo dpkg -i "$deb"
+          test -x "$(command -v mathboard)"
+          echo "MATHBOARD_MCP_BINARY=$(command -v mathboard)" >> "$GITHUB_ENV"
+
+      # A pinned MCP client is installed in the runner temp directory: no new
+      # runtime/dev dependency or package-lock changes in the application.
+      - name: Prepare isolated real MCP Streamable HTTP client
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/mathboard-mcp-sdk"
+          npm install --prefix "$RUNNER_TEMP/mathboard-mcp-sdk" \
+            --no-save --package-lock=false --ignore-scripts --no-audit --no-fund \
+            @modelcontextprotocol/sdk@1.32.2
+          node --check tools/ci/native-mcp-smoke.mjs
+          xdotool --version
+          cp tools/ci/native-mcp-smoke.mjs "$RUNNER_TEMP/mathboard-mcp-sdk/native-mcp-smoke.mjs"
+
+      - name: Run packaged MCP Plot acceptance in virtual desktop
+        shell: bash
+        env:
+          MATHBOARD_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          export MATHBOARD_MCP_ARTIFACT_DIR="$RUNNER_TEMP/mathboard-native-mcp-artifacts"
+          export MATHBOARD_MCP_PROFILE_DIR="$RUNNER_TEMP/mathboard-native-mcp-profile"
+          mkdir -p "$MATHBOARD_MCP_ARTIFACT_DIR"
+          xvfb-run -a -s '-screen 0 1365x900x24' \
+            dbus-run-session -- node "$RUNNER_TEMP/mathboard-mcp-sdk/native-mcp-smoke.mjs"
+
+      - name: Upload native MCP acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-mcp-linux-${{ github.run_id }}
+          path: ${{ runner.temp }}/mathboard-native-mcp-artifacts/
+          retention-days: 14
+          if-no-files-found: warn

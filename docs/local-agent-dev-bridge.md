@@ -215,3 +215,9 @@ BoardController errors return a concise `code` and `message`. A transport error 
 The bridge exposes the eleven canvas operations plus `boards.list`, `boards.create`, `boards.open`, `boards.rename`, `boards.listArchived`, `boards.archive`, `boards.unarchive` and `boards.delete`. Grouping requires two or more existing top-level groupable objects; nested grouping and nested editing are not supported. It has no programmatic undo, redo, ungroup, remote access, authentication, MCP, or multiplayer API. Use the MathBoard UI for human actions such as Undo and Redo. Keep the bridge as a caller of `BoardController`; do not use it to access Fabric or Vue internals.
 
 After using the bridge in real development, record repeated friction before proposing more commands. In particular, check whether coordinates, observation detail, board dimensions, or a missing operation repeatedly block useful work.
+
+## F039 Plot requests
+
+The existing `create`, `createMany`, `update` and `observe` endpoints accept semantic Plot objects after discovering the build's Plot schema at `/__mathboard_agent/help`. No new URL or method was added. Use the optional boolean `transparentBackground` in the Plot create spec or an `update` patch to reveal the underlying board; omitted or `false` preserves the opaque theme surface. Verify it with `observe` and `detail:"full"`. Plot requests use the same 30-second relay deadline, now forwarded privately to the browser renderer; a timed-out or disconnected request cancels its owned Worker before a late mutation. Neither deadline, signal nor interaction channel is writable in JSON command arguments.
+
+Unlike native MCP, a successful development-bridge response is **not** an extra durable-storage acknowledgement; explicitly flush or re-observe after reload when durability matters. On timeout/disconnect or an uncertain acknowledgement, read the board before retrying create/createMany.

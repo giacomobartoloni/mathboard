@@ -208,6 +208,7 @@ export default {
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._pendingFormulaRenders = 0;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
+    this._plotRenderCoordinator = this.mathBoardServices.plotRenderCoordinator;
     this._boardLifecycle = new BoardLifecycle({
       onReadyChanged: (ready) => {
         if (this.canvas?.upperCanvasEl) {
@@ -270,8 +271,14 @@ export default {
       });
       return this._persistence;
     },
-    getBoardController() {
-      return this._ensureBoardController('local_agent');
+    getBoardController(context) {
+      if (!context) return this._ensureBoardController('local_agent');
+      const guard = context.guard || (() => {
+        if (context.signal?.aborted || Date.now() >= context.expiresAtMs)
+          throw Object.assign(new Error('Plot request expired.'), { code: 'command_timeout' });
+      });
+      const buildPlot = this._plotRenderCoordinator.forRequest({ ...context, guard });
+      return this._ensureBoardController('local_agent', guard, undefined, buildPlot);
     },
     getBoardDocumentCommands() {
       if (this._documentCommands) return this._documentCommands;
@@ -285,8 +292,9 @@ export default {
         getActiveChangeVersion: () => this._persistence?.changeVersion ?? null,
         getActiveCommitSequence: () => this._boardHistory.committedSequence(),
         flushActiveThrough: version => this._ensurePersistenceService().flushThrough(version),
-        getActiveController: (guard, buildFormula, interactionChannel) =>
-          this._ensureBoardController(interactionChannel, guard, buildFormula),
+        getActiveController: (guard, buildFormula, interactionChannel, buildPlot) =>
+          this._ensureBoardController(interactionChannel, guard, buildFormula, buildPlot),
+        plotRenderCoordinator: this._plotRenderCoordinator,
         buildFormula: (spec) => buildFormulaFromSemanticSpec(spec, {
           defaultInk: this.boardThemeConfig.defaultInk,
           render: (args) => this._formulaRenderer.render(args),
@@ -304,12 +312,13 @@ export default {
       }
       return this._boardWorkspace;
     },
-    _ensureBoardController(interactionChannel = 'local_agent', commitGuard, boundedBuildFormula) {
+    _ensureBoardController(interactionChannel = 'local_agent', commitGuard, boundedBuildFormula, boundedBuildPlot) {
       if (!commitGuard && this._boardControllers.has(interactionChannel)) return this._boardControllers.get(interactionChannel);
       const controller = new BoardController({
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
         buildFormula: boundedBuildFormula || ((spec) => this._buildFormulaFromSemanticSpec(spec)),
+        buildPlot: boundedBuildPlot,
         pushHistoryCommand: (command) => this._boardHistory.record(command),
         runWithoutHistory: (callback) => this._boardHistory.runSuspended(callback),
         prepareCreatedObject: (object) => {
