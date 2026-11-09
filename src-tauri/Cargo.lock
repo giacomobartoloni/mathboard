@@ -2160,7 +2160,7 @@ dependencies = [
 
 [[package]]
 name = "mathboard"
-version = "1.12.0"
+version = "1.13.0"
 dependencies = [
  "base64 0.22.1",
  "bytes",
