@@ -48,7 +48,7 @@ test('pinned CortexJS MathJSON accepts explicit scalar factors and immutable sna
 
 test('pinned grammar parses conventional juxtaposed coefficient notation', () => {
   const implicit = preparePlotExpression('ax^2+bx+c', ['a', 'b', 'c'])
-  const explicit = preparePlotExpression('a\cdot x^2+b\cdot x+c', ['a', 'b', 'c'])
+  const explicit = preparePlotExpression('a\\cdot x^2+b\\cdot x+c', ['a', 'b', 'c'])
   const values = { a: 2, b: -3, c: 1 }
   close(implicit.bind(values).evaluate(2), explicit.bind(values).evaluate(2))
 })
