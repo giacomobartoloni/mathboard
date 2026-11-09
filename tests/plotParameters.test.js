@@ -56,9 +56,9 @@ test('pinned grammar parses conventional juxtaposed coefficient notation', () =>
 test('editor finds scalar symbols using the same bounded MathJSON grammar', () => {
   assert.deepEqual(discoverPlotParameterSymbols('x^2'), [])
   assert.deepEqual(discoverPlotParameterSymbols('ax^2+bx+c'), ['a', 'b', 'c'])
-  assert.deepEqual(discoverPlotParameterSymbols('a\\\\cdot x^2+b'), ['a', 'b'])
+  assert.deepEqual(discoverPlotParameterSymbols('a\\cdot x^2+b'), ['a', 'b'])
   assert.throws(() => discoverPlotParameterSymbols('x+y'), { code: 'unsupported_expression' })
-  assert.throws(() => discoverPlotParameterSymbols('\\\\int x'), { code: 'unsupported_expression' })
+  assert.throws(() => discoverPlotParameterSymbols('\\int x'), { code: 'unsupported_expression' })
 })
 
 test('five local parameters are supported without a three-slider semantic limit', () => {
