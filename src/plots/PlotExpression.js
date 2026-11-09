@@ -70,7 +70,8 @@ export function discoverPlotParameterSymbols(latex) {
     if (typeof node === 'number' && Number.isFinite(node)) return
     if (typeof node === 'string') {
       if (['x', 'Pi', 'e', 'ExponentialE'].includes(node)) return
-      validatePlotParameterSymbols([node])
+      try { validatePlotParameterSymbols([node]) }
+      catch { fail('unsupported_expression', 'Unsupported plot variable: ' + node) }
       symbols.add(node)
       return
     }
