@@ -235,3 +235,68 @@ test('production adapter counts 5/20/50 UI actions without counting agent mutati
   expect(events.filter(({ name }) => name === 'board_engaged')).toHaveLength(1)
   expect(events.filter(({ name }) => name === 'object_created')).toHaveLength(51)
 })
+
+test('production adapter tracks Graph create/edit/cancel and a mixed Plot deletion', async ({ page }) => {
+  test.setTimeout(60000)
+  await gotoWithAnalyticsCapture(page)
+
+  await page.getByRole('button', { name: 'Graph', exact: true }).click()
+  await clickOnCanvas(page, { x: 320, y: 180 })
+  await expect(page.getByRole('dialog', { name: 'Create graph' })).toBeVisible()
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  await page.keyboard.press('g')
+  await clickOnCanvas(page, { x: 360, y: 220 })
+  await expect(page.getByRole('dialog', { name: 'Create graph' })).toBeVisible()
+  const field = page.getByLabel('Function (LaTeX)')
+  await field.fill('x+y')
+  await expect(page.getByRole('button', { name: 'Insert graph', exact: true })).toBeDisabled()
+  await field.fill('x^2')
+  await expect(page.getByRole('button', { name: 'Insert graph', exact: true })).toBeEnabled({ timeout: 20000 })
+  await page.getByRole('button', { name: 'Insert graph', exact: true }).click()
+  const createdBoard = await waitForState(page, state => state.objects.some(o => o.objectKind === 'plot'))
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  const created = createdBoard.objects.find(o => o.objectKind === 'plot')
+
+  await clickOnCanvas(page, {
+    x: Math.round(created.left + created.width / 2),
+    y: Math.round(created.top + created.height / 2),
+    clickCount: 2,
+  })
+  await expect(page.getByRole('dialog', { name: 'Edit graph' })).toBeVisible()
+  await page.getByLabel('Function (LaTeX)').fill('x^3')
+  await expect(page.getByRole('button', { name: 'Update graph', exact: true })).toBeEnabled({ timeout: 20000 })
+  await page.getByRole('button', { name: 'Update graph', exact: true }).click()
+  await waitForState(page, state => state.objects.some(o => o.plotSpec?.latex === 'x^3'))
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  await page.evaluate(() => window.__MATHBOARD_E2E__.createObjects([
+    { type: 'rect', left: 80, top: 80, width: 30, height: 30 },
+  ]))
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.press('Delete')
+  await waitForState(page, state => state.objects.length === 0)
+
+  const events = await page.evaluate(() => window.__capturedProductEvents)
+  const named = name => events.filter(event => event.name === name)
+  expect(named('plot_tool_selected')).toHaveLength(2)
+  expect(named('plot_modal_opened').map(({ metadata }) => metadata.mode)).toEqual(['create', 'create', 'edit'])
+  expect(named('plot_modal_cancelled')).toEqual([
+    { name: 'plot_modal_cancelled', metadata: { mode: 'create' } },
+  ])
+  expect(named('plot_submitted').map(({ metadata }) => metadata.mode)).toEqual(['create', 'edit'])
+  expect(named('plot_save_failed')).toEqual([])
+  expect(named('object_created').filter(({ metadata }) => metadata.object_type === 'plot')).toHaveLength(1)
+  expect(named('plot_edited')).toHaveLength(1)
+  expect(named('object_deleted')).toContainEqual(expect.objectContaining({
+    name: 'object_deleted',
+    metadata: expect.objectContaining({
+      object_type: 'mixed', selection_count: 2, plot_count: 1, shape_count: 1, unknown_count: 0,
+    }),
+  }))
+  expect(named('board_engaged')).toHaveLength(1)
+  const plotEvents = events.filter(({ name, metadata }) =>
+    name.startsWith('plot_') || metadata?.object_type === 'plot')
+  expect(JSON.stringify(plotEvents)).not.toMatch(/x\^2|x\^3|plotSpec|latex|plotId|coordinates|parameter/)
+})
