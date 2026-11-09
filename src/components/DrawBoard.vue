@@ -21,6 +21,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
   <div id="boardcontainer" ref="boardRoot">
     <canvas :id="id"></canvas>
     <div ref="selectionOverlay" class="selection-overlay">
+      <PlotParameterPanel v-for="panel in plotPanels" :key="panel.id"
+        :plot-id="panel.id" :parameters="panel.parameters"
+        :x="panel.x" :y="panel.y" :max-height="panel.maxHeight"
+        @preview="previewPlotParameter" @commit="commitPlotParameter" @cancel="cancelPlotPreview"
+      />
+      <div v-if="plotPreview" class="plot-live-preview"
+        :style="{ left: plotPreview.x + 'px', top: plotPreview.y + 'px',
+          width: plotPreview.width + 'px', height: plotPreview.height + 'px',
+          background: boardThemeConfig.background }">
+        <svg :viewBox="'0 0 ' + plotPreview.spec.frame.width + ' ' + plotPreview.spec.frame.height"
+          aria-hidden="true">
+          <path v-for="(d, i) in plotPreview.data.grid" :key="'g' + i" :d="d"
+            fill="none" stroke="currentColor" opacity="0.14" />
+          <path v-for="(d, i) in plotPreview.data.axes" :key="'a' + i" :d="d"
+            fill="none" stroke="currentColor" opacity="0.65" />
+          <path v-for="(d, i) in plotPreview.data.curves" :key="'c' + i" :d="d"
+            fill="none" :stroke="plotPreview.spec.color === 'auto' ? 'currentColor' : plotPreview.spec.color"
+            stroke-width="2" />
+          <circle v-for="(dot, i) in plotPreview.data.dots" :key="'d' + i"
+            :cx="dot.x" :cy="dot.y" r="1.7"
+            :fill="plotPreview.spec.color === 'auto' ? 'currentColor' : plotPreview.spec.color" />
+        </svg>
+      </div>
       <SelectionActionsPanel
         :visible="selectionPanel.visible"
         :x="selectionPanel.x"
@@ -39,6 +62,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
 import { plotSemanticProps } from '../plots/plotSpec.js';
+import { computePlotAsync } from '../plots/PlotComputation.js';
 import { Canvas, Pattern, PencilBrush, Shadow, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import { wheelZoomLevel } from "../board/viewport/wheelZoom.js";
 import * as fabric from "fabric";
@@ -68,6 +92,8 @@ import {
   ACTION_DELETE,
   ACTION_DUPLICATE,
   ACTION_EDIT,
+  ACTION_SHOW_PARAMETERS,
+  ACTION_HIDE_PARAMETERS,
   ACTION_GROUP,
   ACTION_UNGROUP,
   panelSize,
@@ -76,6 +102,7 @@ import {
   selectionPanelPosition,
 } from "../config/selectionActions";
 import SelectionActionsPanel from "./SelectionActionsPanel.vue";
+import PlotParameterPanel from "./PlotParameterPanel.vue";
 import {
   snapshotObject,
   applySnapshot,
@@ -147,7 +174,7 @@ const CURSOR_TYPES = {
 
 export default {
   name: "DrawBoard",
-  components: { SelectionActionsPanel },
+  components: { SelectionActionsPanel, PlotParameterPanel },
   mixins: [fabricStaticCanvas],
   inject: {
     mathBoardServices: {
@@ -170,6 +197,8 @@ export default {
       type: "canvas",
       windowWidth: 0,
       windowHeight: 0,
+      plotPanels: [],
+      plotPreview: null,
       selectionPanel: {
         visible: false,
         x: 0,
@@ -199,6 +228,9 @@ export default {
     this._pendingText = null;
     this._pencilGesture = false;
     this._selectionGesture = false;
+    this._plotPreviewToken = 0;
+    this._plotPreviewAbort = null;
+    this._plotPreviewTimer = null;
     this._geometryEditing = null;
     this._shapeGesture = null;
     this._panGesture = null;
@@ -603,6 +635,7 @@ export default {
       };
     },
     refreshSelectionPanel() {
+      this.refreshPlotPanels();
       if (!this.canvas || !this._panelAllowed()) {
         this._hideSelectionPanel();
         return;
@@ -652,6 +685,85 @@ export default {
         && prev.selectionCount === next.selectionCount
         && prev.actions.join() === next.actions.join();
       if (!same) this.selectionPanel = next;
+    },
+    refreshPlotPanels() {
+      if (!this.canvas || !this.$refs.selectionOverlay) return;
+      const overlayBounds = this.$refs.selectionOverlay.getBoundingClientRect();
+      const panels = [];
+      for (const object of this.canvas.getObjects()) {
+        if (!this._boardObjectPolicy.isPlot(object)
+          || !object.plotSpec?.showParameterControls || !object.plotSpec.parameters?.length) continue;
+        const bounds = this._selectionClientBox(object);
+        if (!bounds) continue;
+        const y = Math.round(bounds.top + bounds.height - overlayBounds.top + 10);
+        const maxHeight = Math.min(220, Math.floor(overlayBounds.height - y - 8));
+        if (maxHeight < 48 || y < -220) continue;
+        const x = Math.round(Math.max(8, Math.min(
+          bounds.left - overlayBounds.left + bounds.width / 2 - 125,
+          overlayBounds.width - 258)));
+        panels.push({ id: getMathBoardObjectId(object),
+          parameters: object.plotSpec.parameters, x, y, maxHeight });
+      }
+      if (JSON.stringify(panels) !== JSON.stringify(this.plotPanels)) this.plotPanels = panels;
+      if (this.plotPreview && !this.canvas.getObjects().some(
+        object => getMathBoardObjectId(object) === this.plotPreview.id)) this.cancelPlotPreview();
+    },
+    cancelPlotPreview() {
+      this._plotPreviewToken++;
+      clearTimeout(this._plotPreviewTimer);
+      this._plotPreviewAbort?.abort();
+      this._plotPreviewAbort = null;
+      this.plotPreview = null;
+    },
+    previewPlotParameter({ id, symbol, value }) {
+      this.cancelPlotPreview();
+      const canvas = this.canvas;
+      const object = canvas?.getObjects().find(o => getMathBoardObjectId(o) === id);
+      if (!object || !this._boardObjectPolicy.isPlot(object)) return;
+      const parameters = object.plotSpec.parameters.map(p => p.symbol === symbol ? { ...p, value } : p);
+      const spec = { ...object.plotSpec, parameters };
+      const generation = this._plotPreviewToken;
+      const abort = new AbortController();
+      this._plotPreviewAbort = abort;
+      this._plotPreviewTimer = setTimeout(async () => {
+        try {
+          const data = await computePlotAsync(spec, { signal: abort.signal });
+          if (abort.signal.aborted || generation !== this._plotPreviewToken || this.canvas !== canvas
+            || !canvas.getObjects().includes(object)) return;
+          const frame = this._selectionClientBox(object);
+          const overlay = this.$refs.selectionOverlay?.getBoundingClientRect();
+          if (!frame || !overlay) return;
+          this.plotPreview = { id, spec, data,
+            x: frame.left - overlay.left, y: frame.top - overlay.top,
+            width: frame.width, height: frame.height };
+        } catch (error) {
+          if (!abort.signal.aborted) console.error('Parameter preview failed.', error);
+        }
+      }, 90);
+    },
+    async commitPlotParameter({ id, symbol, value }) {
+      this.cancelPlotPreview();
+      const object = this.canvas?.getObjects().find(o => getMathBoardObjectId(o) === id);
+      if (!object || !this._boardObjectPolicy.isPlot(object)) return;
+      const parameters = object.plotSpec.parameters.map(p => p.symbol === symbol ? { ...p, value } : p);
+      try {
+        await this._ensureBoardController('ui').update(id, { parameters });
+        this.refreshPlotPanels();
+      } catch (error) {
+        console.error('Could not update graph parameter.', error);
+        this.refreshPlotPanels();
+      }
+    },
+    async togglePlotParameterControls(visible) {
+      const object = this.canvas?.getActiveObject();
+      if (!this._boardObjectPolicy.isPlot(object) || !object.plotSpec?.parameters?.length) return;
+      try {
+        await this._ensureBoardController('ui').update(getMathBoardObjectId(object),
+          { showParameterControls: visible }, { select: true });
+        this.refreshPlotPanels();
+      } catch (error) {
+        console.error('Could not change parameter controls visibility.', error);
+      }
     },
     _clearGeometryEditing() {
       const previous = this._geometryEditing;
@@ -738,6 +850,8 @@ export default {
         this.ungroupSelection();
         return;
       }
+      if (actionId === ACTION_SHOW_PARAMETERS) { this.togglePlotParameterControls(true); return; }
+      if (actionId === ACTION_HIDE_PARAMETERS) { this.togglePlotParameterControls(false); return; }
       if (actionId === ACTION_EDIT) this.editSelection();
     },
     _focusBoard() {
@@ -1543,6 +1657,7 @@ export default {
   },
   mounted() {
     this.initializeCanvas();
+    this.canvas.on('after:render', this.refreshPlotPanels);
     // Layout changes from pin/unpin do not emit a window resize.
     if (typeof ResizeObserver !== 'undefined') {
       this._boardResizeObserver = new ResizeObserver(() => this.updateCanvasSize());
@@ -1560,6 +1675,8 @@ export default {
     });
   },
   beforeUnmount() {
+    this.cancelPlotPreview();
+    this.canvas?.off('after:render', this.refreshPlotPanels);
     this._boardLifecycle.dispose();
     this.disablePlotInsertion();
     this._clearGeometryEditing();
@@ -1692,6 +1809,13 @@ div#boardcontainer {
 div#boardcontainer:focus {
   outline: none;
 }
+.plot-live-preview {
+  position: absolute;
+  pointer-events: none;
+  color: var(--text-primary);
+  overflow: hidden;
+}
+.plot-live-preview svg { width: 100%; height: 100%; display: block; }
 .selection-overlay {
   position: absolute;
   inset: 0;

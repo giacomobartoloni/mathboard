@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { preparePlotExpression, parsePlotExpression } from '../src/plots/PlotExpression.js'
+import { preparePlotExpression, parsePlotExpression, discoverPlotParameterSymbols } from '../src/plots/PlotExpression.js'
 import { validatePlotParameters } from '../src/plots/plotParameters.js'
 import { samplePlot } from '../src/plots/PlotSampler.js'
 import { computePlot } from '../src/plots/computePlot.js'
@@ -51,6 +51,14 @@ test('pinned grammar parses conventional juxtaposed coefficient notation', () =>
   const explicit = preparePlotExpression('a\\cdot x^2+b\\cdot x+c', ['a', 'b', 'c'])
   const values = { a: 2, b: -3, c: 1 }
   close(implicit.bind(values).evaluate(2), explicit.bind(values).evaluate(2))
+})
+
+test('editor finds scalar symbols using the same bounded MathJSON grammar', () => {
+  assert.deepEqual(discoverPlotParameterSymbols('x^2'), [])
+  assert.deepEqual(discoverPlotParameterSymbols('ax^2+bx+c'), ['a', 'b', 'c'])
+  assert.deepEqual(discoverPlotParameterSymbols('a\\cdot x^2+b'), ['a', 'b'])
+  assert.throws(() => discoverPlotParameterSymbols('x+y'), { code: 'unsupported_expression' })
+  assert.throws(() => discoverPlotParameterSymbols('\\int x'), { code: 'unsupported_expression' })
 })
 
 test('five local parameters are supported without a three-slider semantic limit', () => {

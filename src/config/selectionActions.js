@@ -27,6 +27,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
 
 export const ACTION_EDIT = 'edit'
+export const ACTION_SHOW_PARAMETERS = 'show-parameters'
+export const ACTION_HIDE_PARAMETERS = 'hide-parameters'
 export const ACTION_DUPLICATE = 'duplicate'
 export const ACTION_DELETE = 'delete'
 export const ACTION_GROUP = 'group'
@@ -78,7 +80,10 @@ export function selectionMeta(object) {
     hasSelection: true,
     selectionCount,
     selectionType,
-    actions: selectionActions(selectionType),
+    actions: selectionType === 'plot' && object.plotSpec?.parameters?.length
+      ? [ACTION_EDIT, object.plotSpec.showParameterControls ? ACTION_HIDE_PARAMETERS : ACTION_SHOW_PARAMETERS,
+        ACTION_DUPLICATE, ACTION_DELETE]
+      : selectionActions(selectionType),
   }
 }
 

@@ -24,7 +24,7 @@ import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { makeControllerCanvas } from './helpers/controller-canvas.js'
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js'
 import { BoardController } from '../src/board/BoardController.js'
-import { DEFAULT_PLOT } from '../src/plots/plotSpec.js'
+import { DEFAULT_PLOT, plotSemanticProps, validatePlotSpec } from '../src/plots/plotSpec.js'
 import { buildPlotObject } from '../src/plots/buildPlotObject.js'
 import { serializeBoardDocument } from '../src/board/persistence/serializeBoardDocument.js'
 import { materializeBoardDocument } from '../src/board/persistence/materializeBoardDocument.js'
@@ -68,6 +68,33 @@ test('v1 plot-free, v2 static, conditional v3 parametric including nested plots'
   assert.deepEqual(saved.objects[0].objects[0].parameters, spec.parameters)
 })
 
+test('optional board controls visibility persists only for parameterized plots', async () => {
+  const enabled = { ...spec, showParameterControls: true }
+  const { canvas, controller, history } = setup()
+  assert.equal(plotSemanticProps(enabled).showParameterControls, true)
+  assert.equal(plotSemanticProps({ ...spec, showParameterControls: false }).showParameterControls, undefined)
+  assert.throws(() => validatePlotSpec({ ...DEFAULT_PLOT, showParameterControls: true }),
+    { code: 'invalid_plot' })
+  assert.throws(() => validatePlotSpec({ ...spec, showParameterControls: 'true' }),
+    { code: 'invalid_plot' })
+  const created = await controller.create({ ...enabled, left: 25, top: 40 })
+  assert.equal(created.showParameterControls, true)
+  await controller.update(created.id, { showParameterControls: false })
+  const toggled = await controller.update(created.id, { showParameterControls: true })
+  assert.equal(toggled.showParameterControls, true)
+  let document = serializeBoardDocument({ canvas, boardObjectPolicy: policy })
+  assert.equal(document.version, 3)
+  assert.equal(document.objects[0].showParameterControls, true)
+  assert.deepEqual((await materializeBoardDocument(document, { buildFormula })).objects[0].plotSpec.parameters, spec.parameters)
+  const updated = await controller.update(created.id, { showParameterControls: false })
+  assert.equal(updated.showParameterControls, undefined)
+  assert.deepEqual(updated.parameters, spec.parameters)
+  document = serializeBoardDocument({ canvas, boardObjectPolicy: policy })
+  assert.equal(document.objects[0].showParameterControls, undefined)
+  assert.equal(history.length, 4)
+  assert.equal(history[3].type, 'replace')
+})
+
 test('create, edit, read, undo replay and reserialize per-Plot bindings', async () => {
   const { canvas, controller, history } = setup()
   const created = await controller.create({ ...spec, left: 123, top: 50 })
@@ -102,6 +129,10 @@ test('public Plot schema and existing local agent methods accept variable-length
     specs: [{ type: 'group', objects: [spec] }] }), true)
   assert.equal(acceptsSchema(update.paramsSchema, { id: 'id', patch: { parameters: spec.parameters } }), true)
   assert.equal(help.patchSchemas.plot.properties.parameters.type, 'array')
+  assert.equal(help.patchSchemas.plot.properties.showParameterControls.type, 'boolean')
+  assert.equal(acceptsSchema(create.paramsSchema, { spec: { ...spec, showParameterControls: true } }), true)
+  assert.equal(acceptsSchema(update.paramsSchema, { id: 'id', patch: { showParameterControls: false } }), true)
+  assert.equal(acceptsSchema(create.paramsSchema, { spec: { ...spec, showParameterControls: 'yes' } }), false)
   const five = ['a','b','c','d','f'].map((symbol, i) => param(symbol, i))
   assert.equal(acceptsSchema(create.paramsSchema, { spec: { ...spec, parameters: five } }), true)
   for (const wrong of [

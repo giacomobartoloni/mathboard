@@ -112,7 +112,12 @@ export function validateObjectPatch(patch, kind) {
   if (Object.keys(patch).some((key) => !allowed.includes(key))) invalid(C.INVALID_PATCH)
   validateValues(patch, C.INVALID_PATCH)
   if (kind === 'plot') {
-    try { validatePlotSpec({ ...DEFAULT_PLOT, ...patch }) }
+    // A patch may toggle visibility without resending existing parameter definitions.
+    // Full merged Plot validation in BoardController.update verifies their consistency.
+    const { showParameterControls, ...otherPlotFields } = patch
+    if (showParameterControls !== undefined && typeof showParameterControls !== 'boolean')
+      invalid(C.INVALID_PATCH)
+    try { validatePlotSpec({ ...DEFAULT_PLOT, ...otherPlotFields }) }
     catch { invalid(C.INVALID_PATCH) }
   }
   for (const key of ['stroke', 'fill']) {
