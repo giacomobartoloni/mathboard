@@ -51,15 +51,24 @@ export class PanGesture {
   }
 
   start(opt) {
-    if (!this.active) return;
-    const evt = opt.e;
-    evt.preventDefault();
-    const point = this._point(evt);
+    if (!this.active || this.dragging) return false;
+    this.canvas.selection = false;
+    return this._begin(opt.e);
+  }
+
+  startMiddle(event) {
+    if (event.button !== 1 || this.dragging) return false;
+    return this._begin(event);
+  }
+
+  _begin(event) {
+    event.preventDefault();
+    const point = this._point(event);
     this.dragging = true;
     this.lastX = point.x;
     this.lastY = point.y;
-    this.canvas.selection = false;
     this.onStart();
+    return true;
   }
 
   move(opt) {

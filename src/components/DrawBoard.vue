@@ -1364,6 +1364,41 @@ export default {
         this.refreshSelectionPanel();
       }
     },
+    onMiddleMouseDown(event) {
+      if (event.button !== 1 || !this.sessionReady || !this.canvas) return;
+      // Handle middle drag before Fabric can invoke the active drawing tool.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!this._panGesture.startMiddle(event)) return;
+      window.addEventListener('mousemove', this.onMiddleMouseMove, true);
+      window.addEventListener('mouseup', this.onMiddleMouseUp, true);
+      window.addEventListener('blur', this.stopMiddleMousePan);
+    },
+    onMiddleMouseMove(event) {
+      if (!(event.buttons & 4)) {
+        this.stopMiddleMousePan();
+        return;
+      }
+      event.stopImmediatePropagation();
+      this._panGesture.move({ e: event });
+    },
+    onMiddleMouseUp(event) {
+      if (event.button !== 1) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      this.stopMiddleMousePan();
+    },
+    stopMiddleMousePan() {
+      window.removeEventListener('mousemove', this.onMiddleMouseMove, true);
+      window.removeEventListener('mouseup', this.onMiddleMouseUp, true);
+      window.removeEventListener('blur', this.stopMiddleMousePan);
+      this._panGesture?.finish();
+    },
+    onMiddleAuxClick(event) {
+      if (event.button !== 1) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    },
     onWheelZoom(event) {
       if (!this.sessionReady || !this.canvas) return;
       // Capture native wheel events on the board root, preventing page scroll
@@ -1486,7 +1521,7 @@ export default {
           this.setCursor(CURSOR_TYPES.grabbing);
         },
         onFinish: () => {
-          if (this.selectedTool === 'pan') this.setCursor(CURSOR_TYPES.grab);
+          this.applyToolCursor(this.selectedTool);
           this.refreshSelectionPanel();
         },
       });
@@ -1549,6 +1584,8 @@ export default {
       this._boardResizeObserver.observe(this.$refs.boardRoot);
     }
     this.$refs.boardRoot.addEventListener('wheel', this.onWheelZoom, { passive: false });
+    this.canvas.upperCanvasEl.addEventListener('mousedown', this.onMiddleMouseDown, true);
+    this.canvas.upperCanvasEl.addEventListener('auxclick', this.onMiddleAuxClick, true);
     
     this.$nextTick(() => {
       this.updateCanvasSize();
@@ -1560,6 +1597,9 @@ export default {
     });
   },
   beforeUnmount() {
+    this.stopMiddleMousePan();
+    this.canvas.upperCanvasEl.removeEventListener('mousedown', this.onMiddleMouseDown, true);
+    this.canvas.upperCanvasEl.removeEventListener('auxclick', this.onMiddleAuxClick, true);
     this._boardLifecycle.dispose();
     this.disablePlotInsertion();
     this._clearGeometryEditing();

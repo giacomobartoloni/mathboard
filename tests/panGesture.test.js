@@ -63,3 +63,31 @@ test('deactivate finalizes drag and repeated tool switches do not leak listeners
   assert.equal(finishes.length,1);
   for(const callbacks of canvas.listeners.values()) assert.equal(callbacks.size,0);
 });
+
+test('middle mouse pans without tool activation or selection changes', () => {
+  const canvas = canvasStub();
+  let starts = 0, finishes = 0, prevented = 0;
+  const gesture = new PanGesture({
+    canvas,
+    onStart: () => starts++,
+    onFinish: () => finishes++,
+  });
+  const event = (button, clientX, clientY) => ({
+    button, clientX, clientY, preventDefault: () => prevented++,
+  });
+
+  assert.equal(gesture.startMiddle(event(0, 10, 20)), false);
+  assert.equal(gesture.startMiddle(event(1, 10, 20)), true);
+  assert.equal(gesture.startMiddle(event(1, 12, 23)), false);
+  assert.equal(canvas.selection, true);
+  assert.equal(canvas.listeners.size, 0);
+  gesture.move({ e: event(1, 40, 35) });
+  assert.deepEqual(canvas.viewportTransform, [1, 0, 0, 1, 33, 19]);
+  assert.equal(gesture.finish(), true);
+  assert.equal(gesture.finish(), false);
+  assert.equal(gesture.isActive(), false);
+  assert.equal(starts, 1);
+  assert.equal(finishes, 1);
+  assert.equal(prevented, 2);
+  assert.equal(canvas.rendered, 1);
+});
