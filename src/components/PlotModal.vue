@@ -65,6 +65,37 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               A real function of x. Try x^2, \frac{1}{x}, or \sin(x). Angles use radians.
             </p>
             <div class="plot-formula" aria-hidden="true" v-html="formulaHtml"></div>
+            <fieldset v-if="formulaSymbols.symbols.length || form.parameters.length" :disabled="busy" class="plot-parameters">
+              <legend>Parameters</legend>
+              <p v-if="missingSymbols.length" class="plot-help">
+                Define the coefficients {{ missingSymbols.join(', ') }} to preview this function.
+              </p>
+              <button v-if="missingSymbols.length" type="button" :disabled="busy" @click="addParameters">
+                Add sliders for {{ missingSymbols.join(', ') }}
+              </button>
+              <div v-for="parameter in form.parameters" :key="parameter.symbol" class="plot-parameter-row">
+                <label :for="'plot-parameter-' + parameter.symbol">{{ parameter.symbol }}</label>
+                <input :id="'plot-parameter-' + parameter.symbol" v-model.number="parameter.value"
+                  type="number" step="any" :min="parameter.min" :max="parameter.max"
+                  :aria-label="'Value for ' + parameter.symbol" required />
+                <details>
+                  <summary>Range for {{ parameter.symbol }}</summary>
+                  <div class="plot-parameter-range">
+                    <label>Min <input v-model.number="parameter.min" type="number" step="any" required /></label>
+                    <label>Max <input v-model.number="parameter.max" type="number" step="any" required /></label>
+                    <label>Step <input v-model.number="parameter.step" type="number" min="0" step="any" required /></label>
+                  </div>
+                </details>
+              </div>
+              <p v-if="unusedSymbols.length" class="plot-help" role="status">
+                Unused parameters: {{ unusedSymbols.join(', ') }}.
+                <button type="button" :disabled="busy" @click="removeUnusedParameters">Remove unused</button>
+              </p>
+              <label v-if="form.parameters.length" class="plot-controls-toggle">
+                <input v-model="form.showParameterControls" type="checkbox" />
+                Show parameter controls on board
+              </label>
+            </fieldset>
             <fieldset :disabled="busy">
               <legend>Axis ranges</legend>
               <div class="plot-ranges">
@@ -173,7 +204,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
               class="plot-help"
               role="status"
             >
-              The curve is outside the visible Y range. Adjust the axis ranges.
+              No real points are visible for these parameter values and axis ranges.
             </p>
             <p v-if="error || commitError" class="plot-error" role="alert">
               {{ error || commitError }}
@@ -203,6 +234,7 @@ import katex from 'katex'
 import 'katex/dist/katex.min.css'
 import { BOARD_THEMES } from '../config/themes.js'
 import { DEFAULT_PLOT } from '../plots/plotSpec.js'
+import { discoverPlotParameterSymbols } from '../plots/PlotExpression.js'
 import { computePlotAsync } from '../plots/PlotComputation.js'
 
 export default {
@@ -216,7 +248,7 @@ export default {
   emits: ['close', 'submit-plot'],
   data() {
     return {
-      form: JSON.parse(JSON.stringify({ ...DEFAULT_PLOT, color: 'auto', ...this.initialSpec })),
+      form: JSON.parse(JSON.stringify({ ...DEFAULT_PLOT, color: 'auto', parameters: [], showParameterControls: false, ...this.initialSpec })),
       preview: null,
       error: '',
       calculating: true,
@@ -229,6 +261,19 @@ export default {
     }
   },
   computed: {
+    formulaSymbols() {
+      try { return { symbols: discoverPlotParameterSymbols(this.form.latex), error: '' } }
+      catch (error) { return { symbols: [], error: error.message } }
+    },
+    missingSymbols() {
+      const declared = new Set(this.form.parameters.map(parameter => parameter.symbol))
+      return this.formulaSymbols.symbols.filter(symbol => !declared.has(symbol))
+    },
+    unusedSymbols() {
+      const used = new Set(this.formulaSymbols.symbols)
+      return this.formulaSymbols.error ? [] : this.form.parameters
+        .filter(parameter => !used.has(parameter.symbol)).map(parameter => parameter.symbol)
+    },
     graphTheme() { return BOARD_THEMES[this.boardTheme] || BOARD_THEMES.light },
     formulaHtml() {
       try {
@@ -261,6 +306,15 @@ export default {
     this._previewAbort?.abort()
   },
   methods: {
+    addParameters() {
+      this.form.parameters.push(...this.missingSymbols.map(symbol =>
+        ({ symbol, value: 1, min: -5, max: 5, step: 0.1 })))
+    },
+    removeUnusedParameters() {
+      const unused = new Set(this.unusedSymbols)
+      this.form.parameters = this.form.parameters.filter(parameter => !unused.has(parameter.symbol))
+      if (!this.form.parameters.length) this.form.showParameterControls = false
+    },
     snapshot() {
       return JSON.parse(JSON.stringify(this.form))
     },
@@ -268,9 +322,11 @@ export default {
       clearTimeout(this._previewTimer)
       this._previewAbort?.abort()
       this.preview = null
-      this.error = ''
-      this.calculating = true
-      this._previewTimer = setTimeout(() => this.calculate(), 200)
+      this.error = this.formulaSymbols.error || (this.missingSymbols.length
+        ? 'Define parameters: ' + this.missingSymbols.join(', ') : '') || (this.unusedSymbols.length
+          ? 'Remove unused parameters: ' + this.unusedSymbols.join(', ') : '')
+      this.calculating = !this.error
+      if (!this.error) this._previewTimer = setTimeout(() => this.calculate(), 200)
     },
     async calculate() {
       const abort = new AbortController()
@@ -409,6 +465,48 @@ legend {
   margin-top: 16px;
   padding-block: 8px;
 }
+.plot-parameters {
+  margin-top: 18px;
+}
+.plot-parameters > button,
+.plot-parameters .plot-help button {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.plot-parameter-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.plot-parameter-row details {
+  grid-column: 2;
+  font-size: 13px;
+}
+.plot-parameter-row summary {
+  cursor: pointer;
+}
+.plot-parameter-range {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px 0;
+}
+.plot-parameter-range label {
+  font-size: 12px;
+}
+.plot-parameter-range input {
+  margin-top: 4px;
+  min-width: 0;
+}
+.plot-controls-toggle {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plot-controls-toggle input { width: 18px; height: 18px; }
 .plot-options {
   display: flex;
   flex-wrap: wrap;
