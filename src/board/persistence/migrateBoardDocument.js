@@ -25,7 +25,8 @@ import {
 
 /**
  * Migrate a BoardDocument JSON to the current version.
- * V1 and V2 retain their explicit format version; adding plots requires V2.
+ * V1/V2/V3 retain their explicit version. Parameterless plots require V2;
+ * Plot-local numeric bindings require V3, including inside groups.
  */
 export function migrateBoardDocument(doc) {
   if (!doc || typeof doc !== 'object') {
