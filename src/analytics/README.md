@@ -278,6 +278,7 @@ MathBoard builds the following metadata for every delete gesture:
 - `shape_count`
 - `text_count`
 - `formula_count`
+- `plot_count`
 - `group_count`
 - `unknown_count`
 
@@ -293,10 +294,10 @@ Before provider-side metadata filtering, MathBoard guarantees:
 selection_count
 =
 path_count + shape_count + text_count
-+ formula_count + group_count + unknown_count
++ formula_count + plot_count + group_count + unknown_count
 ```
 
-`object_type` is the sole type for homogeneous selections and `mixed` for heterogeneous selections. Allowed values: `path`, `shape`, `text`, `formula`, `group`, `unknown`, `mixed`.
+`object_type` is the sole type for homogeneous selections and `mixed` for heterogeneous selections. Allowed values: `path`, `shape`, `text`, `formula`, `plot`, `group`, `unknown`, `mixed`.
 
 Classification uses `BoardObjectPolicy.kindOf()` only. Groups are counted atomically; members are not recursively counted. Stamps deleted as board groups count as `group`. Non-allowlisted kinds fall into `unknown_count`.
 
@@ -310,6 +311,7 @@ Homogeneous example (3 pencil strokes) as built by MathBoard:
   shape_count: 0,
   text_count: 0,
   formula_count: 0,
+  plot_count: 0,
   group_count: 0,
   unknown_count: 0,
 }
@@ -323,7 +325,7 @@ object_type = path
 path_count = 3
 ```
 
-The absent `shape_count`, `text_count`, `formula_count`, `group_count`, and `unknown_count` values are zero for this post-schema event.
+The absent `shape_count`, `text_count`, `formula_count`, `plot_count`, `group_count`, and `unknown_count` values are zero for this post-schema event.
 
 Mixed example:
 
@@ -335,6 +337,7 @@ Mixed example:
   shape_count: 0,
   text_count: 1,
   formula_count: 1,
+  plot_count: 0,
   group_count: 0,
   unknown_count: 0,
 }
