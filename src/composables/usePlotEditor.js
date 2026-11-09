@@ -18,14 +18,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { nextTick, ref } from 'vue'
+import { ANALYTICS_EVENTS } from '../analytics/events.js'
 
 // Owns the Graph editor lifecycle; the board controller remains responsible for mutations.
-export function usePlotEditor({ drawBoardRef, selectedTool }) {
+export function usePlotEditor({ drawBoardRef, selectedTool, trackEvent }) {
   const showPlotModal = ref(false)
   const editingPlotSpec = ref(null)
   const plotBusy = ref(false)
   const plotError = ref('')
   let editingPlotId = null
+  let mode = 'create'
   let plotPosition = null
   let plotReturnFocus = null
 
@@ -42,42 +44,50 @@ export function usePlotEditor({ drawBoardRef, selectedTool }) {
   }
 
   const closePlotModal = async () => {
-    if (plotBusy.value) return
+    if (!showPlotModal.value || plotBusy.value) return
+    trackEvent(ANALYTICS_EVENTS.PLOT_MODAL_CANCELLED, { mode })
     await dismissPlotModal()
   }
 
   const onOpenPlot = (position) => {
+    mode = 'create'
     plotPosition = position
     plotReturnFocus = document.activeElement
     editingPlotSpec.value = null
     editingPlotId = null
     plotError.value = ''
     showPlotModal.value = true
+    trackEvent(ANALYTICS_EVENTS.PLOT_MODAL_OPENED, { mode })
   }
 
   const onEditPlot = ({ spec, id }) => {
+    mode = 'edit'
     plotPosition = null
     plotReturnFocus = document.activeElement
     editingPlotSpec.value = spec
     editingPlotId = id
     plotError.value = ''
     showPlotModal.value = true
+    trackEvent(ANALYTICS_EVENTS.PLOT_MODAL_OPENED, { mode })
   }
 
   const onSubmitPlot = async (spec) => {
-    if (plotBusy.value) return
+    if (!showPlotModal.value || plotBusy.value) return
     plotBusy.value = true
     plotError.value = ''
+    trackEvent(ANALYTICS_EVENTS.PLOT_SUBMITTED, { mode })
+    let saved = false
     try {
       await drawBoardRef.value.savePlot(spec, editingPlotId, plotPosition)
-      // A successful save may close the editor while the external close action is locked.
-      await dismissPlotModal()
+      saved = true
     } catch (error) {
+      trackEvent(ANALYTICS_EVENTS.PLOT_SAVE_FAILED, { mode })
       plotError.value = error?.cause?.message || error?.message
         || 'Could not save this graph. Please try again.'
     } finally {
       plotBusy.value = false
     }
+    if (saved) await dismissPlotModal()
   }
 
   return {

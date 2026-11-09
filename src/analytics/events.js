@@ -36,6 +36,13 @@ export const ANALYTICS_EVENTS = Object.freeze({
   FORMULA_MODAL_CANCELLED: 'formula_modal_cancelled',
   FORMULA_RENDER_FAILED: 'formula_render_failed',
 
+  PLOT_TOOL_SELECTED: 'plot_tool_selected',
+  PLOT_MODAL_OPENED: 'plot_modal_opened',
+  PLOT_SUBMITTED: 'plot_submitted',
+  PLOT_EDITED: 'plot_edited',
+  PLOT_MODAL_CANCELLED: 'plot_modal_cancelled',
+  PLOT_SAVE_FAILED: 'plot_save_failed',
+
   STAMP_SHARE_CREATED: 'stamp_share_created',
   STAMP_SHARE_COPIED: 'stamp_share_copied',
   STAMP_SHARE_OPENED: 'stamp_share_opened',
@@ -68,6 +75,7 @@ export const ANALYTICS_OBJECT_TYPES = Object.freeze({
   SHAPE: 'shape',
   TEXT: 'text',
   FORMULA: 'formula',
+  PLOT: 'plot',
   GROUP: 'group',
   UNKNOWN: 'unknown',
   MIXED: 'mixed',

@@ -264,7 +264,7 @@ export default {
     const {
       showPlotModal, editingPlotSpec, plotBusy, plotError,
       onOpenPlot, onEditPlot, onSubmitPlot, closePlotModal,
-    } = usePlotEditor({ drawBoardRef, selectedTool })
+    } = usePlotEditor({ drawBoardRef, selectedTool, trackEvent })
     const showFormulaModal = ref(false)
     const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
     const showShareStampModal = ref(false)
@@ -496,6 +496,9 @@ export default {
       }
       if (tool === 'formula') {
         trackEvent(ANALYTICS_EVENTS.FORMULA_TOOL_SELECTED)
+      }
+      if (tool === 'graph') {
+        trackEvent(ANALYTICS_EVENTS.PLOT_TOOL_SELECTED)
       }
     }
 
