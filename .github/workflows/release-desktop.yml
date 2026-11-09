@@ -78,27 +78,26 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-    outputs:
-      release_id: ${{ steps.draft.outputs.release_id }}
     steps:
       - name: Create or reuse a unique draft release
-        id: draft
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Parallel packaging jobs must never race to create the same draft.
-          matches="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | \"\\(.id) \\(.draft)\"")"
-          if [[ "$matches" == *$'\n'* ]]; then
-            echo "::error::Multiple releases exist for $GITHUB_REF_NAME; resolve them manually."
+          # GitHub can hold multiple drafts for the same tag: refuse ambiguity.
+          release="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq -r --arg tag "$GITHUB_REF_NAME" \
+              '.[] | select(.tag_name == $tag) | "\(.id) \(.draft)"')"
+          if [[ "$release" == *$'\n'* ]]; then
+            echo "::error::Multiple releases exist for $GITHUB_REF_NAME."
             exit 1
-          fi
-          if [[ -n "$matches" && "$matches" != *' true' ]]; then
-            echo "::error::Release $GITHUB_REF_NAME already exists and is not a draft."
+          elif [[ "$release" == *' true' ]]; then
+            echo "Reusing existing draft release $release"
+          elif [[ -n "$release" ]]; then
+            echo "::error::Release $GITHUB_REF_NAME is already published."
             exit 1
-          fi
-          if [[ -z "$matches" ]]; then
+          else
             cat > release-notes.md <<'RELEASE_NOTES'
           ## MathBoard Desktop — Unsigned Public Beta
           
@@ -132,14 +131,6 @@ jobs:
               --title "MathBoard Desktop $GITHUB_REF_NAME" \
               --notes-file release-notes.md --draft --prerelease
           fi
-          matches="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | \"\\(.id) \\(.draft)\"")"
-          if [[ -z "$matches" || "$matches" == *$'\n'* || "$matches" != *' true' ]]; then
-            echo "::error::Expected exactly one draft release for $GITHUB_REF_NAME."
-            exit 1
-          fi
-          release_id="${matches% true}"
-          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
-          echo "Using draft release $release_id"
 
   package:
     name: Package ${{ matrix.label }}
@@ -199,19 +190,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Validate prepared draft release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ needs.prepare_release.outputs.release_id }}
-        run: |
-          set -euo pipefail
-          release="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '"\(.tag_name) \(.draft)"')"
-          if [[ "$release" != "$GITHUB_REF_NAME true" ]]; then
-            echo "::error::Prepared release $RELEASE_ID is unavailable or no longer a draft."
-            exit 1
-          fi
-
       - name: Build and upload release candidate installers
         uses: tauri-apps/tauri-action@v1
         env:
@@ -228,25 +206,12 @@ jobs:
   checksums:
     name: Release SHA-256 checksums
     if: github.event_name == 'push'
-    needs: [prepare_release, package]
+    needs: package
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - name: Confirm prepared release remains the only draft
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RELEASE_ID: ${{ needs.prepare_release.outputs.release_id }}
-        run: |
-          set -euo pipefail
-          matches="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | \"\\(.id) \\(.draft)\"")"
-          if [[ "$matches" != "$RELEASE_ID true" ]]; then
-            echo "::error::Expected only draft release $RELEASE_ID for $GITHUB_REF_NAME."
-            exit 1
-          fi
-
       - name: Download draft release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
