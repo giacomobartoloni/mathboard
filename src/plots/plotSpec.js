@@ -18,8 +18,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { PlotError } from './PlotError.js'
+import { validatePlotParameters } from './plotParameters.js'
 import { createPlotTransform } from './PlotGeometry.js'
-export const PLOT_KEYS = ['syntax', 'latex', 'mathWindow', 'frame', 'axes', 'axisNumbers', 'grid', 'border', 'transparentBackground', 'color']
+export const PLOT_KEYS = ['syntax', 'latex', 'mathWindow', 'frame', 'axes', 'axisNumbers', 'grid', 'border', 'transparentBackground', 'color', 'parameters']
 export const DEFAULT_PLOT = Object.freeze({
   type: 'plot',
   syntax: 'latex-v1',
@@ -34,6 +35,7 @@ export const DEFAULT_PLOT = Object.freeze({
 })
 export const PLOT_COLORS = ['auto', '#2563eb', '#dc2626', '#16a34a', '#9333ea']
 export function validatePlotSpec(spec) {
+  validatePlotParameters(spec?.parameters)
   if (spec?.axisNumbers !== undefined && typeof spec.axisNumbers !== 'boolean')
     throw new PlotError('invalid_plot', 'Axis numbers must be enabled or disabled.')
   if (spec?.border !== undefined && typeof spec.border !== 'boolean')
@@ -77,5 +79,6 @@ export function plotSemanticProps(spec) {
     transparentBackground: spec.transparentBackground === true,
     axisNumbers: spec.axisNumbers === undefined ? true : spec.axisNumbers
   }
-  return Object.fromEntries(PLOT_KEYS.map(k => [k, structuredClone(normalized[k])]))
+  return Object.fromEntries(PLOT_KEYS.filter(k => k !== 'parameters' || normalized.parameters?.length)
+    .map(k => [k, structuredClone(normalized[k])]))
 }
