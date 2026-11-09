@@ -53,6 +53,42 @@ function checkInput(latex) {
   }
 }
 
+/** Discover Plot-local scalar symbols from the same bounded MathJSON grammar used by
+ * the evaluator. This is an editor hint, never a replacement for final validation.
+ */
+export function discoverPlotParameterSymbols(latex) {
+  checkInput(latex)
+  const normalizedLatex = latex.trim().replace(/^(?:y\s*|f\s*\(\s*x\s*\)\s*)=\s*/, '')
+  if (!engine) engine = new ComputeEngine()
+  let ast
+  try { ast = engine.parse(normalizedLatex, { canonical: false }).json }
+  catch { fail('invalid_expression', 'LaTeX parsing failed') }
+  const symbols = new Set()
+  let nodes = 0
+  function visit(node, depth = 0) {
+    if (++nodes > 256 || depth > 32) fail('computation_limit', 'Expression complexity exceeds limit')
+    if (typeof node === 'number' && Number.isFinite(node)) return
+    if (typeof node === 'string') {
+      if (['x', 'Pi', 'e', 'ExponentialE'].includes(node)) return
+      validatePlotParameterSymbols([node])
+      symbols.add(node)
+      return
+    }
+    if (!Array.isArray(node)) fail('unsupported_expression', 'Unsupported numeric representation')
+    const [op, ...args] = node
+    if (op === 'Error') fail('invalid_expression', 'Invalid LaTeX')
+    if (!((Object.hasOwn(unary, op) && args.length === 1)
+      || (Object.hasOwn(binary, op) && args.length === 2)
+      || (['Add', 'Multiply', 'InvisibleOperator'].includes(op)
+        && args.length >= 2 && args.length <= 64))) {
+      fail('unsupported_expression', 'Unsupported operator or arity: ' + op)
+    }
+    args.forEach(a => visit(a, depth + 1))
+  }
+  visit(ast)
+  return validatePlotParameterSymbols([...symbols])
+}
+
 /** Parse once into bounded MathJSON-based evaluators, without assigning mutable
  * values on the shared CortexJS engine or rewriting the source LaTeX.
  * Numeric semantics use IEEE-754 Math, not Cortex symbolic evaluation.
