@@ -51,7 +51,17 @@ CortexJS symbol table.
    Do not introduce new Plot-specific methods. Preserve the merged trusted
    request deadlines, concurrency admission, cancellation, active/inactive
    board behavior and history guarantees.
-7. A valid parameter state with no real samples inside the selected mathematical
+7. A parameterized Plot may additionally store one optional boolean
+   `showParameterControls` (absent/false means hidden). It is permitted only when
+   a nonempty local parameter array exists. The field is part of the v3 Plot
+   semantics and is read/written through the existing canonical Plot contract,
+   full BoardDocument storage, Undo and local Agent/native MCP public schemas.
+   It controls only the visibility of the accessible Vue slider panel below
+   the Plot; neither selecting the Plot nor switching tools changes it.
+   The full Graph editor checkbox and the selected-Plot contextual Show/Hide
+   action update this single semantic value. The panel itself is not stored
+   as a Fabric object and is excluded from exported canvas graphics.
+8. A valid parameter state with no real samples inside the selected mathematical
    window is a valid empty Plot (derived no_real_samples status), allowing values
    to move back into range. Keep previous static Plot rejection behavior.
    This status is derived observation metadata, never persistent document state.
@@ -62,9 +72,10 @@ CortexJS symbol table.
   their semantic contents require a higher one.
 - Older applications cannot edit new v3 documents until upgraded. This is
   deliberate explicit rejection rather than hidden parameter loss.
-- Full on-board slider controls and a warm interactive Worker are separate
-  subsequent UI concerns. The merged trusted API coordinator is not a slider
-  animation engine.
+- A small on-board slider panel can be built on top of v3 without new semantic
+  object kinds or a generalized overlay framework. Keep its ephemeral preview
+  separate from one committed history operation per completed gesture.
+  A warm interactive Worker is not required unless measurements justify one.
 - Real-domain discontinuity behavior remains bounded and conservative; sampling
   cannot prove global continuity.
 - UI/default range policy, lexical identifier extensions and measured performance
