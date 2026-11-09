@@ -119,9 +119,9 @@ by the workflow.
 6. On four native runners, Tauri builds macOS Apple Silicon/Intel DMGs, Windows
    x64 NSIS and MSI installers, and Linux x64 .deb and AppImage packages. All
    packaging jobs upload into the already-prepared Draft Release.
-7. After all platform builds pass, the checksum job confirms the unique draft,
-   downloads its assets, verifies both macOS architectures and all Windows/Linux
-   formats, then uploads `SHA256SUMS.txt`.
+7. After all platform builds pass, the checksum job downloads the release
+   assets, verifies both macOS architectures and all Windows/Linux formats,
+   then uploads `SHA256SUMS.txt`.
 
 Example tagging commands (run only after approval and checkout of the verified
 release commit on `main`):
