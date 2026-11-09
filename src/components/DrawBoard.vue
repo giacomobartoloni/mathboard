@@ -1481,15 +1481,17 @@ export default {
       });
       this._panGesture = new PanGesture({
         canvas: this.canvas,
+        canStartMiddle: () => this.sessionReady,
         onStart: () => {
           this._hideSelectionPanel();
           this.setCursor(CURSOR_TYPES.grabbing);
         },
         onFinish: () => {
-          if (this.selectedTool === 'pan') this.setCursor(CURSOR_TYPES.grab);
+          this.applyToolCursor(this.selectedTool);
           this.refreshSelectionPanel();
         },
       });
+      this._panGesture.enableMiddleMouse();
       this._textInsertion = new TextInsertionSession({
         canvas: this.canvas,
         getInk: () => this.activeInk,

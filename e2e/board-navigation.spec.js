@@ -68,3 +68,48 @@ test('wheel zooms at the cursor and updates the zoom indicator', async ({ page }
   await expect.poll(async () => (await getBoardState(page)).zoom).toBeCloseTo(1, 4)
   await expect(page.locator('.zoom-button.reset')).toHaveText('100%')
 })
+
+test('middle mouse drag pans across tools without changing objects or history', async ({ page }) => {
+  await gotoBoard(page)
+  const canvas = await canvasBox(page)
+
+  for (const [name, shortcut] of [
+    ['Select', 'v'], ['Pen', 'p'], ['Shapes', 's'], ['Formula', 'f'],
+  ]) {
+    await page.keyboard.press(shortcut)
+    const tool = page.getByRole('button', { name, exact: true })
+    await expect(tool).toHaveAttribute('aria-pressed', 'true')
+
+    const before = await getBoardState(page)
+    await page.mouse.move(canvas.x + 360, canvas.y + 240)
+    await page.mouse.down({ button: 'middle' })
+    await page.mouse.move(canvas.x + 420, canvas.y + 275, { steps: 5 })
+    await page.mouse.up({ button: 'middle' })
+
+    const after = await getBoardState(page)
+    expect(after.viewportTransform[4] - before.viewportTransform[4]).toBeCloseTo(60, 3)
+    expect(after.viewportTransform[5] - before.viewportTransform[5]).toBeCloseTo(35, 3)
+    expect(after.objects).toEqual(before.objects)
+    expect(after.history).toEqual(before.history)
+    await expect(tool).toHaveAttribute('aria-pressed', 'true')
+  }
+})
+
+test('middle drag ends outside the canvas and does not block later drawing', async ({ page }) => {
+  await gotoBoard(page)
+  await page.keyboard.press('p')
+  const canvas = await canvasBox(page)
+  await page.mouse.move(canvas.x + 340, canvas.y + 220)
+  await page.mouse.down({ button: 'middle' })
+  await page.mouse.move(canvas.x + 400, canvas.y + 260)
+  await page.mouse.move(8, 8)
+  await page.mouse.up({ button: 'middle' })
+
+  const afterPan = await getBoardState(page)
+  expect(afterPan.objects).toHaveLength(0)
+  await page.mouse.move(canvas.x + 280, canvas.y + 180)
+  await page.mouse.down()
+  await page.mouse.move(canvas.x + 340, canvas.y + 230, { steps: 10 })
+  await page.mouse.up()
+  await expect.poll(async () => (await getBoardState(page)).objects.length).toBe(1)
+})
