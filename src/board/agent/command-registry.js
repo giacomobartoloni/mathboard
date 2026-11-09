@@ -91,6 +91,7 @@ const plotInput = {
   transparentBackground: { ...boolean, default: false },
   color: { enum: [...PLOT_COLORS], default: 'auto' },
   parameters: plotParameters,
+  showParameterControls: { type: 'boolean', default: false },
 }
 const plotPublicProperties = {
   type: { const: 'plot' }, id: common.id, ...transformProperties,
