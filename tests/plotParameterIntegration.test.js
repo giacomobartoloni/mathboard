@@ -79,6 +79,9 @@ test('optional board controls visibility persists only for parameterized plots',
     { code: 'invalid_plot' })
   const created = await controller.create({ ...enabled, left: 25, top: 40 })
   assert.equal(created.showParameterControls, true)
+  await controller.update(created.id, { showParameterControls: false })
+  const toggled = await controller.update(created.id, { showParameterControls: true })
+  assert.equal(toggled.showParameterControls, true)
   let document = serializeBoardDocument({ canvas, boardObjectPolicy: policy })
   assert.equal(document.version, 3)
   assert.equal(document.objects[0].showParameterControls, true)
@@ -88,8 +91,8 @@ test('optional board controls visibility persists only for parameterized plots',
   assert.deepEqual(updated.parameters, spec.parameters)
   document = serializeBoardDocument({ canvas, boardObjectPolicy: policy })
   assert.equal(document.objects[0].showParameterControls, undefined)
-  assert.equal(history.length, 2)
-  assert.equal(history[1].type, 'replace')
+  assert.equal(history.length, 4)
+  assert.equal(history[3].type, 'replace')
 })
 
 test('create, edit, read, undo replay and reserialize per-Plot bindings', async () => {
