@@ -27,6 +27,10 @@ import { RegisterHTMLHandler } from '@mathjax/src/js/handlers/html.js'
 import '@mathjax/src/js/input/tex/base/BaseConfiguration.js'
 import '@mathjax/src/js/input/tex/ams/AmsConfiguration.js'
 import '@mathjax/src/js/input/tex/boldsymbol/BoldsymbolConfiguration.js'
+import '@mathjax/src/js/input/tex/braket/BraketConfiguration.js'
+import '@mathjax/src/js/input/tex/cancel/CancelConfiguration.js'
+import '@mathjax/src/js/input/tex/extpfeil/ExtpfeilConfiguration.js'
+import '@mathjax/src/js/input/tex/mathtools/MathtoolsConfiguration.js'
 import '@mathjax/src/js/input/tex/newcommand/NewcommandConfiguration.js'
 import '@mathjax/src/js/input/tex/noundefined/NoUndefinedConfiguration.js'
 import '@mathjax/src/js/input/tex/textmacros/TextMacrosConfiguration.js'
@@ -44,6 +48,10 @@ const TEX_PACKAGES = Object.freeze([
   'base',
   'ams',
   'boldsymbol',
+  'braket',
+  'cancel',
+  'extpfeil',
+  'mathtools',
   'newcommand',
   'noundefined',
   'textmacros',
