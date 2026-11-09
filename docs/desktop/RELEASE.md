@@ -113,12 +113,15 @@ by the workflow.
 4. Check the `Desktop Release Candidate` workflow: the source verification job
    first checks the tag syntax, version consistency, main ancestry, lint, tests,
    and production build. Packaging is not allowed if verification fails.
-5. On four native runners, Tauri builds macOS Apple Silicon/Intel DMGs, Windows
-   x64 NSIS and MSI installers, and Linux x64 .deb and AppImage packages. The
-   action attaches them to a **Draft Release**, marked as a prerelease.
-6. After all platform builds pass, the checksum job downloads the draft assets,
-   verifies the five expected artifact categories (including two macOS DMGs),
-   and uploads `SHA256SUMS.txt`.
+5. A single `Prepare one draft release` job first creates (or reuses) exactly
+   one unpublished prerelease for the tag. It rejects duplicate releases and
+   previously published releases rather than silently choosing one.
+6. On four native runners, Tauri builds macOS Apple Silicon/Intel DMGs, Windows
+   x64 NSIS and MSI installers, and Linux x64 .deb and AppImage packages. All
+   packaging jobs upload into the already-prepared Draft Release.
+7. After all platform builds pass, the checksum job confirms the unique draft,
+   downloads its assets, verifies both macOS architectures and all Windows/Linux
+   formats, then uploads `SHA256SUMS.txt`.
 
 Example tagging commands (run only after approval and checkout of the verified
 release commit on `main`):
