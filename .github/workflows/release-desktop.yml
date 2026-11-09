@@ -90,7 +90,59 @@ jobs:
           set -euo pipefail
           # Parallel packaging jobs must never race to create the same draft.
           matches="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | \"\\(.id) \\(.draft)\"")"
-          if [[ "$matches" == *    name: Package ${{ matrix.label }}
+          if [[ "$matches" == *$'\n'* ]]; then
+            echo "::error::Multiple releases exist for $GITHUB_REF_NAME; resolve them manually."
+            exit 1
+          fi
+          if [[ -n "$matches" && "$matches" != *' true' ]]; then
+            echo "::error::Release $GITHUB_REF_NAME already exists and is not a draft."
+            exit 1
+          fi
+          if [[ -z "$matches" ]]; then
+            cat > release-notes.md <<'RELEASE_NOTES'
+          ## MathBoard Desktop — Unsigned Public Beta
+          
+          **Free, open-source prerelease.** These installers are not signed
+          with an Apple Developer ID or Windows Authenticode certificate, and
+          the macOS DMGs have not been notarized by Apple. macOS ad-hoc signing
+          is not equivalent to signing by an identified developer.
+          
+          **Important:** Gatekeeper, SmartScreen, Smart App Control, or
+          organization policies may warn about or block installation.
+          Do not disable system-wide security protections.
+          
+          Download only from this official GitHub repository, and check
+          files against the attached SHA256SUMS.txt before installation.
+          Checksums help detect changes but do not establish publisher
+          identity or replace code signing.
+          
+          Installation and security guidance:
+          https://github.com/giacomobartoloni/mathboard/blob/main/docs/desktop/UNSIGNED_BETA.md
+          
+          Please report issues:
+          https://github.com/giacomobartoloni/mathboard/issues
+          
+          **Support MathBoard:** Optional donations help fund Apple
+          notarization and Windows signing for future releases.
+          The software remains free; no donation is required.
+          https://www.buymeacoffee.com/gbartoloni
+          RELEASE_NOTES
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "MathBoard Desktop $GITHUB_REF_NAME" \
+              --notes-file release-notes.md --draft --prerelease
+          fi
+          matches="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | \"\\(.id) \\(.draft)\"")"
+          if [[ -z "$matches" || "$matches" == *$'\n'* || "$matches" != *' true' ]]; then
+            echo "::error::Expected exactly one draft release for $GITHUB_REF_NAME."
+            exit 1
+          fi
+          release_id="${matches% true}"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          echo "Using draft release $release_id"
+
+  package:
+    name: Package ${{ matrix.label }}
     if: github.event_name == 'push'
     needs: prepare_release
     runs-on: ${{ matrix.os }}
@@ -154,7 +206,7 @@ jobs:
           RELEASE_ID: ${{ needs.prepare_release.outputs.release_id }}
         run: |
           set -euo pipefail
-          release="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '"\\(.tag_name) \\(.draft)"')"
+          release="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" --jq '"\(.tag_name) \(.draft)"')"
           if [[ "$release" != "$GITHUB_REF_NAME true" ]]; then
             echo "::error::Prepared release $RELEASE_ID is unavailable or no longer a draft."
             exit 1
@@ -212,292 +264,6 @@ jobs:
           expected = {
               'macOS Apple Silicon DMG': any(name.endswith('_aarch64.dmg') for name in suffixes),
               'macOS Intel DMG': any(name.endswith('_x64.dmg') for name in suffixes),
-              'Windows NSIS': any(name.endswith('.exe') for name in suffixes),
-              'Windows MSI': any(name.endswith('.msi') for name in suffixes),
-              'Linux Debian': any(name.endswith('.deb') for name in suffixes),
-              'Linux AppImage': any(name.endswith('.appimage') for name in suffixes),
-          }
-          for label, present in expected.items():
-              if not present:
-                  raise SystemExit(f'Missing required release artifact: {label}')
-          with open('SHA256SUMS.txt', 'w', encoding='utf-8') as output:
-              for path in files:
-                  digest = hashlib.sha256()
-                  with path.open('rb') as artifact:
-                      for block in iter(lambda: artifact.read(1024 * 1024), b''):
-                          digest.update(block)
-                  output.write(f'{digest.hexdigest()}  {path.name}\n')
-          print(f'Generated SHA256SUMS.txt for {len(files)} assets.')
-          PY
-
-      - name: Attach checksums to the unpublished release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
-\n'* ]]; then
-            echo "::error::Multiple releases exist for $GITHUB_REF_NAME; resolve them manually."
-            exit 1
-          fi
-          if [[ -n "$matches" && "$matches" != *' true' ]]; then
-            echo "::error::Release $GITHUB_REF_NAME already exists and is not a draft."
-            exit 1
-          fi
-          if [[ -z "$matches" ]]; then
-            cat > release-notes.md <<'RELEASE_NOTES'
-          ## MathBoard Desktop — Unsigned Public Beta
-          
-          **Free, open-source prerelease.** These installers are not signed
-          with an Apple Developer ID or Windows Authenticode certificate, and
-          the macOS DMGs have not been notarized by Apple. macOS ad-hoc signing
-          is not equivalent to signing by an identified developer.
-          
-          **Important:** Gatekeeper, SmartScreen, Smart App Control, or
-          organization policies may warn about or block installation.
-          Do not disable system-wide security protections.
-          
-          Download only from this official GitHub repository, and check
-          files against the attached SHA256SUMS.txt before installation.
-          Checksums help detect changes but do not establish publisher
-          identity or replace code signing.
-          
-          Installation and security guidance:
-          https://github.com/giacomobartoloni/mathboard/blob/main/docs/desktop/UNSIGNED_BETA.md
-          
-          Please report issues:
-          https://github.com/giacomobartoloni/mathboard/issues
-          
-          **Support MathBoard:** Optional donations help fund Apple
-          notarization and Windows signing for future releases.
-          The software remains free; no donation is required.
-          https://www.buymeacoffee.com/gbartoloni
-          RELEASE_NOTES
-            gh release create "$GITHUB_REF_NAME" \
-              --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --title "MathBoard Desktop $GITHUB_REF_NAME" \
-              --notes-file release-notes.md --draft --prerelease
-          fi
-          matches="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq ".[] | select(.tag_name == \"${GITHUB_REF_NAME}\") | \"\\(.id) \\(.draft)\"")"
-          if [[ -z "$matches" || "$matches" == *    name: Package ${{ matrix.label }}
-    if: github.event_name == 'push'
-    needs: verify
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            label: macOS Apple Silicon
-            args: --target aarch64-apple-darwin --bundles dmg
-          - os: macos-latest
-            label: macOS Intel
-            args: --target x86_64-apple-darwin --bundles dmg
-          - os: windows-latest
-            label: Windows x64
-            args: --bundles nsis,msi
-          - os: ubuntu-22.04
-            label: Linux x64
-            args: --bundles deb,appimage
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.node-version'
-          cache: npm
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - run: npm ci
-
-      - name: Build and upload release candidate installers
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # An ad-hoc signature is not Developer ID signing or notarization.
-          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseDraft: true
-          prerelease: true
-          uploadUpdaterJson: false
-          args: ${{ matrix.args }}
-
-  checksums:
-    name: Release SHA-256 checksums
-    if: github.event_name == 'push'
-    needs: package
-    runs-on: ubuntu-22.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - name: Download draft release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir downloaded
-
-      - name: Verify expected formats and generate SHA256SUMS.txt
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import hashlib
-          from pathlib import Path
-
-          files = sorted(path for path in Path('downloaded').iterdir() if path.is_file())
-          suffixes = [path.name.lower() for path in files]
-          expected = {
-              'macOS DMG (Apple Silicon and Intel)': sum(name.endswith('.dmg') for name in suffixes) >= 2,
-              'Windows NSIS': any(name.endswith('.exe') for name in suffixes),
-              'Windows MSI': any(name.endswith('.msi') for name in suffixes),
-              'Linux Debian': any(name.endswith('.deb') for name in suffixes),
-              'Linux AppImage': any(name.endswith('.appimage') for name in suffixes),
-          }
-          for label, present in expected.items():
-              if not present:
-                  raise SystemExit(f'Missing required release artifact: {label}')
-          with open('SHA256SUMS.txt', 'w', encoding='utf-8') as output:
-              for path in files:
-                  digest = hashlib.sha256()
-                  with path.open('rb') as artifact:
-                      for block in iter(lambda: artifact.read(1024 * 1024), b''):
-                          digest.update(block)
-                  output.write(f'{digest.hexdigest()}  {path.name}\n')
-          print(f'Generated SHA256SUMS.txt for {len(files)} assets.')
-          PY
-
-      - name: Attach checksums to the unpublished release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
-\n'* || "$matches" != *' true' ]]; then
-            echo "::error::Expected exactly one draft release for $GITHUB_REF_NAME."
-            exit 1
-          fi
-          release_id="${matches% true}"
-          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
-          echo "Using draft release $release_id"
-
-  package:
-    name: Package ${{ matrix.label }}
-    if: github.event_name == 'push'
-    needs: verify
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            label: macOS Apple Silicon
-            args: --target aarch64-apple-darwin --bundles dmg
-          - os: macos-latest
-            label: macOS Intel
-            args: --target x86_64-apple-darwin --bundles dmg
-          - os: windows-latest
-            label: Windows x64
-            args: --bundles nsis,msi
-          - os: ubuntu-22.04
-            label: Linux x64
-            args: --bundles deb,appimage
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: '.node-version'
-          cache: npm
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - run: npm ci
-
-      - name: Build and upload release candidate installers
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # An ad-hoc signature is not Developer ID signing or notarization.
-          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseDraft: true
-          prerelease: true
-          uploadUpdaterJson: false
-          args: ${{ matrix.args }}
-
-  checksums:
-    name: Release SHA-256 checksums
-    if: github.event_name == 'push'
-    needs: package
-    runs-on: ubuntu-22.04
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - name: Download draft release assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --dir downloaded
-
-      - name: Verify expected formats and generate SHA256SUMS.txt
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import hashlib
-          from pathlib import Path
-
-          files = sorted(path for path in Path('downloaded').iterdir() if path.is_file())
-          suffixes = [path.name.lower() for path in files]
-          expected = {
-              'macOS DMG (Apple Silicon and Intel)': sum(name.endswith('.dmg') for name in suffixes) >= 2,
               'Windows NSIS': any(name.endswith('.exe') for name in suffixes),
               'Windows MSI': any(name.endswith('.msi') for name in suffixes),
               'Linux Debian': any(name.endswith('.deb') for name in suffixes),
