@@ -4,6 +4,8 @@ import {
   ACTION_DELETE,
   ACTION_DUPLICATE,
   ACTION_EDIT,
+  ACTION_SHOW_PARAMETERS,
+  ACTION_HIDE_PARAMETERS,
   ACTION_GROUP,
   ACTION_UNGROUP,
   EMPTY_SELECTION,
@@ -54,6 +56,20 @@ test('formula is the only single selection that offers Edit', () => {
   const plainImage = objectOf('image')
   assert.equal(selectionKind(plainImage), 'unknown')
   assert.deepEqual(selectionActions('unknown'), [ACTION_DUPLICATE, ACTION_DELETE])
+})
+
+test('Plot-only contextual control toggles without making panel selection-dependent', () => {
+  const plot = objectOf('Group', { objectKind: 'plot',
+    plotSpec: { parameters: [{ symbol: 'a', value: 1 }] } })
+  assert.deepEqual(selectionMeta(plot).actions, [
+    ACTION_EDIT, ACTION_SHOW_PARAMETERS, ACTION_DUPLICATE, ACTION_DELETE
+  ])
+  plot.plotSpec.showParameterControls = true
+  assert.deepEqual(selectionMeta(plot).actions, [
+    ACTION_EDIT, ACTION_HIDE_PARAMETERS, ACTION_DUPLICATE, ACTION_DELETE
+  ])
+  assert.deepEqual(selectionMeta(objectOf('Group', { objectKind: 'plot',
+    plotSpec: { parameters: [] } })).actions, [ACTION_EDIT, ACTION_DUPLICATE, ACTION_DELETE])
 })
 
 test('text, path, and shape do not get a type-specific Edit action', () => {
