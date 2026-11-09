@@ -151,7 +151,18 @@ This is a **source implementation, not verified release acceptance**. It protect
 
 See [PR #121](https://github.com/giacomobartoloni/mathboard/pull/121) for current implementation and CI. The application WebView carries no MCP settings or transport configuration.
 
-## Native acceptance checklist (not yet executed)
+## Native acceptance checklist (partially executed; release gates remain)
+
+A packaged macOS acceptance pass was attempted on 2026-11-07 with a real
+Streamable HTTP client and recorded partial success: discovery, semantic Plot
+mutations, validation, durability and transport security passed, but Plot PNG
+capture failed on that build and native GUI On/Off and Undo/Redo were blocked by
+macOS Accessibility permission. A later source fix and the packaged Linux
+acceptance at commit `730129a49f1c8c0b8baedbfcca1e33df5ac3b889` passed
+Plot PNG screenshot and durable restart through an installed `.deb`
+([Desktop CI evidence](https://github.com/giacomobartoloni/mathboard/actions/runs/42476206134)).
+This Linux result does not prove the original macOS defect is resolved in a
+rebuilt macOS app, nor native Off acknowledgment ordering or GUI Undo/Redo.
 
 For each installed Windows, macOS and Linux build, record exact application version, OS, client configuration and MCP traces:
 
@@ -184,3 +195,30 @@ The advertised F033 `paramsSchema` and `options` objects are closed
 (`additionalProperties:false`), and native MCP parsing uses the
 generated schemas rather than a duplicate list of operation arguments.
 `dryRun` is **not** implemented; it must not be interpreted as a preview.
+
+## F039 G4 — semantic Plot authoring (source increment)
+
+The existing `mathboard_create`, `mathboard_create_many`, `mathboard_update`,
+`mathboard_observe` and generic `mathboard_command` support a `plot` semantic
+type when the installed client reports it through `tools/list` and `mathboard_help`.
+Use `detail:"full"` to obtain mathematical source and all plot options before
+editing. A Plot uses LaTeX (`latex-v1`), complete `mathWindow` and `frame`,
+boolean `axes`/`grid` and optional `axisNumbers`, `border`, `transparentBackground`, `color`.
+`transparentBackground` defaults to `false`; set it to `true` to reveal the
+underlying board and its grid, independently of plot Grid/Border/Axes. Update
+this flag through a normal plot patch and observe it with `detail:"full"`.
+Use `color`, not generic Fabric fill/stroke. Derived `plotStatus` does not persist.
+
+Plots render with the same engine as the UI; native request cancellation and
+the existing 10-second total request deadline include lazy import, compute,
+inactive-board hydration and durable acknowledgement. No new Plot tools,
+permissions, protocol versions, transport or public timeout options were added.
+The two-job API limit applies to in-flight Plot materialization, independent of
+the UI preview Worker. Inactive board mutations retain the CAS rules; Stamp v1
+still rejects plots. On `execution_unknown`, observe before retrying.
+
+**Acceptance status:** the packaged Linux MCP smoke has verified
+`tools/list`, Plot `tools/call`, screenshots and durable reload at the
+G4 source head. Installed macOS/Windows GUI MCP Off/revocation during pending
+rendering, Undo/Redo and cross-platform client interoperability remain
+unverified acceptance gates. Do not treat Linux CI as a release sign-off.

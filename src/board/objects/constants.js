@@ -28,7 +28,11 @@ export const BOARD_OBJECT_TYPES = Object.freeze([
   'text',
   'formula',
   'group',
+  'plot',
 ])
+
+// Public and persisted semantic object types share the same canonical inventory.
+export const BOARD_SEMANTIC_TYPES = BOARD_OBJECT_TYPES
 
 export const TRANSFORM_KEYS = Object.freeze([
   'left',

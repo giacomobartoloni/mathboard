@@ -63,3 +63,97 @@ test('deactivate finalizes drag and repeated tool switches do not leak listeners
   assert.equal(finishes.length,1);
   for(const callbacks of canvas.listeners.values()) assert.equal(callbacks.size,0);
 });
+
+test('middle mouse pans without tool activation or selection changes', () => {
+  const canvas = canvasStub();
+  let starts = 0, finishes = 0, prevented = 0;
+  const gesture = new PanGesture({
+    canvas,
+    onStart: () => starts++,
+    onFinish: () => finishes++,
+  });
+  const event = (button, clientX, clientY) => ({
+    button, clientX, clientY, preventDefault: () => prevented++,
+  });
+
+  assert.equal(gesture.startMiddle(event(0, 10, 20)), false);
+  assert.equal(gesture.startMiddle(event(1, 10, 20)), true);
+  assert.equal(gesture.startMiddle(event(1, 12, 23)), false);
+  assert.equal(canvas.selection, true);
+  assert.equal(canvas.listeners.size, 0);
+  gesture.move({ e: event(1, 40, 35) });
+  assert.deepEqual(canvas.viewportTransform, [1, 0, 0, 1, 33, 19]);
+  assert.equal(gesture.finish(), true);
+  assert.equal(gesture.finish(), false);
+  assert.equal(gesture.isActive(), false);
+  assert.equal(starts, 1);
+  assert.equal(finishes, 1);
+  assert.equal(prevented, 2);
+  assert.equal(canvas.rendered, 1);
+});
+
+function domTarget() {
+  const listeners = new Map();
+  return {
+    listeners,
+    addEventListener(name, callback) {
+      if (!listeners.has(name)) listeners.set(name, new Set());
+      listeners.get(name).add(callback);
+    },
+    removeEventListener(name, callback) {
+      listeners.get(name)?.delete(callback);
+    },
+    fire(name, event) {
+      for (const callback of listeners.get(name) || []) callback(event);
+    },
+    listenerCount(name) {
+      return listeners.get(name)?.size || 0;
+    },
+  };
+}
+
+test('middle mouse DOM subscriptions are scoped to the gesture lifecycle', () => {
+  const view = domTarget();
+  const element = domTarget();
+  element.ownerDocument = { defaultView: view };
+  const canvas = canvasStub();
+  canvas.upperCanvasEl = element;
+  let allowed = false;
+  let prevented = 0;
+  let stopped = 0;
+  const pointer = (button, buttons, clientX, clientY) => ({
+    button, buttons, clientX, clientY,
+    preventDefault: () => prevented++,
+    stopImmediatePropagation: () => stopped++,
+  });
+  const gesture = new PanGesture({ canvas, canStartMiddle: () => allowed });
+
+  gesture.enableMiddleMouse();
+  gesture.enableMiddleMouse();
+  assert.equal(element.listenerCount('mousedown'), 1);
+  element.fire('mousedown', pointer(1, 4, 10, 20));
+  assert.equal(gesture.isActive(), false);
+
+  allowed = true;
+  element.fire('mousedown', pointer(1, 4, 10, 20));
+  assert.equal(gesture.isActive(), true);
+  assert.equal(view.listenerCount('mousemove'), 1);
+  view.fire('mousemove', pointer(1, 4, 40, 35));
+  assert.deepEqual(canvas.viewportTransform, [1, 0, 0, 1, 33, 19]);
+  view.fire('mouseup', pointer(1, 0, 40, 35));
+  assert.equal(gesture.isActive(), false);
+  assert.equal(view.listenerCount('mousemove'), 0);
+  assert.equal(view.listenerCount('mouseup'), 0);
+  assert.equal(view.listenerCount('blur'), 0);
+
+  element.fire('mousedown', pointer(1, 4, 10, 20));
+  gesture.dispose();
+  assert.equal(gesture.isActive(), false);
+  assert.equal(element.listenerCount('mousedown'), 0);
+  assert.equal(element.listenerCount('auxclick'), 0);
+  assert.equal(view.listenerCount('mousemove'), 0);
+  assert.equal(view.listenerCount('mouseup'), 0);
+  assert.equal(view.listenerCount('blur'), 0);
+  assert.ok(prevented > 0);
+  assert.ok(stopped > 0);
+});

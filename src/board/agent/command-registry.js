@@ -18,6 +18,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from '../objects/constants.js'
+import { PLOT_COLORS, PLOT_KEYS } from '../../plots/plotSpec.js'
+import { assertPublicPlotCreates, PUBLIC_PLOT_CREATE_FIELDS } from './plotPublicContract.js'
 import { getScreenshotDescriptor } from '../capture/discovery.js'
 
 const number = { type: 'number' }
@@ -62,9 +64,39 @@ const typeFields = {
   formula: { latex },
   group: { objects: { type: 'array', items: { $ref: '#/$defs/createSpec' } } },
 }
+const boundedCoordinate = { type: 'number', minimum: -1e12, maximum: 1e12 }
+const plotWindow = objectSchema({ xMin: boundedCoordinate, xMax: boundedCoordinate,
+  yMin: boundedCoordinate, yMax: boundedCoordinate },
+  ['xMin', 'xMax', 'yMin', 'yMax'])
+const plotFrame = objectSchema({ width: { type: 'number', minimum: 80, maximum: 2048 },
+  height: { type: 'number', minimum: 80, maximum: 2048 } }, ['width', 'height'])
+const plotInput = {
+  syntax: { const: 'latex-v1' },
+  latex: { ...latex, maxLength: 2048 },
+  mathWindow: plotWindow,
+  frame: plotFrame,
+  axes: boolean, grid: boolean,
+  axisNumbers: { ...boolean, default: true },
+  border: { ...boolean, default: true },
+  transparentBackground: { ...boolean, default: false },
+  color: { enum: [...PLOT_COLORS], default: 'auto' },
+}
+const plotPublicProperties = {
+  type: { const: 'plot' }, id: common.id, ...transformProperties,
+  originX: common.originX, originY: common.originY,
+  opacity: { type: 'number', minimum: 0, maximum: 1 }, ...plotInput,
+}
+const plotCreate = objectSchema(plotPublicProperties,
+  ['type', 'syntax', 'latex', 'mathWindow', 'frame', 'axes', 'grid'])
+if (Object.keys(plotPublicProperties).some(key => !PUBLIC_PLOT_CREATE_FIELDS.includes(key))
+  || PUBLIC_PLOT_CREATE_FIELDS.some(key => !Object.hasOwn(plotPublicProperties, key))
+  || PLOT_KEYS.some(key => !Object.hasOwn(plotInput, key))) {
+  throw new Error('Plot public contract is out of sync with the semantic plot keys.')
+}
 const requiredFields = { rect: ['width', 'height'], circle: ['radius'], ellipse: ['rx', 'ry'], polygon: ['points'], arrow: ['x1', 'y1', 'x2', 'y2'], line: ['x1', 'y1', 'x2', 'y2'],
   path: ['path'], text: ['text'], formula: ['latex'], group: ['objects'] }
 const createSpec = { oneOf: BOARD_OBJECT_TYPES.map(type => {
+  if (type === 'plot') return plotCreate
   if (!typeFields[type]) throw new Error(`Missing local discovery schema for ${type}`)
   return objectSchema({ ...common, type: { const: type }, ...typeFields[type] }, ['type', ...requiredFields[type]])
 }) }
@@ -85,10 +117,14 @@ const patchSchemas = {
   formula: objectSchema({ ...transformProperties, latex, fill: formulaPaint, stroke: formulaPaint,
     opacity: stylePatchProperties.opacity, mathboardInkMode: stylePatchProperties.mathboardInkMode }),
   group: objectSchema({ ...transformProperties, opacity: stylePatchProperties.opacity }),
+  plot: objectSchema({ ...transformProperties, ...plotInput,
+    opacity: stylePatchProperties.opacity }),
 }
 const options = { type: 'object', properties: { select: boolean }, additionalProperties: false,
   description: 'Optional boolean selection.' }
-const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty, type: { enum: [...BOARD_OBJECT_TYPES] } },
+const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty,
+  type: { enum: [...BOARD_OBJECT_TYPES] },
+  plotStatus: { enum: ['ok', 'partial'], description: 'Derived sampling quality; not persisted.' } },
   additionalProperties: true, description: 'Detached semantic node; formula retains LaTeX.' }
 const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: false,
   ...(defs ? { $defs: defs } : {}) })
@@ -222,6 +258,7 @@ export function executeBoardCommand(controller, command, capture, workspace, sig
       || Object.keys(params.options).some(key => !Object.hasOwn(fields.options.properties, key))))) {
     throw new Error('Invalid board command parameters.')
   }
+  assertPublicPlotCreates(command.method, params)
   return entry.execute(controller, params, capture, workspace, signal)
 }
 

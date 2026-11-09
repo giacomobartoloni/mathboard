@@ -10,7 +10,7 @@ import {
 } from '../lib/desktop-downloads.mjs'
 
 export default {
-  lastmod: '2026-10-22',
+  lastmod: '2026-11-07',
   path: '/download/security/',
   title: 'MathBoard Desktop Beta — Security and SHA-256 Verification',
   description:
@@ -60,13 +60,19 @@ export default {
       <p><strong>macOS:</strong> the DMGs are not Developer ID-signed or notarized by Apple.
         Gatekeeper may block the app. See the <a href="/download/macos/">Mac installation guide</a>
         and <a href="https://support.apple.com/en-us/102445">Apple's official instructions</a>.</p>
+      <p>The <a href="/download/macos/#homebrew">Homebrew installation guide</a>
+        documents an optional, app-specific command to remove MathBoard's quarantine attribute.
+        This bypasses macOS quarantine-based checks; it does not provide a verified
+        publisher signature or notarization. Prefer Apple's per-app instructions.
+        Never use the override for untrusted files, after malware or damaged-app warnings,
+        or against managed-device policy.</p>
       <p><strong>Windows:</strong> EXE and MSI installers are not Authenticode-signed;
         Defender SmartScreen, Smart App Control or company policies may prevent installation.
         See <a href="/download/windows/">Windows guidance</a>.</p>
       <p><strong>Linux:</strong> AppImage and DEB packages are not signed by a distribution
         repository identity. See the <a href="/download/linux/">Linux guide</a>.</p>
-      <p>Do not turn off operating-system security globally, remove macOS quarantine
-        attributes, bypass managed-device rules or rely on copies from unofficial sources.</p>
+      <p>Do not turn off operating-system security globally, bypass malware warnings,
+        override managed-device rules or rely on copies from unofficial sources.</p>
     </section>
     <section>
       <h2>Known desktop beta limitations</h2>

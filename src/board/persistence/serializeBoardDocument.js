@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { readSemanticBoardObject, toBoardDocumentNode } from '../objects/serialize.js'
 import {
   BOARD_DOCUMENT_FORMAT,
-  BOARD_DOCUMENT_VERSION,
+  boardDocumentVersionForObjects,
   BOARD_DOCUMENT_ERROR_CODES,
   BoardDocumentError,
   validateBoardDocument,
@@ -63,7 +63,7 @@ export function serializeBoardDocument({ canvas, boardObjectPolicy, title }) {
 
   const doc = {
     format: BOARD_DOCUMENT_FORMAT,
-    version: BOARD_DOCUMENT_VERSION,
+    version: boardDocumentVersionForObjects(objects),
     title: typeof title === 'string' ? title : 'Untitled board',
     objects,
   }

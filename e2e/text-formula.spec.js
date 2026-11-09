@@ -311,6 +311,71 @@ test('E2E-P0-005f boldsymbol preview matches editable vector insertion', async (
   expect(state.objects.find((object) => object.latex === editedLatex).childCount).toBeGreaterThan(0)
 })
 
+test('E2E-P0-005i cancel preview creates an editable vector strike-through', async ({ page }) => {
+  await gotoBoard(page)
+  const plainLatex = 'A+B'
+  const cancelLatex = String.raw`A+\cancel{B}`
+  const editedLatex = String.raw`A+\xcancel{B}`
+
+  let state = await insertFormula(page, { latex: plainLatex, x: 300, y: 170 })
+  const plainFormula = state.objects.find((object) => object.latex === plainLatex)
+  expect(plainFormula).toBeTruthy()
+
+  await selectTool(page, 'Formula')
+  await clickOnCanvas(page, { x: 300, y: 290 })
+  const latexInput = page.getByLabel('LaTeX Formula:')
+  await latexInput.fill(cancelLatex)
+  await expect(page.locator('.preview-box .katex')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Insert', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Insert', exact: true }).click()
+
+  state = await waitForState(page,
+    (s) => s.objects.some((o) => o.latex === cancelLatex), { timeout: 15000 })
+  const canceled = state.objects.find((object) => object.latex === cancelLatex)
+  expect(canceled.isVectorFormula).toBe(true)
+  expect(canceled.childCount).toBeGreaterThan(plainFormula.childCount)
+  expect(canceled.width).toBeGreaterThan(0)
+
+  await dblclickFormula(page, canceled)
+  await expect(latexInput).toHaveValue(cancelLatex)
+  await latexInput.fill(editedLatex)
+  await page.getByRole('button', { name: 'Update', exact: true }).click()
+  state = await waitForState(page,
+    (s) => s.history.tipType === 'replace' && s.objects.some((o) => o.latex === editedLatex),
+    { timeout: 15000 })
+  expect(state.objects.find((object) => object.latex === editedLatex).isVectorFormula).toBe(true)
+
+  await clickUndo(page)
+  state = await waitForState(page, (s) => s.objects.some((o) => o.latex === cancelLatex))
+  await clickRedo(page)
+  state = await waitForState(page, (s) => s.objects.some((o) => o.latex === editedLatex))
+  expect(state.objects.find((object) => object.latex === editedLatex).childCount).toBeGreaterThan(0)
+})
+
+for (const { packageName, latex } of [
+  { packageName: 'mathtools', latex: String.raw`a\coloneqq b` },
+  { packageName: 'extpfeil', latex: String.raw`a\xmapsto{f}b` },
+  { packageName: 'braket', latex: String.raw`\braket{\phi|\psi}` },
+]) {
+  test(`E2E-P0-005j ${packageName} has matching KaTeX preview and board vector`, async ({ page }) => {
+    await gotoBoard(page)
+    await selectTool(page, 'Formula')
+    await clickOnCanvas(page, { x: 330, y: 230 })
+    const latexInput = page.getByLabel('LaTeX Formula:')
+    await latexInput.fill(latex)
+    await expect(page.locator('.preview-box .katex')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Insert', exact: true })).toBeEnabled()
+    await page.getByRole('button', { name: 'Insert', exact: true }).click()
+    const state = await waitForState(page,
+      (s) => s.objects.some((object) => object.latex === latex), { timeout: 15000 })
+    const formula = state.objects.find((object) => object.latex === latex)
+    expect(formula.isVectorFormula).toBe(true)
+    expect(formula.childCount).toBeGreaterThan(0)
+    expect(formula.width).toBeGreaterThan(0)
+    expect(formula.height).toBeGreaterThan(0)
+  })
+}
+
 test('E2E-P0-005e dynamic NewCM ranges load without CDN', async ({ page, baseURL }) => {
   const appOrigin = new URL(baseURL || page.url()).origin
   const mathjaxCdnRequests = []

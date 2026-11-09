@@ -38,6 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { workspaceSafeArea } from "../board/layout/workspaceSafeArea.js";
 import { markRaw, toRaw } from "vue";
+import { plotSemanticProps } from '../plots/plotSpec.js';
 import { Canvas, Pattern, PencilBrush, Shadow, InteractiveFabricObject, ActiveSelection, Group } from "fabric";
 import { wheelZoomLevel } from "../board/viewport/wheelZoom.js";
 import * as fabric from "fabric";
@@ -160,6 +161,7 @@ export default {
     boardTheme: { type: String, default: "light" },
     selectedColor: { type: String, default: null },
     sessionReady: { type: Boolean, default: true },
+    sidebarPinned: { type: Boolean, default: false },
     selectionPanelSuspended: { type: Boolean, default: false },
   },
   data() {
@@ -201,10 +203,12 @@ export default {
     this._shapeGesture = null;
     this._panGesture = null;
     this._textInsertion = null;
+    this._wasSidebarPinned = false;
     // Services stay off data() so they are not reactive proxies.
     this._formulaRenderer = this.mathBoardServices.formulaRenderer;
     this._pendingFormulaRenders = 0;
     this._boardObjectPolicy = this.mathBoardServices.boardObjectPolicy;
+    this._plotRenderCoordinator = this.mathBoardServices.plotRenderCoordinator;
     this._boardLifecycle = new BoardLifecycle({
       onReadyChanged: (ready) => {
         if (this.canvas?.upperCanvasEl) {
@@ -254,7 +258,11 @@ export default {
         boardObjectPolicy: this._boardObjectPolicy,
         getCanvas: () => this.canvas,
         buildFormula: (spec) => this._buildFormulaFromSemanticSpec(spec),
-        resetHistory: () => this._resetHistory(),
+        resetHistory: () => {
+          this._resetHistory();
+          // Loaded AUTO ink and graph surfaces belong to the destination board theme.
+          this.syncAutoInk(this.boardThemeConfig);
+        },
         suspendHistory: (flag) => this._boardHistory.setSuspended(flag),
         isDocumentStable: () => this._isBoardInteractionStable(),
         onActiveBoardChanged: (board) => this.$emit('active-board-changed', board),
@@ -263,8 +271,14 @@ export default {
       });
       return this._persistence;
     },
-    getBoardController() {
-      return this._ensureBoardController('local_agent');
+    getBoardController(context) {
+      if (!context) return this._ensureBoardController('local_agent');
+      const guard = context.guard || (() => {
+        if (context.signal?.aborted || Date.now() >= context.expiresAtMs)
+          throw Object.assign(new Error('Plot request expired.'), { code: 'command_timeout' });
+      });
+      const buildPlot = this._plotRenderCoordinator.forRequest({ ...context, guard });
+      return this._ensureBoardController('local_agent', guard, undefined, buildPlot);
     },
     getBoardDocumentCommands() {
       if (this._documentCommands) return this._documentCommands;
@@ -278,8 +292,9 @@ export default {
         getActiveChangeVersion: () => this._persistence?.changeVersion ?? null,
         getActiveCommitSequence: () => this._boardHistory.committedSequence(),
         flushActiveThrough: version => this._ensurePersistenceService().flushThrough(version),
-        getActiveController: (guard, buildFormula, interactionChannel) =>
-          this._ensureBoardController(interactionChannel, guard, buildFormula),
+        getActiveController: (guard, buildFormula, interactionChannel, buildPlot) =>
+          this._ensureBoardController(interactionChannel, guard, buildFormula, buildPlot),
+        plotRenderCoordinator: this._plotRenderCoordinator,
         buildFormula: (spec) => buildFormulaFromSemanticSpec(spec, {
           defaultInk: this.boardThemeConfig.defaultInk,
           render: (args) => this._formulaRenderer.render(args),
@@ -297,12 +312,13 @@ export default {
       }
       return this._boardWorkspace;
     },
-    _ensureBoardController(interactionChannel = 'local_agent', commitGuard, boundedBuildFormula) {
+    _ensureBoardController(interactionChannel = 'local_agent', commitGuard, boundedBuildFormula, boundedBuildPlot) {
       if (!commitGuard && this._boardControllers.has(interactionChannel)) return this._boardControllers.get(interactionChannel);
       const controller = new BoardController({
         getCanvas: () => this.canvas,
         boardObjectPolicy: this._boardObjectPolicy,
         buildFormula: boundedBuildFormula || ((spec) => this._buildFormulaFromSemanticSpec(spec)),
+        buildPlot: boundedBuildPlot,
         pushHistoryCommand: (command) => this._boardHistory.record(command),
         runWithoutHistory: (callback) => this._boardHistory.runSuspended(callback),
         prepareCreatedObject: (object) => {
@@ -413,7 +429,9 @@ export default {
      * Walks into permanent Groups (and ActiveSelection) so stamp kits follow theme.
      */
     _syncObjectAutoInk(object, config) {
-      if (!object || object.mathboardInkMode !== INK_MODE_AUTO) return;
+      if (!object) return;
+      if (this._boardObjectPolicy.isPlot(object)) { object.applyTheme(config); return; }
+      if (object.mathboardInkMode !== INK_MODE_AUTO) return;
       if (this._boardObjectPolicy.isFormula(object)) {
         this._formulaRenderer.syncInk(object, config);
         return;
@@ -461,13 +479,25 @@ export default {
       });
     },
     updateCanvasSize() {
-      this.windowWidth = document.documentElement.clientWidth;
-      this.windowHeight = document.documentElement.clientHeight;
+      if (!this.canvas || !this.$refs.boardRoot) return;
+      // Measure the actual drawing viewport; pinning may resize it without window.resize.
+      const { width, height } = this.$refs.boardRoot.getBoundingClientRect();
+      const nextWidth = Math.max(1, Math.round(width));
+      const nextHeight = Math.max(1, Math.round(height));
+      const previousWidth = this.canvas.getWidth();
+      if (previousWidth === nextWidth && this.canvas.getHeight() === nextHeight) return;
+      this.windowWidth = nextWidth;
+      this.windowHeight = nextHeight;
       // Fabric 7 removed setWidth/setHeight; use setDimensions.
-      this.canvas.setDimensions({
-        width: this.windowWidth,
-        height: this.windowHeight
-      });
+      this.canvas.setDimensions({ width: nextWidth, height: nextHeight });
+      if (nextWidth !== previousWidth && (this.sidebarPinned || this._wasSidebarPinned)) {
+        // Keep the same scene point at the horizontal center as the usable
+        // viewport grows/shrinks. Scene objects, zoom and history stay intact.
+        const vpt = this.canvas.viewportTransform.slice();
+        vpt[4] += (nextWidth - previousWidth) / 2;
+        this.canvas.setViewportTransform(vpt);
+      }
+      this._wasSidebarPinned = this.sidebarPinned;
       this.canvas.renderAll();
       this.canvas.calcOffset();
       this.refreshSelectionPanel();
@@ -505,7 +535,7 @@ export default {
         this.setCursor(CURSOR_TYPES.text);
         return;
       }
-      if (tool === 'formula') {
+      if (tool === 'formula' || tool === 'graph') {
         this.setCursor(CURSOR_TYPES.crosshair);
         return;
       }
@@ -741,6 +771,7 @@ export default {
     },
     editSelection() {
       const active = this.canvas?.getActiveObject();
+      if (this._boardObjectPolicy.isPlot(active)) { this.requestPlotEdit(active); return; }
       if (!active || active.isEditing || !this._boardObjectPolicy.isFormula(active)) return;
       this.$emit("edit-formula", {
         latex: active.latex,
@@ -820,6 +851,10 @@ export default {
       const walk = (object) => {
         if (!object) return;
 
+        if (this._boardObjectPolicy.isPlot(object)) {
+          object.applyTheme(this.boardThemeConfig);
+          return;
+        }
         if (this._boardObjectPolicy.isFormula(object)) {
           if (object.mathboardInkMode !== INK_MODE_FIXED) {
             object.mathboardInkMode = INK_MODE_AUTO;
@@ -1028,6 +1063,22 @@ export default {
       const pointer = opt.scenePoint || this.canvas.getScenePoint(opt.e);
       this.$emit('request-formula', { x: pointer.x, y: pointer.y });
     },
+    enablePlotInsertion() {
+      this.canvas.isDrawingMode = false;
+      this.canvas.selection = false;
+      this.canvas.discardActiveObject();
+      this.setObjectsSelectable(false);
+      this.canvas.on('mouse:down', this.requestPlotInput);
+      this.canvas.requestRenderAll();
+    },
+    disablePlotInsertion() {
+      this.canvas.off('mouse:down', this.requestPlotInput);
+    },
+    requestPlotInput(opt) {
+      if (this.selectedTool !== 'graph' || (opt.e?.button !== undefined && opt.e.button !== 0)) return;
+      const point = opt.scenePoint || this.canvas.getScenePoint(opt.e);
+      this.$emit('request-plot', { x: point.x, y: point.y });
+    },
     async _buildFormulaObject(formulaData, position) {
       this._pendingFormulaRenders += 1;
       try {
@@ -1044,6 +1095,23 @@ export default {
       } finally {
         this._pendingFormulaRenders -= 1;
       }
+    },
+    requestPlotEdit(object) {
+      this.$emit('edit-plot', { spec: plotSemanticProps(object.plotSpec), id: getMathBoardObjectId(object) });
+    },
+    async savePlot(spec, id, position) {
+      const controller = this._ensureBoardController('ui');
+      const props = plotSemanticProps(spec);
+      if (id) return controller.update(id, props, { select: true });
+      if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+        throw new Error('Choose a point on the board before inserting a graph.');
+      }
+      const safe = workspaceSafeArea(this.canvas, this.$el.closest('#app'));
+      const zoom = this.canvas.getZoom();
+      const scale = Math.min(1, Math.max(0.05, (safe.width - 32) / (spec.frame.width * zoom)),
+        Math.max(0.05, (safe.height - 32) / (spec.frame.height * zoom)));
+      return controller.create({ type: 'plot', ...props, scaleX: scale, scaleY: scale,
+        left: position.x, top: position.y }, { select: true });
     },
     async addFormulaToCanvas(formulaData, position) {
       try {
@@ -1369,10 +1437,13 @@ export default {
 
       // Enable double-click editing for text objects and formulas
       this.canvas.on('mouse:dblclick', (opt) => {
+        if (this.selectedTool === 'graph') return;
         const target = opt.target;
         if (target && target.isType(...FILL_INK_TYPES) && target.editable) {
           target.enterEditing();
           target.selectAll();
+        } else if (this._boardObjectPolicy.isPlot(target)) {
+          this.requestPlotEdit(target);
         } else if (target && this._boardObjectPolicy.isFormula(target)) {
           // Edit formula
           this.$emit('edit-formula', { 
@@ -1410,15 +1481,17 @@ export default {
       });
       this._panGesture = new PanGesture({
         canvas: this.canvas,
+        canStartMiddle: () => this.sessionReady,
         onStart: () => {
           this._hideSelectionPanel();
           this.setCursor(CURSOR_TYPES.grabbing);
         },
         onFinish: () => {
-          if (this.selectedTool === 'pan') this.setCursor(CURSOR_TYPES.grab);
+          this.applyToolCursor(this.selectedTool);
           this.refreshSelectionPanel();
         },
       });
+      this._panGesture.enableMiddleMouse();
       this._textInsertion = new TextInsertionSession({
         canvas: this.canvas,
         getInk: () => this.activeInk,
@@ -1461,6 +1534,7 @@ export default {
       delete obj.boardTheme;
       delete obj.selectedColor;
       delete obj.selectionPanelSuspended;
+      delete obj.sidebarPinned;
       Object.keys(obj).forEach((key) => {
         if (obj[key] === undefined) {
           delete obj[key];
@@ -1471,6 +1545,11 @@ export default {
   },
   mounted() {
     this.initializeCanvas();
+    // Layout changes from pin/unpin do not emit a window resize.
+    if (typeof ResizeObserver !== 'undefined') {
+      this._boardResizeObserver = new ResizeObserver(() => this.updateCanvasSize());
+      this._boardResizeObserver.observe(this.$refs.boardRoot);
+    }
     this.$refs.boardRoot.addEventListener('wheel', this.onWheelZoom, { passive: false });
     
     this.$nextTick(() => {
@@ -1484,11 +1563,13 @@ export default {
   },
   beforeUnmount() {
     this._boardLifecycle.dispose();
+    this.disablePlotInsertion();
     this._clearGeometryEditing();
     this._shapeGesture?.dispose();
     this._textInsertion?.dispose();
     this._panGesture?.dispose();
     this.$refs.boardRoot.removeEventListener('wheel', this.onWheelZoom);
+    this._boardResizeObserver?.disconnect();
     this._persistence?.dispose();
     CANVAS_EVENTS.forEach((event) => {
       this.canvas.off(event);
@@ -1553,6 +1634,7 @@ export default {
       this.disableTextInsertion();
       this.disableShapeDrawing();
       this.disableFormulaInsertion();
+      this.disablePlotInsertion();
       
       switch(newTool) {
         case 'select':
@@ -1580,6 +1662,9 @@ export default {
         case 'formula':
           this.canvas.isDrawingMode = false;
           this.enableFormulaInsertion();
+          break;
+        case 'graph':
+          this.enablePlotInsertion();
           break;
         case 'shapes':
           this.enableShapeDrawing();

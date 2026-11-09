@@ -166,6 +166,12 @@ export async function materializeBoardObject(node, options = {}) {
       applyInkMetadata(object, node)
       break
     }
+    case 'plot': {
+      const buildPlot = options.buildPlot
+        || (await import('../../plots/buildPlotObject.js')).buildPlotObject
+      object = await buildPlot(node)
+      break
+    }
     case 'formula': {
       object = await buildFormula({
         latex: node.latex,

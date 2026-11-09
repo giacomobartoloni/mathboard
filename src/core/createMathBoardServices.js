@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
 import { MathJaxRuntime } from '../formulas/MathJaxRuntime.js'
 import { MathJaxSvgFormulaRenderer } from '../formulas/MathJaxSvgFormulaRenderer.js'
+import { createPlotRenderCoordinator } from '../plots/PlotRenderCoordinator.js'
 
 /**
  * Application services composed at bootstrap. Callers should receive these
@@ -29,9 +30,11 @@ export function createMathBoardServices() {
   const boardObjectPolicy = new BoardObjectPolicy()
   const mathJaxRuntime = new MathJaxRuntime()
   const formulaRenderer = new MathJaxSvgFormulaRenderer(mathJaxRuntime)
+  const plotRenderCoordinator = createPlotRenderCoordinator()
 
   return {
     boardObjectPolicy,
     formulaRenderer,
+    plotRenderCoordinator,
   }
 }

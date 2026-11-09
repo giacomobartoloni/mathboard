@@ -148,3 +148,58 @@ memory. Session-scoped active board identity may be lost across a full applicati
 restart, so verify saved-board access and recovery on each native platform rather
 than assuming the last scratch board automatically reopens. UI preferences may
 persist independently through `localStorage`.
+
+## Packaged native MCP Plot smoke (F039 G4.4)
+
+The Desktop CI workflow has an **opt-in** Linux packaged-app acceptance job.
+On GitHub, open **Actions → Desktop CI → Run workflow**, select the
+`feat/f039-agent-mcp-plots` branch and enable `native_mcp_smoke`. The
+equivalent GitHub CLI command is:
+
+```sh
+gh workflow run desktop.yml --repo giacomobartoloni/mathboard \
+  --ref feat/f039-agent-mcp-plots -f native_mcp_smoke=true
+```
+
+The job builds a real Linux `.deb` with Tauri (not `--no-bundle`), installs
+it into an ephemeral runner, launches the GUI under Xvfb and a private D-Bus
+session, and connects using a pinned `@modelcontextprotocol/sdk@1.32.2`
+Streamable HTTP client. It uses the documented native
+`--mathboard-mcp-http` startup flag and reads the actual endpoint from stdout.
+The board database and process home are isolated under the runner's temporary
+directory; a disposable board is removed after the tests.
+
+The smoke covers native discovery, empty-board PNG control, Plot create and
+semantic readback, **Plot-containing PNG capture**, edit and visual-change PNG,
+and **real GUI Undo/Redo via X11 keyboard events** (`Ctrl+Z` /
+`Ctrl+Shift+Z`). The keyboard sequence exercises undo/redo of both Plot edits
+and creation; the installed MCP client checks semantic state and stable IDs
+after each keypress, with separate PNG evidence for an undone/redone edit.
+The suite then verifies durable readback plus capture after an application
+restart. PNG files,
+sanitized startup logs, package SHA-256 and structured PASS/FAIL test results
+are retained as a GitHub artifact for 14 days. A failed assertion fails the
+job; the test never substitutes the development bridge or a mock MCP server.
+A transient SDK package is installed in a separate temporary directory, not
+added to the application's dependency tree.
+
+For PRs targeting `develop` or `main`, the packaged smoke is triggered
+automatically when the diff touches the smoke harness/workflow, Plot engine,
+public board agent contract, capture/observation/persistence, desktop bridge,
+Graph/board integration, native MCP runtime or relevant build configuration.
+Unrelated web-only changes stay on lightweight CI. Scheduled Desktop CI still
+runs the native compilation matrix without smoke. Manual workflow dispatch
+always runs the existing desktop compilation matrix and runs this smoke only
+when the input is enabled.
+
+**Limits:** Xvfb is a virtual installed Linux GUI, not macOS or Windows
+acceptance. GUI Undo/Redo uses `xdotool` with real X11 key events and does not
+inject JavaScript, invoke WebView history methods or bypass MCP transport.
+The job still does **not** automate the native MCP settings On/Off toggle,
+prove Off acknowledgement ordering or demonstrate the two-job `board_busy`
+path through serialized native requests. Linux keyboard acceptance is not a
+substitute for verifying GUI shortcuts on installed macOS/Windows. The macOS
+Plot screenshot regression was independently retested successfully with a
+real installed app at source commit `d18b214` (see the F039 G4.4 AgentWorklog);
+its earlier failure is resolved, but Off/Undo/Redo environment gates remain
+open unless separately evidenced.

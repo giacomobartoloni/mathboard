@@ -37,6 +37,22 @@ test('native MCP discovery matches the executable F033 registry', () => {
     assert.deepEqual(created.inputSchema.properties.spec,
       methods.find(item => item.method === 'create').paramsSchema.properties.spec)
     assert.ok(created.inputSchema.properties.boardId)
+    const plot = created.inputSchema.$defs.createSpec.oneOf
+      .find(item => item.properties.type.const === 'plot')
+    assert.deepEqual(plot.required, ['type', 'syntax', 'latex', 'mathWindow', 'frame', 'axes', 'grid'])
+    assert.equal(plot.properties.color.default, 'auto')
+    assert.deepEqual(plot.properties.transparentBackground, { type: 'boolean', default: false })
+    assert.equal(help.examplesByType.plot.transparentBackground, false)
+    const patchSchema = help.patchSchemas.plot
+    assert.deepEqual(patchSchema.properties.transparentBackground,
+      { type: 'boolean', default: false })
+    const nativeUpdate = tools.find(item => item.name === 'mathboard_update')
+    assert.ok(nativeUpdate)
+    assert.ok(JSON.stringify(nativeUpdate.inputSchema).includes('transparentBackground'))
+    assert.equal(plot.properties.mathWindow.additionalProperties, false)
+    assert.ok(help.objectTypes.includes('plot'))
+    assert.ok(help.patchSchemas.plot)
+    assert.equal(help.examplesByType.plot.type, 'plot')
     const batch = tools.find(item => item.name === 'mathboard_create_many')
     assert.deepEqual(batch.inputSchema.required, ['specs'])
     const deletion = tools.find(item => item.name === 'mathboard_boards_delete')

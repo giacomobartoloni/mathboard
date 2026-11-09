@@ -24,39 +24,48 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
+    :class="{ 'library-sidebar-pinned': librarySidebarMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal }"
+    :style="{ '--library-sidebar-width': librarySidebarWidth + 'px' }"
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
       <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
         aria-label="Open Board library" title="Open Board library"
-        :aria-expanded="showBoardLibrary" aria-haspopup="dialog" :inert="showBoardLibrary" @click="openBoardLibrary">
-        <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
-        <span class="board-library-trigger-label">
-          <span class="board-library-trigger-label-long">Board library</span>
-          <span class="board-library-trigger-label-short" aria-hidden="true">Boards</span>
-        </span>
-        <font-awesome-icon :icon="['fas', 'chevron-down']" aria-hidden="true" />
+        :aria-expanded="isLibrarySidebarOpen" aria-haspopup="dialog" :inert="librarySidebarMode === 'overlay' || showPlotModal" @click="openBoardLibrary">
+        <!-- Lucide Library Big icon, ISC license: https://lucide.dev/icons/library-big -->
+        <svg class="board-library-trigger-icon" width="20" height="20" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <rect width="8" height="18" x="3" y="3" rx="1" />
+          <path d="M7 3v18" />
+          <path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z" />
+        </svg>
+        <span class="board-library-trigger-label">Boards</span>
       </button>
     </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || showBoardLibrary">
+    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || librarySidebarMode === 'overlay' || showPlotModal">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
         :selectedShape="selectedShape"
         :session-ready="boardSessionReady"
+        :sidebar-pinned="librarySidebarMode === 'pinned'"
         :board-theme="boardTheme"
         :selected-color="selectedColor"
-        :selection-panel-suspended="showFormulaModal || showShareStampModal"
+        :selection-panel-suspended="showPlotModal || showFormulaModal || showShareStampModal"
         ref="drawBoardRef"
         @request-formula="onRequestFormula"
         @edit-formula="onEditFormula"
+        @edit-plot="onEditPlot"
+        @request-plot="onOpenPlot"
         @text-editing-completed="onTextEditingCompleted"
         @shape-drawing-completed="onShapeDrawingCompleted"
         @zoom-changed="updateZoomLevel"
         @selection-color="onSelectionColor"
         @persistence-status="onPersistenceStatus"
+        @active-board-changed="onActiveBoardChanged"
       />
       <ToolsPanel
         :selectedTool="selectedTool"
@@ -72,9 +81,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       />
 
     </div>
-    <BoardLibraryModal v-if="showBoardLibrary" :boards="boardList" :archived-boards="archivedList"
-      :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
-      @close="closeBoardLibrary" @action="onBoardLibraryAction" />
+    <Transition name="library-sidebar" @after-leave="restoreLibrarySidebarFocus">
+      <LibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
+        :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
+        :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
+        :width="librarySidebarWidth" :min-width="librarySidebarMinWidth" :max-width="librarySidebarMaxWidth"
+        :resizable="librarySidebarResizable" @resize="setLibrarySidebarWidth"
+        @toggle-pin="toggleLibrarySidebarPin" @close="closeLibrarySidebar" @browse="onBoardLibraryBrowse" @action="onBoardLibraryAction" />
+    </Transition>
 
     <div v-if="!boardSessionReady" class="board-session-loading" role="status" aria-label="Loading board">Loading board…</div>
 
@@ -99,6 +113,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @assist-used="onFormulaAssistUsed"
     />
 
+    <PlotModal v-if="showPlotModal" :board-theme="boardTheme" :initial-spec="editingPlotSpec" :busy="plotBusy" :commit-error="plotError"
+      @close="closePlotModal" @submit-plot="onSubmitPlot" />
     <ShareStampModal
       v-if="showShareStampModal"
       :isVisible="showShareStampModal"
@@ -109,7 +125,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     />
     
     <ZoomPanel 
-      :inert="showBoardLibrary"
+      :inert="librarySidebarMode === 'overlay' || showPlotModal"
       :zoomLevel="zoomLevel"
       :board-theme="boardTheme"
       :is-fullscreen="isFullscreen"
@@ -123,7 +139,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
       @toggle-fullscreen="toggleFullscreen"
     />
     
-    <SupportPanel class="secondary-chrome" :inert="showBoardLibrary" />
+    <SupportPanel class="secondary-chrome" :inert="librarySidebarMode === 'overlay' || showPlotModal" />
     
     <span class="copyright secondary-chrome">© 2026 MathBoard.app • Made with <font-awesome-icon :icon="['fas', 'heart']" /> in Florence • All Rights Reserved</span>
   </div>
@@ -132,10 +148,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 <script>
 import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref } from 'vue'
 import DrawBoard from './components/DrawBoard.vue'
-import BoardLibraryModal from './components/BoardLibraryModal.vue'
+import LibrarySidebar from './components/LibrarySidebar.vue'
 import ToolsPanel from './components/ToolsPanel.vue'
 // Deferred until opened: FormulaModal brings the KaTeX preview renderer.
 const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
+const PlotModal = defineAsyncComponent(() => import('./components/PlotModal.vue'))
 const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
@@ -172,6 +189,9 @@ import { createTemporaryPanController } from './board/interactions/TemporaryPanC
 import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
 import { trackEvent } from './analytics'
+import { useBoardLibrary } from './composables/useBoardLibrary.js'
+import { usePlotEditor } from './composables/usePlotEditor.js'
+import { useLibrarySidebar } from './composables/useLibrarySidebar.js'
 import {
   ANALYTICS_EVENTS,
   ANALYTICS_FORMULA_MODES,
@@ -194,9 +214,10 @@ export default {
   name: 'App',
   components: {
     DrawBoard,
-    BoardLibraryModal,
+    LibrarySidebar,
     ToolsPanel,
     FormulaModal,
+    PlotModal,
     ShareStampModal,
     SupportPanel,
     ZoomPanel,
@@ -240,6 +261,10 @@ export default {
     const selectedShape = ref('rectangle')
     const drawBoardRef = ref(null)
     const fullscreenRootRef = ref(null)
+    const {
+      showPlotModal, editingPlotSpec, plotBusy, plotError,
+      onOpenPlot, onEditPlot, onSubmitPlot, closePlotModal,
+    } = usePlotEditor({ drawBoardRef, selectedTool })
     const showFormulaModal = ref(false)
     const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
     const showShareStampModal = ref(false)
@@ -269,74 +294,37 @@ export default {
         recoveringConflict.value = false
       }
     }
-    const showBoardLibrary = ref(false)
-    const boardLibraryTriggerRef = ref(null)
-    const boardList = ref([])
-    const archivedList = ref([])
-    const boardLibraryBusy = ref(false)
-    const boardLibraryLoading = ref(false)
-    const boardLibraryError = ref(null)
-    const closeBoardLibrary = async () => {
-      if (boardLibraryBusy.value) return
-      showBoardLibrary.value = false
-      await nextTick()
-      boardLibraryTriggerRef.value?.focus()
-    }
-    const boardWorkspace = () => drawBoardRef.value?.getBoardWorkspace()
-    const refreshBoardLibrary = async () => {
-      const workspace = boardWorkspace()
-      if (!workspace) throw new Error('Board workspace is not ready.')
-      const [boards, archived] = await Promise.all([workspace.list(), workspace.listArchived()])
-      boardList.value = boards
-      archivedList.value = archived
-    }
-    const openBoardLibrary = async () => {
-      if (!boardSessionReady.value) return
-      boardLibraryError.value = null
-      boardList.value = []
-      archivedList.value = []
-      boardLibraryLoading.value = true
-      showBoardLibrary.value = true
-      try { await refreshBoardLibrary() } catch (error) { boardLibraryError.value = error.message }
-      finally { boardLibraryLoading.value = false }
-    }
-    const onBoardLibraryAction = async ({ action, boardId, title }) => {
-      if (boardLibraryBusy.value) return
-      const switchedAwayFromActive = (action === 'archive' || action === 'delete')
-        && boardList.value.some(board => board.id === boardId && board.isActive)
-      boardLibraryError.value = null
-      boardLibraryBusy.value = true
-      try {
-        const workspace = boardWorkspace()
-        if (!workspace) throw new Error('Board workspace is not ready.')
-        if (action === 'create') await workspace.create({ title })
-        else if (action === 'open') await workspace.open({ boardId })
-        else if (action === 'unarchive-open') {
-          await workspace.unarchive({ boardId })
-          try { await workspace.open({ boardId }) }
-          catch (error) { throw new Error(`Board restored but could not be opened. ${error?.message || ''}`.trim()) }
-        }
-        else if (action === 'rename') await workspace.rename({ boardId, title })
-        else if (action === 'archive') await workspace.archive({ boardId })
-        else if (action === 'unarchive') await workspace.unarchive({ boardId })
-        else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
-        else throw new Error('Unsupported board library action.')
-        await refreshBoardLibrary()
-        if (switchedAwayFromActive) selectedTool.value = 'select'
-        if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
-          selectedTool.value = 'select'
-          showBoardLibrary.value = false
-          await nextTick()
-          boardLibraryTriggerRef.value?.focus()
-        }
-      } catch (error) {
-        boardLibraryError.value = error?.message || 'Board library operation failed.'
-        // A failed post-transition metadata write may still leave a new active board.
-        try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
-      } finally {
-        boardLibraryBusy.value = false
-      }
-    }
+    const {
+      boardList, archivedList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
+      openBoardLibrary, onBoardLibraryAction, onActiveBoardChanged, onBoardLibraryBrowse,
+      onSidebarClosed, onSidebarModeChanged,
+    } = useBoardLibrary({
+      isReady: boardSessionReady,
+      getWorkspace: () => drawBoardRef.value?.getBoardWorkspace(),
+      // Resolved only on interaction, after useLibrarySidebar initializes below.
+      getSidebar: () => librarySidebar,
+      resetSelectedTool: () => { selectedTool.value = 'select' },
+      trackEvent,
+    })
+    const librarySidebar = useLibrarySidebar({
+      isBusy: () => boardLibraryBusy.value,
+      onClosed: onSidebarClosed,
+      onModeChanged: onSidebarModeChanged,
+    })
+    const {
+      mode: librarySidebarMode,
+      width: librarySidebarWidth,
+      minWidth: librarySidebarMinWidth,
+      maxWidth: librarySidebarMaxWidth,
+      resizable: librarySidebarResizable,
+      canPin: canPinLibrarySidebar,
+      isOpen: isLibrarySidebarOpen,
+      triggerRef: boardLibraryTriggerRef,
+      setWidth: setLibrarySidebarWidth,
+      close: closeLibrarySidebar,
+      restoreFocus: restoreLibrarySidebarFocus,
+      togglePin: toggleLibrarySidebarPin,
+    } = librarySidebar
     let fullscreenInitialized = false
     let previousFullscreen = false
     let disconnectDesktopWindow = null
@@ -442,11 +430,13 @@ export default {
         try {
           const disconnect = await connectDesktopWindow({
             onUndo: () => {
-              if (boardSessionReady.value && !showBoardLibrary.value
+              if (boardSessionReady.value && librarySidebarMode.value !== 'overlay'
+                && !document.activeElement?.closest?.('.library-sidebar-panel')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onUndo()
             },
             onRedo: () => {
-              if (boardSessionReady.value && !showBoardLibrary.value
+              if (boardSessionReady.value && librarySidebarMode.value !== 'overlay'
+                && !document.activeElement?.closest?.('.library-sidebar-panel')
                 && !shouldIgnoreGlobalShortcut({ target: document.activeElement })) onRedo()
             },
             onFullscreenChange: setFullscreenState,
@@ -563,6 +553,7 @@ export default {
 
     const onKeyDown = (event) => {
       if (!boardSessionReady.value) return
+      if (showPlotModal.value) return
       if (isEscapeShortcut(event)) {
         // The browser uses Escape to leave fullscreen. Do not cancel that.
         if (document.fullscreenElement) return
@@ -576,8 +567,9 @@ export default {
           event.preventDefault()
           return
         }
-        if (showBoardLibrary.value) {
-          closeBoardLibrary()
+        if (librarySidebarMode.value === 'overlay'
+          || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.library-sidebar-panel'))) {
+          closeLibrarySidebar('escape')
           event.preventDefault()
           return
         }
@@ -587,6 +579,11 @@ export default {
           return
         }
         if (shouldIgnoreGlobalShortcut(event)) return
+        if (selectedTool.value === 'graph') {
+          selectedTool.value = 'select'
+          event.preventDefault()
+          return
+        }
         drawBoardRef.value?.cancelTransientAction()
         event.preventDefault()
         return
@@ -595,7 +592,8 @@ export default {
       if (
         showFormulaModal.value
         || showShareStampModal.value
-        || showBoardLibrary.value
+        || librarySidebarMode.value === 'overlay'
+        || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.library-sidebar-panel'))
         || shouldIgnoreGlobalShortcut(event)
         || drawBoardRef.value?.isTextEditing()
       ) return
@@ -840,6 +838,7 @@ export default {
       selectedShape,
       drawBoardRef,
       fullscreenRootRef,
+      showPlotModal, editingPlotSpec, plotBusy, plotError, onOpenPlot, onEditPlot, onSubmitPlot, closePlotModal,
       showFormulaModal,
       formulaModalMode,
       showShareStampModal,
@@ -862,7 +861,17 @@ export default {
       recoveringConflict,
       onPersistenceStatus,
       recoverConflict,
-      showBoardLibrary,
+      isLibrarySidebarOpen,
+      librarySidebarMode,
+      canPinLibrarySidebar,
+      librarySidebarWidth,
+      librarySidebarMinWidth,
+      librarySidebarMaxWidth,
+      librarySidebarResizable,
+      setLibrarySidebarWidth,
+      toggleLibrarySidebarPin,
+      onBoardLibraryBrowse,
+      onActiveBoardChanged,
       boardLibraryTriggerRef,
       boardList,
       archivedList,
@@ -870,7 +879,8 @@ export default {
       boardLibraryLoading,
       boardLibraryError,
       openBoardLibrary,
-      closeBoardLibrary,
+      closeLibrarySidebar,
+      restoreLibrarySidebarFocus,
       onBoardLibraryAction,
       onRequestFormula,
       onEditFormula,
@@ -969,7 +979,7 @@ body {
   display: none !important;
 }
 
-/* On desktop, keep the existing independent logo and centered board selector. */
+/* Keep the logo left and the library trigger at the top-right. */
 .board-topbar { display: contents; }
 
 .logo {
@@ -1001,13 +1011,12 @@ body {
 .board-library-trigger {
   position: fixed;
   top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: max(16px, env(safe-area-inset-right));
   z-index: 1100;
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(330px, calc(100vw - 350px));
+  width: auto;
   min-height: 44px;
   padding: 9px 14px;
   border: 0;
@@ -1021,10 +1030,16 @@ body {
 }
 .board-library-trigger:hover:not(:disabled) { box-shadow: var(--panel-shadow), inset 0 0 0 1px var(--border-color); }
 .board-library-trigger:focus-visible { outline: 2px solid var(--selected-bg); outline-offset: 2px; }
-.board-library-trigger-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.board-library-trigger-label-short { display: none; }
-.board-library-trigger > svg:last-child { color: var(--text-muted); font-size: 12px; }
+.board-library-trigger-icon { flex: none; }
+.board-library-trigger-label { white-space: nowrap; }
 .board-library-trigger:disabled { opacity: .6; cursor: default; }
+
+/* Docked mode reserves the user's sidebar width; Fabric keeps scene coordinates. */
+#app.library-sidebar-pinned #boardcontainer { right: var(--library-sidebar-width); }
+#app.library-sidebar-pinned .support-panel { right: calc(var(--library-sidebar-width) + 12px); }
+#app.library-sidebar-pinned .copyright { display: none; }
+/* Editing dialogs must remain above an open pinned sidebar. */
+#app.foreground-dialog-open .library-sidebar-layer.is-pinned { z-index: 500; }
 
 .copyright {
   position: absolute;
@@ -1097,7 +1112,7 @@ body {
 }
 
 @media (max-width: 600px) {
-  /* Fit the board selector beside the logo instead of dedicating another row. */
+  /* Keep the compact board control opposite the logo on mobile. */
   .board-topbar {
     position: fixed;
     top: max(12px, env(safe-area-inset-top));
@@ -1116,21 +1131,15 @@ body {
   }
   .board-library-trigger {
     position: static;
-    flex: 1 1 0;
-    min-width: 0;
-    width: auto;
-    max-width: none;
-    transform: none;
-    gap: 8px;
-    padding: 9px 10px;
+    flex: 0 0 44px;
+    justify-content: center;
+    margin-left: auto;
+    width: 44px;
+    height: 44px;
+    padding: 0;
   }
+  .board-library-trigger-label { display: none; }
   .copyright { display: none; }
-}
-
-/* Keep the selector legible beside the logo on very narrow phones. */
-@media (max-width: 360px) {
-  .board-library-trigger-label-long { display: none; }
-  .board-library-trigger-label-short { display: inline; }
 }
 
 .board-session-loading {

@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
 import { util } from 'fabric'
+import { plotSemanticProps } from '../../plots/plotSpec.js'
 import { BoardObjectPolicy } from '../BoardObjectPolicy.js'
 import { ensureMathBoardObjectId, getMathBoardObjectId } from '../ids.js'
 import { STYLE_KEYS, TEXT_KEYS, TRANSFORM_KEYS } from './constants.js'
@@ -136,6 +137,8 @@ export function readSemanticBoardObject(object, options = {}) {
 
   const withId = (node) => (includeId && id ? { id, ...node } : node)
 
+  if (policy.isPlot(object)) return withId({type:'plot',...plotSemanticProps(object.plotSpec),...commonProps(object)})
+
   if (policy.isFormula(object)) {
     if (typeof object.latex !== 'string' || !object.latex.trim()) {
       throw new Error('Formula is missing latex.')
@@ -230,6 +233,7 @@ export function readSemanticBoardObject(object, options = {}) {
  */
 export function toStampNode(semantic) {
   if (!semantic || typeof semantic !== 'object') return semantic
+  if (semantic.type === 'plot') throw new Error('Graphs cannot be shared as stamps yet.')
   const { id, objects, ...rest } = semantic
   void id
   if (semantic.type === 'group' && Array.isArray(objects)) {
