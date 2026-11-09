@@ -76,3 +76,62 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+version_sync:
+    name: Release version sync
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'develop' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.node-version'
+
+      - name: Check release version consistency
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
+          const packageLock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+          const cargoToml = readFileSync('src-tauri/Cargo.toml', 'utf8');
+          const cargoLock = readFileSync('src-tauri/Cargo.lock', 'utf8');
+
+          function cargoManifestVersion(source) {
+            const section = source.split(/^\[package\][ \t]*\r?$/m)[1]?.split(/^\[/m)[0];
+            return section?.match(/^version[ \t]*=[ \t]*"([^"]+)"[ \t]*\r?$/m)?.[1];
+          }
+
+          function cargoLockVersion(source) {
+            const packages = source.split(/^\[\[package\]\][ \t]*\r?$/m).slice(1);
+            const matches = packages.filter((section) =>
+              /^name[ \t]*=[ \t]*"mathboard"[ \t]*\r?$/m.test(section)
+            );
+            if (matches.length !== 1) return undefined;
+            return matches[0].match(/^version[ \t]*=[ \t]*"([^"]+)"[ \t]*\r?$/m)?.[1];
+          }
+
+          const versions = [
+            ['package.json', packageJson.version],
+            ['package-lock.json', packageLock.version],
+            ['package-lock.json (root package)', packageLock.packages?.['']?.version],
+            ['src-tauri/Cargo.toml', cargoManifestVersion(cargoToml)],
+            ['src-tauri/Cargo.lock (mathboard)', cargoLockVersion(cargoLock)],
+          ];
+
+          for (const [file, version] of versions) {
+            console.log(file + ': ' + (version ?? 'MISSING'));
+          }
+
+          const expected = versions[0][1];
+          if (typeof expected !== 'string' || !expected ||
+              versions.some(([, version]) => version !== expected)) {
+            console.error('::error title=Release version mismatch::Align package.json, package-lock.json, src-tauri/Cargo.toml, and src-tauri/Cargo.lock before merging develop into main.');
+            process.exit(1);
+          }
+
+          console.log('Release versions are aligned: ' + expected);
+          NODE
