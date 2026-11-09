@@ -21,7 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 export function withPlotStatus(node, object, policy) {
   const result = structuredClone(node)
   if (policy.isPlot(object)) {
-    if (['ok', 'partial'].includes(object.plotStatus)) result.plotStatus = object.plotStatus
+    if (['ok', 'partial', 'no_real_samples'].includes(object.plotStatus)) result.plotStatus = object.plotStatus
   } else if (policy.isBoardGroup(object) && Array.isArray(result.objects)) {
     const children = object.getObjects()
     result.objects = result.objects.map((child, index) =>
