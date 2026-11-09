@@ -22,7 +22,7 @@ import { renderOpenBoardCTA, renderScreenshot } from '../lib/render-components.m
 import { linearFunctionStampPayload } from '../data/linear-function-stamp.mjs'
 
 export default {
-  lastmod: '2026-10-26',
+  lastmod: '2026-11-09',
   path: '/examples/graph-linear-function/',
   title: 'How to Graph a Linear Function Step by Step | MathBoard',
   description:
@@ -96,7 +96,7 @@ export default {
       From there, count one tick to the right and two ticks upward to mark (1, 3);
       repeat for (2, 5).</li>
     <li><strong>Draw the line.</strong> Use the Line tool to connect the points and extend the straight line.
-      You are drawing it manually; MathBoard does not automatically plot an equation.</li>
+      This manual step helps learners see how the slope and intercept determine the line.</li>
     <li><strong>Add an editable equation.</strong> Choose <em>Formula</em> (shortcut <kbd>F</kbd>),
       enter <code>y = 2x + 1</code>, check the preview and insert it beside your graph.
       Select the formula later to edit it again.</li>
@@ -109,7 +109,7 @@ export default {
     height: 1048,
     className: 'screenshot--board-capture',
     alt: 'MathBoard board with the Cartesian plane stamp, a blue line through (0, 1), (1, 3) and (2, 5), red dashed run one and rise two guides, and y = 2x + 1 as an editable formula.',
-    caption: 'Created in MathBoard with the Cartesian plane stamp, Line, Circle and Text annotation, and an editable Formula object. MathBoard does not plot the equation automatically.',
+    caption: 'Created in MathBoard with the Cartesian plane stamp, Line, Circle and Text annotation, and an editable Formula object. The line and guides use drawing objects rather than the Graph tool.',
   })}
   <p><a href="/seo/examples/linear-function-board.png">Open the full-size MathBoard capture</a> if the labels are too small on your screen.</p>
   <p class="cta-row">
@@ -124,7 +124,10 @@ export default {
   <p>
     For help with notation, see the <a href="/latex-whiteboard/">LaTeX whiteboard guide</a>.
     The same workflow works during a video call using your normal screen-sharing software.
-    MathBoard is a drawing surface, not a built-in live graphing calculator.
+    MathBoard also has a <strong>Graph</strong> tool (shortcut <kbd>G</kbd>) that plots
+    supported real functions of x as editable graphs. To try it, select Graph, click
+    the board, and enter <code>2x + 1</code> in the function editor. This lesson
+    uses the drawing tools to make the rise and run visible.
   </p>
 </section>
 <section>

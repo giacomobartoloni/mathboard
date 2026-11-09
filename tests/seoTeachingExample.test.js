@@ -34,7 +34,10 @@ test('E003 is crawlable, readable, and linked to the board and existing guides',
   assert.match(html, /<h1>How to graph a linear function by hand<\/h1>/)
   assert.match(html, /<table>[\s\S]*?\(2, 5\)[\s\S]*?<\/table>/)
   assert.match(html, /\(0, 1\)[\s\S]*?\(1, 3\)/)
-  assert.match(html, /MathBoard does not automatically plot an equation/)
+  assert.match(html, /manual step helps learners see how the slope and intercept determine the line/)
+  assert.match(html, /<strong>Graph<\/strong> tool \(shortcut <kbd>G<\/kbd>\)/)
+  assert.match(html, /supported real functions of x as editable graphs/)
+  assert.doesNotMatch(html, /does not automatically plot|does not plot the equation automatically|not a built-in live graphing calculator/i)
   assert.match(html, /data-seo-cta="open-board"/)
   assert.ok(collectInternalHrefs(html).includes('/math-whiteboard/'))
   assert.ok(collectInternalHrefs(html).includes('/latex-whiteboard/'))
@@ -90,7 +93,7 @@ test('E003 board capture documents the real MathBoard workflow', () => {
     /<img[\s\S]*?src="\/seo\/examples\/linear-function-board\.png"[\s\S]*?width="1048"[\s\S]*?height="1048"[\s\S]*?alt="[^"]*\(0, 1\)[^"]*"/,
   )
   assert.match(html, /Created in MathBoard with the Cartesian plane stamp/)
-  assert.match(html, /MathBoard does not plot the equation automatically/)
+  assert.match(html, /The line and guides use drawing objects rather than the Graph tool/)
   assert.ok(html.includes('href="/seo/examples/linear-function-board.png"'))
 
   const png = readFileSync(new URL('../public/seo/examples/linear-function-board.png', import.meta.url))
