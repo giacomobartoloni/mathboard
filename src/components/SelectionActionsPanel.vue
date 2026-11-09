@@ -63,6 +63,16 @@ const ACTION_CATALOG = {
     title: 'Ungroup (Ctrl+Shift+G)',
     icon: ['fas', 'object-ungroup'],
   },
+  'show-parameters': {
+    label: 'Show parameter controls',
+    title: 'Show parameter controls',
+    icon: ['fas', 'eye'],
+  },
+  'hide-parameters': {
+    label: 'Hide parameter controls',
+    title: 'Hide parameter controls',
+    icon: ['fas', 'eye-slash'],
+  },
   duplicate: {
     label: 'Duplicate',
     title: 'Duplicate (Ctrl+D)',
