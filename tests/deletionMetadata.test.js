@@ -14,6 +14,7 @@ function sumCounts(metadata) {
     + metadata.shape_count
     + metadata.text_count
     + metadata.formula_count
+    + metadata.plot_count
     + metadata.group_count
     + metadata.unknown_count
   )
@@ -27,6 +28,7 @@ test('builder keeps zero-valued count fields in its application metadata', () =>
     'group_count',
     'object_type',
     'path_count',
+    'plot_count',
     'selection_count',
     'shape_count',
     'text_count',
@@ -36,6 +38,7 @@ test('builder keeps zero-valued count fields in its application metadata', () =>
   assert.equal(metadata.shape_count, 0)
   assert.equal(metadata.text_count, 0)
   assert.equal(metadata.formula_count, 0)
+  assert.equal(metadata.plot_count, 0)
   assert.equal(metadata.group_count, 0)
   assert.equal(metadata.unknown_count, 0)
 })
@@ -48,6 +51,7 @@ test('single path', () => {
     shape_count: 0,
     text_count: 0,
     formula_count: 0,
+    plot_count: 0,
     group_count: 0,
     unknown_count: 0,
   })
@@ -61,6 +65,7 @@ test('homogeneous multi path', () => {
   assert.equal(metadata.shape_count, 0)
   assert.equal(metadata.text_count, 0)
   assert.equal(metadata.formula_count, 0)
+  assert.equal(metadata.plot_count, 0)
   assert.equal(metadata.group_count, 0)
   assert.equal(metadata.unknown_count, 0)
 })
@@ -72,6 +77,7 @@ test('mixed selection', () => {
   assert.equal(metadata.path_count, 3)
   assert.equal(metadata.text_count, 1)
   assert.equal(metadata.formula_count, 1)
+  assert.equal(metadata.plot_count, 0)
   assert.equal(metadata.shape_count, 0)
   assert.equal(metadata.group_count, 0)
   assert.equal(metadata.unknown_count, 0)
@@ -104,6 +110,7 @@ test('group is atomic — no child visitation', () => {
     shape_count: 0,
     text_count: 0,
     formula_count: 0,
+    plot_count: 0,
     group_count: 1,
     unknown_count: 0,
   })
@@ -134,4 +141,21 @@ test('mixed with unknown', () => {
   assert.equal(metadata.unknown_count, 1)
   assert.equal(metadata.selection_count, 2)
   assert.equal(metadata.selection_count, sumCounts(metadata))
+})
+
+test('Plot roots are counted directly, while Group children stay atomic', () => {
+  const metadata = build(['plot', 'formula', 'plot'])
+  assert.equal(metadata.object_type, ANALYTICS_OBJECT_TYPES.MIXED)
+  assert.equal(metadata.selection_count, 3)
+  assert.equal(metadata.plot_count, 2)
+  assert.equal(metadata.formula_count, 1)
+  assert.equal(metadata.unknown_count, 0)
+  assert.equal(sumCounts(metadata), 3)
+
+  const grouped = buildObjectDeletedMetadata([
+    { kind: 'group', children: [{ kind: 'plot' }] },
+  ], (object) => object.kind)
+  assert.equal(grouped.object_type, ANALYTICS_OBJECT_TYPES.GROUP)
+  assert.equal(grouped.group_count, 1)
+  assert.equal(grouped.plot_count, 0)
 })

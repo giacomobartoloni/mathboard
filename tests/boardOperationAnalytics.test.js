@@ -54,7 +54,7 @@ test('deletion metadata counts semantic roots once and keeps every fixed count f
     ['engaged'], ['action'],
     ['event', 'object_deleted', {
       selection_count: 3, object_type: 'mixed', path_count: 1, shape_count: 0,
-      text_count: 0, formula_count: 1, group_count: 1, unknown_count: 0,
+      text_count: 0, formula_count: 1, plot_count: 0, group_count: 1, unknown_count: 0,
     }],
   ])
 })
@@ -148,9 +148,63 @@ test('MCP provenance is categorical on existing events and excludes all board co
     { object_type: 'formula', interaction_channel: 'mcp' }])
   assert.deepEqual(calls[1], ['event', 'object_deleted', {
     selection_count: 2, object_type: 'mixed', path_count: 1, shape_count: 0,
-    text_count: 1, formula_count: 0, group_count: 0, unknown_count: 0,
+    text_count: 1, formula_count: 0, plot_count: 0, group_count: 0, unknown_count: 0,
     interaction_channel: 'mcp',
   }])
   assert.deepEqual(calls[2], ['event', 'formula_edited', { interaction_channel: 'mcp' }])
   assert.doesNotMatch(JSON.stringify(calls), /private/)
+})
+
+test('Plot creates use object_created with no new createMany root counter', () => {
+  const { analytics, calls } = setup()
+  analytics.record({ kind: 'create', objectKinds: ['plot'] }, { interactionChannel: 'ui' })
+  analytics.record({ kind: 'create', objectKinds: ['plot', 'plot'] }, { interactionChannel: 'local_agent' })
+  analytics.record({ kind: 'create', objectKinds: ['plot', 'formula'] }, { interactionChannel: 'mcp' })
+  assert.deepEqual(calls, [
+    ['engaged'], ['action'], ['event', 'object_created', { object_type: 'plot' }],
+    ['event', 'object_created', { object_type: 'plot' }],
+    ['event', 'object_created', { object_type: 'mixed', interaction_channel: 'mcp' }],
+  ])
+})
+
+test('committed Plot edits are counted once for UI and not as human actions for agents', () => {
+  const { analytics, calls } = setup()
+  analytics.record({ kind: 'plot_edit', latex: 'secret equation', id: 'secret id' },
+    { interactionChannel: 'ui', secret: 'not allowed' })
+  analytics.record({ kind: 'plot_edit' }, { interactionChannel: 'local_agent' })
+  analytics.record({ kind: 'plot_edit', latex: 'private' }, { interactionChannel: 'mcp' })
+  assert.deepEqual(calls, [
+    ['engaged'], ['action'], ['event', 'plot_edited', undefined],
+    ['event', 'plot_edited', undefined],
+    ['event', 'plot_edited', { interaction_channel: 'mcp' }],
+  ])
+  assert.doesNotMatch(JSON.stringify(calls), /secret|private/)
+  assert.equal(analytics.record({ kind: 'plot_edit' }, { interactionChannel: 'untrusted' }), false)
+})
+
+test('Plot deletion preserves fixed root counts for pure and mixed selections', () => {
+  const { analytics, calls } = setup()
+  analytics.record({ kind: 'delete', objectKinds: ['plot', 'plot'] }, { interactionChannel: 'ui' })
+  analytics.record({ kind: 'delete', objectKinds: ['plot', 'group', 'formula'] }, { interactionChannel: 'mcp' })
+  assert.deepEqual(calls, [
+    ['engaged'], ['action'], ['event', 'object_deleted', {
+      selection_count: 2, object_type: 'plot',
+      path_count: 0, shape_count: 0, text_count: 0, formula_count: 0,
+      plot_count: 2, group_count: 0, unknown_count: 0,
+    }],
+    ['event', 'object_deleted', {
+      selection_count: 3, object_type: 'mixed',
+      path_count: 0, shape_count: 0, text_count: 0, formula_count: 1,
+      plot_count: 1, group_count: 1, unknown_count: 0, interaction_channel: 'mcp',
+    }],
+  ])
+})
+
+test('invalid or absent Plot effects never count as human actions', () => {
+  const { analytics, calls } = setup()
+  assert.equal(analytics.record(null, { interactionChannel: 'ui' }), false)
+  assert.equal(analytics.record({ kind: 'plot_edit' }, { interactionChannel: 'unknown' }), false)
+  assert.equal(analytics.record({ kind: 'create', objectKinds: [] }, { interactionChannel: 'ui' }), false)
+  assert.equal(analytics.record({ kind: 'update' }, { interactionChannel: 'ui' }), true)
+  assert.deepEqual(calls, [])
 })
