@@ -112,7 +112,7 @@ test('public Plot schema and existing local agent methods accept variable-length
   let invoked = 0
   const facade = { create: () => { invoked++; return {} } }
   await executeBoardCommand(facade, { method: 'create', params: { spec } })
-  await assert.rejects(executeBoardCommand(facade, { method: 'create',
+  await assert.rejects(async () => executeBoardCommand(facade, { method: 'create',
     params: { spec: { ...spec, parameters: [param('a', 1), param('a', 2)] } } }),
   { code: 'invalid_object_spec' })
   assert.equal(invoked, 1)
