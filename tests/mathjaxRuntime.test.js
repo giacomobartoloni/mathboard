@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import katex from 'katex'
 import { liteAdaptor } from '@mathjax/src/js/adaptors/liteAdaptor.js'
 import { createMathJaxEngine } from '../src/formulas/mathjaxBrowserEngine.js'
 import { MathJaxRuntime } from '../src/formulas/MathJaxRuntime.js'
@@ -37,6 +38,16 @@ const CORPUS = [
   String.raw`\boldsymbol{\alpha}`,
   String.raw`\boldsymbol{\nabla}`,
   String.raw`\boldsymbol{x+\alpha}`,
+  String.raw`A + \cancel{B}`,
+  String.raw`\bcancel{x}`,
+  String.raw`\xcancel{\frac{a}{b}}`,
+  String.raw`a \coloneqq b`,
+  String.raw`\xhookrightarrow{f}`,
+  String.raw`\xlongequal{definition}`,
+  String.raw`\xmapsto{f}`,
+  String.raw`\bra{\phi}`,
+  String.raw`\ket{\psi}`,
+  String.raw`\braket{\phi|\psi}`,
 ]
 
 function paletteLatex() {
@@ -88,6 +99,57 @@ test('MathJaxRuntime renders boldsymbol as bold glyphs instead of an undefined c
     assert.ok(boldWidth < normalWidth * 2, `Unexpected extra content in ${boldLatex}`)
     assert.notEqual(boldSvg, normalSvg, `Expected a distinct bold glyph for ${boldLatex}`)
     assert.doesNotMatch(markupWithoutStyle(boldSvg), /data-mml-node="merror"/)
+  }
+})
+
+
+const SHARED_EXTENSION_CASES = [
+  { packageName: 'cancel', latex: String.raw`A + \cancel{B}` },
+  { packageName: 'cancel', latex: String.raw`\bcancel{x}` },
+  { packageName: 'cancel', latex: String.raw`\xcancel{\frac{a}{b}}` },
+  { packageName: 'mathtools', latex: String.raw`a \coloneqq b` },
+  { packageName: 'mathtools', latex: String.raw`\xhookrightarrow{f}` },
+  { packageName: 'extpfeil', latex: String.raw`\xlongequal{definition}` },
+  { packageName: 'extpfeil', latex: String.raw`\xmapsto{f}` },
+  { packageName: 'braket', latex: String.raw`\bra{\phi}` },
+  { packageName: 'braket', latex: String.raw`\ket{\psi}` },
+  { packageName: 'braket', latex: String.raw`\braket{\phi|\psi}` },
+]
+
+test('MathJax SVG supports selected KaTeX-compatible extension commands without undefined-command text', async () => {
+  const runtime = runtimeWithLiteEngine()
+  for (const { packageName, latex } of SHARED_EXTENSION_CASES) {
+    assert.doesNotThrow(() => katex.renderToString(latex, { throwOnError: true }),
+      `KaTeX preview rejected ${packageName}: ${latex}`)
+    const svg = await runtime.renderSvg(latex)
+    const markup = markupWithoutStyle(svg)
+    assert.match(svg, /<svg[\s>]/)
+    assert.doesNotMatch(markup, /data-mml-node="(?:merror|mtext)"/,
+      `Unexpected MathJax fallback for ${packageName}: ${latex}`)
+    assert.match(svg, /width="[\d.]+"/)
+  }
+})
+
+test('MathJax cancel variants create semantic strike-through enclosures', async () => {
+  const runtime = runtimeWithLiteEngine()
+  for (const latex of [
+    String.raw`A + \cancel{B}`,
+    String.raw`\bcancel{x}`,
+    String.raw`\xcancel{\frac{a}{b}}`,
+  ]) {
+    const svg = await runtime.renderSvg(latex)
+    assert.match(markupWithoutStyle(svg), /data-mml-node="menclose"/,
+      `Expected cancellation enclosure for ${latex}`)
+  }
+})
+
+test('MathJax-only extension macros are not misrepresented as supported KaTeX preview', () => {
+  for (const latex of [
+    String.raw`\cancelto{0}{x}`,
+    String.raw`\prescript{a}{b}{X}`,
+  ]) {
+    assert.throws(() => katex.renderToString(latex, { throwOnError: true }),
+      `KaTeX unexpectedly accepts ${latex}; review compatibility documentation`)
   }
 })
 
