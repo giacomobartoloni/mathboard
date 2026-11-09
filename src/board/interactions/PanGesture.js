@@ -19,8 +19,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 /** Owns pan pointer/touch subscriptions and the live viewport drag. */
 export class PanGesture {
-  constructor({ canvas, onStart = () => {}, onFinish = () => {} }) {
+  constructor({ canvas, canStartMiddle = () => true, onStart = () => {}, onFinish = () => {} }) {
     this.canvas = canvas;
+    this.canStartMiddle = canStartMiddle;
     this.onStart = onStart;
     this.onFinish = onFinish;
     this.active = false;
@@ -30,6 +31,13 @@ export class PanGesture {
     this._down = (opt) => this.start(opt);
     this._move = (opt) => this.move(opt);
     this._up = () => this.finish();
+    this._middleEnabled = false;
+    this._middleWindow = null;
+    this._middleDown = (event) => this.onMiddleMouseDown(event);
+    this._middleMove = (event) => this.onMiddleMouseMove(event);
+    this._middleUp = (event) => this.onMiddleMouseUp(event);
+    this._middleBlur = () => this.stopMiddleMousePan();
+    this._middleAuxClick = (event) => this.onMiddleAuxClick(event);
   }
 
   activate() {
@@ -43,6 +51,66 @@ export class PanGesture {
       ["mouse:down", this._down], ["mouse:move", this._move], ["mouse:up", this._up],
       ["touch:start", this._down], ["touch:move", this._move], ["touch:end", this._up],
     ];
+  }
+
+  enableMiddleMouse() {
+    if (this._middleEnabled) return;
+    this.canvas.upperCanvasEl.addEventListener('mousedown', this._middleDown, true);
+    this.canvas.upperCanvasEl.addEventListener('auxclick', this._middleAuxClick, true);
+    this._middleEnabled = true;
+  }
+
+  disableMiddleMouse() {
+    if (!this._middleEnabled) return;
+    this.stopMiddleMousePan();
+    this.canvas.upperCanvasEl.removeEventListener('mousedown', this._middleDown, true);
+    this.canvas.upperCanvasEl.removeEventListener('auxclick', this._middleAuxClick, true);
+    this._middleEnabled = false;
+  }
+
+  onMiddleMouseDown(event) {
+    if (event.button !== 1 || !this.canStartMiddle()) return;
+    // Capture before Fabric dispatches events to the active tool.
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!this.startMiddle(event)) return;
+    const view = this.canvas.upperCanvasEl.ownerDocument.defaultView;
+    this._middleWindow = view;
+    view.addEventListener('mousemove', this._middleMove, true);
+    view.addEventListener('mouseup', this._middleUp, true);
+    view.addEventListener('blur', this._middleBlur);
+  }
+
+  onMiddleMouseMove(event) {
+    if (!(event.buttons & 4)) {
+      this.stopMiddleMousePan();
+      return;
+    }
+    event.stopImmediatePropagation();
+    this.move({ e: event });
+  }
+
+  onMiddleMouseUp(event) {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    this.stopMiddleMousePan();
+  }
+
+  onMiddleAuxClick(event) {
+    if (event.button !== 1) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  stopMiddleMousePan() {
+    if (!this._middleWindow) return;
+    const view = this._middleWindow;
+    this._middleWindow = null;
+    view.removeEventListener('mousemove', this._middleMove, true);
+    view.removeEventListener('mouseup', this._middleUp, true);
+    view.removeEventListener('blur', this._middleBlur);
+    this.finish();
   }
 
   _point(evt) {
@@ -93,7 +161,8 @@ export class PanGesture {
 
   deactivate() {
     if (!this.active) return;
-    this.finish();
+    // Changing tools must not interrupt a middle-button drag.
+    if (!this._middleWindow) this.finish();
     for (const [event, listener] of this._listeners()) this.canvas.off(event, listener);
     this.active = false;
   }
@@ -103,6 +172,7 @@ export class PanGesture {
   }
 
   dispose() {
+    this.disableMiddleMouse();
     this.deactivate();
   }
 }

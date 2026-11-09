@@ -91,3 +91,69 @@ test('middle mouse pans without tool activation or selection changes', () => {
   assert.equal(prevented, 2);
   assert.equal(canvas.rendered, 1);
 });
+
+function domTarget() {
+  const listeners = new Map();
+  return {
+    listeners,
+    addEventListener(name, callback) {
+      if (!listeners.has(name)) listeners.set(name, new Set());
+      listeners.get(name).add(callback);
+    },
+    removeEventListener(name, callback) {
+      listeners.get(name)?.delete(callback);
+    },
+    fire(name, event) {
+      for (const callback of listeners.get(name) || []) callback(event);
+    },
+    listenerCount(name) {
+      return listeners.get(name)?.size || 0;
+    },
+  };
+}
+
+test('middle mouse DOM subscriptions are scoped to the gesture lifecycle', () => {
+  const view = domTarget();
+  const element = domTarget();
+  element.ownerDocument = { defaultView: view };
+  const canvas = canvasStub();
+  canvas.upperCanvasEl = element;
+  let allowed = false;
+  let prevented = 0;
+  let stopped = 0;
+  const pointer = (button, buttons, clientX, clientY) => ({
+    button, buttons, clientX, clientY,
+    preventDefault: () => prevented++,
+    stopImmediatePropagation: () => stopped++,
+  });
+  const gesture = new PanGesture({ canvas, canStartMiddle: () => allowed });
+
+  gesture.enableMiddleMouse();
+  gesture.enableMiddleMouse();
+  assert.equal(element.listenerCount('mousedown'), 1);
+  element.fire('mousedown', pointer(1, 4, 10, 20));
+  assert.equal(gesture.isActive(), false);
+
+  allowed = true;
+  element.fire('mousedown', pointer(1, 4, 10, 20));
+  assert.equal(gesture.isActive(), true);
+  assert.equal(view.listenerCount('mousemove'), 1);
+  view.fire('mousemove', pointer(1, 4, 40, 35));
+  assert.deepEqual(canvas.viewportTransform, [1, 0, 0, 1, 33, 19]);
+  view.fire('mouseup', pointer(1, 0, 40, 35));
+  assert.equal(gesture.isActive(), false);
+  assert.equal(view.listenerCount('mousemove'), 0);
+  assert.equal(view.listenerCount('mouseup'), 0);
+  assert.equal(view.listenerCount('blur'), 0);
+
+  element.fire('mousedown', pointer(1, 4, 10, 20));
+  gesture.dispose();
+  assert.equal(gesture.isActive(), false);
+  assert.equal(element.listenerCount('mousedown'), 0);
+  assert.equal(element.listenerCount('auxclick'), 0);
+  assert.equal(view.listenerCount('mousemove'), 0);
+  assert.equal(view.listenerCount('mouseup'), 0);
+  assert.equal(view.listenerCount('blur'), 0);
+  assert.ok(prevented > 0);
+  assert.ok(stopped > 0);
+});
