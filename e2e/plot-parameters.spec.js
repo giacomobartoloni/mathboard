@@ -81,6 +81,12 @@ test('contextual button toggles panel without editing and slider gesture makes o
   expect(changed.history.length).toBe(start.history.length + 1)
   await clickUndo(page)
   await waitForState(page, s => s.objects[0].plotSpec.parameters?.[0]?.value === 1)
+  // Undo may clear the active Fabric selection; the toolbar is selection-scoped.
+  await clickOnCanvas(page, {
+    x: Math.round(graph.left + graph.width * graph.scaleX / 2),
+    y: Math.round(graph.top + graph.height * graph.scaleY / 2)
+  })
+  await expect(page.getByRole('button', { name: 'Hide parameter controls' })).toBeVisible()
   await page.getByRole('button', { name: 'Hide parameter controls' }).click()
   await expect(panel).toHaveCount(0)
   const hidden = await getBoardState(page)
