@@ -144,7 +144,7 @@ The Graph tool uses the existing product-event adapter and committed board-opera
 | A valid submitted save rejects | `plot_save_failed` | `mode=create\|edit` |
 | Accepted Plot root deletion | `object_deleted` | Existing fixed root counts plus `plot_count` |
 
-`plot_submitted` is intent, not a successful mutation. The existing `BoardController` commit boundary is the **only** source of create/edit/delete success, so a no-op edit, failed operation, or Undo replay never emits `plot_edited`. A rejected save leaves the editor available for retry or cancellation. Closing after a failed attempt can legitimately produce both a failure and a cancellation; a successful save never emits cancellation.
+`plot_submitted` is intent, not a successful mutation. `BoardController` and direct UI mutation owners report successful changes only after an accepted history command; `BoardOperationAnalytics` translates those effects centrally. A no-op edit, failed operation, or Undo replay never emits `plot_edited`. A rejected save leaves the editor available for retry or cancellation. Closing after a failed attempt can legitimately produce both a failure and a cancellation; a successful save never emits cancellation.
 
 `object_created` remains **one event per accepted create command**, not one per individual root. Mixed-root batches remain `object_type=mixed`; no recursive Plot counting is added. `object_deleted` counts only top-level roots. A Plot inside a Group is counted as the Group root, not a nested Plot. The JavaScript deletion schema retains a zero-valued `plot_count`, although Simple Analytics may omit zero fields.
 

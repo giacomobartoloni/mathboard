@@ -268,8 +268,22 @@ test('production adapter tracks Graph create/edit/cancel and a mixed Plot deleti
   await page.getByLabel('Function (LaTeX)').fill('x^3')
   await expect(page.getByRole('button', { name: 'Update graph', exact: true })).toBeEnabled({ timeout: 20000 })
   await page.getByRole('button', { name: 'Update graph', exact: true }).click()
-  await waitForState(page, state => state.objects.some(o => o.plotSpec?.latex === 'x^3'))
+  const updatedBoard = await waitForState(page, state => state.objects.some(o => o.plotSpec?.latex === 'x^3'))
   await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  // Submitting an unchanged graph is intent, not a committed edit.
+  const historyLength = updatedBoard.history.length
+  const updated = updatedBoard.objects.find(o => o.objectKind === 'plot')
+  await clickOnCanvas(page, {
+    x: Math.round(updated.left + updated.width / 2),
+    y: Math.round(updated.top + updated.height / 2),
+    clickCount: 2,
+  })
+  await expect(page.getByRole('dialog', { name: 'Edit graph' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Update graph', exact: true })).toBeEnabled({ timeout: 20000 })
+  await page.getByRole('button', { name: 'Update graph', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  expect((await getBoardState(page)).history.length).toBe(historyLength)
 
   await page.evaluate(() => window.__MATHBOARD_E2E__.createObjects([
     { type: 'rect', left: 80, top: 80, width: 30, height: 30 },
@@ -281,11 +295,11 @@ test('production adapter tracks Graph create/edit/cancel and a mixed Plot deleti
   const events = await page.evaluate(() => window.__capturedProductEvents)
   const named = name => events.filter(event => event.name === name)
   expect(named('plot_tool_selected')).toHaveLength(2)
-  expect(named('plot_modal_opened').map(({ metadata }) => metadata.mode)).toEqual(['create', 'create', 'edit'])
+  expect(named('plot_modal_opened').map(({ metadata }) => metadata.mode)).toEqual(['create', 'create', 'edit', 'edit'])
   expect(named('plot_modal_cancelled')).toEqual([
     { name: 'plot_modal_cancelled', metadata: { mode: 'create' } },
   ])
-  expect(named('plot_submitted').map(({ metadata }) => metadata.mode)).toEqual(['create', 'edit'])
+  expect(named('plot_submitted').map(({ metadata }) => metadata.mode)).toEqual(['create', 'edit', 'edit'])
   expect(named('plot_save_failed')).toEqual([])
   expect(named('object_created').filter(({ metadata }) => metadata.object_type === 'plot')).toHaveLength(1)
   expect(named('plot_edited')).toHaveLength(1)
@@ -296,7 +310,5 @@ test('production adapter tracks Graph create/edit/cancel and a mixed Plot deleti
     }),
   }))
   expect(named('board_engaged')).toHaveLength(1)
-  const plotEvents = events.filter(({ name, metadata }) =>
-    name.startsWith('plot_') || metadata?.object_type === 'plot')
-  expect(JSON.stringify(plotEvents)).not.toMatch(/x\^2|x\^3|plotSpec|latex|plotId|coordinates|parameter/)
+  expect(JSON.stringify(events)).not.toMatch(/x\^2|x\^3|plotSpec|latex|plotId|coordinates|parameter/)
 })
