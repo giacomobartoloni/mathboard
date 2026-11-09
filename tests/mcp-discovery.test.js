@@ -42,6 +42,9 @@ test('native MCP discovery matches the executable F033 registry', () => {
     assert.deepEqual(plot.required, ['type', 'syntax', 'latex', 'mathWindow', 'frame', 'axes', 'grid'])
     assert.equal(plot.properties.color.default, 'auto')
     assert.deepEqual(plot.properties.transparentBackground, { type: 'boolean', default: false })
+    assert.equal(plot.properties.parameters.type, 'array')
+    assert.equal(plot.properties.parameters.items.additionalProperties, false)
+    assert.deepEqual(plot.properties.parameters.items.required, ['symbol', 'value', 'min', 'max', 'step'])
     assert.equal(help.examplesByType.plot.transparentBackground, false)
     const patchSchema = help.patchSchemas.plot
     assert.deepEqual(patchSchema.properties.transparentBackground,
@@ -49,6 +52,8 @@ test('native MCP discovery matches the executable F033 registry', () => {
     const nativeUpdate = tools.find(item => item.name === 'mathboard_update')
     assert.ok(nativeUpdate)
     assert.ok(JSON.stringify(nativeUpdate.inputSchema).includes('transparentBackground'))
+    assert.ok(JSON.stringify(nativeUpdate.inputSchema).includes('parameters'))
+    assert.equal(help.patchSchemas.plot.properties.parameters.type, 'array')
     assert.equal(plot.properties.mathWindow.additionalProperties, false)
     assert.ok(help.objectTypes.includes('plot'))
     assert.ok(help.patchSchemas.plot)
