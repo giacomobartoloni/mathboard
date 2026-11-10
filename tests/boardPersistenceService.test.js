@@ -500,6 +500,82 @@ test('a fresh tab session bootstraps a new board and records it as active', asyn
   service.dispose()
 })
 
+test('a fresh tab session reopens the most recent unarchived board without writing', async () => {
+  const sessionStorage = new MapStorage()
+  const document = title => ({ format: 'mathboard-board', version: 1, title, objects: [] })
+  const records = new Map([
+    ['mb_old', {
+      id: 'mb_old', title: 'Old', updatedAt: '2026-10-10T00:00:00.000Z', document: document('Old'),
+    }],
+    ['mb_archived', {
+      id: 'mb_archived', title: 'Archived', updatedAt: '2026-10-15T00:00:00.000Z',
+      archivedAt: '2026-10-15T00:00:00.000Z', document: document('Archived'),
+    }],
+    ['mb_recent', {
+      id: 'mb_recent', title: 'Recent', updatedAt: '2026-10-14T00:00:00.000Z',
+      document: document('Recent'),
+    }],
+  ])
+  const repository = makeRepository(records)
+  repository.list = async () => [...records.values()]
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+  const service = new BoardPersistenceService({
+    repository, boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
+  })
+
+  const result = await service.bootstrap()
+
+  assert.equal(result.id, 'mb_recent')
+  assert.equal(service.boardId, 'mb_recent')
+  assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), 'mb_recent')
+  assert.equal(repository.puts.length, 0)
+  assert.equal(records.size, 3)
+  service.dispose()
+})
+
+test('bootstrap creates a board when all existing boards are archived', async () => {
+  const sessionStorage = new MapStorage()
+  const document = { format: 'mathboard-board', version: 1, title: 'Archived', objects: [] }
+  const records = new Map([
+    ['mb_archived', {
+      id: 'mb_archived', archivedAt: '2026-10-14T00:00:00.000Z', document,
+    }],
+    ['mb_legacy_trash', {
+      id: 'mb_legacy_trash', trashedAt: '2026-10-14T00:00:00.000Z', document,
+    }],
+  ])
+  const repository = makeRepository(records)
+  const service = new BoardPersistenceService({
+    repository, boardObjectPolicy: new BoardObjectPolicy(),
+    getCanvas: () => makeCanvas(), buildFormula: async () => null,
+    resetHistory: () => {}, suspendHistory: () => {}, sessionStorage,
+  })
+
+  const result = await service.bootstrap()
+
+  assert.match(result.id, /^mb_/)
+  assert.equal(repository.puts.length, 1)
+  assert.equal(records.size, 3)
+  assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), result.id)
+  service.dispose()
+})
+
+test('bootstrap does not replace an unloadable recent board with a blank one', async () => {
+  const records = new Map([['mb_corrupt', {
+    id: 'mb_corrupt', title: 'Corrupt', updatedAt: '2026-10-14T00:00:00.000Z',
+    document: { format: 'mathboard-board', version: 999, title: 'Corrupt', objects: [] },
+  }]])
+  const repository = makeRepository(records)
+  const service = makeService({ repository })
+
+  await assert.rejects(() => service.bootstrap())
+  assert.equal(records.size, 1)
+  assert.equal(repository.puts.length, 0)
+  service.dispose()
+})
+
 test('an active tab session restores its existing board without creating a replacement', async () => {
   const sessionStorage = new MapStorage()
   sessionStorage.setItem('mathboard.activeBoardId', 'mb_existing')
@@ -641,7 +717,7 @@ test('bootstrap retains all historical scratch boards without age-based pruning'
   service.dispose()
 })
 
-test('bootstrap does not require listing local boards for cleanup', async () => {
+test('bootstrap does not create a board if the library cannot be listed', async () => {
   const sessionStorage = new MapStorage()
   const repository = makeRepository()
   repository.list = async () => {
@@ -654,11 +730,11 @@ test('bootstrap does not require listing local boards for cleanup', async () => 
     now: () => '2026-10-14T00:00:00.000Z',
   })
 
-  const result = await service.bootstrap()
+  await assert.rejects(() => service.bootstrap(), /list failed/)
 
-  assert.match(result.id, /^mb_/)
-  assert.equal(service.boardId, result.id)
-  assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), service.boardId)
+  assert.equal(service.boardId, null)
+  assert.equal(repository.puts.length, 0)
+  assert.equal(sessionStorage.getItem('mathboard.activeBoardId'), null)
   service.dispose()
 })
 
