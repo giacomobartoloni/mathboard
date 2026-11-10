@@ -24,6 +24,7 @@ const COUNT_FIELD_BY_TYPE = Object.freeze({
   [ANALYTICS_OBJECT_TYPES.SHAPE]: 'shape_count',
   [ANALYTICS_OBJECT_TYPES.TEXT]: 'text_count',
   [ANALYTICS_OBJECT_TYPES.FORMULA]: 'formula_count',
+  [ANALYTICS_OBJECT_TYPES.PLOT]: 'plot_count',
   [ANALYTICS_OBJECT_TYPES.GROUP]: 'group_count',
   [ANALYTICS_OBJECT_TYPES.UNKNOWN]: 'unknown_count',
 })
@@ -41,6 +42,7 @@ export function buildObjectDeletedMetadata(objects, getObjectType) {
     shape_count: 0,
     text_count: 0,
     formula_count: 0,
+    plot_count: 0,
     group_count: 0,
     unknown_count: 0,
   }
