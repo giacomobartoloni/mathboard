@@ -705,7 +705,8 @@ export class BoardPersistenceService {
   }
 
   /**
-   * Bootstrap: restore this tab's active board or create a new local board.
+   * Bootstrap: restore this tab's active board, or reopen the most recently
+   * updated unarchived board. Create a new one only when none remain.
    * Historical scratch records are retained; no automatic garbage collection.
    */
   async bootstrap() {
@@ -736,7 +737,10 @@ export class BoardPersistenceService {
         result = { record, restoreFailure }
       }
     } else {
-      result = await this.createNewBoard()
+      const [mostRecent] = await this.listBoards()
+      result = mostRecent
+        ? await this.openBoard(mostRecent.id)
+        : await this.createNewBoard()
     }
 
     return result
