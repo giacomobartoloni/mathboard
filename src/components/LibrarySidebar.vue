@@ -43,7 +43,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           :aria-label="pinned ? 'Unpin sidebar' : 'Pin sidebar'"
           :title="!canPin && !pinned ? 'Pin available on wider screens' : pinned ? 'Unpin sidebar' : 'Pin sidebar'"
           @click="$emit('toggle-pin')">
-          <font-awesome-icon :icon="['fas', 'thumbtack']" aria-hidden="true" />
+          <!-- Lucide Panel Right: https://lucide.dev/icons/panel-right -->
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M15 3v18" />
+          </svg>
         </button>
       </header>
 
