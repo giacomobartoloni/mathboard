@@ -70,10 +70,72 @@ jobs:
       - run: npm run build
       - run: npm run assert:no-e2e-hook
 
+  prepare_release:
+    name: Prepare one draft release
+    if: github.event_name == 'push'
+    needs: verify
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Create or reuse a unique draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # GitHub can hold multiple drafts for the same tag: refuse ambiguity.
+          release="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+            jq -r --arg tag "$GITHUB_REF_NAME" \
+              '.[] | select(.tag_name == $tag) | "\(.id) \(.draft)"')"
+          if [[ "$release" == *$'\n'* ]]; then
+            echo "::error::Multiple releases exist for $GITHUB_REF_NAME."
+            exit 1
+          elif [[ "$release" == *' true' ]]; then
+            echo "Reusing existing draft release $release"
+          elif [[ -n "$release" ]]; then
+            echo "::error::Release $GITHUB_REF_NAME is already published."
+            exit 1
+          else
+            cat > release-notes.md <<'RELEASE_NOTES'
+          ## MathBoard Desktop — Unsigned Public Beta
+          
+          **Free, open-source prerelease.** These installers are not signed
+          with an Apple Developer ID or Windows Authenticode certificate, and
+          the macOS DMGs have not been notarized by Apple. macOS ad-hoc signing
+          is not equivalent to signing by an identified developer.
+          
+          **Important:** Gatekeeper, SmartScreen, Smart App Control, or
+          organization policies may warn about or block installation.
+          Do not disable system-wide security protections.
+          
+          Download only from this official GitHub repository, and check
+          files against the attached SHA256SUMS.txt before installation.
+          Checksums help detect changes but do not establish publisher
+          identity or replace code signing.
+          
+          Installation and security guidance:
+          https://github.com/giacomobartoloni/mathboard/blob/main/docs/desktop/UNSIGNED_BETA.md
+          
+          Please report issues:
+          https://github.com/giacomobartoloni/mathboard/issues
+          
+          **Support MathBoard:** Optional donations help fund Apple
+          notarization and Windows signing for future releases.
+          The software remains free; no donation is required.
+          https://www.buymeacoffee.com/gbartoloni
+          RELEASE_NOTES
+            gh release create "$GITHUB_REF_NAME" \
+              --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "MathBoard Desktop $GITHUB_REF_NAME" \
+              --notes-file release-notes.md --draft --prerelease
+          fi
+
   package:
     name: Package ${{ matrix.label }}
     if: github.event_name == 'push'
-    needs: verify
+    needs: prepare_release
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     permissions:
@@ -136,34 +198,6 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: MathBoard Desktop ${{ github.ref_name }}
-          releaseBody: |
-            ## MathBoard Desktop — Unsigned Public Beta
-
-            **Free, open-source prerelease.** These installers are not signed
-            with an Apple Developer ID or Windows Authenticode certificate, and
-            the macOS DMGs have not been notarized by Apple. macOS ad-hoc signing
-            is not equivalent to signing by an identified developer.
-
-            **Important:** Gatekeeper, SmartScreen, Smart App Control, or
-            organization policies may warn about or block installation.
-            Do not disable system-wide security protections.
-
-            Download only from this official GitHub repository, and check
-            files against the attached SHA256SUMS.txt before installation.
-            Checksums help detect changes but do not establish publisher
-            identity or replace code signing.
-
-            Installation and security guidance:
-            https://github.com/giacomobartoloni/mathboard/blob/main/docs/desktop/UNSIGNED_BETA.md
-
-            Please report issues:
-            https://github.com/giacomobartoloni/mathboard/issues
-
-            **Support MathBoard:** Optional donations help fund Apple
-            notarization and Windows signing for future releases.
-            The software remains free; no donation is required.
-            https://www.buymeacoffee.com/gbartoloni
           releaseDraft: true
           prerelease: true
           uploadUpdaterJson: false
@@ -193,7 +227,8 @@ jobs:
           files = sorted(path for path in Path('downloaded').iterdir() if path.is_file())
           suffixes = [path.name.lower() for path in files]
           expected = {
-              'macOS DMG (Apple Silicon and Intel)': sum(name.endswith('.dmg') for name in suffixes) >= 2,
+              'macOS Apple Silicon DMG': any(name.endswith('_aarch64.dmg') for name in suffixes),
+              'macOS Intel DMG': any(name.endswith('_x64.dmg') for name in suffixes),
               'Windows NSIS': any(name.endswith('.exe') for name in suffixes),
               'Windows MSI': any(name.endswith('.msi') for name in suffixes),
               'Linux Debian': any(name.endswith('.deb') for name in suffixes),
