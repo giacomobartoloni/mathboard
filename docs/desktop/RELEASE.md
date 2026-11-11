@@ -218,3 +218,12 @@ security warnings and mandatory per-platform QA gates still apply.
 
 See [Update discovery](UPDATE_DISCOVERY.md) for the release eligibility contract,
 native menu behavior, platform verification and future-updater boundary.
+
+## Homebrew tap PR automation
+
+After a manually approved public desktop GitHub Release is published, a
+separate workflow can propose an update to the independent Homebrew tap.
+It verifies both DMGs and their SHA-256 values and opens a cask-only PR;
+it never publishes installers or merges the tap PR. See
+[Homebrew tap PR automation](HOMEBREW_TAP_AUTOMATION.md) for GitHub App
+setup, manual backfill, CI ownership, and remaining acceptance gates.
