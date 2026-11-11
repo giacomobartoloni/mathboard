@@ -45,6 +45,8 @@ jobs:
   e2e:
     name: E2E (Chromium)
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     timeout-minutes: 15
     needs: quality
 
@@ -58,8 +60,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
 
       - name: Run E2E
         run: npm run test:e2e
