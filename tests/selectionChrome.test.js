@@ -176,3 +176,16 @@ test('applySelectionObjectChrome preserves padding recursively', () => {
   assert.equal(stampRoot.borderColor, patch.borderColor)
   assert.equal(formula.borderColor, patch.borderColor)
 })
+
+test('rectangle, circle and ellipse expose axis-specific resize handles', () => {
+  for (const type of ['Rect', 'Circle', 'Ellipse']) {
+    let controls = null;
+    const object = {
+      isType: (...types) => types.includes(type),
+      set() {},
+      setControlsVisibility(patch) { controls = patch; },
+    };
+    applySelectionObjectChrome(object, selectionObjectChromeForBoard('light'));
+    assert.deepEqual(controls, { mt: true, mr: true, mb: true, ml: true });
+  }
+});
