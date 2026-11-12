@@ -41,6 +41,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     >
       <font-awesome-icon :icon="action.icon" />
     </button>
+    <div v-if="isTextSelection" class="text-style-controls">
+      <label>
+        <span>Font</span>
+        <select aria-label="Text font family" :value="textStyle.fontFamily"
+          @change="$emit('text-style', { fontFamily: $event.target.value })">
+          <option value="Arial">Sans</option>
+          <option value="serif">Serif</option>
+          <option value="monospace">Mono</option>
+          <option v-if="!fontFamilies.includes(textStyle.fontFamily)"
+            :value="textStyle.fontFamily">{{ textStyle.fontFamily }}</option>
+        </select>
+      </label>
+      <label>
+        <span>Size</span>
+        <select aria-label="Text font size" :value="textStyle.fontSize"
+          @change="$emit('text-style', { fontSize: Number($event.target.value) })">
+          <option v-for="size in fontSizes" :key="size" :value="size">{{ size }} px</option>
+          <option v-if="!fontSizes.includes(textStyle.fontSize)"
+            :value="textStyle.fontSize">{{ textStyle.fontSize }} px</option>
+        </select>
+      </label>
+    </div>
   </div>
 </template>
 
@@ -85,9 +107,19 @@ export default {
     selectionType: { type: String, default: null },
     selectionCount: { type: Number, default: 0 },
     actions: { type: Array, default: () => [] },
+    textStyle: { type: Object, default: null },
   },
-  emits: ['action'],
+  emits: ['action', 'text-style'],
   computed: {
+    isTextSelection() {
+      return this.selectionType === 'text' && Boolean(this.textStyle)
+    },
+    fontFamilies() {
+      return ['Arial', 'serif', 'monospace']
+    },
+    fontSizes() {
+      return [16, 24, 32, 48, 64, 96]
+    },
     toolbarLabel() {
       if (this.selectionCount > 1) {
         return `Selection actions, ${this.selectionCount} objects`
@@ -165,4 +197,25 @@ export default {
   outline: 2px solid var(--text-primary);
   outline-offset: 2px;
 }
+  .text-style-controls {
+    display: grid;
+    gap: 4px;
+    width: 100%;
+  }
+  .text-style-controls label {
+    display: grid;
+    gap: 2px;
+    font-size: 11px;
+    color: var(--text-primary);
+  }
+  .text-style-controls select {
+    width: 100%;
+    min-width: 0;
+    height: 27px;
+    font-size: 12px;
+    color: var(--text-primary);
+    background: var(--surface-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+  }
 </style>
