@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { BOARD_OBJECT_TYPES, TRANSFORM_KEYS, TEXT_KEYS, STYLE_KEYS } from '../objects/constants.js'
 import { PLOT_COLORS, PLOT_KEYS } from '../../plots/plotSpec.js'
+import { PLOT_PARAMETER_BUDGET, PLOT_PARAMETER_MAGNITUDE, PLOT_PARAMETER_SYMBOL_PATTERN } from '../../plots/plotParameters.js'
 import { assertPublicPlotCreates, PUBLIC_PLOT_CREATE_FIELDS } from './plotPublicContract.js'
 import { getScreenshotDescriptor } from '../capture/discovery.js'
 
@@ -70,6 +71,15 @@ const plotWindow = objectSchema({ xMin: boundedCoordinate, xMax: boundedCoordina
   ['xMin', 'xMax', 'yMin', 'yMax'])
 const plotFrame = objectSchema({ width: { type: 'number', minimum: 80, maximum: 2048 },
   height: { type: 'number', minimum: 80, maximum: 2048 } }, ['width', 'height'])
+const plotParameterNumber = { type: 'number', minimum: -PLOT_PARAMETER_MAGNITUDE,
+  maximum: PLOT_PARAMETER_MAGNITUDE }
+const plotParameters = { type: 'array', maxItems: PLOT_PARAMETER_BUDGET,
+  items: objectSchema({
+    symbol: { type: 'string', pattern: PLOT_PARAMETER_SYMBOL_PATTERN },
+    value: plotParameterNumber, min: plotParameterNumber, max: plotParameterNumber,
+    step: { type: 'number', exclusiveMinimum: 0, maximum: PLOT_PARAMETER_MAGNITUDE }
+  }, ['symbol', 'value', 'min', 'max', 'step']),
+  description: 'Optional Plot-local finite real parameters; values and ranges are validated at runtime.' }
 const plotInput = {
   syntax: { const: 'latex-v1' },
   latex: { ...latex, maxLength: 2048 },
@@ -80,6 +90,7 @@ const plotInput = {
   border: { ...boolean, default: true },
   transparentBackground: { ...boolean, default: false },
   color: { enum: [...PLOT_COLORS], default: 'auto' },
+  parameters: plotParameters,
 }
 const plotPublicProperties = {
   type: { const: 'plot' }, id: common.id, ...transformProperties,
@@ -124,7 +135,7 @@ const options = { type: 'object', properties: { select: boolean }, additionalPro
   description: 'Optional boolean selection.' }
 const node = { type: 'object', required: ['id', 'type'], properties: { id: nonempty,
   type: { enum: [...BOARD_OBJECT_TYPES] },
-  plotStatus: { enum: ['ok', 'partial'], description: 'Derived sampling quality; not persisted.' } },
+  plotStatus: { enum: ['ok', 'partial', 'no_real_samples'], description: 'Derived sampling quality; not persisted.' } },
   additionalProperties: true, description: 'Detached semantic node; formula retains LaTeX.' }
 const params = (properties, required = [], defs) => ({ type: 'object', properties, required, additionalProperties: false,
   ...(defs ? { $defs: defs } : {}) })

@@ -47,7 +47,7 @@ export function serializeBoardState({ canvas, boardObjectPolicy, boardId = null,
           ...(text !== undefined ? { text } : {}),
           ...(latex !== undefined ? { latex } : {}),
           ...(mathboardInkMode !== undefined ? { mathboardInkMode } : {}),
-          ...(boardObjectPolicy.isPlot(object) && ['ok', 'partial'].includes(object.plotStatus)
+          ...(boardObjectPolicy.isPlot(object) && ['ok', 'partial', 'no_real_samples'].includes(object.plotStatus)
             ? { plotStatus: object.plotStatus } : {}) })
       }
       return { ...withPlotStatus(semantic, object, boardObjectPolicy), bounds }

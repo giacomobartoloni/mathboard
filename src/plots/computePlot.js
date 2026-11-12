@@ -17,7 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-import { parsePlotExpression } from './PlotExpression.js'
+import { parsePlotExpression, preparePlotExpression } from './PlotExpression.js'
+import { validatePlotParameters } from './plotParameters.js'
 import { samplePlot } from './PlotSampler.js'
 import { createPlotTransform, clipMathSegment } from './PlotGeometry.js'
 import { validatePlotSpec } from './plotSpec.js'
@@ -25,8 +26,13 @@ import { PlotError } from './PlotError.js'
 
 export function computePlot(spec) {
   validatePlotSpec(spec)
-  const result = samplePlot(parsePlotExpression(spec.latex), spec.mathWindow)
-  if (result.status === 'no_real_samples')
+  const symbols = validatePlotParameters(spec.parameters)
+  const values = Object.fromEntries((spec.parameters || []).map(p => [p.symbol, p.value]))
+  const expression = symbols.length
+    ? preparePlotExpression(spec.latex, symbols).bind(values)
+    : parsePlotExpression(spec.latex)
+  const result = samplePlot(expression, spec.mathWindow)
+  if (result.status === 'no_real_samples' && symbols.length === 0)
     throw new PlotError(
       'no_real_samples',
       'No real points found in this interval. Try a different expression or range.'

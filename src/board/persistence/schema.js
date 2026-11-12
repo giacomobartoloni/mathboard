@@ -25,10 +25,16 @@ import { BOARD_SEMANTIC_TYPES as BOARD_OBJECT_TYPES, STYLE_KEYS, TRANSFORM_KEYS 
 export const BOARD_DOCUMENT_FORMAT = 'mathboard-board'
 export const BOARD_DOCUMENT_VERSION = 1
 export const BOARD_DOCUMENT_PLOT_VERSION = 2
-export const BOARD_DOCUMENT_SUPPORTED_VERSIONS = [1, 2]
+export const BOARD_DOCUMENT_PARAMETRIC_PLOT_VERSION = 3
+export const BOARD_DOCUMENT_SUPPORTED_VERSIONS = [1, 2, 3]
 
 export function boardDocumentVersionForObjects(objects) {
-  return objects.some(node => node.type === 'plot' || (node.type === 'group' && boardDocumentVersionForObjects(node.objects || []) === 2)) ? 2 : 1
+  return objects.reduce((version, node) => {
+    if (node.type === 'plot')
+      return Math.max(version, node.parameters?.length ? BOARD_DOCUMENT_PARAMETRIC_PLOT_VERSION : BOARD_DOCUMENT_PLOT_VERSION)
+    if (node.type === 'group') return Math.max(version, boardDocumentVersionForObjects(node.objects || []))
+    return version
+  }, BOARD_DOCUMENT_VERSION)
 }
 
 export const BOARD_DOCUMENT_MAX_BYTES = 8 * 1024 * 1024
@@ -325,7 +331,9 @@ export function validateBoardDocument(doc) {
   doc.objects.forEach((node, index) => {
     validateNode(node, `objects[${index}]`, 0, seenIds, counters)
   })
-  if (doc.version === 1 && boardDocumentVersionForObjects(doc.objects) === 2) throw new BoardDocumentError(BOARD_DOCUMENT_ERROR_CODES.UNSUPPORTED_VERSION, 'Graphs require BoardDocument v2.')
+  const needed = boardDocumentVersionForObjects(doc.objects)
+  if (doc.version < needed) throw new BoardDocumentError(BOARD_DOCUMENT_ERROR_CODES.UNSUPPORTED_VERSION,
+    'This board requires BoardDocument v' + needed + '.')
   return doc
 }
 

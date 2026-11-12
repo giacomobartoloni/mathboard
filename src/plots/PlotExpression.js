@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { ComputeEngine } from '@cortex-js/compute-engine'
 
 import { PlotError } from './PlotError.js'
+import { validatePlotParameterSymbols } from './plotParameters.js'
 export { PlotError } from './PlotError.js'
 
 const fail = (code, message) => { throw new PlotError(code, message) }
@@ -52,12 +53,14 @@ function checkInput(latex) {
   }
 }
 
-/** Parse without canonical simplification; evaluate only a bounded scalar subset.
- * Numeric semantics use IEEE-754 Math, not the Cortex symbolic evaluator.
- * No compile(), eval(), or dynamic Function construction is used.
+/** Parse once into bounded MathJSON-based evaluators, without assigning mutable
+ * values on the shared CortexJS engine or rewriting the source LaTeX.
+ * Numeric semantics use IEEE-754 Math, not Cortex symbolic evaluation.
  */
-export function parsePlotExpression(latex) {
+export function preparePlotExpression(latex, parameterSymbols = []) {
   checkInput(latex)
+  const symbols = validatePlotParameterSymbols(parameterSymbols)
+  const allowed = new Set(symbols), used = new Set()
   const normalizedLatex = latex.trim().replace(/^(?:y\s*|f\s*\(\s*x\s*\)\s*)=\s*/, '')
   if (!engine) engine = new ComputeEngine()
   let ast
@@ -72,7 +75,11 @@ export function parsePlotExpression(latex) {
       if (node === 'x') return x => x
       if (node === 'Pi') return () => Math.PI
       if (node === 'e' || node === 'ExponentialE') return () => Math.E
-      fail('unsupported_expression', 'Only x and approved real constants are supported')
+      if (allowed.has(node)) {
+        used.add(node)
+        return (_x, values) => values[node]
+      }
+      fail('unsupported_expression', 'Undeclared or unsupported plot symbol')
     }
     if (!Array.isArray(node)) fail('unsupported_expression', 'Unsupported numeric representation')
     const [op, ...args] = node
@@ -82,12 +89,12 @@ export function parsePlotExpression(latex) {
     else if (Object.hasOwn(binary, op) && args.length === 2) operation = v => binary[op](...v)
     else if (['Add', 'Multiply', 'InvisibleOperator'].includes(op) && args.length >= 2 && args.length <= 64) {
       operation = v => op === 'Add' ? v.reduce((a, b) => a + b, 0) : v.reduce((a, b) => a * b, 1)
-    } else fail('unsupported_expression', `Unsupported operator or arity: ${op}`)
+    } else fail('unsupported_expression', 'Unsupported operator or arity: ' + op)
     const children = args.map(a => visit(a, depth + 1))
-    const evaluate = x => {
-      const values = children.map(f => f(x))
-      if (!values.every(Number.isFinite)) return NaN
-      const value = operation(values)
+    const evaluate = (x, values) => {
+      const inputs = children.map(f => f(x, values))
+      if (!inputs.every(Number.isFinite)) return NaN
+      const value = operation(inputs)
       return Number.isFinite(value) ? value : NaN
     }
     // Track zero sets in divisors, including even powers and products.
@@ -102,11 +109,31 @@ export function parsePlotExpression(latex) {
     if (guarded !== null) {
       for (const factor of divisorFactors(guarded)) guards.push(visit(factor, depth + 1))
     }
-    if (op === 'Tan') guards.push(x => Math.cos(children[0](x)))
+    if (op === 'Tan') guards.push((x, values) => Math.cos(children[0](x, values)))
     return evaluate
   }
   const evaluate = visit(ast)
-  return Object.freeze({ latex, normalizedLatex, mathJson: ast,
-    evaluate: x => Number.isFinite(x) ? evaluate(x) : NaN,
-    continuityGuards: x => guards.map(f => f(x)) })
+  if (used.size !== allowed.size) fail('unsupported_expression', 'Unused plot parameter declaration')
+  return Object.freeze({
+    latex, normalizedLatex, mathJson: ast, parameterSymbols: symbols,
+    bind(values) {
+      if (!values || typeof values !== 'object' || Array.isArray(values)
+        || Object.keys(values).length !== symbols.length
+        || symbols.some(symbol => !Object.hasOwn(values, symbol)
+          || typeof values[symbol] !== 'number' || !Number.isFinite(values[symbol]))) {
+        fail('invalid_plot', 'Plot parameter bindings must match declarations and be finite.')
+      }
+      const snapshot = Object.freeze(Object.assign(Object.create(null), values))
+      return Object.freeze({
+        latex, normalizedLatex, mathJson: ast,
+        evaluate: x => Number.isFinite(x) ? evaluate(x, snapshot) : NaN,
+        continuityGuards: x => guards.map(f => f(x, snapshot))
+      })
+    }
+  })
+}
+
+/** Retain the parameterless plotting contract for existing consumers. */
+export function parsePlotExpression(latex) {
+  return preparePlotExpression(latex).bind({})
 }

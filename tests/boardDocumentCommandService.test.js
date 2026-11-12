@@ -380,6 +380,33 @@ test('inactive Plot creation, readback, update and reload stay isolated from the
   assert.equal((await repository.get(activeId)).revision, 1)
 })
 
+test('inactive Plot parameter writes upgrade to v3 and removing bindings returns to v2', async () => {
+  const { repository, targetId, service } = await fixture()
+  service._plotRenderCoordinator = createPlotRenderCoordinator(async () => buildPlotObject)
+  const run = (method, params = {}) => service.executeOnBoard({ boardId: targetId, method, params },
+    { expiresAtMs: Date.now() + 10000, interactionChannel: 'mcp' })
+  const parameters = [
+    { symbol: 'a', value: 2, min: -5, max: 5, step: 0.1 },
+    { symbol: 'b', value: 1, min: -5, max: 5, step: 0.1 }
+  ]
+  const created = await run('create', { spec: {
+    ...DEFAULT_PLOT, latex: 'a\\cdot x+b', parameters,
+  } })
+  assert.deepEqual(created.parameters, parameters)
+  assert.equal((await repository.get(targetId)).document.version, 3)
+  const changed = parameters.map(p => ({ ...p, value: p.value - 1 }))
+  const updated = await run('update', { id: created.id, patch: { parameters: changed } })
+  assert.deepEqual(updated.parameters, changed)
+  const observed = await run('observe', { detail: 'full' })
+  assert.deepEqual(observed.objects[0].parameters, changed)
+  assert.equal((await repository.get(targetId)).document.version, 3)
+  const downgraded = await run('update', { id: created.id, patch: { latex: 'x', parameters: [] } })
+  assert.equal(downgraded.parameters, undefined)
+  const saved = await repository.get(targetId)
+  assert.equal(saved.document.version, 2)
+  assert.equal(saved.document.objects[0].parameters, undefined)
+})
+
 test('inactive Plot hydration obeys deadline and does not launch a late render', { timeout: 3000 }, async () => {
   const { repository, targetId, service, disposed } = await fixture()
   service._plotRenderCoordinator = createPlotRenderCoordinator(async () => buildPlotObject)
