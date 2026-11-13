@@ -129,6 +129,27 @@ text_edited
 - `text_edited` requires a real snapshot change; transform/recolor/duplicate are not text edits.
 - Do not emit keystrokes, cursor, or selection events.
 
+## Plot (Graph tool) funnel
+
+The Graph tool uses the existing product-event adapter and committed board-operation owner. These are **aggregate event counts**, not unique users or session-linked conversions.
+
+| Interaction | Event | Allowed metadata |
+| --- | --- | --- |
+| Explicit Graph tool selection (button or G) | `plot_tool_selected` | none |
+| Open Graph editor for insertion or edit | `plot_modal_opened` | `mode=create\|edit` |
+| Valid Insert graph / Update graph submit | `plot_submitted` | `mode=create\|edit` |
+| Accepted Plot create (including homogeneous createMany) | `object_created` | `object_type=plot`; trusted `interaction_channel=mcp` only for native MCP |
+| Accepted, changed Plot replacement | `plot_edited` | none; trusted `interaction_channel=mcp` only for native MCP |
+| Close the editor without a successful save | `plot_modal_cancelled` | `mode=create\|edit` |
+| A valid submitted save rejects | `plot_save_failed` | `mode=create\|edit` |
+| Accepted Plot root deletion | `object_deleted` | Existing fixed root counts plus `plot_count` |
+
+`plot_submitted` is intent, not a successful mutation. `BoardController` and direct UI mutation owners report successful changes only after an accepted history command; `BoardOperationAnalytics` translates those effects centrally. A no-op edit, failed operation, or Undo replay never emits `plot_edited`. A rejected save leaves the editor available for retry or cancellation. Closing after a failed attempt can legitimately produce both a failure and a cancellation; a successful save never emits cancellation.
+
+`object_created` remains **one event per accepted create command**, not one per individual root. Mixed-root batches remain `object_type=mixed`; no recursive Plot counting is added. `object_deleted` counts only top-level roots. A Plot inside a Group is counted as the Group root, not a nested Plot. The JavaScript deletion schema retains a zero-valued `plot_count`, although Simple Analytics may omit zero fields.
+
+UI committed Plot creations, real edits, and deletions retain the existing engagement/action milestones; local-agent and MCP operations do not become human actions. No LaTeX, board content, object/board IDs, error messages, coordinates, parameter symbols, numeric values, or slider previews are transmitted. The native desktop transport uses the same event taxonomy; its post-2026-11-06 forwarding behavior relies on caller-owned metadata minimization rather than a Rust event allowlist.
+
 ## Formula funnel
 
 Measure Formula intent → open → assist interaction → submit → success/failure, separately from create/edit cancellation. Do **not** send LaTeX, formula HTML, coordinates, error messages, or user identifiers.
@@ -257,6 +278,7 @@ MathBoard builds the following metadata for every delete gesture:
 - `shape_count`
 - `text_count`
 - `formula_count`
+- `plot_count`
 - `group_count`
 - `unknown_count`
 
@@ -272,10 +294,10 @@ Before provider-side metadata filtering, MathBoard guarantees:
 selection_count
 =
 path_count + shape_count + text_count
-+ formula_count + group_count + unknown_count
++ formula_count + plot_count + group_count + unknown_count
 ```
 
-`object_type` is the sole type for homogeneous selections and `mixed` for heterogeneous selections. Allowed values: `path`, `shape`, `text`, `formula`, `group`, `unknown`, `mixed`.
+`object_type` is the sole type for homogeneous selections and `mixed` for heterogeneous selections. Allowed values: `path`, `shape`, `text`, `formula`, `plot`, `group`, `unknown`, `mixed`.
 
 Classification uses `BoardObjectPolicy.kindOf()` only. Groups are counted atomically; members are not recursively counted. Stamps deleted as board groups count as `group`. Non-allowlisted kinds fall into `unknown_count`.
 
@@ -289,6 +311,7 @@ Homogeneous example (3 pencil strokes) as built by MathBoard:
   shape_count: 0,
   text_count: 0,
   formula_count: 0,
+  plot_count: 0,
   group_count: 0,
   unknown_count: 0,
 }
@@ -302,7 +325,7 @@ object_type = path
 path_count = 3
 ```
 
-The absent `shape_count`, `text_count`, `formula_count`, `group_count`, and `unknown_count` values are zero for this post-schema event.
+The absent `shape_count`, `text_count`, `formula_count`, `plot_count`, `group_count`, and `unknown_count` values are zero for this post-schema event.
 
 Mixed example:
 
@@ -314,6 +337,7 @@ Mixed example:
   shape_count: 0,
   text_count: 1,
   formula_count: 1,
+  plot_count: 0,
   group_count: 0,
   unknown_count: 0,
 }

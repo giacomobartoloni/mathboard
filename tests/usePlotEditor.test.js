@@ -37,6 +37,7 @@ function createHarness(savePlot = async () => {}) {
       selector === 'button[aria-label="Graph"]' ? graphButton : null,
   }
   const calls = []
+  const events = []
   const drawBoardRef = ref({
     savePlot: async (...args) => {
       calls.push(args)
@@ -44,9 +45,12 @@ function createHarness(savePlot = async () => {}) {
     },
   })
   const selectedTool = ref('graph')
-  const editor = usePlotEditor({ drawBoardRef, selectedTool })
+  const editor = usePlotEditor({
+    drawBoardRef, selectedTool,
+    trackEvent: (name, metadata) => events.push({ name, metadata }),
+  })
   return {
-    editor, calls, selectedTool, focused, originalFocus,
+    editor, calls, events, selectedTool, focused, originalFocus,
     restoreDocument() {
       if (previousDocument === undefined) delete globalThis.document
       else globalThis.document = previousDocument
@@ -129,6 +133,89 @@ test('save failure leaves the editor open and permits cancellation', async () =>
     assert.equal(h.editor.showPlotModal.value, false)
     assert.equal(h.selectedTool.value, 'select')
     assert.deepEqual(h.focused, ['original'])
+  } finally {
+    h.restoreDocument()
+  }
+})
+
+test('Graph create and edit emit intent, but successful save does not emit cancellation', async () => {
+  const h = createHarness()
+  try {
+    h.editor.onOpenPlot({ x: 12, y: 18 })
+    await h.editor.onSubmitPlot({ latex: 'x^2' })
+    await h.editor.closePlotModal()
+    h.editor.onEditPlot({ spec: { latex: 'x^2' }, id: 'plot-id' })
+    await h.editor.onSubmitPlot({ latex: 'x^2+1' })
+    assert.deepEqual(h.events, [
+      { name: 'plot_modal_opened', metadata: { mode: 'create' } },
+      { name: 'plot_submitted', metadata: { mode: 'create' } },
+      { name: 'plot_modal_opened', metadata: { mode: 'edit' } },
+      { name: 'plot_submitted', metadata: { mode: 'edit' } },
+    ])
+  } finally {
+    h.restoreDocument()
+  }
+})
+
+test('Graph cancellation fires once and a stale submit after close is ignored', async () => {
+  const h = createHarness()
+  try {
+    h.editor.onOpenPlot({ x: 10, y: 20 })
+    await h.editor.closePlotModal()
+    await h.editor.closePlotModal()
+    await h.editor.onSubmitPlot({ latex: 'private' })
+    assert.deepEqual(h.calls, [])
+    assert.deepEqual(h.events, [
+      { name: 'plot_modal_opened', metadata: { mode: 'create' } },
+      { name: 'plot_modal_cancelled', metadata: { mode: 'create' } },
+    ])
+  } finally {
+    h.restoreDocument()
+  }
+})
+
+test('busy Graph save suppresses cancellation and repeated submit tracking', async () => {
+  let resolveSave
+  const saving = new Promise(resolve => { resolveSave = resolve })
+  const h = createHarness(() => saving)
+  try {
+    h.editor.onEditPlot({ spec: { latex: 'x' }, id: 'plot-id' })
+    const first = h.editor.onSubmitPlot({ latex: 'x+1' })
+    await h.editor.onSubmitPlot({ latex: 'x+2' })
+    await h.editor.closePlotModal()
+    assert.deepEqual(h.events, [
+      { name: 'plot_modal_opened', metadata: { mode: 'edit' } },
+      { name: 'plot_submitted', metadata: { mode: 'edit' } },
+    ])
+    resolveSave()
+    await first
+    assert.equal(h.editor.showPlotModal.value, false)
+    assert.equal(h.calls.length, 1)
+  } finally {
+    h.restoreDocument()
+  }
+})
+
+test('failed Graph save is retryable and never leaks error text or plot content', async () => {
+  let attempts = 0
+  const h = createHarness(async () => {
+    attempts += 1
+    if (attempts === 1) throw new Error('Private expression x^2 failed')
+  })
+  try {
+    h.editor.onOpenPlot({ x: 20, y: 20 })
+    await h.editor.onSubmitPlot({ latex: 'x^2' })
+    assert.equal(h.editor.showPlotModal.value, true)
+    assert.match(h.editor.plotError.value, /Private expression/)
+    await h.editor.onSubmitPlot({ latex: 'x^2' })
+    assert.equal(h.editor.showPlotModal.value, false)
+    assert.deepEqual(h.events, [
+      { name: 'plot_modal_opened', metadata: { mode: 'create' } },
+      { name: 'plot_submitted', metadata: { mode: 'create' } },
+      { name: 'plot_save_failed', metadata: { mode: 'create' } },
+      { name: 'plot_submitted', metadata: { mode: 'create' } },
+    ])
+    assert.doesNotMatch(JSON.stringify(h.events), /Private|x\^2|failure|error|latex/)
   } finally {
     h.restoreDocument()
   }

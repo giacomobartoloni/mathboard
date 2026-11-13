@@ -45,6 +45,8 @@ jobs:
   e2e:
     name: E2E (Chromium)
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
     timeout-minutes: 15
     needs: quality
 
@@ -58,8 +60,6 @@ jobs:
 
       - run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
 
       - name: Run E2E
         run: npm run test:e2e
@@ -76,3 +76,41 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  version_sync:
+    name: Release version sync
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.head_ref == 'develop' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check release versions
+        run: |
+          python3 - <<'PY'
+          import json
+          import tomllib
+          from pathlib import Path
+
+          npm = json.loads(Path('package.json').read_text())
+          npm_lock = json.loads(Path('package-lock.json').read_text())
+          cargo = tomllib.loads(Path('src-tauri/Cargo.toml').read_text())
+          cargo_lock = tomllib.loads(Path('src-tauri/Cargo.lock').read_text())
+
+          versions = {
+              'package.json': npm['version'],
+              'package-lock.json': npm_lock['version'],
+              'package-lock.json (root)': npm_lock['packages']['']['version'],
+              'src-tauri/Cargo.toml': cargo['package']['version'],
+              'src-tauri/Cargo.lock': next(
+                  (p['version'] for p in cargo_lock['package']
+                   if p['name'] == cargo['package']['name']), None
+              ),
+          }
+
+          for file, version in versions.items():
+              print(f'{file}: {version}')
+          if len(set(versions.values())) != 1:
+              raise SystemExit('Release versions are not aligned.')
+          PY

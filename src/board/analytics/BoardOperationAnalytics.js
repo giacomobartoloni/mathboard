@@ -24,7 +24,8 @@ const CHANNELS = new Set(['ui', 'local_agent', 'mcp'])
 const OBJECT_TYPES = new Set([...Object.values(ANALYTICS_OBJECT_TYPES), 'stamp', 'stamp_template'])
 const DELETION_TYPES = new Set([
   ANALYTICS_OBJECT_TYPES.PATH, ANALYTICS_OBJECT_TYPES.SHAPE, ANALYTICS_OBJECT_TYPES.TEXT,
-  ANALYTICS_OBJECT_TYPES.FORMULA, ANALYTICS_OBJECT_TYPES.GROUP, ANALYTICS_OBJECT_TYPES.UNKNOWN,
+  ANALYTICS_OBJECT_TYPES.FORMULA, ANALYTICS_OBJECT_TYPES.PLOT,
+  ANALYTICS_OBJECT_TYPES.GROUP, ANALYTICS_OBJECT_TYPES.UNKNOWN,
 ])
 const SHAPES = new Set(Object.values(ANALYTICS_SHAPES))
 const COMMAND_TYPES = new Set(['add', 'batch-add', 'modify', 'replace', 'delete', 'duplicate', 'group', 'ungroup', 'recolor'])
@@ -73,6 +74,10 @@ export function createBoardOperationAnalytics({ trackEvent, trackBoardEngaged, r
       }
       case 'formula_edit':
         eventName = ANALYTICS_EVENTS.FORMULA_EDITED
+        humanAction = true
+        break
+      case 'plot_edit':
+        eventName = ANALYTICS_EVENTS.PLOT_EDITED
         humanAction = true
         break
       case 'group':

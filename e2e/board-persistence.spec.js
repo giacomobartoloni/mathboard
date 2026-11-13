@@ -206,45 +206,43 @@ test('E2E persistence: flush defers while text editing is active', async ({ page
   await waitForState(page, (s) => s.objects.some((object) => object.mathboardId === text.mathboardId && object.text === 'after'))
 })
 
-test('E2E persistence: two independent tabs own distinct scratch boards', async ({ page, context }) => {
+test('E2E persistence: a fresh tab reopens the latest board and detects stale writes', async ({ page, context }) => {
   await gotoBoard(page)
   await selectTool(page, 'Pen')
   await dragOnCanvas(page, { x1: 280, y1: 180, x2: 380, y2: 260 })
-  let stateA = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Path'))
+  const stateA = await waitForState(page, (s) => s.objects.some((o) => o.type === 'Path'))
   await flushPersistence(page)
-  const boardA = stateA.boardId
+  const boardId = stateA.boardId
   const pathA = stateA.objects.find((o) => o.type === 'Path').mathboardId
-  expect(boardA).toMatch(/^mb_/)
+  expect(boardId).toMatch(/^mb_/)
 
   const pageB = await context.newPage()
   try {
     await gotoBoard(pageB)
-    let stateB = await getBoardState(pageB)
-    expect(stateB.boardId).toMatch(/^mb_/)
-    expect(stateB.boardId).not.toBe(boardA)
-    expect(stateB.objects).toHaveLength(0)
+    const openedB = await getBoardState(pageB)
+    expect(openedB.boardId).toBe(boardId)
+    expect(openedB.objects).toHaveLength(1)
+    expect(openedB.objects[0].mathboardId).toBe(pathA)
 
     await selectTool(pageB, 'Pen')
     await dragOnCanvas(pageB, { x1: 300, y1: 200, x2: 420, y2: 300 })
-    stateB = await waitForState(pageB, (s) => s.objects.some((o) => o.type === 'Path'))
+    const stateB = await waitForState(pageB, (s) => s.objects.filter((o) => o.type === 'Path').length === 2)
     await flushPersistence(pageB)
-    const boardB = stateB.boardId
-    const pathB = stateB.objects.find((o) => o.type === 'Path').mathboardId
+    const pathB = stateB.objects.find((o) => o.mathboardId !== pathA).mathboardId
 
-    let stateAfterB = await getBoardState(page)
-    expect(stateAfterB.boardId).toBe(boardA)
-    expect(stateAfterB.objects).toHaveLength(1)
-    expect(stateAfterB.objects[0].mathboardId).toBe(pathA)
-
-    await reloadBoard(page)
-    const reloadedA = await waitForState(page, (s) => s.objects.some((o) => o.mathboardId === pathA))
-    expect(reloadedA.boardId).toBe(boardA)
-    expect(reloadedA.objects).toHaveLength(1)
+    // Tab A still has its previous revision; its next write must not replace B's work.
+    const staleA = await getBoardState(page)
+    expect(staleA.objects).toHaveLength(1)
+    await selectTool(page, 'Pen')
+    await dragOnCanvas(page, { x1: 440, y1: 180, x2: 520, y2: 260 })
+    const conflictA = await waitForState(page, (s) => s.persistence?.state === 'error')
+    expect(conflictA.persistence.error).toMatch(/Board changed in another writer/)
 
     await reloadBoard(pageB)
-    const reloadedB = await waitForState(pageB, (s) => s.objects.some((o) => o.mathboardId === pathB))
-    expect(reloadedB.boardId).toBe(boardB)
-    expect(reloadedB.objects).toHaveLength(1)
+    const savedB = await waitForState(pageB, (s) => s.objects.some((o) => o.mathboardId === pathB))
+    expect(savedB.boardId).toBe(boardId)
+    expect(savedB.objects).toHaveLength(2)
+    expect(savedB.objects.some((o) => o.mathboardId === pathA)).toBe(true)
   } finally {
     await pageB.close()
   }
