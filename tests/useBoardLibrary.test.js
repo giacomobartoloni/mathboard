@@ -22,6 +22,7 @@ import test from 'node:test'
 import { ref } from 'vue'
 import { useBoardLibrary } from '../src/composables/useBoardLibrary.js'
 import { ANALYTICS_EVENTS } from '../src/analytics/events.js'
+import { createEmptyBoardDocument } from '../src/board/persistence/schema.js'
 
 function harness({ mode = 'closed', boards = [], overrides = {} } = {}) {
   const events = []
@@ -116,4 +117,51 @@ test('restoring from Trash keeps the library open and records a privacy-safe act
   assert.equal(sidebar.mode.value, 'overlay')
   assert.equal(events[0].metadata.action, 'restore')
   assert.equal(events[0].metadata.outcome, 'success')
+})
+const sampleFile = (name, document) => {
+  const body = JSON.stringify(document)
+  return { name, size: new TextEncoder().encode(body).length, text: async () => body }
+}
+
+test('import uses the shared BoardDocument copy path and closes overlay', async () => {
+  const doc = createEmptyBoardDocument('Imported')
+  const { library, sidebar, calls, events, resets } = harness({
+    mode: 'overlay',
+    overrides: { importBoard: async ({ document }) => { calls.push(['import', document]) } },
+  })
+  await library.onBoardLibraryAction({ action: 'import', files: [sampleFile('lesson.mathboard', doc)] })
+  assert.deepEqual(calls, [['import', doc]])
+  assert.equal(library.boardLibraryError.value, null)
+  assert.equal(resets(), 1)
+  assert.equal(sidebar.mode.value, 'closed')
+  assert.deepEqual(events.filter(x => x.event === ANALYTICS_EVENTS.LIBRARY_ACTION).map(x => x.metadata), [
+    { library: 'boards', action: 'import', outcome: 'success', mode: 'overlay' },
+  ])
+})
+
+test('invalid import does not call workspace and exposes a safe failure', async () => {
+  const { library, sidebar, calls, events } = harness({ mode: 'overlay' })
+  await library.onBoardLibraryAction({ action: 'import', files: [{
+    name: 'broken.mathboard', size: 20, text: async () => '{private expression',
+  }] })
+  assert.deepEqual(calls, [])
+  assert.equal(sidebar.mode.value, 'overlay')
+  assert.match(library.boardLibraryError.value, /not a valid MathBoard board/)
+  assert.ok(!JSON.stringify(events).includes('private expression'))
+  assert.equal(events[0].metadata.action, 'import')
+  assert.equal(events[0].metadata.outcome, 'failure')
+  assert.equal(library.boardLibraryBusy.value, false)
+})
+
+test('pinned import keeps the library open and does not expose document metadata in analytics', async () => {
+  const doc = createEmptyBoardDocument('Confidential mathematics')
+  const { library, sidebar, events, resets } = harness({
+    mode: 'pinned',
+    overrides: { importBoard: async () => {} },
+  })
+  await library.onBoardLibraryAction({ action: 'import', files: [sampleFile('confidential.mathboard', doc)] })
+  assert.equal(sidebar.mode.value, 'pinned')
+  assert.equal(resets(), 1)
+  assert.ok(!JSON.stringify(events).includes('Confidential'))
+  assert.deepEqual(events.filter(x => x.event === ANALYTICS_EVENTS.LIBRARY_ACTION).map(x => x.metadata.outcome), ['success'])
 })

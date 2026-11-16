@@ -21,6 +21,7 @@ import { ref } from 'vue'
 import { createBoardLibraryAnalytics } from '../analytics/boardLibrary.js'
 import { ANALYTICS_EVENTS } from '../analytics/events.js'
 import { downloadBoardDocument } from '../board/persistence/downloadBoardDocument.js'
+import { BoardFileImportError, readBoardDocumentFile } from '../board/persistence/readBoardDocumentFile.js'
 
 // Owns Boards data/actions and their UX signals; sidebar presentation is injected.
 export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelectedTool, trackEvent }) {
@@ -55,7 +56,7 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
     finally { boardLibraryLoading.value = false }
   }
 
-  const onBoardLibraryAction = async ({ action, boardId, title }) => {
+  const onBoardLibraryAction = async ({ action, boardId, title, files }) => {
     if (boardLibraryBusy.value) return
     const sidebar = getSidebar()
     const modeAtAction = sidebar.mode.value
@@ -83,17 +84,23 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
         downloadBoardDocument(document)
         trackEvent(ANALYTICS_EVENTS.DOCUMENT_EXPORTED)
       }
+      else if (action === 'import') {
+        const document = await readBoardDocumentFile(files)
+        await workspace.importBoard({ document })
+      }
       else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
       else throw new Error('Unsupported board library action.')
       await refreshBoardLibrary()
       analytics.actionFinished(action, 'success', modeAtAction)
-      if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
+      if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open' || action === 'import') {
         resetSelectedTool()
         if (sidebar.mode.value === 'overlay') sidebar.dismiss('board_action')
       }
     } catch (error) {
       analytics.actionFinished(action, 'failure', modeAtAction)
-      boardLibraryError.value = error?.message || 'Board library operation failed.'
+      boardLibraryError.value = action === 'import'
+        ? (error instanceof BoardFileImportError ? error.message : 'Could not import this board. Please try again.')
+        : (error?.message || 'Board library operation failed.')
       // A failed post-transition metadata write may still leave a new active board.
       try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
     } finally {

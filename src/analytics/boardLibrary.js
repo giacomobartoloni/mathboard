@@ -34,6 +34,7 @@ const BOARD_ACTIONS = Object.freeze({
   trash: 'trash',
   restore: 'restore',
   delete: 'delete',
+  import: 'import',
 })
 
 /**

@@ -19,8 +19,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <template>
   <div class="library-sidebar-layer" :class="{ 'is-pinned': pinned }" @click.self="!pinned && $emit('close', 'backdrop')" @keydown.esc.stop.prevent="onOverlayEscape"
     @keydown.tab="trapTab">
-    <aside id="library-sidebar-panel" ref="sidebarRef" class="library-sidebar-panel" :role="pinned ? null : 'dialog'" :aria-modal="pinned ? null : 'true'"
-      aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1">
+    <aside id="library-sidebar-panel" ref="sidebarRef" class="library-sidebar-panel"
+      :class="{ 'is-import-dragging': importDragActive }" :role="pinned ? null : 'dialog'" :aria-modal="pinned ? null : 'true'"
+      aria-labelledby="board-library-heading" :aria-busy="busy" tabindex="-1"
+      @dragenter="onImportDragEnter" @dragover="onImportDragOver"
+      @dragleave="onImportDragLeave" @drop="onImportDrop">
       <header class="board-library-header">
         <span class="board-library-heading-icon" aria-hidden="true">
           <!-- Same Lucide Library Big icon as the Boards trigger (ISC): https://lucide.dev/icons/library-big -->
@@ -57,6 +60,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           :aria-label="createLabel" :title="createLabel" @click="createBoard">
           <font-awesome-icon :icon="['fas', 'plus']" aria-hidden="true" />
         </button>
+        <button ref="importButton" class="board-library-create-button" type="button"
+          :disabled="busy || loading" aria-label="Import board" title="Import board"
+          @click="openImportPicker">
+          <font-awesome-icon :icon="['fas', 'file-arrow-up']" aria-hidden="true" />
+        </button>
+        <!-- Do not filter by accept: native pickers may disable unknown .mathboard extensions. -->
+        <input ref="importFileInput" class="board-library-file-input" type="file"
+          tabindex="-1" @change="onImportFileChange">
         <label for="board-library-search-input">Find or create a board</label>
         <div class="board-library-search-field">
           <input id="board-library-search-input" v-model="boardQuery" type="text" inputmode="search"
@@ -230,6 +241,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <p v-if="showTrash" class="board-library-trash-notice">Boards in Trash are permanently deleted after 30 days.</p>
         <BoardStorageNotice :is-desktop="isDesktop" />
       </div>
+      <div v-if="importDragActive" class="board-library-import-overlay" aria-hidden="true">
+        <font-awesome-icon :icon="['fas', 'file-arrow-up']" />
+        <span>Drop a .mathboard file to import</span>
+      </div>
     </aside>
   </div>
 </template>
@@ -268,6 +283,10 @@ export default {
     const showTrash = computed(() => view.value === 'trash')
     const closeButton = ref(null)
     const sidebarRef = ref(null)
+    const importButton = ref(null)
+    const importFileInput = ref(null)
+    const importDragActive = ref(false)
+    let importDragDepth = 0
     // Measure the actual panel: desktop window width does not indicate sidebar width.
     const isCompact = ref(Math.min(props.width, window.innerWidth) < 400)
     let sidebarResizeObserver = null
@@ -326,8 +345,10 @@ export default {
       await nextTick()
       const target = pendingFocus.value === 'close'
         ? closeButton.value
-        : (document.getElementById('rename-action-' + pendingFocus.value)
-          || document.getElementById('more-action-' + pendingFocus.value))
+        : pendingFocus.value === 'import'
+          ? importButton.value
+          : (document.getElementById('rename-action-' + pendingFocus.value)
+            || document.getElementById('more-action-' + pendingFocus.value))
       const focusTarget = target || closeButton.value
       focusTarget?.focus()
       pendingFocus.value = null
@@ -405,6 +426,45 @@ export default {
       const firstAction = isCompact.value && view.value === 'recent' ? 'rename-menu-action-' : 'export-action-'
       document.getElementById(firstAction + boardId)?.focus()
     }
+    const submitImportFiles = (files) => {
+      awaitActionFocus('import')
+      emit('action', { action: 'import', files: Array.from(files) })
+    }
+    const openImportPicker = () => {
+      if (!props.busy && !props.loading) importFileInput.value?.click()
+    }
+    const onImportFileChange = (event) => {
+      const files = Array.from(event.target.files || [])
+      event.target.value = ''
+      if (files.length) submitImportFiles(files)
+    }
+    const isFileDrag = (event) => Array.from(event.dataTransfer?.types || []).includes('Files')
+    const onImportDragEnter = (event) => {
+      if (!isFileDrag(event)) return
+      event.preventDefault()
+      if (props.busy || props.loading) return
+      importDragDepth++
+      importDragActive.value = true
+    }
+    const onImportDragOver = (event) => {
+      if (!isFileDrag(event)) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = props.busy || props.loading ? 'none' : 'copy'
+    }
+    const onImportDragLeave = (event) => {
+      if (!isFileDrag(event)) return
+      importDragDepth = Math.max(0, importDragDepth - 1)
+      if (!importDragDepth) importDragActive.value = false
+    }
+    const onImportDrop = (event) => {
+      if (!isFileDrag(event)) return
+      event.preventDefault()
+      event.stopPropagation()
+      importDragDepth = 0
+      importDragActive.value = false
+      if (props.busy || props.loading) return
+      submitImportFiles(event.dataTransfer.files || [])
+    }
     const createBoard = () => {
       emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
     }
@@ -462,6 +522,8 @@ export default {
       renameId.value = null
     }
     return { boardQuery, renameId, renameTitle, confirmDeleteId, view, showArchived, showTrash, isCompact, closeButton, sidebarRef,
+      importButton, importFileInput, importDragActive, openImportPicker, onImportFileChange,
+      onImportDragEnter, onImportDragOver, onImportDragLeave, onImportDrop,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
       submitRename, beginRename, beginDelete, cancelInline, submitDelete, onSearchInput, trapTab,
       startResize, moveResize, stopResize, resizeWithKeyboard,
@@ -610,6 +672,27 @@ export default {
   cursor: pointer;
 }
 .board-library-create-button:hover:not(:disabled) { background: var(--hover-bg); }
+.board-library-file-input { display: none; }
+.board-library-import-overlay {
+  position: absolute;
+  inset: 12px;
+  z-index: 4;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 2px dashed var(--selected-bg);
+  border-radius: 12px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  padding: 24px;
+}
+.board-library-import-overlay svg { font-size: 32px; }
 .board-library-search label {
   position: absolute;
   width: 1px;
