@@ -37,14 +37,14 @@ const scenarios = [
     key: 'r',
     type: 'Rect',
     draw: { x1: 280, y1: 180, x2: 420, y2: 300 },
-    move: { x1: 350, y1: 240, x2: 400, y2: 275 },
+    move: { x1: 350, y1: 180, x2: 400, y2: 215 },
   },
   {
     label: 'Circle',
     key: 'c',
     type: 'Circle',
     draw: { x1: 350, y1: 225, x2: 440, y2: 290 },
-    move: { x1: 350, y1: 225, x2: 400, y2: 255 },
+    move: { x1: 405, y1: 225, x2: 455, y2: 255 },
   },
   {
     label: 'Line',
@@ -73,6 +73,7 @@ for (const scenario of scenarios) {
     const addStep = state.history.step
     const original = { left: state.objects[0].left, top: state.objects[0].top }
 
+    // Outline-only shapes are grabbed from painted edges, not their empty interiors.
     // Dragging a completed shape moves it, never creates a second one.
     await dragOnCanvas(page, scenario.move)
 
