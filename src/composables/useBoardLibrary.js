@@ -19,6 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { ref } from 'vue'
 import { createBoardLibraryAnalytics } from '../analytics/boardLibrary.js'
+import { ANALYTICS_EVENTS } from '../analytics/events.js'
+import { downloadBoardDocument } from '../board/persistence/downloadBoardDocument.js'
 
 // Owns Boards data/actions and their UX signals; sidebar presentation is injected.
 export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelectedTool, trackEvent }) {
@@ -71,6 +73,11 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
       else if (action === 'rename') await workspace.rename({ boardId, title })
       else if (action === 'archive') await workspace.archive({ boardId })
       else if (action === 'unarchive') await workspace.unarchive({ boardId })
+      else if (action === 'export') {
+        const document = await workspace.exportBoard({ boardId })
+        downloadBoardDocument(document)
+        trackEvent(ANALYTICS_EVENTS.DOCUMENT_EXPORTED)
+      }
       else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
       else throw new Error('Unsupported board library action.')
       await refreshBoardLibrary()
