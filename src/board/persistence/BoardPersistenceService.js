@@ -141,7 +141,7 @@ export class BoardPersistenceService {
     this._onActiveBoardChanged({ id: this.boardId, title: this.title })
   }
 
-  // Commit active-record identity only after the canvas transition succeeds.
+  // Activate only after the required persistence or canvas work succeeds.
   _activateRecord(record, title = record.title) {
     this.boardId = record.id
     this.revision = boardRevision(record)
