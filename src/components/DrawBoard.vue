@@ -1479,6 +1479,10 @@ export default {
       // on the raw instance then misses, and the add command is dropped.
       this.canvas = markRaw(new Canvas(this.id, {
         ...this.definedProps,
+        // Select only fully enclosed objects; clicks should follow visible ink.
+        selectionFullyContained: true,
+        perPixelTargetFind: true,
+        targetFindTolerance: 4,
       }));
       
       this._ensureBoardController();
