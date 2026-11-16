@@ -350,6 +350,133 @@ test('unconfirmed active-board delete preserves lifecycle and stored data', asyn
   service.dispose()
 })
 
+test('Trash preserves board identity and restores the active board via a replacement', async () => {
+  const { workspace, service, records } = fixture()
+  const original = await workspace.create({ title: 'Recoverable lesson' })
+  const document = records.get(original.id).document
+  const next = await workspace.create({ title: 'Continue here' })
+  await workspace.open({ boardId: original.id })
+  const trashed = await workspace.trash({ boardId: original.id })
+
+  assert.equal(trashed.deletedAt, '2026-10-23T12:00:00Z')
+  assert.equal(service.boardId, next.id)
+  assert.equal(records.get(original.id).document, document)
+  assert.equal((await workspace.list()).some(board => board.id === original.id), false)
+  assert.equal((await workspace.listTrash()).some(board => board.id === original.id), true)
+  await assert.rejects(() => workspace.open({ boardId: original.id }),
+    { code: BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED })
+  await assert.rejects(() => workspace.rename({ boardId: original.id, title: 'Lost' }),
+    { code: BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED })
+
+  const restored = await workspace.restore({ boardId: original.id })
+  assert.equal(restored.deletedAt, undefined)
+  assert.equal(records.get(original.id).document, document)
+  await workspace.open({ boardId: original.id })
+  assert.equal(service.title, 'Recoverable lesson')
+  await assert.rejects(() => workspace.restore({ boardId: original.id }),
+    { code: BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_TRASHED })
+  service.dispose()
+})
+
+test('Trash from Archive restores to Archive and does not expire historical trashedAt', async () => {
+  const { workspace, service, records } = fixture()
+  const archived = await workspace.create({ title: 'Archived lesson' })
+  await workspace.create({ title: 'Current' })
+  await workspace.archive({ boardId: archived.id })
+  const previouslyArchived = records.get(archived.id).archivedAt
+  await workspace.trash({ boardId: archived.id })
+  assert.equal((await workspace.listArchived()).some(board => board.id === archived.id), false)
+  await workspace.restore({ boardId: archived.id })
+  assert.equal(records.get(archived.id).archivedAt, previouslyArchived)
+  assert.equal((await workspace.listArchived()).some(board => board.id === archived.id), true)
+
+  const legacy = await workspace.create({ title: 'Legacy trash' })
+  records.set(legacy.id, { ...records.get(legacy.id), trashedAt: '2020-01-01T00:00:00Z' })
+  await workspace.listTrash()
+  assert.ok(records.has(legacy.id))
+  assert.equal((await workspace.listArchived()).some(board => board.id === legacy.id), true)
+  service.dispose()
+})
+
+test('Trash expires only entries older than 30 full days and ignores invalid timestamps', async () => {
+  const { workspace, service, records } = fixture()
+  const expired = await workspace.create({ title: 'Expired' })
+  const boundary = await workspace.create({ title: 'Boundary' })
+  const recent = await workspace.create({ title: 'Recent' })
+  const invalid = await workspace.create({ title: 'Invalid metadata' })
+  const active = await workspace.create({ title: 'Safe current' })
+  for (const board of [expired, boundary, recent, invalid]) await workspace.trash({ boardId: board.id })
+  records.set(expired.id, { ...records.get(expired.id), deletedAt: '2026-09-23T11:59:59Z' })
+  records.set(boundary.id, { ...records.get(boundary.id), deletedAt: '2026-09-23T12:00:00Z' })
+  records.set(invalid.id, { ...records.get(invalid.id), deletedAt: 'not-a-date' })
+
+  const visible = await workspace.listTrash()
+  assert.equal(records.has(expired.id), false)
+  assert.deepEqual(visible.map(board => board.id).sort(), [boundary.id, recent.id, invalid.id].sort())
+  assert.ok(records.has(active.id))
+  assert.equal((await workspace.list()).some(board => board.id === active.id), true)
+  service.dispose()
+})
+
+test('cleanup does not remove a board restored in another writer', async () => {
+  const { workspace, service, records, repository } = fixture()
+  const target = await workspace.create({ title: 'Race' })
+  await workspace.create({ title: 'Current' })
+  await workspace.trash({ boardId: target.id })
+  records.set(target.id, { ...records.get(target.id), deletedAt: '2026-09-01T00:00:00Z' })
+  const originalDelete = repository.deleteIfRevisionMatches.bind(repository)
+  repository.deleteIfRevisionMatches = async (id, revision) => {
+    if (id === target.id) {
+      const value = records.get(id)
+      records.set(id, { ...value, deletedAt: undefined, revision: revision + 1 })
+      throw Object.assign(new Error('Concurrent restoration'), { code: 'board_conflict' })
+    }
+    return originalDelete(id, revision)
+  }
+  await workspace.listTrash()
+  assert.ok(records.has(target.id))
+  assert.equal((await workspace.list()).some(board => board.id === target.id), true)
+  service.dispose()
+})
+
+test('Trash of the only active board retains a usable blank replacement', async () => {
+  const { workspace, service, records, session } = fixture()
+  const active = await workspace.create({ title: 'Only board' })
+  await workspace.trash({ boardId: active.id })
+  assert.ok(records.has(active.id))
+  assert.notEqual(service.boardId, active.id)
+  assert.equal(session.get('mathboard.activeBoardId'), service.boardId)
+  assert.equal((await workspace.list()).length, 1)
+  assert.equal((await workspace.listTrash()).length, 1)
+  service.dispose()
+})
+
+test('Trash write failure restores active board and removes temporary replacement', async () => {
+  const { workspace, service, records, repository } = fixture()
+  const active = await workspace.create({ title: 'Only board' })
+  const originalUpdate = repository.updateIfRevisionMatches.bind(repository)
+  repository.updateIfRevisionMatches = async (id, revision, build) => {
+    if (id === active.id) throw new Error('late trash failure')
+    return originalUpdate(id, revision, build)
+  }
+  await assert.rejects(() => workspace.trash({ boardId: active.id }), /late trash failure/)
+  assert.deepEqual([...records.keys()], [active.id])
+  assert.equal(records.get(active.id).deletedAt, undefined)
+  assert.equal(service.boardId, active.id)
+  service.dispose()
+})
+
+test('existing confirmed delete remains permanent for agent compatibility', async () => {
+  const { workspace, records, service } = fixture()
+  const board = await workspace.create({ title: 'Permanent' })
+  await workspace.create({ title: 'Other' })
+  await workspace.trash({ boardId: board.id })
+  await workspace.delete({ boardId: board.id, confirm: true })
+  assert.equal(records.has(board.id), false)
+  assert.deepEqual(await workspace.listTrash(), [])
+  service.dispose()
+})
+
 test('permanent delete requires confirmation and is not recoverable', async () => {
   const { workspace, records, service } = fixture()
   const first = await workspace.create({ title: 'To delete' })

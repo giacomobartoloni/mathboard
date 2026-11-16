@@ -26,6 +26,7 @@ import { downloadBoardDocument } from '../board/persistence/downloadBoardDocumen
 export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelectedTool, trackEvent }) {
   const boardList = ref([])
   const archivedList = ref([])
+  const trashList = ref([])
   const boardLibraryBusy = ref(false)
   const boardLibraryLoading = ref(false)
   const boardLibraryError = ref(null)
@@ -34,9 +35,10 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
   const refreshBoardLibrary = async () => {
     const workspace = getWorkspace()
     if (!workspace) throw new Error('Board workspace is not ready.')
-    const [boards, archived] = await Promise.all([workspace.list(), workspace.listArchived()])
+    const [boards, archived, trash] = await Promise.all([workspace.list(), workspace.listArchived(), workspace.listTrash()])
     boardList.value = boards
     archivedList.value = archived
+    trashList.value = trash
   }
 
   const openBoardLibrary = async () => {
@@ -45,6 +47,7 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
     boardLibraryError.value = null
     boardList.value = []
     archivedList.value = []
+    trashList.value = []
     boardLibraryLoading.value = true
     sidebar.open()
     analytics.opened()
@@ -56,7 +59,7 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
     if (boardLibraryBusy.value) return
     const sidebar = getSidebar()
     const modeAtAction = sidebar.mode.value
-    const switchedAwayFromActive = (action === 'archive' || action === 'delete')
+    const switchedAwayFromActive = (action === 'archive' || action === 'trash' || action === 'delete')
       && boardList.value.some(board => board.id === boardId && board.isActive)
     boardLibraryError.value = null
     boardLibraryBusy.value = true
@@ -73,6 +76,8 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
       else if (action === 'rename') await workspace.rename({ boardId, title })
       else if (action === 'archive') await workspace.archive({ boardId })
       else if (action === 'unarchive') await workspace.unarchive({ boardId })
+      else if (action === 'trash') await workspace.trash({ boardId })
+      else if (action === 'restore') await workspace.restore({ boardId })
       else if (action === 'export') {
         const document = await workspace.exportBoard({ boardId })
         downloadBoardDocument(document)
@@ -106,7 +111,7 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
   }
 
   return {
-    boardList, archivedList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
+    boardList, archivedList, trashList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
     openBoardLibrary, onBoardLibraryAction, onActiveBoardChanged,
     onBoardLibraryBrowse: action => analytics.browsed(action),
     onSidebarClosed: (mode, reason) => analytics.closed(mode, reason),
