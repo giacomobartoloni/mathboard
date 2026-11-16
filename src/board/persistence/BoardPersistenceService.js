@@ -20,7 +20,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { serializeBoardDocument } from './serializeBoardDocument.js'
 import { replaceBoardFromDocument, BoardReplacementRollbackError,
   BoardReplacementCommitError } from './replaceBoardFromDocument.js'
-import { createEmptyBoardDocument } from './schema.js'
+import { createEmptyBoardDocument, validateBoardDocument } from './schema.js'
+import { copyBoardDocumentWithFreshIds } from '../../share/copyBoardDocument.js'
 import { generateBoardName } from '../names/generateBoardName.js'
 import {
   isArchivedBoardRecord,
@@ -405,11 +406,37 @@ export class BoardPersistenceService {
     return this._withTransition(token => this._createNewBoard(title, token))
   }
 
-  async _createNewBoard(title, token) {
+  importSharedBoard(rawDocument) {
+    const document = copyBoardDocumentWithFreshIds(rawDocument)
+    return this._withTransition(token => this._createNewBoard(document.title, token, document))
+  }
+
+  async exportBoard(boardId) {
+    if (boardId === this.boardId) {
+      if (!this._isDocumentStable()) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'Finish editing before exporting this board.')
+      }
+      const version = this.changeVersion
+      await this.flushThrough(version)
+      if (this.boardId !== boardId || this.changeVersion !== version) {
+        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.EDIT_IN_PROGRESS,
+          'Board changed during export. Please retry.')
+      }
+    }
+    const record = await this._repository.get(boardId)
+    if (!record?.document) {
+      throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND,
+        'Board could not be found for export.')
+    }
+    return validateBoardDocument(record.document)
+  }
+
+  async _createNewBoard(title, token, importedDocument = null) {
     title = normalizeBoardTitle(title === undefined ? generateBoardName() : title)
     await this._flushBeforeTransition(token)
     const canvas = this._getCanvas()
-    const document = createEmptyBoardDocument(title)
+    const document = importedDocument ? { ...importedDocument, title } : createEmptyBoardDocument(title)
     const record = createBoardRecord({
       id: createBoardId(),
       kind: BOARD_RECORD_KINDS.SAVED,

@@ -75,11 +75,33 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
       <div class="board-library-tabs" role="group" aria-label="Board views">
         <button type="button" :class="{ active: view === 'recent' }" :aria-pressed="view === 'recent'"
-          :disabled="busy || loading" @click="selectView('recent')">Recent ({{ boards.length }})</button>
+          aria-label="Recent" title="Recent" :disabled="busy || loading" @click="selectView('recent')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+        </button>
         <button type="button" :class="{ active: showArchived }" :aria-pressed="showArchived"
-          :disabled="busy || loading" @click="selectView('archived')">Archived ({{ archivedBoards.length }})</button>
-        <button type="button" :class="{ active: showTrash }" :aria-pressed="showTrash"
-          :disabled="busy || loading" @click="selectView('trash')">Trash ({{ trashedBoards.length }})</button>
+          aria-label="Archived" title="Archived" :disabled="busy || loading" @click="selectView('archived')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="5" rx="1" />
+            <path d="M4 8v13h16V8" />
+            <path d="M10 12h4" />
+          </svg>
+        </button>
+        <button type="button" class="board-library-trash-tab" :class="{ active: showTrash }" :aria-pressed="showTrash"
+          aria-label="Trashed" title="Trashed" :disabled="busy || loading" @click="selectView('trash')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M5 6l1 15h12l1-15" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </svg>
+        </button>
       </div>
 
       <div class="board-library-content" :class="showTrash ? 'board-library-trash' : showArchived ? 'board-library-archived' : 'board-library-recent'"
@@ -161,12 +183,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                   <span>Archive</span>
                 </button>
               </template>
+              <button :id="'export-action-' + board.id" class="board-library-more-option" type="button"
+                :disabled="busy" :aria-label="'Export ' + board.title" :title="'Export ' + board.title"
+                @click="hideOpenPopover(); submitAction('export', board.id)">
+                <font-awesome-icon :icon="['fas', 'download']" aria-hidden="true" />
+                <span>Export board</span>
+              </button>
               <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
                 :disabled="busy" :aria-label="(showTrash ? 'Permanently delete ' : 'Move to Trash ') + board.title"
                 :title="(showTrash ? 'Permanently delete ' : 'Move to Trash ') + board.title"
                 @click="beginDelete(board)">
                 <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
-                <span v-if="isCompact">{{ showTrash ? 'Permanently delete' : 'Move to Trash' }}</span>
+                <span>{{ showTrash ? 'Permanently delete' : 'Move to Trash' }}</span>
               </button>
             </div>
 
@@ -374,7 +402,7 @@ export default {
         popover.style.top = Math.max(8, top) + 'px'
         popover.style.left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8)) + 'px'
       }
-      const firstAction = isCompact.value && view.value === 'recent' ? 'rename-menu-action-' : 'delete-action-'
+      const firstAction = isCompact.value && view.value === 'recent' ? 'rename-menu-action-' : 'export-action-'
       document.getElementById(firstAction + boardId)?.focus()
     }
     const createBoard = () => {
@@ -655,8 +683,13 @@ export default {
   border-bottom: 1px solid var(--border-color);
 }
 .board-library-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
   min-height: 44px;
-  padding: 0 2px;
+  padding: 0;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -664,6 +697,7 @@ export default {
   cursor: pointer;
 }
 .board-library-tabs button.active { border-bottom-color: var(--selected-bg); color: var(--text-primary); font-weight: 600; }
+.board-library-trash-tab { margin-left: auto; }
 .board-library-content {
   min-height: 100px;
   flex: 1 1 auto;
@@ -740,10 +774,11 @@ export default {
 .board-library-more-delete {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
   border: 0;
   border-radius: 6px;
   background: transparent;

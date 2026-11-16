@@ -85,6 +85,10 @@ export class BoardWorkspaceService {
     return this._run(async () => this._summary(await this._persistence.unarchiveBoard(boardId)), { signal })
   }
 
+  exportBoard({ boardId } = {}, { signal } = {}) {
+    return this._run(() => this._persistence.exportBoard(boardId), { signal })
+  }
+
   trash({ boardId } = {}, { signal } = {}) {
     return this._run(async () => this._summary(await this._persistence.trashBoard(boardId)), { signal })
   }

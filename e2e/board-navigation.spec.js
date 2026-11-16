@@ -113,3 +113,30 @@ test('middle drag ends outside the canvas and does not block later drawing', asy
   await page.mouse.up()
   await expect.poll(async () => (await getBoardState(page)).objects.length).toBe(1)
 })
+
+
+test('topbar keeps the logo, Share and Boards separated across responsive widths', async ({ page }) => {
+  await gotoBoard(page)
+  const logo = page.locator('.board-topbar .logo')
+  const share = page.getByRole('button', { name: 'Share current board' })
+  const boards = page.getByRole('button', { name: 'Open Board library' })
+
+  for (const width of [320, 390, 600, 642, 768, 1280]) {
+    await page.setViewportSize({ width, height: 800 })
+    const [logoBox, shareBox, boardsBox] = await Promise.all([
+      logo.boundingBox(), share.boundingBox(), boards.boundingBox(),
+    ])
+    expect(logoBox, `logo at ${width}px`).not.toBeNull()
+    expect(shareBox, `share at ${width}px`).not.toBeNull()
+    expect(boardsBox, `boards at ${width}px`).not.toBeNull()
+    expect(logoBox.x, `logo left edge at ${width}px`).toBeGreaterThanOrEqual(0)
+    expect(shareBox.x - (logoBox.x + logoBox.width),
+      `logo/share gap at ${width}px`).toBeGreaterThanOrEqual(6)
+    expect(boardsBox.x - (shareBox.x + shareBox.width),
+      `share/boards gap at ${width}px`).toBeGreaterThanOrEqual(6)
+    expect(boardsBox.x + boardsBox.width,
+      `boards right edge at ${width}px`).toBeLessThanOrEqual(width)
+    expect(Math.abs((logoBox.y + logoBox.height / 2) - (shareBox.y + shareBox.height / 2)),
+      `vertical alignment at ${width}px`).toBeLessThanOrEqual(3)
+  }
+})
