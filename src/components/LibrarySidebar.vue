@@ -76,15 +76,31 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
       <div class="board-library-tabs" role="group" aria-label="Board views">
         <button type="button" :class="{ active: view === 'recent' }" :aria-pressed="view === 'recent'"
           aria-label="Recent" title="Recent" :disabled="busy || loading" @click="selectView('recent')">
-          <font-awesome-icon :icon="['fas', 'clock']" aria-hidden="true" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
         </button>
         <button type="button" :class="{ active: showArchived }" :aria-pressed="showArchived"
           aria-label="Archived" title="Archived" :disabled="busy || loading" @click="selectView('archived')">
-          <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="3" width="20" height="5" rx="1" />
+            <path d="M4 8v13h16V8" />
+            <path d="M10 12h4" />
+          </svg>
         </button>
         <button type="button" class="board-library-trash-tab" :class="{ active: showTrash }" :aria-pressed="showTrash"
           aria-label="Trashed" title="Trashed" :disabled="busy || loading" @click="selectView('trash')">
-          <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M5 6l1 15h12l1-15" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </svg>
         </button>
       </div>
 

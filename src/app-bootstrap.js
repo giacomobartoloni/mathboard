@@ -42,7 +42,6 @@ import { faChalkboard } from '@fortawesome/free-solid-svg-icons'
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons'
 import { faPlus } from '@fortawesome/free-solid-svg-icons'
 import { faBoxArchive } from '@fortawesome/free-solid-svg-icons'
-import { faClock } from '@fortawesome/free-solid-svg-icons'
 import { faXmark } from '@fortawesome/free-solid-svg-icons'
 import { faExpand } from '@fortawesome/free-solid-svg-icons'
 import { faCompress } from '@fortawesome/free-solid-svg-icons'
@@ -83,7 +82,6 @@ library.add(faChalkboard)
 library.add(faChevronDown)
 library.add(faPlus)
 library.add(faBoxArchive)
-library.add(faClock)
 library.add(faXmark)
 library.add(faExpand)
 library.add(faCompress)

@@ -44,14 +44,21 @@ test('board views use icon-only tabs with accessible tooltips and a right-aligne
 
   await expect(tabs.getByRole('button')).toHaveCount(3)
   await expect(tabs).toHaveText('')
-  for (const [button, label, icon] of [
-    [recent, 'Recent', 'clock'],
-    [archived, 'Archived', 'box-archive'],
-    [trashed, 'Trashed', 'trash'],
+  for (const [button, label] of [
+    [recent, 'Recent'],
+    [archived, 'Archived'],
+    [trashed, 'Trashed'],
   ]) {
     await expect(button).toHaveAttribute('title', label)
-    await expect(button.locator(`svg[data-icon="${icon}"]`)).toBeVisible()
+    const icon = button.locator('svg')
+    await expect(icon).toBeVisible()
+    await expect(icon).toHaveAttribute('fill', 'none')
+    await expect(icon).toHaveAttribute('stroke', 'currentColor')
+    await expect(icon).toHaveAttribute('aria-hidden', 'true')
   }
+  await expect(recent.locator('svg circle')).toHaveCount(1)
+  await expect(archived.locator('svg rect')).toHaveCount(1)
+  await expect(trashed.locator('svg path')).toHaveCount(5)
 
   await expect(recent).toHaveAttribute('aria-pressed', 'true')
   await archived.click()
