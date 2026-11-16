@@ -74,11 +74,11 @@ export async function handleShareRequest(request, env) {
   if (!env.BOARD_SHARES || !env.SHARE_RATE_LIMITER) {
     return json({ error: 'unavailable' }, 503, corsHeaders)
   }
-  const sourceIp = request.headers.get('CF-Connecting-IP') || 'unknown'
-  const { success } = await env.SHARE_RATE_LIMITER.limit({ key: sourceIp })
-  if (!success) return json({ error: 'rate_limited' }, 429, corsHeaders)
-
   if (request.method === 'POST' && url.pathname === '/api/shares') {
+    // Limit costly uploads, not share openings: many students may share one IP.
+    const sourceIp = request.headers.get('CF-Connecting-IP') || 'unknown'
+    const { success } = await env.SHARE_RATE_LIMITER.limit({ key: sourceIp })
+    if (!success) return json({ error: 'rate_limited' }, 429, corsHeaders)
     if (!allowedOrigin(origin, url)) return json({ error: 'forbidden' }, 403, corsHeaders)
     if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/octet-stream') {
       return json({ error: 'invalid_content_type' }, 415, corsHeaders)

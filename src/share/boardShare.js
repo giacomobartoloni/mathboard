@@ -164,7 +164,8 @@ export async function createBoardShare(document, { desktop = false } = {}) {
   if (!ID_PATTERN.test(body?.id || '')) {
     throw new BoardShareError('upload', 'Share service returned an invalid link.')
   }
-  return { url: `https://mathboard.app/#b=${body.id},${key}`, expiresAt: body.expiresAt }
+  const pathname = desktop ? '/' : window.location.pathname
+  return { url: `${origin}${pathname}#b=${body.id},${key}`, expiresAt: body.expiresAt }
 }
 
 export async function downloadBoardShare({ id, key }, { desktop = false } = {}) {

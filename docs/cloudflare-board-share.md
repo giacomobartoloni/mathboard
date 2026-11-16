@@ -6,7 +6,7 @@ This runbook covers the optional encrypted Board Share feature. It does not enab
 
 MathBoard is already deployed as a Cloudflare Worker with static assets. The existing `mathboard` Worker serves both the web app and the new `/api/shares` POST/GET endpoints; the API routes run before the static asset handler. No separate database, account service, or public bucket URL is needed.
 
-The Worker receives opaque ciphertext only. The browser generates a fresh AES-256-GCM key, compresses and encrypts a validated BoardDocument, and puts the key in the `#b=<opaque-id>,<key>` URL fragment. Anyone with the complete link can decrypt its contents. Link recipients receive independent editable local copies. Existing `#s=` selection Stamp links remain local URL transfers.
+The Worker receives opaque ciphertext only. The Workers Rate Limiting binding protects POST uploads, not GET reads, so multiple classroom recipients behind one IP are not blocked by the small upload quota. The browser generates a fresh AES-256-GCM key, compresses and encrypts a validated BoardDocument, and puts the key in the `#b=<opaque-id>,<key>` URL fragment. Anyone with the complete link can decrypt its contents. Link recipients receive independent editable local copies. Existing `#s=` selection Stamp links remain local URL transfers.
 
 ## Cloudflare account setup — required before deployment
 
@@ -22,7 +22,7 @@ Until the bucket and binding exist, the Worker responds `503 unavailable`. Do no
 
 - `POST /api/shares`: requires an allowed `Origin` and `application/octet-stream`; uploads at most 2 MiB of ciphertext and returns a random ID and ISO expiry.
 - `GET /api/shares/:id`: returns ciphertext only, or 400/404/410 on invalid, missing, or expired links. Responses use `Cache-Control: no-store`.
-- The Worker stores only ciphertext and expiration metadata in R2; keys stay in the URL fragment and browser. Application analytics never receives board content, IDs, keys, payloads, or free-form error text.
+- The Worker stores only ciphertext and expiration metadata in R2; keys stay in the URL fragment and browser. Browser-generated links use their current environment origin (e.g. staging previews stay on staging), while desktop links use the public MathBoard origin. Application analytics never receives board content, IDs, keys, payloads, or free-form error text.
 
 ## Pre-release checklist
 
