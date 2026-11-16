@@ -26,9 +26,20 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 
     await gotoBoard(page)
     const switcher = page.getByRole('button', { name: 'Open Board library' })
     await expect(switcher).toBeVisible()
+    const analyticsCredit = page.getByRole('link', { name: 'Simple Analytics' })
+    await expect(analyticsCredit).toHaveCount(0)
     await page.getByRole('button', { name: 'About' }).click()
     const overlay = page.locator('.support-panel .modal-overlay')
     await expect(overlay).toBeVisible()
+    await expect(analyticsCredit).toBeVisible()
+    await expect(analyticsCredit).toHaveAttribute('href', 'https://www.simpleanalytics.com/')
+    await expect(analyticsCredit.locator('svg')).toBeVisible()
+
+    const legalLinks = overlay.locator('.legal-links a')
+    await expect(legalLinks).toHaveCount(3)
+    const linkRows = await legalLinks.evaluateAll((links) =>
+      links.map((link) => Math.round(link.getBoundingClientRect().top)))
+    expect(new Set(linkRows).size).toBeLessThan(3)
 
     const switcherBox = await switcher.boundingBox()
     const hitIsAbout = await page.evaluate(({ x, y }) =>
