@@ -22,7 +22,7 @@
       "name": "SHARE_RATE_LIMITER",
       "namespace_id": "24016",
       "simple": {
-        "limit": 30,
+        "limit": 10,
         "period": 60
       }
     }
@@ -39,7 +39,7 @@
         "name": "SHARE_RATE_LIMITER",
         "namespace_id": "24017",
         "simple": {
-          "limit": 30,
+          "limit": 10,
           "period": 60
         }
       }
