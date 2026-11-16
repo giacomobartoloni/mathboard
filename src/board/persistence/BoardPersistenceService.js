@@ -24,6 +24,12 @@ import { createEmptyBoardDocument, validateBoardDocument } from './schema.js'
 import { copyBoardDocumentWithFreshIds } from '../../share/copyBoardDocument.js'
 import { generateBoardName } from '../names/generateBoardName.js'
 import {
+  isArchivedBoardRecord,
+  isTrashedBoardRecord,
+  isExpiredTrashedBoardRecord,
+  summarizeBoardRecord,
+} from './boardRecordPolicy.js'
+import {
   BOARD_RECORD_KINDS,
   createBoardId,
   createBoardRecord,
@@ -62,7 +68,6 @@ export const SAVE_STATES = Object.freeze({
 
 const IDLE_DEBOUNCE_MS = 1000
 const MAX_WAIT_MS = 5000
-const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 export function normalizeBoardTitle(title) {
   if (typeof title !== 'string' || !title.trim() || title.trim().length > 120
@@ -135,6 +140,17 @@ export class BoardPersistenceService {
 
   _reportActiveBoard() {
     this._onActiveBoardChanged({ id: this.boardId, title: this.title })
+  }
+
+  // Activate only after the required persistence or canvas work succeeds.
+  _activateRecord(record, title = record.title) {
+    this.boardId = record.id
+    this.revision = boardRevision(record)
+    this._conflicted = false
+    this.title = title
+    this.changeVersion = 0
+    this._persistedChangeVersion = 0
+    this._writeActiveBoardId(record.id)
   }
 
   _readActiveBoardId() {
@@ -362,13 +378,7 @@ export class BoardPersistenceService {
       const record = createBoardRecord({ title: document.title, document })
       await this._repository.create(record)
       if (token) this._assertTransition(token)
-      this.boardId = record.id
-      this.revision = record.revision
-      this.title = record.title
-      this.changeVersion = 0
-      this._persistedChangeVersion = 0
-      this._conflicted = false
-      this._writeActiveBoardId(record.id)
+      this._activateRecord(record)
       this._setStatus({ state: SAVE_STATES.CLEAN, error: null, errorCode: null,
         lastSavedAt: record.updatedAt })
       this._reportActiveBoard()
@@ -455,65 +465,36 @@ export class BoardPersistenceService {
       throw error
     }
 
-    this.boardId = record.id
-    this.revision = record.revision
-    this._conflicted = false
-    this.title = record.title
-    this.changeVersion = 0
-    this._persistedChangeVersion = 0
-    this._writeActiveBoardId(record.id)
+    this._activateRecord(record)
     this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: record.updatedAt, error: null })
     this._reportActiveBoard()
     return record
   }
 
-  // Historical scratch records are retained. Legacy trashedAt records
-  // become archived and can be recovered using the Archive UI.
-  _isArchived(record) {
-    return Boolean(record?.archivedAt || record?.trashedAt)
-  }
-
-  _isTrashed(record) {
-    return Boolean(record?.deletedAt)
-  }
-
-  _boardSummary(record) {
-    return {
-      id: record.id,
-      title: record.title || 'Untitled board',
-      createdAt: record.createdAt || null,
-      updatedAt: record.updatedAt || null,
-      isActive: record.id === this.boardId,
-      ...(this._isArchived(record) ? { archivedAt: record.archivedAt || record.trashedAt } : {}),
-      ...(this._isTrashed(record) ? { deletedAt: record.deletedAt } : {}),
-    }
-  }
-
   async listBoards() {
     const records = await this._repository.list()
-    return records.filter(record => !this._isArchived(record) && !this._isTrashed(record))
-      .map(record => this._boardSummary(record))
+    return records.filter(record => !isArchivedBoardRecord(record) && !isTrashedBoardRecord(record))
+      .map(record => summarizeBoardRecord(record, this.boardId))
   }
 
   async listArchivedBoards() {
     const records = await this._repository.list()
-    return records.filter(record => this._isArchived(record) && !this._isTrashed(record))
-      .map(record => this._boardSummary(record))
+    return records.filter(record => isArchivedBoardRecord(record) && !isTrashedBoardRecord(record))
+      .map(record => summarizeBoardRecord(record, this.boardId))
   }
 
   async listTrashedBoards() {
     await this.purgeExpiredTrashedBoards()
     const records = await this._repository.list()
-    return records.filter(record => this._isTrashed(record)).map(record => this._boardSummary(record))
+    return records.filter(record => isTrashedBoardRecord(record)).map(record => summarizeBoardRecord(record, this.boardId))
   }
 
   async purgeExpiredTrashedBoards() {
-    const cutoff = Date.parse(this._now()) - TRASH_RETENTION_MS
-    if (!Number.isFinite(cutoff)) return
+    const nowMs = Date.parse(this._now())
+    if (!Number.isFinite(nowMs)) return
     const records = await this._repository.list()
     for (const record of records) {
-      const deletedAt = Date.parse(record.deletedAt)
-      if (!this._isTrashed(record) || !Number.isFinite(deletedAt) || deletedAt >= cutoff) continue
+      if (!isExpiredTrashedBoardRecord(record, nowMs)) continue
       try {
         await this._repository.deleteIfRevisionMatches(record.id, boardRevision(record))
       } catch (error) {
@@ -560,6 +541,16 @@ export class BoardPersistenceService {
     }
   }
 
+  async _withActiveBoardReplacement(boardId, record, token, mutation) {
+    const transition = await this._selectReplacementForActiveBoard(boardId, token)
+    try {
+      return await mutation(transition?.departedRevision ?? boardRevision(record))
+    } catch (error) {
+      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition, token)
+      throw error
+    }
+  }
+
   archiveBoard(boardId) {
     return boardId === this.boardId
       ? this._withTransition(token => this._archiveBoard(boardId, token))
@@ -567,34 +558,28 @@ export class BoardPersistenceService {
   }
 
   async _archiveBoard(boardId, token) {
-    let record = await this._repository.get(boardId)
+    const record = await this._repository.get(boardId)
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (this._isTrashed(record)) {
+    if (isTrashedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash first.')
     }
-    if (this._isArchived(record)) {
+    if (isArchivedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Board is already archived.')
     }
-    const transition = await this._selectReplacementForActiveBoard(boardId, token)
-    try {
-      if (!record?.document) {
-        throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
-      }
-      const archived = await this._repository.updateIfRevisionMatches(boardId,
-        transition?.departedRevision ?? boardRevision(record), current => {
-        if (this._isTrashed(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash first.')
-        if (this._isArchived(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Board is already archived.')
+    return this._withActiveBoardReplacement(boardId, record, token, revision =>
+      this._repository.updateIfRevisionMatches(boardId, revision, current => {
+        if (isTrashedBoardRecord(current)) {
+          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash first.')
+        }
+        if (isArchivedBoardRecord(current)) {
+          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Board is already archived.')
+        }
         const next = { ...current, archivedAt: this._now() }
         delete next.trashedAt
         return next
-        })
-      return archived
-    } catch (error) {
-      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition, token)
-      throw error
-    }
+      }))
   }
 
   async unarchiveBoard(boardId) {
@@ -602,15 +587,15 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (this._isTrashed(record)) {
+    if (isTrashedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash first.')
     }
-    if (!this._isArchived(record)) {
+    if (!isArchivedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_ARCHIVED, 'Board is not archived.')
     }
     const restored = await this._repository.updateIfRevisionMatches(boardId, boardRevision(record), current => {
-      if (this._isTrashed(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash first.')
-      if (!this._isArchived(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_ARCHIVED, 'Board is not archived.')
+      if (isTrashedBoardRecord(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash first.')
+      if (!isArchivedBoardRecord(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_ARCHIVED, 'Board is not archived.')
       const next = { ...current }
       delete next.archivedAt
       delete next.trashedAt
@@ -630,22 +615,16 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (this._isTrashed(record)) {
+    if (isTrashedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Board is already in Trash.')
     }
-    const transition = await this._selectReplacementForActiveBoard(boardId, token)
-    try {
-      return await this._repository.updateIfRevisionMatches(boardId,
-        transition?.departedRevision ?? boardRevision(record), current => {
-          if (this._isTrashed(current)) {
-            throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Board is already in Trash.')
-          }
-          return { ...current, deletedAt: this._now() }
-        })
-    } catch (error) {
-      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition, token)
-      throw error
-    }
+    return this._withActiveBoardReplacement(boardId, record, token, revision =>
+      this._repository.updateIfRevisionMatches(boardId, revision, current => {
+        if (isTrashedBoardRecord(current)) {
+          throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Board is already in Trash.')
+        }
+        return { ...current, deletedAt: this._now() }
+      }))
   }
 
   async restoreTrashedBoard(boardId) {
@@ -653,11 +632,11 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (!this._isTrashed(record)) {
+    if (!isTrashedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_TRASHED, 'Board is not in Trash.')
     }
     return this._repository.updateIfRevisionMatches(boardId, boardRevision(record), current => {
-      if (!this._isTrashed(current)) {
+      if (!isTrashedBoardRecord(current)) {
         throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_TRASHED, 'Board is not in Trash.')
       }
       const next = { ...current }
@@ -686,13 +665,8 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    const transition = await this._selectReplacementForActiveBoard(boardId, token)
-    try {
-      await this._repository.deleteIfRevisionMatches(boardId, transition?.departedRevision ?? boardRevision(record))
-    } catch (error) {
-      if (transition) await this._restorePreviousBoardOnFailure(boardId, transition, token)
-      throw error
-    }
+    await this._withActiveBoardReplacement(boardId, record, token, revision =>
+      this._repository.deleteIfRevisionMatches(boardId, revision))
     if (this._readRecoveryBoardId() === boardId) this._writeRecoveryBoardId(null)
     return { id: boardId, deleted: true }
   }
@@ -705,10 +679,10 @@ export class BoardPersistenceService {
     if (!record?.document) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_NOT_FOUND, `Board not found: ${boardId}`)
     }
-    if (this._isTrashed(record)) {
+    if (isTrashedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash before renaming it.')
     }
-    if (this._isArchived(record)) {
+    if (isArchivedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before renaming it.')
     }
     if (record.title === title && record.document.title === title) return record
@@ -717,8 +691,8 @@ export class BoardPersistenceService {
     }
     const updatedAt = this._now()
     const renamed = await this._repository.updateIfRevisionMatches(boardId, boardRevision(record), current => {
-      if (this._isTrashed(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash before renaming it.')
-      if (this._isArchived(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before renaming it.')
+      if (isTrashedBoardRecord(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash before renaming it.')
+      if (isArchivedBoardRecord(current)) throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before renaming it.')
       return { ...current, title, document: { ...current.document, title }, updatedAt }
     })
     if (boardId === this.boardId) {
@@ -746,10 +720,10 @@ export class BoardPersistenceService {
       )
     }
 
-    if (this._isTrashed(record)) {
+    if (isTrashedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_TRASHED, 'Restore this board from Trash before opening it.')
     }
-    if (this._isArchived(record)) {
+    if (isArchivedBoardRecord(record)) {
       throw new BoardPersistenceError(BOARD_PERSISTENCE_ERROR_CODES.BOARD_ARCHIVED, 'Unarchive this board before opening it.')
     }
 
@@ -769,13 +743,7 @@ export class BoardPersistenceService {
       throw error
     }
 
-    this.boardId = record.id
-    this.revision = boardRevision(record)
-    this._conflicted = false
-    this.title = record.title || record.document.title || 'Untitled board'
-    this.changeVersion = 0
-    this._persistedChangeVersion = 0
-    this._writeActiveBoardId(record.id)
+    this._activateRecord(record, record.title || record.document.title || 'Untitled board')
     if (this._readRecoveryBoardId() === record.id) {
       this._writeRecoveryBoardId(null)
       this._setStatus({ recoveryFailure: null })
@@ -814,13 +782,7 @@ export class BoardPersistenceService {
     })
     await this._repository.create(record)
     if (token) this._assertTransition(token)
-    this.boardId = record.id
-    this.revision = record.revision
-    this._conflicted = false
-    this.title = record.title
-    this.changeVersion = 0
-    this._persistedChangeVersion = 0
-    this._writeActiveBoardId(record.id)
+    this._activateRecord(record)
     this._setStatus({
       state: SAVE_STATES.CLEAN,
       lastSavedAt: record.updatedAt,
