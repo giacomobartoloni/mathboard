@@ -38,4 +38,6 @@ test('Worker Previews provide separate R2 and rate-limit bindings', () => {
   assert.notEqual(previewR2.bucket_name, productionR2.bucket_name)
   assert.notEqual(previewLimiter.namespace_id, productionLimiter.namespace_id)
   assert.deepEqual(previewLimiter.simple, productionLimiter.simple)
+  assert.deepEqual(productionLimiter.simple, { limit: 10, period: 60 })
+  assert.deepEqual(previewLimiter.simple, { limit: 10, period: 60 })
 })

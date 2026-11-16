@@ -106,7 +106,7 @@ References:
 
 1. Create a **private R2 bucket** named `mathboard-board-shares`. For example, in the target account run `npx wrangler r2 bucket create mathboard-board-shares` or create the bucket in the dashboard.
 2. Configure an R2 **object lifecycle rule** for keys with prefix `boards/` that deletes objects after **90 days**. R2 cleanup is asynchronous; the Worker checks each object's stored `expiresAt` timestamp and refuses GETs immediately at expiry.
-3. Bind the bucket as `BOARD_SHARES`. Confirm the name and binding in `wrangler.json`. Cloudflare Workers Rate Limiting is bound as `SHARE_RATE_LIMITER`; the initial limit is 30 requests per IP per minute. Review namespace configuration and account-specific quotas.
+3. Bind the bucket as `BOARD_SHARES`. Confirm the name and binding in `wrangler.json`. Cloudflare Workers Rate Limiting is bound as `SHARE_RATE_LIMITER`; the initial limit is 10 POST upload attempts per IP per 60 seconds (approximately per Cloudflare location). Review namespace configuration and account-specific quotas.
 4. Configure Cloudflare WAF/bot abuse monitoring for `POST /api/shares` and review cost alerts/budgets, particularly because this is an unauthenticated upload endpoint. Rate limiting is one defense, not a replacement for abuse controls. Restrict Worker access to private bucket objects; do not enable a public R2 endpoint.
 5. Review the updated Privacy Policy, data processing location, Cloudflare request/security logs, provider terms and GDPR implications before turning on uploads.
 
