@@ -203,6 +203,7 @@ import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/native
 import { initializeAnalytics, trackEvent } from './analytics'
 import { useBoardLibrary } from './composables/useBoardLibrary.js'
 import { useBoardLinkBootstrap } from './composables/useBoardLinkBootstrap.js'
+import { useBoardSharePanel } from './composables/useBoardSharePanel.js'
 import { usePlotEditor } from './composables/usePlotEditor.js'
 import { useLibrarySidebar } from './composables/useLibrarySidebar.js'
 import {
@@ -215,7 +216,6 @@ import {
 } from './analytics/events.js'
 import { getKitById } from './stamps/registry.js'
 import { buildStampShareUrl } from './stamps/url.js'
-import { createBoardShare } from './share/boardShare.js'
 
 function detectFullscreenSupport() {
   return typeof document !== 'undefined'
@@ -282,10 +282,11 @@ export default {
     } = usePlotEditor({ drawBoardRef, selectedTool, trackEvent })
     const showFormulaModal = ref(false)
     const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
-    const showBoardSharePanel = ref(false)
-    const boardShareBusy = ref(false)
-    const boardShareUrl = ref('')
-    const boardShareError = ref('')
+    const {
+      showBoardSharePanel, boardShareBusy, boardShareUrl, boardShareError,
+      openBoardSharePanel, closeBoardSharePanel, requestBoardShareLink,
+      onBoardShareCopied, onBoardShareCopyFailed,
+    } = useBoardSharePanel({ boardSessionReady, drawBoardRef, desktopRuntime, trackEvent })
     const showShareStampModal = ref(false)
     const shareStampUrl = ref('')
     const formulaPosition = ref({ x: 0, y: 0 })
@@ -519,49 +520,6 @@ export default {
       saveBoardTheme(nextBoard)
       saveUiTheme(uiTheme.value)
       trackEvent(ANALYTICS_EVENTS.THEME_CHANGED, { theme: nextBoard })
-    }
-
-    const openBoardSharePanel = () => {
-      if (!boardSessionReady.value || showBoardSharePanel.value) return
-      boardShareUrl.value = ''
-      boardShareError.value = ''
-      showBoardSharePanel.value = true
-      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_PANEL_OPENED)
-    }
-    const closeBoardSharePanel = () => {
-      if (boardShareBusy.value) return
-      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_PANEL_CLOSED, {
-        outcome: boardShareUrl.value ? 'created' : 'abandoned',
-      })
-      showBoardSharePanel.value = false
-      boardShareUrl.value = ''
-      boardShareError.value = ''
-    }
-    const requestBoardShareLink = async () => {
-      if (boardShareBusy.value || boardShareUrl.value) return
-      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_REQUESTED)
-      boardShareError.value = ''
-      boardShareBusy.value = true
-      try {
-        let document
-        try { document = drawBoardRef.value.captureBoardDocument() }
-        catch {
-          const error = new Error('Finish editing before sharing this board.')
-          error.stage = 'snapshot'
-          throw error
-        }
-        const result = await createBoardShare(document, { desktop: desktopRuntime })
-        boardShareUrl.value = result.url
-        trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_CREATED)
-      } catch (error) {
-        trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_FAILED, { stage: error?.stage || 'upload' })
-        boardShareError.value = error?.message || 'Could not create share link. Please retry.'
-      } finally { boardShareBusy.value = false }
-    }
-    const onBoardShareCopied = () => trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_COPIED)
-    const onBoardShareCopyFailed = () => {
-      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_FAILED, { stage: 'copy' })
-      boardShareError.value = 'Could not copy the link. Select and copy it manually.'
     }
 
     const closeShareStampModal = () => {
