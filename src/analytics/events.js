@@ -43,6 +43,14 @@ export const ANALYTICS_EVENTS = Object.freeze({
   PLOT_MODAL_CANCELLED: 'plot_modal_cancelled',
   PLOT_SAVE_FAILED: 'plot_save_failed',
 
+  BOARD_SHARE_PANEL_OPENED: 'board_share_panel_opened',
+  BOARD_SHARE_PANEL_CLOSED: 'board_share_panel_closed',
+  BOARD_SHARE_REQUESTED: 'board_share_requested',
+  BOARD_SHARE_CREATED: 'board_share_created',
+  BOARD_SHARE_COPIED: 'board_share_copied',
+  BOARD_SHARE_OPENED: 'board_share_opened',
+  BOARD_SHARE_FAILED: 'board_share_failed',
+
   STAMP_SHARE_CREATED: 'stamp_share_created',
   STAMP_SHARE_COPIED: 'stamp_share_copied',
   STAMP_SHARE_OPENED: 'stamp_share_opened',
