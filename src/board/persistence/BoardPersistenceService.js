@@ -141,6 +141,17 @@ export class BoardPersistenceService {
     this._onActiveBoardChanged({ id: this.boardId, title: this.title })
   }
 
+  // Commit active-record identity only after the canvas transition succeeds.
+  _activateRecord(record, title = record.title) {
+    this.boardId = record.id
+    this.revision = boardRevision(record)
+    this._conflicted = false
+    this.title = title
+    this.changeVersion = 0
+    this._persistedChangeVersion = 0
+    this._writeActiveBoardId(record.id)
+  }
+
   _readActiveBoardId() {
     try {
       return this._sessionStorage?.getItem?.(ACTIVE_BOARD_ID_KEY) || null
@@ -366,13 +377,7 @@ export class BoardPersistenceService {
       const record = createBoardRecord({ title: document.title, document })
       await this._repository.create(record)
       if (token) this._assertTransition(token)
-      this.boardId = record.id
-      this.revision = record.revision
-      this.title = record.title
-      this.changeVersion = 0
-      this._persistedChangeVersion = 0
-      this._conflicted = false
-      this._writeActiveBoardId(record.id)
+      this._activateRecord(record)
       this._setStatus({ state: SAVE_STATES.CLEAN, error: null, errorCode: null,
         lastSavedAt: record.updatedAt })
       this._reportActiveBoard()
@@ -433,13 +438,7 @@ export class BoardPersistenceService {
       throw error
     }
 
-    this.boardId = record.id
-    this.revision = record.revision
-    this._conflicted = false
-    this.title = record.title
-    this.changeVersion = 0
-    this._persistedChangeVersion = 0
-    this._writeActiveBoardId(record.id)
+    this._activateRecord(record)
     this._setStatus({ state: SAVE_STATES.CLEAN, lastSavedAt: record.updatedAt, error: null })
     this._reportActiveBoard()
     return record
@@ -717,13 +716,7 @@ export class BoardPersistenceService {
       throw error
     }
 
-    this.boardId = record.id
-    this.revision = boardRevision(record)
-    this._conflicted = false
-    this.title = record.title || record.document.title || 'Untitled board'
-    this.changeVersion = 0
-    this._persistedChangeVersion = 0
-    this._writeActiveBoardId(record.id)
+    this._activateRecord(record, record.title || record.document.title || 'Untitled board')
     if (this._readRecoveryBoardId() === record.id) {
       this._writeRecoveryBoardId(null)
       this._setStatus({ recoveryFailure: null })
@@ -762,13 +755,7 @@ export class BoardPersistenceService {
     })
     await this._repository.create(record)
     if (token) this._assertTransition(token)
-    this.boardId = record.id
-    this.revision = record.revision
-    this._conflicted = false
-    this.title = record.title
-    this.changeVersion = 0
-    this._persistedChangeVersion = 0
-    this._writeActiveBoardId(record.id)
+    this._activateRecord(record)
     this._setStatus({
       state: SAVE_STATES.CLEAN,
       lastSavedAt: record.updatedAt,
