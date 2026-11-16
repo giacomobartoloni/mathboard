@@ -122,12 +122,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
         <div class="legal-links">
           <a href="/resources/" @click="onSiteLink($event, '/resources/')">Resources</a>
-          <span class="separator" aria-hidden="true">·</span>
           <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" @click="onSiteLink($event, '/privacy-policy.html')">Privacy Policy</a>
-          <template v-if="!desktopRuntime">
-            <span class="separator" aria-hidden="true">·</span>
-            <a href="https://www.simpleanalytics.com/" target="_blank" rel="noopener noreferrer">Analytics by Simple Analytics</a>
-          </template>
+          <a v-if="!desktopRuntime" href="https://www.simpleanalytics.com/" target="_blank" rel="noopener noreferrer">
+            <svg class="analytics-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M1.019 13.019h3.849V24h-3.85zm8.943-6.68h3.85V24h-3.85zM19.132 0h3.85v24h-3.85z" />
+            </svg>
+            Simple Analytics
+          </a>
         </div>
       </div>
     </div>
@@ -580,14 +581,22 @@ export default {
 }
 
 .legal-links {
-  text-align: center;
-  padding: 15px 20px 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 15px 0 0;
   margin-top: 15px;
   border-top: 1px solid var(--border-color);
   font-size: 13px;
 }
 
 .legal-links a {
+  display: inline-flex;
+  gap: 5px;
+  padding: 2px 0;
+  white-space: nowrap;
   color: var(--text-muted);
   text-decoration: none;
   transition: color 0.2s ease;
@@ -598,8 +607,10 @@ export default {
   text-decoration: underline;
 }
 
-.legal-links .separator {
-  margin: 0 10px;
-  color: #ccc;
+.analytics-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: #ff4f64;
 }
 </style>
