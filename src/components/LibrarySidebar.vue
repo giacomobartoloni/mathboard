@@ -65,8 +65,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
           @click="openImportPicker">
           <font-awesome-icon :icon="['fas', 'file-arrow-up']" aria-hidden="true" />
         </button>
+        <!-- Do not filter by accept: native pickers may disable unknown .mathboard extensions. -->
         <input ref="importFileInput" class="board-library-file-input" type="file"
-          accept=".mathboard,.mathboard.json" tabindex="-1" @change="onImportFileChange">
+          tabindex="-1" @change="onImportFileChange">
         <label for="board-library-search-input">Find or create a board</label>
         <div class="board-library-search-field">
           <input id="board-library-search-input" v-model="boardQuery" type="text" inputmode="search"

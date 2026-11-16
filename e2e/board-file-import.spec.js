@@ -33,6 +33,8 @@ test('Import button opens native picker and creates an independent local board',
   expect(searchBox.x).toBeGreaterThan(importBox.x + importBox.width)
   expect(searchBox.width).toBeGreaterThan(80)
 
+  // The native picker must not filter out .mathboard custom extensions.
+  await expect(panel.locator('input[type="file"]')).not.toHaveAttribute('accept')
   const chooserEvent = page.waitForEvent('filechooser')
   await importButton.click()
   const chooser = await chooserEvent
