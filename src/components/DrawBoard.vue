@@ -482,6 +482,12 @@ export default {
       if (!path) return;
       path.mathboardInkMode = this.inkMode;
     },
+    configureObjectHitTesting({ target }) {
+      // Preserve bounding-box editing for text, formulas and composite objects.
+      if (this._boardObjectPolicy.isPath(target) || this._boardObjectPolicy.isShape(target)) {
+        target.perPixelTargetFind = true;
+      }
+    },
     applyBrushColor() {
       if (this.canvas?.freeDrawingBrush) {
         this.canvas.freeDrawingBrush.color = this.activeInk;
@@ -1439,6 +1445,7 @@ export default {
       // The command is the finished path, recorded once "path:created" fires.
       this.canvas.on('before:path:created', this.markPathInk);
       this.canvas.on('path:created', this.onPathCreated);
+      this.canvas.on('object:added', this.configureObjectHitTesting);
       this.canvas.on('before:transform', this.onBeforeTransform);
       this.canvas.on('object:modified', this.onObjectModified);
       this.canvas.on('text:editing:entered', this.onTextEditingEntered);
@@ -1481,7 +1488,6 @@ export default {
         ...this.definedProps,
         // Select only fully enclosed objects; clicks should follow visible ink.
         selectionFullyContained: true,
-        perPixelTargetFind: true,
         targetFindTolerance: 4,
       }));
       
@@ -1533,6 +1539,7 @@ export default {
       this.applySelectionChrome();
       this.createEvents();
       this.setupEventListeners();
+      this.canvas.forEachObject((target) => this.configureObjectHitTesting({ target }));
       this.applyToolCursor(this.selectedTool);
     },
   },
@@ -1595,6 +1602,7 @@ export default {
     });
     
     this.canvas.off('before:path:created', this.markPathInk);
+    this.canvas.off('object:added', this.configureObjectHitTesting);
     this.canvas.off('path:created', this.onPathCreated);
     this.canvas.off('before:transform', this.onBeforeTransform);
     this.canvas.off('object:modified', this.onObjectModified);
