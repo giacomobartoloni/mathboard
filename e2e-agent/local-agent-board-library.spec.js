@@ -336,7 +336,7 @@ test('Anchored icon-only actions popover supports mouse, keyboard and confirmed 
   await expect(popover).toBeVisible()
   await expect(deleteAction).toBeFocused()
   await expect(deleteAction).toHaveText('')
-  await expect(deleteAction).toHaveAttribute('aria-label', `Delete ${active.title}`)
+  await expect(deleteAction).toHaveAttribute('aria-label', `Move to Trash ${active.title}`)
   expect((await row.evaluate(element => element.getBoundingClientRect().height))).toBe(rowHeight)
   expect((await sibling.boundingBox()).y).toBe(siblingY)
   const popupBox = await popover.boundingBox()

@@ -49,6 +49,7 @@ export class BoardWorkspaceService {
       updatedAt: record.updatedAt || null,
       isActive: record.id === this._persistence.boardId,
       ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
+      ...(record.deletedAt ? { deletedAt: record.deletedAt } : {}),
     }
   }
 
