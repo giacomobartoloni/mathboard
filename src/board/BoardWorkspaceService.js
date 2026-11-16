@@ -72,12 +72,24 @@ export class BoardWorkspaceService {
     return this._run(() => this._persistence.listArchivedBoards(), { signal })
   }
 
+  listTrash({ signal } = {}) {
+    return this._run(() => this._persistence.listTrashedBoards(), { signal })
+  }
+
   archive({ boardId } = {}, { signal } = {}) {
     return this._run(async () => this._summary(await this._persistence.archiveBoard(boardId)), { signal })
   }
 
   unarchive({ boardId } = {}, { signal } = {}) {
     return this._run(async () => this._summary(await this._persistence.unarchiveBoard(boardId)), { signal })
+  }
+
+  trash({ boardId } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.trashBoard(boardId)), { signal })
+  }
+
+  restore({ boardId } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.restoreTrashedBoard(boardId)), { signal })
   }
 
   delete({ boardId, confirm } = {}, { signal } = {}) {

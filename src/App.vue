@@ -82,7 +82,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     </div>
     <Transition name="library-sidebar" @after-leave="restoreLibrarySidebarFocus">
-      <LibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
+      <LibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList" :trashed-boards="trashList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
         :width="librarySidebarWidth" :min-width="librarySidebarMinWidth" :max-width="librarySidebarMaxWidth"
@@ -295,7 +295,7 @@ export default {
       }
     }
     const {
-      boardList, archivedList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
+      boardList, archivedList, trashList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
       openBoardLibrary, onBoardLibraryAction, onActiveBoardChanged, onBoardLibraryBrowse,
       onSidebarClosed, onSidebarModeChanged,
     } = useBoardLibrary({
@@ -878,6 +878,7 @@ export default {
       boardLibraryTriggerRef,
       boardList,
       archivedList,
+      trashList,
       boardLibraryBusy,
       boardLibraryLoading,
       boardLibraryError,
