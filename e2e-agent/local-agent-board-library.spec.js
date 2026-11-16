@@ -289,6 +289,22 @@ test('a failed board selection reports the error and keeps focus in the library'
   await expect(dialog.getByRole('button', { name: 'Close board library' })).toBeFocused()
 })
 
+test('Export board downloads a .mathboard file', async ({ page, request }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await expect.poll(async () => (await send(request, 'observe')).stable).toBe(true)
+  const active = (await send(request, 'boards.list')).find(board => board.isActive)
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Board library' })
+  const row = dialog.locator('.board-library-list li').filter({ hasText: active.title }).first()
+  await row.getByRole('button', { name: `More actions for ${active.title}` }).click()
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    row.getByRole('button', { name: `Export ${active.title}` }).click(),
+  ])
+  expect(download.suggestedFilename()).toBe(`${active.title}.mathboard`)
+})
+
 test('Anchored icon-only actions popover supports mouse, keyboard and confirmed Delete', async ({ page, request }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
