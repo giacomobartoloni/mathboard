@@ -124,6 +124,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
           <a href="/resources/" @click="onSiteLink($event, '/resources/')">Resources</a>
           <span class="separator" aria-hidden="true">·</span>
           <a href="/privacy-policy.html" target="_blank" rel="noopener noreferrer" @click="onSiteLink($event, '/privacy-policy.html')">Privacy Policy</a>
+          <template v-if="!desktopRuntime">
+            <span class="separator" aria-hidden="true">·</span>
+            <a href="https://www.simpleanalytics.com/" target="_blank" rel="noopener noreferrer">Analytics by Simple Analytics</a>
+          </template>
         </div>
       </div>
     </div>
@@ -175,6 +179,7 @@ export default {
       shortcutsExpanded,
       version,
       shortcutHelp,
+      desktopRuntime,
       onExternalLink,
       onSiteLink,
       openAbout,
