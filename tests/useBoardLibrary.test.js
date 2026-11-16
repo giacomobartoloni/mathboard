@@ -42,7 +42,10 @@ function harness({ mode = 'closed', boards = [], overrides = {} } = {}) {
   const workspace = {
     list: async () => boards,
     listArchived: async () => [],
+    listTrash: async () => [],
     archive: async (params) => { calls.push(['archive', params]) },
+    trash: async (params) => { calls.push(['trash', params]) },
+    restore: async (params) => { calls.push(['restore', params]) },
     rename: async (params) => { calls.push(['rename', params]) },
     unarchive: async (params) => { calls.push(['unarchive', params]) },
     open: async (params) => { calls.push(['open', params]) },
@@ -94,6 +97,27 @@ test('failed restored-board opening preserves error and records failure', async 
   assert.equal(events[0].metadata.action, 'unarchive_open')
 })
 
+test('moving an active board to Trash resets the tool and hides the overlay', async () => {
+  const { library, sidebar, calls, events, resets } = harness({
+    boards: [{ id: 'a', isActive: true }],
+  })
+  await library.openBoardLibrary()
+  await library.onBoardLibraryAction({ action: 'trash', boardId: 'a' })
+  assert.deepEqual(calls, [['trash', { boardId: 'a' }]])
+  assert.equal(resets(), 1)
+  assert.equal(sidebar.mode.value, 'closed')
+  assert.equal(events[1].metadata.action, 'trash')
+})
+
+test('restoring from Trash keeps the library open and records a privacy-safe action', async () => {
+  const { library, sidebar, calls, events, resets } = harness({ mode: 'overlay' })
+  await library.onBoardLibraryAction({ action: 'restore', boardId: 'a' })
+  assert.deepEqual(calls, [['restore', { boardId: 'a' }]])
+  assert.equal(resets(), 0)
+  assert.equal(sidebar.mode.value, 'overlay')
+  assert.equal(events[0].metadata.action, 'restore')
+  assert.equal(events[0].metadata.outcome, 'success')
+})
 const sampleFile = (name, document) => {
   const body = JSON.stringify(document)
   return { name, size: new TextEncoder().encode(body).length, text: async () => body }

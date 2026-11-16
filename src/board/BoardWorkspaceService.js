@@ -49,6 +49,7 @@ export class BoardWorkspaceService {
       updatedAt: record.updatedAt || null,
       isActive: record.id === this._persistence.boardId,
       ...(record.archivedAt ? { archivedAt: record.archivedAt } : {}),
+      ...(record.deletedAt ? { deletedAt: record.deletedAt } : {}),
     }
   }
 
@@ -72,6 +73,10 @@ export class BoardWorkspaceService {
     return this._run(() => this._persistence.listArchivedBoards(), { signal })
   }
 
+  listTrash({ signal } = {}) {
+    return this._run(() => this._persistence.listTrashedBoards(), { signal })
+  }
+
   archive({ boardId } = {}, { signal } = {}) {
     return this._run(async () => this._summary(await this._persistence.archiveBoard(boardId)), { signal })
   }
@@ -86,6 +91,14 @@ export class BoardWorkspaceService {
 
   importBoard({ document } = {}, { signal } = {}) {
     return this._run(async () => this._summary(await this._persistence.importSharedBoard(document)), { signal })
+  }
+
+  trash({ boardId } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.trashBoard(boardId)), { signal })
+  }
+
+  restore({ boardId } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.restoreTrashedBoard(boardId)), { signal })
   }
 
   delete({ boardId, confirm } = {}, { signal } = {}) {
