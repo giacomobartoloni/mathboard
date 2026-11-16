@@ -149,11 +149,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                   <span>Archive</span>
                 </button>
               </template>
+              <button :id="'export-action-' + board.id" class="board-library-more-option" type="button"
+                :disabled="busy" :aria-label="'Export ' + board.title" :title="'Export ' + board.title"
+                @click="hideOpenPopover(); submitAction('export', board.id)">
+                <font-awesome-icon :icon="['fas', 'download']" aria-hidden="true" />
+                <span>Export board</span>
+              </button>
               <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
                 :disabled="busy" :aria-label="'Delete ' + board.title" :title="'Delete ' + board.title"
                 @click="beginDelete(board)">
                 <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
-                <span v-if="isCompact">Delete</span>
+                <span>Delete board</span>
               </button>
             </div>
 
@@ -356,7 +362,7 @@ export default {
         popover.style.top = Math.max(8, top) + 'px'
         popover.style.left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8)) + 'px'
       }
-      const firstAction = isCompact.value && !showArchived.value ? 'rename-menu-action-' : 'delete-action-'
+      const firstAction = isCompact.value && !showArchived.value ? 'rename-menu-action-' : 'export-action-'
       document.getElementById(firstAction + boardId)?.focus()
     }
     const createBoard = () => {
@@ -720,10 +726,11 @@ export default {
 .board-library-more-delete {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px;
   border: 0;
   border-radius: 6px;
   background: transparent;

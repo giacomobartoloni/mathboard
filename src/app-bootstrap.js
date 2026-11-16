@@ -48,6 +48,7 @@ import { faCompress } from '@fortawesome/free-solid-svg-icons'
 import { faCopy } from '@fortawesome/free-solid-svg-icons'
 import { faTrash } from '@fortawesome/free-solid-svg-icons'
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
+import { faDownload } from '@fortawesome/free-solid-svg-icons'
 import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 import { faObjectGroup } from '@fortawesome/free-solid-svg-icons'
 import { faObjectUngroup } from '@fortawesome/free-solid-svg-icons'
@@ -87,6 +88,7 @@ library.add(faCompress)
 library.add(faCopy)
 library.add(faTrash)
 library.add(faEllipsis)
+library.add(faDownload)
 library.add(faPenToSquare)
 library.add(faObjectGroup)
 library.add(faObjectUngroup)
@@ -102,7 +104,10 @@ library.add(faGithub)
  * @param {{ services?: ReturnType<typeof createMathBoardServices> }} [options]
  */
 export function mountMathBoard(options = {}) {
-  initializeAnalytics()
+  // Never expose a share decryption key to the third-party pageview script.
+  // Shared links initialize analytics only after their URL fragment is removed.
+  const incomingShare = new URLSearchParams(window.location.hash.slice(1)).has('b')
+  if (!incomingShare) initializeAnalytics()
 
   const services = options.services ?? createMathBoardServices()
 
