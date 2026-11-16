@@ -74,13 +74,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
       <p v-if="error" class="board-library-error" role="alert">{{ error }}</p>
 
       <div class="board-library-tabs" role="group" aria-label="Board views">
-        <button type="button" :class="{ active: !showArchived }" :aria-pressed="!showArchived"
-          :disabled="busy || loading" @click="selectView(false)">Recent ({{ boards.length }})</button>
+        <button type="button" :class="{ active: view === 'recent' }" :aria-pressed="view === 'recent'"
+          :disabled="busy || loading" @click="selectView('recent')">Recent ({{ boards.length }})</button>
         <button type="button" :class="{ active: showArchived }" :aria-pressed="showArchived"
-          :disabled="busy || loading" @click="selectView(true)">Archived ({{ archivedBoards.length }})</button>
+          :disabled="busy || loading" @click="selectView('archived')">Archived ({{ archivedBoards.length }})</button>
+        <button type="button" :class="{ active: showTrash }" :aria-pressed="showTrash"
+          :disabled="busy || loading" @click="selectView('trash')">Trash ({{ trashedBoards.length }})</button>
       </div>
 
-      <div class="board-library-content" :class="showArchived ? 'board-library-trash' : 'board-library-recent'"
+      <div class="board-library-content" :class="showTrash ? 'board-library-trash' : showArchived ? 'board-library-archived' : 'board-library-recent'"
         :aria-busy="loading" @scroll="hideOpenPopover">
         <div v-if="loading" class="board-library-loading" role="status" aria-label="Loading boards">
           <div v-for="index in 3" :key="index" class="board-library-loading-row" aria-hidden="true">
@@ -90,31 +92,41 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <ul v-else-if="visibleBoards.length" class="board-library-list">
           <li v-for="board in visibleBoards" :key="board.id" :class="{ 'is-active': board.isActive }">
             <div class="board-library-row">
-              <button class="board-library-glyph" type="button" :disabled="busy"
+              <button class="board-library-glyph" type="button" :disabled="busy || showTrash"
                 :aria-label="boardSelectionLabel(board)" :title="boardSelectionLabel(board)"
                 @click="selectBoard(board)">
                 <font-awesome-icon :icon="['fas', 'chalkboard']" aria-hidden="true" />
               </button>
               <div class="board-library-details">
                 <span v-if="board.isActive" class="board-library-current-name" :title="board.title">{{ board.title }}</span>
-                <button v-else-if="!showArchived" type="button" class="board-library-open" :title="board.title"
+                <button v-else-if="!showArchived && !showTrash" type="button" class="board-library-open" :title="board.title"
                   :disabled="busy" @click="selectBoard(board)">{{ board.title }}</button>
                 <span v-else class="board-library-current-name" :title="board.title">{{ board.title }}</span>
                 <span class="board-library-meta">
-                  <span v-if="board.isActive" class="board-library-kind">Current board</span>
-                  <span v-if="board.isActive && board.updatedAt" aria-hidden="true"> · </span>
-                  <time v-if="board.updatedAt" :datetime="board.updatedAt">{{ formatBoardDate(board.updatedAt) }}</time>
-                  <span v-else-if="!board.isActive">Saved locally</span>
+                  <template v-if="showTrash">
+                    Deleted <time :datetime="board.deletedAt">{{ formatBoardDate(board.deletedAt) }}</time>
+                  </template>
+                  <template v-else>
+                    <span v-if="board.isActive" class="board-library-kind">Current board</span>
+                    <span v-if="board.isActive && board.updatedAt" aria-hidden="true"> · </span>
+                    <time v-if="board.updatedAt" :datetime="board.updatedAt">{{ formatBoardDate(board.updatedAt) }}</time>
+                    <span v-else-if="!board.isActive">Saved locally</span>
+                  </template>
                 </span>
               </div>
               <div class="board-library-row-actions" role="group" :aria-label="'Actions for ' + board.title">
-                <button v-if="!isCompact" :id="'rename-action-' + board.id" type="button" :disabled="busy || showArchived"
+                <button v-if="!isCompact && !showTrash" :id="'rename-action-' + board.id" type="button" :disabled="busy || showArchived"
                   :aria-label="'Rename ' + board.title + (showArchived ? ' (unarchive first)' : '')"
                   :title="showArchived ? 'Unarchive before renaming' : 'Rename ' + board.title"
                   @click="beginRename(board)">
                   <font-awesome-icon :icon="['fas', 'pen-to-square']" aria-hidden="true" />
                 </button>
-                <button v-if="showArchived" type="button" :disabled="busy"
+                <button v-if="showTrash" type="button" :disabled="busy"
+                  :aria-label="'Restore ' + board.title" :title="'Restore ' + board.title"
+                  @click="submitAction('restore', board.id)">
+                  <font-awesome-icon :icon="['fas', 'undo']" aria-hidden="true" />
+                </button>
+                <button v-else-if="showArchived" type="button" :disabled="busy"
                   :aria-label="'Unarchive ' + board.title" :title="'Unarchive ' + board.title"
                   @click="submitAction('unarchive', board.id)">
                   <font-awesome-icon :icon="['fas', 'undo']" aria-hidden="true" />
@@ -136,7 +148,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
               :class="{ 'is-compact': isCompact }" popover="auto"
               role="group" :aria-label="'More actions for ' + board.title"
               @toggle="onMoreMenuToggle($event, board.id)">
-              <template v-if="isCompact && !showArchived">
+              <template v-if="isCompact && view === 'recent'">
                 <button :id="'rename-menu-action-' + board.id" class="board-library-more-option" type="button"
                   :disabled="busy" :aria-label="'Rename ' + board.title" @click="beginRename(board)">
                   <font-awesome-icon :icon="['fas', 'pen-to-square']" aria-hidden="true" />
@@ -150,10 +162,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
                 </button>
               </template>
               <button :id="'delete-action-' + board.id" class="board-library-more-delete" type="button"
-                :disabled="busy" :aria-label="'Delete ' + board.title" :title="'Delete ' + board.title"
+                :disabled="busy" :aria-label="(showTrash ? 'Permanently delete ' : 'Move to Trash ') + board.title"
+                :title="(showTrash ? 'Permanently delete ' : 'Move to Trash ') + board.title"
                 @click="beginDelete(board)">
                 <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
-                <span v-if="isCompact">Delete</span>
+                <span v-if="isCompact">{{ showTrash ? 'Permanently delete' : 'Move to Trash' }}</span>
               </button>
             </div>
 
@@ -169,22 +182,24 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
             <div v-if="confirmDeleteId === board.id" class="board-library-delete-confirm" role="group"
               :aria-label="'Confirm deletion of ' + board.title" @keydown.esc.stop.prevent="cancelInline(board.id)">
-              <span>Permanently delete “{{ board.title }}” from this device? This cannot be undone.</span>
+              <span v-if="showTrash">Permanently delete “{{ board.title }}” from this device? This cannot be undone.</span>
+              <span v-else>Move “{{ board.title }}” to Trash? You can restore it within 30 days.</span>
               <button :id="'confirm-delete-' + board.id" class="board-library-danger" type="button"
                 :disabled="busy" @click="submitDelete(board.id)">
-                Permanently delete
+                {{ showTrash ? 'Permanently delete' : 'Move to Trash' }}
               </button>
               <button type="button" :disabled="busy" @click="cancelInline(board.id)">Cancel</button>
             </div>
           </li>
         </ul>
         <div v-else class="board-library-empty" role="status">
-          <font-awesome-icon :icon="['fas', showArchived ? 'box-archive' : 'chalkboard']" aria-hidden="true" />
-          <strong>{{ boardQuery.trim() ? 'No matching boards' : showArchived ? 'No archived boards' : 'No saved boards yet' }}</strong>
-          <p>{{ boardQuery.trim() ? 'Try another name or use the + button beside search.' : showArchived ? 'Boards you archive will appear here.' : 'Your current board will appear after its first edit.' }}</p>
+          <font-awesome-icon :icon="['fas', showTrash ? 'trash' : showArchived ? 'box-archive' : 'chalkboard']" aria-hidden="true" />
+          <strong>{{ boardQuery.trim() ? 'No matching boards' : showTrash ? 'Trash is empty' : showArchived ? 'No archived boards' : 'No saved boards yet' }}</strong>
+          <p>{{ boardQuery.trim() ? 'Try another name or use the + button beside search.' : showTrash ? 'Deleted boards remain here for 30 days.' : showArchived ? 'Boards you archive will appear here.' : 'Your current board will appear after its first edit.' }}</p>
         </div>
       </div>
       <div class="board-library-footer">
+        <p v-if="showTrash" class="board-library-trash-notice">Boards in Trash are permanently deleted after 30 days.</p>
         <BoardStorageNotice :is-desktop="isDesktop" />
       </div>
     </aside>
@@ -208,6 +223,7 @@ export default {
     resizable: { type: Boolean, default: false },
     boards: { type: Array, default: () => [] },
     archivedBoards: { type: Array, default: () => [] },
+    trashedBoards: { type: Array, default: () => [] },
     busy: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
     error: { type: String, default: null },
@@ -219,7 +235,9 @@ export default {
     const renameId = ref(null)
     const renameTitle = ref('')
     const confirmDeleteId = ref(null)
-    const showArchived = ref(false)
+    const view = ref('recent')
+    const showArchived = computed(() => view.value === 'archived')
+    const showTrash = computed(() => view.value === 'trash')
     const closeButton = ref(null)
     const sidebarRef = ref(null)
     // Measure the actual panel: desktop window width does not indicate sidebar width.
@@ -257,7 +275,7 @@ export default {
     }
     const pendingFocus = ref(null)
     const visibleBoards = computed(() => {
-      const boards = showArchived.value ? props.archivedBoards : props.boards
+      const boards = showTrash.value ? props.trashedBoards : showArchived.value ? props.archivedBoards : props.boards
       const query = boardQuery.value.trim().toLocaleLowerCase()
       return query ? boards.filter(board => board.title.toLocaleLowerCase().includes(query)) : boards
     })
@@ -322,9 +340,9 @@ export default {
         emit('browse', 'search')
       }
     }
-    const selectView = (archived) => {
-      if (showArchived.value !== archived) emit('browse', archived ? 'archived' : 'recent')
-      showArchived.value = archived
+    const selectView = (nextView) => {
+      if (view.value !== nextView) emit('browse', nextView)
+      view.value = nextView
       renameId.value = null
       confirmDeleteId.value = null
     }
@@ -363,10 +381,11 @@ export default {
       emit('action', { action: 'create', title: boardQuery.value.trim() || undefined })
     }
     const boardSelectionLabel = (board) => {
-      const action = board.isActive ? 'Continue with' : showArchived.value ? 'Unarchive and open' : 'Open'
+      const action = showTrash.value ? 'Deleted board' : board.isActive ? 'Continue with' : showArchived.value ? 'Unarchive and open' : 'Open'
       return `${action} ${board.title}`
     }
     const selectBoard = (board) => {
+      if (showTrash.value) return
       if (board.isActive) {
         if (!props.pinned) emit('close', 'board_action')
       }
@@ -406,7 +425,7 @@ export default {
     const submitDelete = (boardId) => {
       confirmDeleteId.value = null
       awaitActionFocus('close')
-      emit('action', { action: 'delete', boardId })
+      emit('action', { action: showTrash.value ? 'delete' : 'trash', boardId })
     }
     const submitRename = (boardId) => {
       if (!renameTitle.value.trim()) return
@@ -414,7 +433,7 @@ export default {
       emit('action', { action: 'rename', boardId, title: renameTitle.value.trim() })
       renameId.value = null
     }
-    return { boardQuery, renameId, renameTitle, confirmDeleteId, showArchived, isCompact, closeButton, sidebarRef,
+    return { boardQuery, renameId, renameTitle, confirmDeleteId, view, showArchived, showTrash, isCompact, closeButton, sidebarRef,
       visibleBoards, createLabel, formatBoardDate, selectView, createBoard, boardSelectionLabel, selectBoard, submitAction,
       submitRename, beginRename, beginDelete, cancelInline, submitDelete, onSearchInput, trapTab,
       startResize, moveResize, stopResize, resizeWithKeyboard,
@@ -628,9 +647,10 @@ export default {
   box-shadow: inset 0 0 0 1px var(--border-color);
 }
 .board-library-footer { flex: none; padding: 10px 20px 14px; border-top: 1px solid var(--border-color); }
+.board-library-trash-notice { margin: 0 0 10px; color: var(--text-secondary); font-size: 12px; line-height: 1.4; }
 .board-library-tabs {
   display: flex;
-  gap: 18px;
+  gap: 12px;
   padding: 0 20px;
   border-bottom: 1px solid var(--border-color);
 }
