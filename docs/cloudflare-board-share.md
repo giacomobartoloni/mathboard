@@ -8,6 +8,22 @@ MathBoard is already deployed as a Cloudflare Worker with static assets. The exi
 
 The Worker receives opaque ciphertext only. The Workers Rate Limiting binding protects POST uploads, not GET reads, so multiple classroom recipients behind one IP are not blocked by the small upload quota. The browser generates a fresh AES-256-GCM key, compresses and encrypts a validated BoardDocument, and puts the key in the `#b=<opaque-id>,<key>` URL fragment. Anyone with the complete link can decrypt its contents. Link recipients receive independent editable local copies. Existing `#s=` selection Stamp links remain local URL transfers.
 
+## Test sharing locally with Wrangler (without a Cloudflare account)
+
+Running `npm run dev` starts **Vite only**. It does not serve the Worker `/api/shares` route, so pressing **Get shareable link** against `localhost:5173` cannot upload anything. Do not mistake this for a cryptography failure.
+
+For a self-contained local smoke test, use the configured Worker and Miniflare's simulated private R2 storage:
+
+```sh
+npm ci
+npm run build
+npx wrangler dev --port 8787
+```
+
+Open **the address Wrangler prints** (typically `http://localhost:8787`), not the Vite dev port. Click **Share → Get shareable link**. Open the generated local link in another browser tab to verify the independent board import. The local link is **not externally shareable**: it points to your local Worker. Local R2 data is isolated from production and is persisted by Wrangler under `.wrangler/state`. These commands have not been run as part of the Cloudflare remote deployment checks.
+
+For actual internet-accessible links, configure the Cloudflare resources and deploy the Worker as described below. Never point a development Worker at the production R2 bucket just to make local testing work. <Cite> is not required in repository documentation; see https://developers.cloudflare.com/r2/local-development/.
+
 ## Cloudflare account setup — required before deployment
 
 1. Create a **private R2 bucket** named `mathboard-board-shares`. For example, in the target account run `npx wrangler r2 bucket create mathboard-board-shares` or create the bucket in the dashboard.

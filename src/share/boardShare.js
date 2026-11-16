@@ -154,13 +154,26 @@ export async function createBoardShare(document, { desktop = false } = {}) {
     throw new BoardShareError('upload', 'Could not connect to share storage.')
   }
   if (!response.ok) {
-    throw new BoardShareError('upload', response.status === 413
-      ? 'This board is too large to share as a link. Export a file instead.'
-      : 'Could not upload this board. Please retry.')
+    const messages = {
+      403: 'Board sharing was denied by the server. Check the app origin.',
+      404: 'Board sharing is not available on this server. Run MathBoard through its Cloudflare Worker.',
+      413: 'This board is too large to share as a link. Export a file instead.',
+      415: 'The share service rejected this request. Refresh MathBoard and try again.',
+      429: 'Too many share attempts. Try again later.',
+      503: 'Board sharing is unavailable. Check the Cloudflare Worker and R2 configuration.',
+    }
+    const message = messages[response.status]
+      || (response.status >= 500
+        ? 'The share service is temporarily unavailable. Try again later.'
+        : 'Could not upload this board. Please retry.')
+    throw new BoardShareError('upload', message)
   }
   let body
   try { body = await response.json() }
-  catch { throw new BoardShareError('upload', 'Share service returned an invalid response.') }
+  catch {
+    throw new BoardShareError('upload',
+      'The share service is not responding correctly. Run MathBoard through its Cloudflare Worker.')
+  }
   if (!ID_PATTERN.test(body?.id || '')) {
     throw new BoardShareError('upload', 'Share service returned an invalid link.')
   }

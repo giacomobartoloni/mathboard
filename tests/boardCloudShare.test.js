@@ -8,7 +8,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { webcrypto } from 'node:crypto'
 import { handleShareRequest, SHARE_TTL_MS, MAX_CIPHERTEXT_BYTES } from '../worker/index.js'
-import { encryptSharedBoard, decryptSharedBoard, BoardShareError } from '../src/share/boardShare.js'
+import { encryptSharedBoard, decryptSharedBoard, createBoardShare, BoardShareError } from '../src/share/boardShare.js'
 import { createEmptyBoardDocument } from '../src/board/persistence/schema.js'
 
 if (!globalThis.crypto) globalThis.crypto = webcrypto
@@ -75,4 +75,51 @@ test('Worker rejects oversized, malformed, cross-origin and missing shares', asy
   assert.equal((await handleShareRequest(new Request(endpoint, {
     method: 'POST', headers, body: new Uint8Array(40),
   }), env)).status, 429)
+})
+
+test('share upload surfaces actionable API and configuration errors without exposing board data', async () => {
+  const originalWindow = globalThis.window
+  const originalFetch = globalThis.fetch
+  globalThis.window = { location: { origin: 'http://localhost:5173', pathname: '/' } }
+  try {
+    const document = createEmptyBoardDocument('Private class lesson')
+    const expected = [
+      [403, 'denied by the server'],
+      [404, 'not available on this server'],
+      [413, 'too large'],
+      [429, 'Too many share attempts'],
+      [503, 'Cloudflare Worker and R2'],
+      [502, 'temporarily unavailable'],
+    ]
+    for (const [status, phrase] of expected) {
+      globalThis.fetch = async () => new Response(null, { status })
+      await assert.rejects(createBoardShare(document), error => (
+        error instanceof BoardShareError
+        && error.stage === 'upload'
+        && error.message.includes(phrase)
+        && !error.message.includes(document.title)
+      ))
+    }
+    // Vite can respond with HTML to an unhandled API route, rather than JSON.
+    globalThis.fetch = async () => new Response('<html>Not an API</html>', {
+      status: 200, headers: { 'Content-Type': 'text/html' },
+    })
+    await assert.rejects(createBoardShare(document), error => (
+      error instanceof BoardShareError
+      && error.stage === 'upload'
+      && error.message.includes('Run MathBoard through its Cloudflare Worker')
+    ))
+  } finally {
+    globalThis.fetch = originalFetch
+    if (originalWindow === undefined) delete globalThis.window
+    else globalThis.window = originalWindow
+  }
+})
+
+test('Worker returns unavailable if Cloudflare bindings have not been configured', async () => {
+  const response = await handleShareRequest(new Request(endpoint, {
+    method: 'POST', headers, body: new Uint8Array(40),
+  }), {})
+  assert.equal(response.status, 503)
+  assert.deepEqual(await response.json(), { error: 'unavailable' })
 })
