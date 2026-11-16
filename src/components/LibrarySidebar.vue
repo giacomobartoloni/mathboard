@@ -63,7 +63,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <button ref="importButton" class="board-library-create-button" type="button"
           :disabled="busy || loading" aria-label="Import board" title="Import board"
           @click="openImportPicker">
-          <font-awesome-icon :icon="['fas', 'file-import']" aria-hidden="true" />
+          <font-awesome-icon :icon="['fas', 'file-arrow-up']" aria-hidden="true" />
         </button>
         <input ref="importFileInput" class="board-library-file-input" type="file"
           accept=".mathboard,.mathboard.json" tabindex="-1" @change="onImportFileChange">
@@ -204,7 +204,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
         <BoardStorageNotice :is-desktop="isDesktop" />
       </div>
       <div v-if="importDragActive" class="board-library-import-overlay" aria-hidden="true">
-        <font-awesome-icon :icon="['fas', 'file-import']" />
+        <font-awesome-icon :icon="['fas', 'file-arrow-up']" />
         <span>Drop a .mathboard file to import</span>
       </div>
     </aside>
