@@ -27,7 +27,24 @@
       }
     }
   ],
-  "previews": {},
+  "previews": {
+    "r2_buckets": [
+      {
+        "binding": "BOARD_SHARES",
+        "bucket_name": "mathboard-board-shares-preview"
+      }
+    ],
+    "ratelimits": [
+      {
+        "name": "SHARE_RATE_LIMITER",
+        "namespace_id": "24017",
+        "simple": {
+          "limit": 30,
+          "period": 60
+        }
+      }
+    ]
+  },
   "observability": {
     "enabled": true,
     "logs": {

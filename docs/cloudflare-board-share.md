@@ -62,6 +62,46 @@ configuration require a deploy. Vite-only local development does not
 execute the Worker and produces no Cloudflare log events.
 Review sampling later based on log volume and account cost.
 
+## Preview branch: isolated bindings
+
+The feature branch uses **Cloudflare Worker Previews**. These previews do not
+inherit production bindings. Previously, `previews: {}` caused
+`board_share_failure: missing_bindings` and HTTP 503 even after the production
+R2 bucket had been created.
+
+Production remains bound to `mathboard-board-shares` and rate-limit namespace
+`24016`. Preview uses a **different private bucket**
+`mathboard-board-shares-preview` and rate-limit namespace `24017`, both
+explicitly configured under `previews` in `wrangler.json`.
+
+Create the preview bucket **once** in the same Cloudflare account and add the
+same 90-day lifecycle rule for objects under `boards/`:
+
+```sh
+npx wrangler r2 bucket create mathboard-board-shares-preview
+npx wrangler r2 bucket lifecycle add mathboard-board-shares-preview expire-shares-90d boards/ --expire-days 90
+npx wrangler r2 bucket lifecycle list mathboard-board-shares-preview
+```
+
+Do not recreate the existing production bucket. Do not expose either bucket
+through a public R2 URL. If the preview bucket exists already, skip the
+create command; apply/verify the lifecycle instead.
+
+After committing the preview configuration, re-run the Cloudflare preview
+deployment (normally performed by connected Workers Builds on a branch push;
+otherwise `npx wrangler preview`). Verify both bindings are present under the
+Preview deployment settings, then retry sharing. A successful POST returns
+201, while the Share panel shows a link hosted on the preview origin.
+
+The private preview bucket can be shared by different feature previews, so
+it is isolated from production **but not from other preview branches**. This is
+sufficient for development testing. Test data should not be considered
+permanent and preview share links should not be distributed as permanent URLs.
+
+References:
+- https://developers.cloudflare.com/workers/previews/configuration/
+- https://developers.cloudflare.com/workers/previews/resources/
+
 ## Cloudflare account setup — required before deployment
 
 1. Create a **private R2 bucket** named `mathboard-board-shares`. For example, in the target account run `npx wrangler r2 bucket create mathboard-board-shares` or create the bucket in the dashboard.
