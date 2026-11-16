@@ -22,7 +22,7 @@ npx wrangler dev --port 8787
 
 Open **the address Wrangler prints** (typically `http://localhost:8787`), not the Vite dev port. Click **Share → Get shareable link**. Open the generated local link in another browser tab to verify the independent board import. The local link is **not externally shareable**: it points to your local Worker. Local R2 data is isolated from production and is persisted by Wrangler under `.wrangler/state`. These commands have not been run as part of the Cloudflare remote deployment checks.
 
-For actual internet-accessible links, configure the Cloudflare resources and deploy the Worker as described below. Never point a development Worker at the production R2 bucket just to make local testing work. <Cite> is not required in repository documentation; see https://developers.cloudflare.com/r2/local-development/.
+For actual internet-accessible links, configure the Cloudflare resources and deploy the Worker as described below. Never point a development Worker at the production R2 bucket just to make local testing work. See https://developers.cloudflare.com/r2/local-development/ for the local R2 behavior.
 
 ## Cloudflare account setup — required before deployment
 
