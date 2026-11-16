@@ -374,7 +374,7 @@ export default {
         popover.style.top = Math.max(8, top) + 'px'
         popover.style.left = Math.max(8, Math.min(anchor.right - width, window.innerWidth - width - 8)) + 'px'
       }
-      const firstAction = isCompact.value && !showArchived.value ? 'rename-menu-action-' : 'delete-action-'
+      const firstAction = isCompact.value && view.value === 'recent' ? 'rename-menu-action-' : 'delete-action-'
       document.getElementById(firstAction + boardId)?.focus()
     }
     const createBoard = () => {
