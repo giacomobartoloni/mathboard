@@ -32,6 +32,38 @@ async function viewportTransform(page) {
     .drawBoardRef.canvas.viewportTransform.slice())
 }
 
+test('board views use icon-only tabs with accessible tooltips and a right-aligned Trash', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('canvas.upper-canvas')).toBeVisible()
+  await page.getByRole('button', { name: 'Open Board library' }).click()
+
+  const tabs = page.getByRole('group', { name: 'Board views' })
+  const recent = tabs.getByRole('button', { name: 'Recent' })
+  const archived = tabs.getByRole('button', { name: 'Archived' })
+  const trashed = tabs.getByRole('button', { name: 'Trashed' })
+
+  await expect(tabs.getByRole('button')).toHaveCount(3)
+  await expect(tabs).toHaveText('')
+  for (const [button, label, icon] of [
+    [recent, 'Recent', 'clock'],
+    [archived, 'Archived', 'box-archive'],
+    [trashed, 'Trashed', 'trash'],
+  ]) {
+    await expect(button).toHaveAttribute('title', label)
+    await expect(button.locator(`svg[data-icon="${icon}"]`)).toBeVisible()
+  }
+
+  await expect(recent).toHaveAttribute('aria-pressed', 'true')
+  await archived.click()
+  await expect(archived).toHaveAttribute('aria-pressed', 'true')
+  await trashed.click()
+  await expect(trashed).toHaveAttribute('aria-pressed', 'true')
+
+  const tabsBox = await tabs.boundingBox()
+  const trashBox = await trashed.boundingBox()
+  expect(Math.abs(trashBox.x + trashBox.width - (tabsBox.x + tabsBox.width - 20))).toBeLessThan(2)
+})
+
 test('autosaved local board archive, recoverable Trash and confirmed permanent delete', async ({ page, request }) => {
   await page.goto('/')
   await expect(page.locator('canvas.upper-canvas')).toBeVisible()
@@ -71,7 +103,7 @@ test('autosaved local board archive, recoverable Trash and confirmed permanent d
   expect((await send(request, 'boards.listArchived')).some(board => board.id === created.id)).toBe(true)
   expect((await send(request, 'observe')).boardId).toBe(initial.id)
   await page.getByRole('button', { name: 'Open Board library' }).click()
-  await dialog.getByRole('button', { name: 'Archived (1)' }).click()
+  await dialog.getByRole('button', { name: 'Archived' }).click()
   const archivedItem = dialog.locator('.board-library-archived li').filter({ hasText: 'Algebra B' })
   await expect(archivedItem.getByRole('button', { name: 'Rename Algebra B (unarchive first)' })).toBeDisabled()
   await archivedItem.getByRole('button', { name: 'More actions for Algebra B' }).click()
@@ -123,11 +155,11 @@ test('autosaved local board archive, recoverable Trash and confirmed permanent d
 
   await page.getByRole('button', { name: 'Open Board library' }).click()
   const library = page.getByRole('dialog', { name: 'Board library' })
-  await library.getByRole('button', { name: 'Trash (1)' }).click()
+  await library.getByRole('button', { name: 'Trashed' }).click()
   const trashRow = library.locator('.board-library-trash li').filter({ hasText: 'Algebra B' })
   await expect(trashRow.getByRole('button', { name: 'Restore Algebra B' })).toBeVisible()
   await trashRow.getByRole('button', { name: 'Restore Algebra B' }).click()
-  await expect(library.getByRole('button', { name: 'Trash (0)' })).toBeVisible()
+  await expect(library.getByRole('button', { name: 'Trashed' })).toBeVisible()
   await library.getByRole('button', { name: /^Recent \(/ }).click()
   expect((await send(request, 'boards.list')).some(board => board.id === created.id)).toBe(true)
 
@@ -135,12 +167,12 @@ test('autosaved local board archive, recoverable Trash and confirmed permanent d
   await restoredRow.getByRole('button', { name: 'More actions for Algebra B' }).click()
   await restoredRow.getByRole('button', { name: 'Move to Trash Algebra B' }).click()
   await restoredRow.getByRole('button', { name: 'Move to Trash' }).click()
-  await library.getByRole('button', { name: 'Trash (1)' }).click()
+  await library.getByRole('button', { name: 'Trashed' }).click()
   const finalRow = library.locator('.board-library-trash li').filter({ hasText: 'Algebra B' })
   await finalRow.getByRole('button', { name: 'More actions for Algebra B' }).click()
   await finalRow.getByRole('button', { name: 'Permanently delete Algebra B' }).click()
   await finalRow.getByRole('button', { name: 'Permanently delete' }).click()
-  await expect(library.getByRole('button', { name: 'Trash (0)' })).toBeVisible()
+  await expect(library.getByRole('button', { name: 'Trashed' })).toBeVisible()
 })
 
 test('active board archival/deletion selects the latest remaining board without creating extras', async ({ page, request }) => {
@@ -223,7 +255,7 @@ test('board glyphs select boards from the right sidebar', async ({ page, request
   await send(request, 'boards.archive', { boardId: geometry.id })
   await page.getByRole('button', { name: 'Open Board library' }).click()
   dialog = page.getByRole('dialog', { name: 'Board library' })
-  await dialog.getByRole('button', { name: 'Archived (1)' }).click()
+  await dialog.getByRole('button', { name: 'Archived' }).click()
   await dialog.getByRole('button', { name: 'Unarchive and open Geometry' }).click()
   await expect(page.getByRole('button', { name: 'Open Board library' })).toBeVisible()
   await expect(dialog).toHaveCount(0)
@@ -278,7 +310,8 @@ test('a long board list scrolls while creation stays reachable', async ({ page, 
   for (let index = 1; index <= 12; index++) await send(request, 'boards.create', { title: `Lesson ${index}` })
   await page.getByRole('button', { name: 'Open Board library' }).click()
   const dialog = page.getByRole('dialog', { name: 'Board library' })
-  await expect(dialog.getByRole('button', { name: 'Recent (13)' })).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Recent' })).toBeVisible()
+  await expect(dialog.locator('.board-library-list > li')).toHaveCount(13)
   const content = dialog.locator('.board-library-content')
   const dimensions = await content.evaluate(element => ({ visible: element.clientHeight, total: element.scrollHeight }))
   expect(dimensions.total).toBeGreaterThan(dimensions.visible)
@@ -301,7 +334,7 @@ test('a failed board selection reports the error and keeps focus in the library'
   await send(request, 'boards.archive', { boardId: stale.id })
   await page.getByRole('button', { name: 'Open Board library' }).click()
   const dialog = page.getByRole('dialog', { name: 'Board library' })
-  await dialog.getByRole('button', { name: 'Archived (1)' }).click()
+  await dialog.getByRole('button', { name: 'Archived' }).click()
   const glyph = dialog.getByRole('button', { name: 'Unarchive and open Stale board' })
   await expect(glyph).toBeVisible()
   await send(request, 'boards.delete', { boardId: stale.id, confirm: true })
@@ -455,7 +488,7 @@ test('compact sidebar moves Rename and Archive into the existing menu at actual 
   await expect(sidebar).toBeVisible()
 
   // Archived rows keep Unarchive direct; overflow contains Export and Move to Trash.
-  await sidebar.getByRole('button', { name: 'Archived (1)' }).click()
+  await sidebar.getByRole('button', { name: 'Archived' }).click()
   const archivedRow = sidebar.locator('.board-library-archived li').filter({ hasText: 'Compact renamed' })
   await expect(archivedRow.getByRole('button', { name: 'Unarchive Compact renamed' })).toBeVisible()
   const archivedMore = archivedRow.getByRole('button', { name: 'More actions for Compact renamed' })

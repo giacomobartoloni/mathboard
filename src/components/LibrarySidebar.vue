@@ -75,11 +75,17 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
       <div class="board-library-tabs" role="group" aria-label="Board views">
         <button type="button" :class="{ active: view === 'recent' }" :aria-pressed="view === 'recent'"
-          :disabled="busy || loading" @click="selectView('recent')">Recent ({{ boards.length }})</button>
+          aria-label="Recent" title="Recent" :disabled="busy || loading" @click="selectView('recent')">
+          <font-awesome-icon :icon="['fas', 'clock']" aria-hidden="true" />
+        </button>
         <button type="button" :class="{ active: showArchived }" :aria-pressed="showArchived"
-          :disabled="busy || loading" @click="selectView('archived')">Archived ({{ archivedBoards.length }})</button>
-        <button type="button" :class="{ active: showTrash }" :aria-pressed="showTrash"
-          :disabled="busy || loading" @click="selectView('trash')">Trash ({{ trashedBoards.length }})</button>
+          aria-label="Archived" title="Archived" :disabled="busy || loading" @click="selectView('archived')">
+          <font-awesome-icon :icon="['fas', 'box-archive']" aria-hidden="true" />
+        </button>
+        <button type="button" class="board-library-trash-tab" :class="{ active: showTrash }" :aria-pressed="showTrash"
+          aria-label="Trashed" title="Trashed" :disabled="busy || loading" @click="selectView('trash')">
+          <font-awesome-icon :icon="['fas', 'trash']" aria-hidden="true" />
+        </button>
       </div>
 
       <div class="board-library-content" :class="showTrash ? 'board-library-trash' : showArchived ? 'board-library-archived' : 'board-library-recent'"
@@ -661,8 +667,13 @@ export default {
   border-bottom: 1px solid var(--border-color);
 }
 .board-library-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
   min-height: 44px;
-  padding: 0 2px;
+  padding: 0;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -670,6 +681,7 @@ export default {
   cursor: pointer;
 }
 .board-library-tabs button.active { border-bottom-color: var(--selected-bg); color: var(--text-primary); font-weight: 600; }
+.board-library-trash-tab { margin-left: auto; }
 .board-library-content {
   min-height: 100px;
   flex: 1 1 auto;
