@@ -48,6 +48,7 @@ import { faCompress } from '@fortawesome/free-solid-svg-icons'
 import { faCopy } from '@fortawesome/free-solid-svg-icons'
 import { faTrash } from '@fortawesome/free-solid-svg-icons'
 import { faEllipsis } from '@fortawesome/free-solid-svg-icons'
+import { faDownload } from '@fortawesome/free-solid-svg-icons'
 import { faPenToSquare } from '@fortawesome/free-solid-svg-icons'
 import { faObjectGroup } from '@fortawesome/free-solid-svg-icons'
 import { faObjectUngroup } from '@fortawesome/free-solid-svg-icons'
@@ -87,6 +88,7 @@ library.add(faCompress)
 library.add(faCopy)
 library.add(faTrash)
 library.add(faEllipsis)
+library.add(faDownload)
 library.add(faPenToSquare)
 library.add(faObjectGroup)
 library.add(faObjectUngroup)
