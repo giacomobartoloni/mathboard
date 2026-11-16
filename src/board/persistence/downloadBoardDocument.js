@@ -15,7 +15,7 @@ export function downloadBoardDocument(document) {
   const url = URL.createObjectURL(blob)
   const anchor = window.document.createElement('a')
   anchor.href = url
-  anchor.download = name + '.mathboard.json'
+  anchor.download = name + '.mathboard'
   window.document.body.appendChild(anchor)
   try { anchor.click() }
   finally {
