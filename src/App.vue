@@ -202,6 +202,7 @@ import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
 import { initializeAnalytics, trackEvent } from './analytics'
 import { useBoardLibrary } from './composables/useBoardLibrary.js'
+import { useBoardLinkBootstrap } from './composables/useBoardLinkBootstrap.js'
 import { usePlotEditor } from './composables/usePlotEditor.js'
 import { useLibrarySidebar } from './composables/useLibrarySidebar.js'
 import {
@@ -213,8 +214,8 @@ import {
   ANALYTICS_STAMP_SHARE_FAILURE_STAGES,
 } from './analytics/events.js'
 import { getKitById } from './stamps/registry.js'
-import { buildStampShareUrl, clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
-import { createBoardShare, downloadBoardShare, readBoardShareFromLocation, clearBoardShareFromLocation } from './share/boardShare.js'
+import { buildStampShareUrl } from './stamps/url.js'
+import { createBoardShare } from './share/boardShare.js'
 
 function detectFullscreenSupport() {
   return typeof document !== 'undefined'
@@ -403,59 +404,15 @@ export default {
       trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_FAILED, { stage })
     }
 
-    const bootstrapStampFromUrl = async () => {
-      const payload = readStampFromLocation()
-      if (!payload) return false
-      try {
-        const ready = await waitForBoardReady()
-        if (!ready || !drawBoardRef.value) {
-          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          boardError.value = 'Board is not ready to load the stamp link.'
-          return false
-        }
-        const result = await drawBoardRef.value.bootstrapFromStamp(payload)
-        if (!result?.ok) {
-          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          boardError.value = result?.message || 'Could not load stamp from the link.'
-          return false
-        }
-        trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_OPENED)
-        selectedTool.value = 'select'
-        return true
-      } catch (error) {
-        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-        boardError.value = error?.message || 'Could not load stamp from the link.'
-        return false
-      } finally {
-        clearStampFromLocation()
-      }
-    }
-
-    const bootstrapSharedBoardFromUrl = async () => {
-      try {
-        const share = readBoardShareFromLocation()
-        if (!share) return false
-        const ready = await waitForBoardReady()
-        if (!ready || !drawBoardRef.value) throw new Error('Board is not ready.')
-        const document = await downloadBoardShare(share, { desktop: desktopRuntime })
-        try { await drawBoardRef.value.bootstrapSharedBoard(document) }
-        catch {
-          const failure = new Error('Could not create a local board from this link.')
-          failure.stage = 'import'
-          throw failure
-        }
-        trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_OPENED)
-        selectedTool.value = 'select'
-        return true
-      } catch (error) {
-        trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_FAILED, { stage: error?.stage || 'download' })
-        boardError.value = error?.message || 'Could not open shared board.'
-        return false
-      } finally {
-        try { clearBoardShareFromLocation() }
-        finally { initializeAnalytics() }
-      }
-    }
+    const { bootstrapStampFromUrl, bootstrapSharedBoardFromUrl } = useBoardLinkBootstrap({
+      drawBoardRef,
+      boardError,
+      selectedTool,
+      desktopRuntime,
+      waitForBoardReady,
+      trackEvent,
+      initializeAnalytics,
+    })
 
     const bootstrapLocalBoard = async () => {
       const ready = await waitForBoardReady()
