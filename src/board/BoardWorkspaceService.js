@@ -84,6 +84,10 @@ export class BoardWorkspaceService {
     return this._run(() => this._persistence.exportBoard(boardId), { signal })
   }
 
+  importBoard({ document } = {}, { signal } = {}) {
+    return this._run(async () => this._summary(await this._persistence.importSharedBoard(document)), { signal })
+  }
+
   delete({ boardId, confirm } = {}, { signal } = {}) {
     return this._run(() => this._persistence.deleteBoard(boardId, { confirm }), { signal })
   }

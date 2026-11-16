@@ -32,6 +32,7 @@ const BOARD_ACTIONS = Object.freeze({
   unarchive: 'unarchive',
   'unarchive-open': 'unarchive_open',
   delete: 'delete',
+  import: 'import',
 })
 
 /**
