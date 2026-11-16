@@ -104,7 +104,10 @@ library.add(faGithub)
  * @param {{ services?: ReturnType<typeof createMathBoardServices> }} [options]
  */
 export function mountMathBoard(options = {}) {
-  initializeAnalytics()
+  // Never expose a share decryption key to the third-party pageview script.
+  // Shared links initialize analytics only after their URL fragment is removed.
+  const incomingShare = new URLSearchParams(window.location.hash.slice(1)).has('b')
+  if (!incomingShare) initializeAnalytics()
 
   const services = options.services ?? createMathBoardServices()
 

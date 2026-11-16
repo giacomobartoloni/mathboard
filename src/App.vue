@@ -200,7 +200,7 @@ import {
 import { createTemporaryPanController } from './board/interactions/TemporaryPanController.js'
 import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
-import { trackEvent } from './analytics'
+import { initializeAnalytics, trackEvent } from './analytics'
 import { useBoardLibrary } from './composables/useBoardLibrary.js'
 import { usePlotEditor } from './composables/usePlotEditor.js'
 import { useLibrarySidebar } from './composables/useLibrarySidebar.js'
@@ -452,7 +452,8 @@ export default {
         boardError.value = error?.message || 'Could not open shared board.'
         return false
       } finally {
-        clearBoardShareFromLocation()
+        try { clearBoardShareFromLocation() }
+        finally { initializeAnalytics() }
       }
     }
 
