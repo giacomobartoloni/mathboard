@@ -8,7 +8,8 @@ import { validateBoardDocument } from './schema.js'
 export function downloadBoardDocument(document) {
   validateBoardDocument(document)
   const name = document.title.normalize('NFKC')
-    .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '-')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .split('').map(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127 ? '-' : char).join('')
     .trim().replace(/[. ]+$/g, '').slice(0, 80) || 'board'
   const blob = new Blob([JSON.stringify(document, null, 2) + '\n'], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
