@@ -378,6 +378,21 @@ export default {
       this.refreshSelectionPanel();
       return record;
     },
+    /** A consistent, non-mutating snapshot of the current saved board. */
+    captureBoardDocument() {
+      if (!this._persistenceBootstrapped || !this._isBoardInteractionStable()) {
+        throw new Error('Finish editing before sharing this board.');
+      }
+      return this._ensurePersistenceService().serializeCurrent();
+    },
+    /** Open a complete shared board as a new local saved document. */
+    async bootstrapSharedBoard(document) {
+      if (this._persistenceBootstrapped || !this.canvas) throw new Error('Board is already loaded.');
+      const record = await this._ensurePersistenceService().importSharedBoard(document);
+      this._persistenceBootstrapped = true;
+      this.refreshSelectionPanel();
+      return record;
+    },
     async flushPersistence() {
       return this._persistence?.flush();
     },
