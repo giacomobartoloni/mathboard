@@ -32,49 +32,48 @@ export function useBoardSharePanel({ boardSessionReady, drawBoardRef, desktopRun
   const boardShareUrl = ref('')
   const boardShareError = ref('')
 
-    const openBoardSharePanel = () => {
-      if (!boardSessionReady.value || showBoardSharePanel.value) return
-      boardShareUrl.value = ''
-      boardShareError.value = ''
-      showBoardSharePanel.value = true
-      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_PANEL_OPENED)
-    }
-    const closeBoardSharePanel = () => {
-      if (boardShareBusy.value) return
-      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_PANEL_CLOSED, {
-        outcome: boardShareUrl.value ? 'created' : 'abandoned',
-      })
-      showBoardSharePanel.value = false
-      boardShareUrl.value = ''
-      boardShareError.value = ''
-    }
-    const requestBoardShareLink = async () => {
-      if (boardShareBusy.value || boardShareUrl.value) return
-      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_REQUESTED)
-      boardShareError.value = ''
-      boardShareBusy.value = true
-      try {
-        let document
-        try { document = drawBoardRef.value.captureBoardDocument() }
-        catch {
-          const error = new Error('Finish editing before sharing this board.')
-          error.stage = 'snapshot'
-          throw error
-        }
-        const result = await createBoardShare(document, { desktop: desktopRuntime })
-        boardShareUrl.value = result.url
-        trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_CREATED)
-      } catch (error) {
-        trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_FAILED, { stage: error?.stage || 'upload' })
-        boardShareError.value = error?.message || 'Could not create share link. Please retry.'
-      } finally { boardShareBusy.value = false }
-    }
-    const onBoardShareCopied = () => trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_COPIED)
-    const onBoardShareCopyFailed = () => {
-      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_FAILED, { stage: 'copy' })
-      boardShareError.value = 'Could not copy the link. Select and copy it manually.'
-    }
-
+  const openBoardSharePanel = () => {
+    if (!boardSessionReady.value || showBoardSharePanel.value) return
+    boardShareUrl.value = ''
+    boardShareError.value = ''
+    showBoardSharePanel.value = true
+    trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_PANEL_OPENED)
+  }
+  const closeBoardSharePanel = () => {
+    if (!showBoardSharePanel.value || boardShareBusy.value) return
+    trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_PANEL_CLOSED, {
+      outcome: boardShareUrl.value ? 'created' : 'abandoned',
+    })
+    showBoardSharePanel.value = false
+    boardShareUrl.value = ''
+    boardShareError.value = ''
+  }
+  const requestBoardShareLink = async () => {
+    if (!showBoardSharePanel.value || boardShareBusy.value || boardShareUrl.value) return
+    trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_REQUESTED)
+    boardShareError.value = ''
+    boardShareBusy.value = true
+    try {
+      let document
+      try { document = drawBoardRef.value.captureBoardDocument() }
+      catch {
+        const error = new Error('Finish editing before sharing this board.')
+        error.stage = 'snapshot'
+        throw error
+      }
+      const result = await createBoardShare(document, { desktop: desktopRuntime })
+      boardShareUrl.value = result.url
+      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_CREATED)
+    } catch (error) {
+      trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_FAILED, { stage: error?.stage || 'upload' })
+      boardShareError.value = error?.message || 'Could not create share link. Please retry.'
+    } finally { boardShareBusy.value = false }
+  }
+  const onBoardShareCopied = () => trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_COPIED)
+  const onBoardShareCopyFailed = () => {
+    trackEvent(ANALYTICS_EVENTS.BOARD_SHARE_FAILED, { stage: 'copy' })
+    boardShareError.value = 'Could not copy the link. Select and copy it manually.'
+  }
 
   return {
     showBoardSharePanel, boardShareBusy, boardShareUrl, boardShareError,

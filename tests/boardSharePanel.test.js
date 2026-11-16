@@ -60,6 +60,9 @@ test('opening Share never uploads and closing without a link records abandonment
   assert.deepEqual(f.events.at(-1), {
     name: ANALYTICS_EVENTS.BOARD_SHARE_PANEL_CLOSED, metadata: { outcome: 'abandoned' },
   })
+  const eventCount = f.events.length
+  f.closeBoardSharePanel()
+  assert.equal(f.events.length, eventCount)
   f.boardSessionReady.value = false
   f.openBoardSharePanel()
   assert.equal(f.showBoardSharePanel.value, false)
