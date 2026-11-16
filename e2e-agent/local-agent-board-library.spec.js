@@ -75,7 +75,7 @@ test('autosaved local board archive, recoverable Trash and confirmed permanent d
   const archivedItem = dialog.locator('.board-library-archived li').filter({ hasText: 'Algebra B' })
   await expect(archivedItem.getByRole('button', { name: 'Rename Algebra B (unarchive first)' })).toBeDisabled()
   await archivedItem.getByRole('button', { name: 'More actions for Algebra B' }).click()
-  await expect(archivedItem.getByRole('button', { name: 'Move to Trash Algebra B' })).toBeFocused()
+  await expect(archivedItem.getByRole('button', { name: 'Export Algebra B' })).toBeFocused()
   await archivedItem.getByRole('button', { name: 'Move to Trash Algebra B' }).click()
   await expect(archivedItem.getByRole('button', { name: 'Move to Trash' })).toBeFocused()
   await page.keyboard.press('Escape')
@@ -323,6 +323,7 @@ test('Anchored icon-only actions popover supports mouse, keyboard and confirmed 
   const sibling = dialog.locator('.board-library-list li').filter({ hasText: 'Popover sibling board' })
   const more = row.getByRole('button', { name: `More actions for ${active.title}` })
   const popover = row.locator('.board-library-more-menu')
+  const exportAction = row.getByRole('button', { name: `Export ${active.title}` })
   const deleteAction = row.getByRole('button', { name: `Move to Trash ${active.title}` })
   const confirm = row.getByRole('button', { name: 'Move to Trash' })
 
@@ -334,8 +335,9 @@ test('Anchored icon-only actions popover supports mouse, keyboard and confirmed 
 
   await more.click()
   await expect(popover).toBeVisible()
-  await expect(deleteAction).toBeFocused()
-  await expect(deleteAction).toHaveText('')
+  await expect(exportAction).toBeFocused()
+  await expect(exportAction).toHaveText('Export board')
+  await expect(deleteAction).toHaveText('Move to Trash')
   await expect(deleteAction).toHaveAttribute('aria-label', `Move to Trash ${active.title}`)
   expect((await row.evaluate(element => element.getBoundingClientRect().height))).toBe(rowHeight)
   expect((await sibling.boundingBox()).y).toBe(siblingY)
@@ -362,12 +364,14 @@ test('Anchored icon-only actions popover supports mouse, keyboard and confirmed 
 
   await more.focus()
   await page.keyboard.press('Enter')
-  await expect(deleteAction).toBeFocused()
+  await expect(exportAction).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(more).toBeFocused()
   await expect(popover).toBeHidden()
 
   await page.keyboard.press('Enter')
+  await expect(exportAction).toBeFocused()
+  await page.keyboard.press('Tab')
   await expect(deleteAction).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(confirm).toBeFocused()
@@ -428,7 +432,8 @@ test('compact sidebar moves Rename and Archive into the existing menu at actual 
   await expect(rename).toBeFocused()
   await expect(archive).toBeVisible()
   await expect(deleteAction).toBeVisible()
-  await expect(menu.getByRole('button')).toHaveCount(3)
+  await expect(menu.getByRole('button', { name: 'Export Compact actions' })).toBeVisible()
+  await expect(menu.getByRole('button')).toHaveCount(4)
 
   await rename.click()
   await expect(menu).toBeHidden()
@@ -449,19 +454,19 @@ test('compact sidebar moves Rename and Archive into the existing menu at actual 
     (await send(request, 'boards.listArchived')).some(board => board.id === target.id)).toBe(true)
   await expect(sidebar).toBeVisible()
 
-  // Archived rows keep Unarchive direct; overflow contains only Move to Trash.
+  // Archived rows keep Unarchive direct; overflow contains Export and Move to Trash.
   await sidebar.getByRole('button', { name: 'Archived (1)' }).click()
   const archivedRow = sidebar.locator('.board-library-archived li').filter({ hasText: 'Compact renamed' })
   await expect(archivedRow.getByRole('button', { name: 'Unarchive Compact renamed' })).toBeVisible()
   const archivedMore = archivedRow.getByRole('button', { name: 'More actions for Compact renamed' })
   await archivedMore.click()
   const archivedMenu = archivedRow.locator('.board-library-more-menu')
-  await expect(archivedMenu.getByRole('button', { name: 'Move to Trash Compact renamed' })).toBeFocused()
-  await expect(archivedMenu.getByRole('button')).toHaveCount(1)
+  await expect(archivedMenu.getByRole('button', { name: 'Export Compact renamed' })).toBeFocused()
+  await expect(archivedMenu.getByRole('button')).toHaveCount(2)
   await page.keyboard.press('Escape')
   await expect(archivedMore).toBeFocused()
 
-  // Expanding restores the existing direct actions and Trash-only menu.
+  // Expanding restores direct actions and the Export/Trash overflow menu.
   await sidebar.getByRole('button', { name: /^Recent \(/ }).click()
   await resize.focus()
   await page.keyboard.press('End')
@@ -470,7 +475,7 @@ test('compact sidebar moves Rename and Archive into the existing menu at actual 
   await expect(wideRow.locator('.board-library-row-actions button')).toHaveCount(3)
   await expect(wideRow.getByRole('button', { name: 'Archive Another active board' })).toBeVisible()
   await wideRow.getByRole('button', { name: 'More actions for Another active board' }).click()
-  await expect(wideRow.locator('.board-library-more-menu').getByRole('button')).toHaveCount(1)
+  await expect(wideRow.locator('.board-library-more-menu').getByRole('button')).toHaveCount(2)
 })
 
 test('compact menu is available on a narrow viewport without a resizable sidebar', async ({ page, request }) => {
@@ -522,13 +527,16 @@ test('board library isolates drawing shortcuts and returns focus on Escape', asy
   await page.keyboard.press('Escape')
   await expect(renameAction).toBeFocused()
   await lastAction.click()
+  const menuExport = dialog.getByRole('button', { name: /^Export / })
   const menuDelete = dialog.getByRole('button', { name: /^Move to Trash / })
-  await expect(menuDelete).toBeFocused()
+  await expect(menuExport).toBeFocused()
   await page.keyboard.press('Escape')
   await expect(lastAction).toBeFocused()
   await expect(menuDelete).toHaveCount(0)
   await lastAction.focus()
   await page.keyboard.press('Enter')
+  await expect(menuExport).toBeFocused()
+  await page.keyboard.press('Tab')
   await expect(menuDelete).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(dialog.getByRole('button', { name: 'Move to Trash' })).toBeFocused()

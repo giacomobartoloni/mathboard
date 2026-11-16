@@ -127,7 +127,24 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 stored persistently or retried. Development builds do not send analytics.
             </p>
 
-            <h3>2.4 Website delivery and contact</h3>
+            <h3>2.4 Optional encrypted board sharing</h3>
+            <p>
+                When you explicitly select <strong>Get shareable link</strong>, MathBoard
+                compresses and encrypts a snapshot of your current board in your browser,
+                then uploads only its ciphertext to a private Cloudflare R2 bucket through
+                a Cloudflare Worker. Simply opening the Share panel does not upload anything.
+                The server stores an opaque identifier and expiry metadata, not the
+                decryption key. The key is included in the share URL fragment; anyone
+                possessing the complete link can decrypt, edit and forward a copy.
+            </p>
+            <p>
+                Shared snapshots are accessible through their link for 90 days after creation.
+                The Worker rejects expired links; R2 lifecycle deletion occurs separately.
+                Recipients save their own independent local copies, which are not deleted
+                when the original share link expires. Cloudflare also processes request
+                details for delivery, rate limiting and abuse protection.
+            </p>
+            <h3>2.5 Website delivery and contact</h3>
             <p>
                 The public website is served through Cloudflare. To deliver the website
                 and protect its infrastructure, Cloudflare may process request information
@@ -137,7 +154,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 If you email the project, the message and your contact details are processed
                 to handle your enquiry.
             </p>
-            <h3>2.5 What is not part of analytics</h3>
+            <h3>2.6 What is not part of analytics</h3>
             <p>
                 MathBoard does not use analytics for advertising profiles or cross-site
                 identification, and does not intentionally transmit user-entered board
@@ -171,6 +188,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
             </p>
             <ul>
                 <li><strong>Website delivery and security:</strong> Technical request and security information may be processed to provide a reliable service and protect against abuse, based on legitimate interests (Article 6(1)(f) GDPR).</li>
+                <li><strong>Optional encrypted board sharing:</strong> When requested, ciphertext and expiry metadata are processed to provide the share link and to enforce its expiration. This is a user-initiated transfer, separate from product analytics.</li>
                 <li><strong>Project support:</strong> When you voluntarily send an email, its contents and contact details are used to respond to you, based on legitimate interests in handling correspondence (Article 6(1)(f) GDPR).</li>
                 <li><strong>Product statistics:</strong> Simple Analytics is configured to produce privacy-focused pageview and product-event statistics without user or device identifiers. To the extent any incidental personal data is processed in delivering these measurements, the purpose is improving MathBoard through aggregate usage insights, based on legitimate interests (Article 6(1)(f) GDPR), subject to any applicable ePrivacy requirements.</li>
             </ul>
@@ -184,7 +202,10 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         <section>
             <h2>5. Data Security</h2>
             <p>
-                Board content and preferences are stored locally on your device, so you retain control over that information. 
+                Boards remain locally stored by default. Cloud sharing is an optional,
+                explicit encrypted transfer; the server cannot decrypt the uploaded snapshot
+                without the full link key. The link itself grants access and should be
+                handled as sensitive information. 
                 We recommend:
             </p>
             <ul>
@@ -201,6 +222,9 @@ SPDX-License-Identifier: AGPL-3.0-or-later
                 delete them, clear the applicable browser or WebView storage, or uninstall
                 the application (subject to your device's storage behaviour). You can also
                 remove individual saved boards using MathBoard's local board controls.
+                Cloud shared snapshots expire 90 days after creation, with Worker-enforced
+                access expiration and asynchronous R2 lifecycle cleanup. Local imported
+                copies remain until removed from the recipient's device.
             </p>
             <p>
                 Analytics reporting data is retained according to the configured Simple Analytics
@@ -220,7 +244,8 @@ SPDX-License-Identifier: AGPL-3.0-or-later
         <section>
             <h2>7. Providers and External Services</h2>
             <p>
-                MathBoard uses Cloudflare to deliver the public site and Simple Analytics
+                MathBoard uses Cloudflare to deliver the public site, and its Workers and
+                R2 services for user-requested encrypted board sharing. MathBoard uses Simple Analytics
                 for the limited measurement described in sections 2.2 and 2.3.
                 These providers have their own published privacy practices and may use
                 subprocessors. Simple Analytics states that its standard analytics
