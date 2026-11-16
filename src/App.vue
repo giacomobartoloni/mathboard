@@ -1000,10 +1000,11 @@ body {
   display: none !important;
 }
 
-/* Share and Boards form one top-right action cluster. */
+/* One full-width row keeps the logo left and Share / Boards right. */
 .board-topbar {
   position: fixed;
-  top: 16px;
+  top: 12px;
+  left: max(12px, env(safe-area-inset-left));
   right: max(16px, env(safe-area-inset-right));
   z-index: 1100;
   display: flex;
@@ -1011,6 +1012,7 @@ body {
   gap: 8px;
 }
 .board-share-trigger {
+  flex: 0 0 44px;
   width: 44px;
   height: 44px;
   display: grid;
@@ -1026,34 +1028,24 @@ body {
 .board-share-trigger:focus-visible { outline: 2px solid var(--selected-bg); outline-offset: 2px; }
 
 .logo {
+  flex: 0 0 auto;
+  margin-right: auto;
   font-family: 'Satisfy', cursive;
   font-size: 24px;
   line-height: normal;
-
+  white-space: nowrap;
   color: whitesmoke;
   background-color: rgb(61, 61, 61);
   border-radius: 8px;
   padding: 8px 15px;
   border: tan 4px solid;
-
-    position: absolute;
-    z-index: 10;
-    left: 12px;
-    top: 12px;
-    display: -ms-flexbox;
-    display: flex;
-    -ms-flex-direction: row;
-    flex-direction: row;
-    z-index: 200;
-    /* Render Satisfy at its final size instead of scaling a composited layer. */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-                0 2px 4px rgba(0, 0, 0, 0.1);
-
+  /* Render Satisfy at its final size instead of scaling a composited layer. */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
+              0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .board-library-trigger {
-  position: static;
-  z-index: 1100;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1153,35 +1145,24 @@ body {
 }
 
 @media (max-width: 600px) {
-  /* Keep the compact board control opposite the logo on mobile. */
   .board-topbar {
-    position: fixed;
     top: max(12px, env(safe-area-inset-top));
-    left: max(12px, env(safe-area-inset-left));
     right: max(12px, env(safe-area-inset-right));
-    z-index: 1100;
-    display: flex;
-    align-items: center;
-    gap: 10px;
   }
-  .board-topbar .logo {
-    position: static;
-    flex: 0 0 auto;
-    border-radius: 5px;
-    white-space: nowrap;
-  }
-  .board-share-trigger { margin-left: auto; flex: 0 0 44px; }
+  .board-topbar .logo { border-radius: 5px; }
   .board-library-trigger {
-    position: static;
     flex: 0 0 44px;
     justify-content: center;
-    margin-left: 0;
     width: 44px;
     height: 44px;
     padding: 0;
   }
   .board-library-trigger-label { display: none; }
   .copyright { display: none; }
+}
+
+@media (max-width: 360px) {
+  .board-topbar .logo { font-size: 20px; padding: 7px 10px; }
 }
 
 .board-session-loading {
