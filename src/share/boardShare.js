@@ -151,31 +151,31 @@ export async function createBoardShare(document, { desktop = false } = {}) {
       body: bytes,
     })
   } catch {
-    throw new BoardShareError('upload', 'Could not connect to share storage.')
+    throw new BoardShareError('upload', 'Could not connect. Check your internet connection and try again.')
   }
   if (!response.ok) {
     const messages = {
-      403: 'Board sharing was denied by the server. Check the app origin.',
-      404: 'Board sharing is not available on this server. Run MathBoard through its Cloudflare Worker.',
+      403: 'Could not create a share link right now. Please try again later.',
+      404: 'Sharing is not available right now. Please try again later.',
       413: 'This board is too large to share as a link. Export a file instead.',
-      415: 'The share service rejected this request. Refresh MathBoard and try again.',
-      429: 'Too many share attempts. Try again later.',
-      503: 'Board sharing is unavailable. Check the Cloudflare Worker and R2 configuration.',
+      415: 'Could not create a share link. Refresh MathBoard and try again.',
+      429: 'Too many sharing attempts. Please try again in a moment.',
+      503: 'Sharing is temporarily unavailable. Please try again later.',
     }
     const message = messages[response.status]
       || (response.status >= 500
-        ? 'The share service is temporarily unavailable. Try again later.'
-        : 'Could not upload this board. Please retry.')
+        ? 'Sharing is temporarily unavailable. Please try again later.'
+        : 'Could not create a share link. Please try again.')
     throw new BoardShareError('upload', message)
   }
   let body
   try { body = await response.json() }
   catch {
     throw new BoardShareError('upload',
-      'The share service is not responding correctly. Run MathBoard through its Cloudflare Worker.')
+      'Could not create a share link right now. Please try again later.')
   }
   if (!ID_PATTERN.test(body?.id || '')) {
-    throw new BoardShareError('upload', 'Share service returned an invalid link.')
+    throw new BoardShareError('upload', 'Could not create a share link right now. Please try again later.')
   }
   const pathname = desktop ? '/' : window.location.pathname
   return { url: `${origin}${pathname}#b=${body.id},${key}`, expiresAt: body.expiresAt }
@@ -185,7 +185,7 @@ export async function downloadBoardShare({ id, key }, { desktop = false } = {}) 
   const origin = desktop ? 'https://mathboard.app' : window.location.origin
   let response
   try { response = await fetch(origin + API_PATH + '/' + id, { cache: 'no-store' }) }
-  catch { throw new BoardShareError('download', 'Could not connect to share storage.') }
+  catch { throw new BoardShareError('download', 'Could not connect. Check your internet connection and try again.') }
   if (response.status === 410) throw new BoardShareError('expired', 'This share link expired after 90 days.')
   if (!response.ok) throw new BoardShareError('download', 'This shared board was not found.')
   let bytes

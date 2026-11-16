@@ -25,6 +25,11 @@ const cors = (origin, requestUrl) => allowedOrigin(origin, requestUrl)
   ? { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin' }
   : {}
 
+// Only fixed reason codes reach Workers Logs, never board content or link secrets.
+function logShareFailure(operation, reason) {
+  console.error(JSON.stringify({ event: 'board_share_failure', operation, reason }))
+}
+
 function idFromRandomBytes(bytes) {
   const binary = Array.from(bytes, byte => String.fromCharCode(byte)).join('')
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
@@ -72,6 +77,7 @@ export async function handleShareRequest(request, env) {
     } })
   }
   if (!env.BOARD_SHARES || !env.SHARE_RATE_LIMITER) {
+    logShareFailure('request', 'missing_bindings')
     return json({ error: 'unavailable' }, 503, corsHeaders)
   }
   if (request.method === 'POST' && url.pathname === '/api/shares') {
@@ -91,17 +97,27 @@ export async function handleShareRequest(request, env) {
 
     const id = idFromRandomBytes(crypto.getRandomValues(new Uint8Array(16)))
     const expiresAt = Date.now() + SHARE_TTL_MS
-    await env.BOARD_SHARES.put(KEY_PREFIX + id, ciphertext, {
-      customMetadata: { expiresAt: String(expiresAt) },
-      httpMetadata: { contentType: 'application/octet-stream' },
-    })
+    try {
+      await env.BOARD_SHARES.put(KEY_PREFIX + id, ciphertext, {
+        customMetadata: { expiresAt: String(expiresAt) },
+        httpMetadata: { contentType: 'application/octet-stream' },
+      })
+    } catch {
+      logShareFailure('upload', 'storage_write_failed')
+      return json({ error: 'unavailable' }, 503, corsHeaders)
+    }
     return json({ id, expiresAt: new Date(expiresAt).toISOString() }, 201, corsHeaders)
   }
 
   if (request.method === 'GET' && url.pathname.startsWith('/api/shares/')) {
     const id = url.pathname.slice('/api/shares/'.length)
     if (!ID_PATTERN.test(id)) return json({ error: 'invalid_id' }, 400, corsHeaders)
-    const stored = await env.BOARD_SHARES.get(KEY_PREFIX + id)
+    let stored
+    try { stored = await env.BOARD_SHARES.get(KEY_PREFIX + id) }
+    catch {
+      logShareFailure('download', 'storage_read_failed')
+      return json({ error: 'unavailable' }, 503, corsHeaders)
+    }
     if (!stored) return json({ error: 'not_found' }, 404, corsHeaders)
     const expiresAt = Number(stored.customMetadata?.expiresAt)
     if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
@@ -119,7 +135,10 @@ export default {
     const pathname = new URL(request.url).pathname
     if (pathname === '/api/shares' || pathname.startsWith('/api/shares/')) {
       try { return await handleShareRequest(request, env) }
-      catch { return json({ error: 'unavailable' }, 503) }
+      catch {
+        logShareFailure(request.method === 'POST' ? 'upload' : 'download', 'unexpected_error')
+        return json({ error: 'unavailable' }, 503)
+      }
     }
     return env.ASSETS.fetch(request)
   },

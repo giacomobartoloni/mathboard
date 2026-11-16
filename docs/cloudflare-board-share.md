@@ -24,6 +24,44 @@ Open **the address Wrangler prints** (typically `http://localhost:8787`), not th
 
 For actual internet-accessible links, configure the Cloudflare resources and deploy the Worker as described below. Never point a development Worker at the production R2 bucket just to make local testing work. See https://developers.cloudflare.com/r2/local-development/ for the local R2 behavior.
 
+## Privacy-safe operational diagnostics
+
+User-facing Share errors must never expose Cloudflare, Workers, R2, API
+details or server configuration. The separate product analytics funnel records
+only semantic events and an allowlisted failure stage, not infrastructure
+reasons.
+
+Cloudflare Workers Logs persist invocation outcomes and sanitized application
+diagnostics. The Worker logs only fixed `board_share_failure` reason codes:
+`missing_bindings`, `storage_write_failed`,
+`storage_read_failed` and `unexpected_error`.
+It never logs document content, share IDs, keys, full URLs, IP addresses,
+request headers or exception messages. Cloudflare's platform invocation logs
+may contain standard request metadata; query strings are configured to be
+redacted. Inspect log retention and account privacy settings.
+
+The `observability.logs` section in `wrangler.json` enables persistence and
+invocation logs with 100% sampling during initial verification. After deploy,
+open **Cloudflare dashboard → Workers & Pages → mathboard → Observability →
+Logs**, or stream deployed Worker events using:
+
+```sh
+npx wrangler tail mathboard --format pretty
+```
+
+Look for `board_share_failure`. For example:
+
+```json
+{"event":"board_share_failure","operation":"request","reason":"missing_bindings"}
+```
+
+The bucket and lifecycle rule have been created by the maintainer, but
+the deployed Worker must still expose `/api/shares` and have its
+`BOARD_SHARES` and `SHARE_RATE_LIMITER` bindings. Changes to the
+configuration require a deploy. Vite-only local development does not
+execute the Worker and produces no Cloudflare log events.
+Review sampling later based on log volume and account cost.
+
 ## Cloudflare account setup — required before deployment
 
 1. Create a **private R2 bucket** named `mathboard-board-shares`. For example, in the target account run `npx wrangler r2 bucket create mathboard-board-shares` or create the bucket in the dashboard.

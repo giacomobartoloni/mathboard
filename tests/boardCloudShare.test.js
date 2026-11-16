@@ -84,12 +84,12 @@ test('share upload surfaces actionable API and configuration errors without expo
   try {
     const document = createEmptyBoardDocument('Private class lesson')
     const expected = [
-      [403, 'denied by the server'],
-      [404, 'not available on this server'],
+      [403, 'Please try again later'],
+      [404, 'Sharing is not available'],
       [413, 'too large'],
-      [429, 'Too many share attempts'],
-      [503, 'Cloudflare Worker and R2'],
-      [502, 'temporarily unavailable'],
+      [429, 'Too many sharing attempts'],
+      [503, 'Sharing is temporarily unavailable'],
+      [502, 'Sharing is temporarily unavailable'],
     ]
     for (const [status, phrase] of expected) {
       globalThis.fetch = async () => new Response(null, { status })
@@ -98,6 +98,7 @@ test('share upload surfaces actionable API and configuration errors without expo
         && error.stage === 'upload'
         && error.message.includes(phrase)
         && !error.message.includes(document.title)
+        && !/Cloudflare|Worker|R2|server|storage|API/i.test(error.message)
       ))
     }
     // Vite can respond with HTML to an unhandled API route, rather than JSON.
@@ -107,7 +108,7 @@ test('share upload surfaces actionable API and configuration errors without expo
     await assert.rejects(createBoardShare(document), error => (
       error instanceof BoardShareError
       && error.stage === 'upload'
-      && error.message.includes('Run MathBoard through its Cloudflare Worker')
+      && error.message.includes('Could not create a share link right now')
     ))
   } finally {
     globalThis.fetch = originalFetch
@@ -122,4 +123,40 @@ test('Worker returns unavailable if Cloudflare bindings have not been configured
   }), {})
   assert.equal(response.status, 503)
   assert.deepEqual(await response.json(), { error: 'unavailable' })
+})
+
+test('Worker logs only allowlisted reason codes for missing bindings and storage errors', async () => {
+  const originalError = console.error
+  const logs = []
+  console.error = message => logs.push(JSON.parse(message))
+  try {
+    const absent = await handleShareRequest(new Request(endpoint, {
+      method: 'POST', headers, body: new Uint8Array(40),
+    }), {})
+    assert.equal(absent.status, 503)
+    assert.deepEqual(logs[0], {
+      event: 'board_share_failure', operation: 'request', reason: 'missing_bindings',
+    })
+
+    const env = fakeEnvironment()
+    env.BOARD_SHARES.put = async () => { throw new Error('Private formula') }
+    const failedUpload = await handleShareRequest(new Request(endpoint, {
+      method: 'POST', headers, body: new Uint8Array(40),
+    }), env)
+    assert.equal(failedUpload.status, 503)
+    assert.deepEqual(logs[1], {
+      event: 'board_share_failure', operation: 'upload', reason: 'storage_write_failed',
+    })
+
+    env.BOARD_SHARES.get = async () => { throw new Error('Private plot') }
+    const failedRead = await handleShareRequest(new Request(endpoint + '/' + 'A'.repeat(22)), env)
+    assert.equal(failedRead.status, 503)
+    assert.deepEqual(logs[2], {
+      event: 'board_share_failure', operation: 'download', reason: 'storage_read_failed',
+    })
+    assert.ok(!JSON.stringify(logs).includes('Private'))
+    assert.ok(!JSON.stringify(logs).includes('A'.repeat(22)))
+  } finally {
+    console.error = originalError
+  }
 })

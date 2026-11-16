@@ -27,5 +27,15 @@
       }
     }
   ],
-  "previews": {}
+  "previews": {},
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true,
+      "head_sampling_rate": 1
+    },
+    "redact_query_string": true
+  }
 }
