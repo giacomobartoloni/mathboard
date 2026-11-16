@@ -167,7 +167,7 @@ test('autosaved local board archive, recoverable Trash and confirmed permanent d
   await expect(trashRow.getByRole('button', { name: 'Restore Algebra B' })).toBeVisible()
   await trashRow.getByRole('button', { name: 'Restore Algebra B' }).click()
   await expect(library.getByRole('button', { name: 'Trashed' })).toBeVisible()
-  await library.getByRole('button', { name: /^Recent \(/ }).click()
+  await library.getByRole('button', { name: 'Recent' }).click()
   expect((await send(request, 'boards.list')).some(board => board.id === created.id)).toBe(true)
 
   const restoredRow = library.locator('.board-library-list li').filter({ hasText: 'Algebra B' })
@@ -523,7 +523,7 @@ test('compact sidebar moves Rename and Archive into the existing menu at actual 
   await expect(archivedMore).toBeFocused()
 
   // Expanding restores direct actions and the Export/Trash overflow menu.
-  await sidebar.getByRole('button', { name: /^Recent \(/ }).click()
+  await sidebar.getByRole('button', { name: 'Recent' }).click()
   await resize.focus()
   await page.keyboard.press('End')
   await expect(resize).toHaveAttribute('aria-valuenow', '560')
