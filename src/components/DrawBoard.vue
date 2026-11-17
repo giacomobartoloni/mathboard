@@ -482,6 +482,14 @@ export default {
       if (!path) return;
       path.mathboardInkMode = this.inkMode;
     },
+    configureObjectHitTesting({ target }) {
+      // Formulas, plots and text retain their bounding-box editing behavior.
+      if (this._boardObjectPolicy.isPath(target)
+        || this._boardObjectPolicy.isShape(target)
+        || this._boardObjectPolicy.isBoardGroup(target)) {
+        target.perPixelTargetFind = true;
+      }
+    },
     applyBrushColor() {
       if (this.canvas?.freeDrawingBrush) {
         this.canvas.freeDrawingBrush.color = this.activeInk;
@@ -1439,6 +1447,7 @@ export default {
       // The command is the finished path, recorded once "path:created" fires.
       this.canvas.on('before:path:created', this.markPathInk);
       this.canvas.on('path:created', this.onPathCreated);
+      this.canvas.on('object:added', this.configureObjectHitTesting);
       this.canvas.on('before:transform', this.onBeforeTransform);
       this.canvas.on('object:modified', this.onObjectModified);
       this.canvas.on('text:editing:entered', this.onTextEditingEntered);
@@ -1479,6 +1488,9 @@ export default {
       // on the raw instance then misses, and the add command is dropped.
       this.canvas = markRaw(new Canvas(this.id, {
         ...this.definedProps,
+        // Select only fully enclosed objects; clicks should follow visible ink.
+        selectionFullyContained: true,
+        targetFindTolerance: 4,
       }));
       
       this._ensureBoardController();
@@ -1529,6 +1541,7 @@ export default {
       this.applySelectionChrome();
       this.createEvents();
       this.setupEventListeners();
+      this.canvas.forEachObject((target) => this.configureObjectHitTesting({ target }));
       this.applyToolCursor(this.selectedTool);
     },
   },
@@ -1591,6 +1604,7 @@ export default {
     });
     
     this.canvas.off('before:path:created', this.markPathInk);
+    this.canvas.off('object:added', this.configureObjectHitTesting);
     this.canvas.off('path:created', this.onPathCreated);
     this.canvas.off('before:transform', this.onBeforeTransform);
     this.canvas.off('object:modified', this.onObjectModified);
