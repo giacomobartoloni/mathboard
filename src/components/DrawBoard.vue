@@ -483,8 +483,10 @@ export default {
       path.mathboardInkMode = this.inkMode;
     },
     configureObjectHitTesting({ target }) {
-      // Preserve bounding-box editing for text, formulas and composite objects.
-      if (this._boardObjectPolicy.isPath(target) || this._boardObjectPolicy.isShape(target)) {
+      // Formulas, plots and text retain their bounding-box editing behavior.
+      if (this._boardObjectPolicy.isPath(target)
+        || this._boardObjectPolicy.isShape(target)
+        || this._boardObjectPolicy.isBoardGroup(target)) {
         target.perPixelTargetFind = true;
       }
     },
