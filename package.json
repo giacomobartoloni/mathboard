@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "version:set": "node tools/set-version.mjs",
     "dev:agent": "vite --mode agent --host 127.0.0.1 --port 5173 --strictPort",
     "build:app": "vite build",
     "build:seo": "node tools/build-seo.mjs",
