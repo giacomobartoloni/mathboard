@@ -79,7 +79,7 @@ test('transparent rectangle selects from its outline, not its unpainted interior
   expect(after.history).toEqual(before.history)
 })
 
-test('group remains atomic and uses group bounds for clicks and marquee', async ({ page }) => {
+test('group stays atomic and selects only painted members or full marquee', async ({ page }) => {
   await gotoBoard(page)
   await selectShape(page, 'Rectangle')
   await dragOnCanvas(page, { x1: 280, y1: 180, x2: 350, y2: 240 })
@@ -102,11 +102,15 @@ test('group remains atomic and uses group bounds for clicks and marquee', async 
   expect(state.active.selectionCount).toBe(1)
 
   await clickOnCanvas(page, { x: 610, y: 340 })
-  // Current deliberate behavior: blank space between members is clickable.
+  // Blank space between members is not part of the group's painted hit area.
   await clickOnCanvas(page, { x: 400, y: 210 })
   state = await getBoardState(page)
-  expect(state.active.type).toBe('Group')
-  expect(state.active.selectionCount).toBe(1)
+  expect(state.active.selectionCount).toBe(0)
+
+  await clickOnCanvas(page, { x: 450, y: 210 })
+  expect((await getBoardState(page)).active.type).toBe('Group')
+  await clickOnCanvas(page, { x: 400, y: 210 })
+  expect((await getBoardState(page)).active.selectionCount).toBe(0)
 
   await clickOnCanvas(page, { x: 610, y: 340 })
   await dragOnCanvas(page, { x1: 260, y1: 160, x2: 400, y2: 270 })
