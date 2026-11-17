@@ -19,11 +19,15 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import { ref } from 'vue'
 import { createBoardLibraryAnalytics } from '../analytics/boardLibrary.js'
+import { ANALYTICS_EVENTS } from '../analytics/events.js'
+import { downloadBoardDocument } from '../board/persistence/downloadBoardDocument.js'
+import { BoardFileImportError, readBoardDocumentFile } from '../board/persistence/readBoardDocumentFile.js'
 
 // Owns Boards data/actions and their UX signals; sidebar presentation is injected.
 export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelectedTool, trackEvent }) {
   const boardList = ref([])
   const archivedList = ref([])
+  const trashList = ref([])
   const boardLibraryBusy = ref(false)
   const boardLibraryLoading = ref(false)
   const boardLibraryError = ref(null)
@@ -32,9 +36,10 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
   const refreshBoardLibrary = async () => {
     const workspace = getWorkspace()
     if (!workspace) throw new Error('Board workspace is not ready.')
-    const [boards, archived] = await Promise.all([workspace.list(), workspace.listArchived()])
+    const [boards, archived, trash] = await Promise.all([workspace.list(), workspace.listArchived(), workspace.listTrash()])
     boardList.value = boards
     archivedList.value = archived
+    trashList.value = trash
   }
 
   const openBoardLibrary = async () => {
@@ -43,6 +48,7 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
     boardLibraryError.value = null
     boardList.value = []
     archivedList.value = []
+    trashList.value = []
     boardLibraryLoading.value = true
     sidebar.open()
     analytics.opened()
@@ -50,11 +56,11 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
     finally { boardLibraryLoading.value = false }
   }
 
-  const onBoardLibraryAction = async ({ action, boardId, title }) => {
+  const onBoardLibraryAction = async ({ action, boardId, title, files }) => {
     if (boardLibraryBusy.value) return
     const sidebar = getSidebar()
     const modeAtAction = sidebar.mode.value
-    const switchedAwayFromActive = (action === 'archive' || action === 'delete')
+    const switchedAwayFromActive = (action === 'archive' || action === 'trash' || action === 'delete')
       && boardList.value.some(board => board.id === boardId && board.isActive)
     boardLibraryError.value = null
     boardLibraryBusy.value = true
@@ -71,17 +77,30 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
       else if (action === 'rename') await workspace.rename({ boardId, title })
       else if (action === 'archive') await workspace.archive({ boardId })
       else if (action === 'unarchive') await workspace.unarchive({ boardId })
+      else if (action === 'trash') await workspace.trash({ boardId })
+      else if (action === 'restore') await workspace.restore({ boardId })
+      else if (action === 'export') {
+        const document = await workspace.exportBoard({ boardId })
+        downloadBoardDocument(document)
+        trackEvent(ANALYTICS_EVENTS.DOCUMENT_EXPORTED)
+      }
+      else if (action === 'import') {
+        const document = await readBoardDocumentFile(files)
+        await workspace.importBoard({ document })
+      }
       else if (action === 'delete') await workspace.delete({ boardId, confirm: true })
       else throw new Error('Unsupported board library action.')
       await refreshBoardLibrary()
       analytics.actionFinished(action, 'success', modeAtAction)
-      if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open') {
+      if (switchedAwayFromActive || action === 'create' || action === 'open' || action === 'unarchive-open' || action === 'import') {
         resetSelectedTool()
         if (sidebar.mode.value === 'overlay') sidebar.dismiss('board_action')
       }
     } catch (error) {
       analytics.actionFinished(action, 'failure', modeAtAction)
-      boardLibraryError.value = error?.message || 'Board library operation failed.'
+      boardLibraryError.value = action === 'import'
+        ? (error instanceof BoardFileImportError ? error.message : 'Could not import this board. Please try again.')
+        : (error?.message || 'Board library operation failed.')
       // A failed post-transition metadata write may still leave a new active board.
       try { await refreshBoardLibrary() } catch { /* Preserve the original error. */ }
     } finally {
@@ -99,7 +118,7 @@ export function useBoardLibrary({ isReady, getWorkspace, getSidebar, resetSelect
   }
 
   return {
-    boardList, archivedList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
+    boardList, archivedList, trashList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
     openBoardLibrary, onBoardLibraryAction, onActiveBoardChanged,
     onBoardLibraryBrowse: action => analytics.browsed(action),
     onSidebarClosed: (mode, reason) => analytics.closed(mode, reason),

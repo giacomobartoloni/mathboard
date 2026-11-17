@@ -24,11 +24,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     :aria-busy="!boardSessionReady"
     :data-theme="uiTheme"
     :data-fullscreen="isFullscreen ? 'true' : 'false'"
-    :class="{ 'library-sidebar-pinned': librarySidebarMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal }"
+    :class="{ 'library-sidebar-pinned': librarySidebarMode === 'pinned', 'foreground-dialog-open': showFormulaModal || showShareStampModal || showBoardSharePanel }"
     :style="{ '--library-sidebar-width': librarySidebarWidth + 'px' }"
   >
     <div class="board-topbar">
       <span class="logo">MathBoard</span>
+      <button class="board-share-trigger" type="button" :disabled="!boardSessionReady || isLibrarySidebarOpen"
+        aria-label="Share current board" title="Share current board" @click="openBoardSharePanel">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+          <path d="m8.7 13.5 6.6 4m0-11-6.6 4"/>
+        </svg>
+      </button>
       <button ref="boardLibraryTriggerRef" class="board-library-trigger" type="button" :disabled="!boardSessionReady"
         aria-label="Open Board library" title="Open Board library"
         :aria-expanded="isLibrarySidebarOpen" aria-haspopup="dialog" :inert="librarySidebarMode === 'overlay' || showPlotModal" @click="openBoardLibrary">
@@ -45,7 +53,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     </div>
 
     <!-- <img alt="Vue logo" src="./assets/logo.png"> -->
-    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || librarySidebarMode === 'overlay' || showPlotModal">
+    <div :inert="!boardSessionReady || showFormulaModal || showShareStampModal || showBoardSharePanel || librarySidebarMode === 'overlay' || showPlotModal">
       <DrawBoard
         :id="'board'"
         :selectedTool="selectedTool"
@@ -54,7 +62,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
         :sidebar-pinned="librarySidebarMode === 'pinned'"
         :board-theme="boardTheme"
         :selected-color="selectedColor"
-        :selection-panel-suspended="showPlotModal || showFormulaModal || showShareStampModal"
+        :selection-panel-suspended="showPlotModal || showFormulaModal || showShareStampModal || showBoardSharePanel"
         ref="drawBoardRef"
         @request-formula="onRequestFormula"
         @edit-formula="onEditFormula"
@@ -82,7 +90,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     </div>
     <Transition name="library-sidebar" @after-leave="restoreLibrarySidebarFocus">
-      <LibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal" :boards="boardList" :archived-boards="archivedList"
+      <LibrarySidebar v-if="isLibrarySidebarOpen" :inert="showFormulaModal || showShareStampModal || showBoardSharePanel" :boards="boardList" :archived-boards="archivedList" :trashed-boards="trashList"
         :busy="boardLibraryBusy" :loading="boardLibraryLoading" :error="boardLibraryError" :is-desktop="desktopRuntime"
         :pinned="librarySidebarMode === 'pinned'" :can-pin="canPinLibrarySidebar"
         :width="librarySidebarWidth" :min-width="librarySidebarMinWidth" :max-width="librarySidebarMaxWidth"
@@ -115,6 +123,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
     <PlotModal v-if="showPlotModal" :board-theme="boardTheme" :initial-spec="editingPlotSpec" :busy="plotBusy" :commit-error="plotError"
       @close="closePlotModal" @submit-plot="onSubmitPlot" />
+    <ShareBoardPanel v-if="showBoardSharePanel" :busy="boardShareBusy" :url="boardShareUrl"
+      :error="boardShareError" @close="closeBoardSharePanel" @request-link="requestBoardShareLink"
+      @copied="onBoardShareCopied" @copy-failed="onBoardShareCopyFailed" />
     <ShareStampModal
       v-if="showShareStampModal"
       :isVisible="showShareStampModal"
@@ -154,6 +165,7 @@ import ToolsPanel from './components/ToolsPanel.vue'
 const FormulaModal = defineAsyncComponent(() => import('./components/FormulaModal.vue'))
 const PlotModal = defineAsyncComponent(() => import('./components/PlotModal.vue'))
 const ShareStampModal = defineAsyncComponent(() => import('./components/ShareStampModal.vue'))
+const ShareBoardPanel = defineAsyncComponent(() => import('./components/ShareBoardPanel.vue'))
 import SupportPanel from './components/SupportPanel.vue'
 import ZoomPanel from './components/ZoomPanel.vue'
 import {
@@ -188,8 +200,10 @@ import {
 import { createTemporaryPanController } from './board/interactions/TemporaryPanController.js'
 import { isDesktopRuntime } from './platform/runtime'
 import { connectDesktopWindow, toggleDesktopFullscreen } from './platform/nativeDesktop'
-import { trackEvent } from './analytics'
+import { initializeAnalytics, trackEvent } from './analytics'
 import { useBoardLibrary } from './composables/useBoardLibrary.js'
+import { useBoardLinkBootstrap } from './composables/useBoardLinkBootstrap.js'
+import { useBoardSharePanel } from './composables/useBoardSharePanel.js'
 import { usePlotEditor } from './composables/usePlotEditor.js'
 import { useLibrarySidebar } from './composables/useLibrarySidebar.js'
 import {
@@ -201,7 +215,7 @@ import {
   ANALYTICS_STAMP_SHARE_FAILURE_STAGES,
 } from './analytics/events.js'
 import { getKitById } from './stamps/registry.js'
-import { buildStampShareUrl, clearStampFromLocation, readStampFromLocation } from './stamps/url.js'
+import { buildStampShareUrl } from './stamps/url.js'
 
 function detectFullscreenSupport() {
   return typeof document !== 'undefined'
@@ -219,6 +233,7 @@ export default {
     FormulaModal,
     PlotModal,
     ShareStampModal,
+    ShareBoardPanel,
     SupportPanel,
     ZoomPanel,
   },
@@ -267,6 +282,11 @@ export default {
     } = usePlotEditor({ drawBoardRef, selectedTool, trackEvent })
     const showFormulaModal = ref(false)
     const formulaModalMode = ref(ANALYTICS_FORMULA_MODES.CREATE)
+    const {
+      showBoardSharePanel, boardShareBusy, boardShareUrl, boardShareError,
+      openBoardSharePanel, closeBoardSharePanel, requestBoardShareLink,
+      onBoardShareCopied, onBoardShareCopyFailed,
+    } = useBoardSharePanel({ boardSessionReady, drawBoardRef, desktopRuntime, trackEvent })
     const showShareStampModal = ref(false)
     const shareStampUrl = ref('')
     const formulaPosition = ref({ x: 0, y: 0 })
@@ -295,7 +315,7 @@ export default {
       }
     }
     const {
-      boardList, archivedList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
+      boardList, archivedList, trashList, boardLibraryBusy, boardLibraryLoading, boardLibraryError,
       openBoardLibrary, onBoardLibraryAction, onActiveBoardChanged, onBoardLibraryBrowse,
       onSidebarClosed, onSidebarModeChanged,
     } = useBoardLibrary({
@@ -385,33 +405,15 @@ export default {
       trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_FAILED, { stage })
     }
 
-    const bootstrapStampFromUrl = async () => {
-      const payload = readStampFromLocation()
-      if (!payload) return false
-      try {
-        const ready = await waitForBoardReady()
-        if (!ready || !drawBoardRef.value) {
-          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          boardError.value = 'Board is not ready to load the stamp link.'
-          return false
-        }
-        const result = await drawBoardRef.value.bootstrapFromStamp(payload)
-        if (!result?.ok) {
-          trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-          boardError.value = result?.message || 'Could not load stamp from the link.'
-          return false
-        }
-        trackEvent(ANALYTICS_EVENTS.STAMP_SHARE_OPENED)
-        selectedTool.value = 'select'
-        return true
-      } catch (error) {
-        trackStampShareFailure(ANALYTICS_STAMP_SHARE_FAILURE_STAGES.OPEN)
-        boardError.value = error?.message || 'Could not load stamp from the link.'
-        return false
-      } finally {
-        clearStampFromLocation()
-      }
-    }
+    const { bootstrapStampFromUrl, bootstrapSharedBoardFromUrl } = useBoardLinkBootstrap({
+      drawBoardRef,
+      boardError,
+      selectedTool,
+      desktopRuntime,
+      waitForBoardReady,
+      trackEvent,
+      initializeAnalytics,
+    })
 
     const bootstrapLocalBoard = async () => {
       const ready = await waitForBoardReady()
@@ -451,14 +453,19 @@ export default {
         syncWebFullscreenState()
       }
       try {
-        const stampLoaded = await bootstrapStampFromUrl()
-        if (stampLoaded) {
-          // Stamp URL starts a new session: keep canvas, mint a new local board id.
-          const ready = await waitForBoardReady()
-          if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for Stamp adoption.')
-          await drawBoardRef.value.bootstrapPersistence({ adoptCurrent: true })
+        const hasBoardShare = new URLSearchParams(window.location.hash.slice(1)).has('b')
+        if (hasBoardShare) {
+          if (!await bootstrapSharedBoardFromUrl()) await bootstrapLocalBoard()
         } else {
-          await bootstrapLocalBoard()
+          const stampLoaded = await bootstrapStampFromUrl()
+          if (stampLoaded) {
+            // Stamp URL starts a new session: keep canvas, mint a new local board id.
+            const ready = await waitForBoardReady()
+            if (!ready || !drawBoardRef.value) throw new Error('Board is not ready for Stamp adoption.')
+            await drawBoardRef.value.bootstrapPersistence({ adoptCurrent: true })
+          } else {
+            await bootstrapLocalBoard()
+          }
         }
       } catch (error) {
         console.error('Board session bootstrap failed', error)
@@ -565,6 +572,7 @@ export default {
           event.preventDefault()
           return
         }
+        if (showBoardSharePanel.value) { closeBoardSharePanel(); return }
         if (showShareStampModal.value) {
           closeShareStampModal()
           event.preventDefault()
@@ -595,6 +603,7 @@ export default {
       if (
         showFormulaModal.value
         || showShareStampModal.value
+        || showBoardSharePanel.value
         || librarySidebarMode.value === 'overlay'
         || (librarySidebarMode.value === 'pinned' && event.target?.closest?.('.library-sidebar-panel'))
         || shouldIgnoreGlobalShortcut(event)
@@ -845,6 +854,15 @@ export default {
       showFormulaModal,
       formulaModalMode,
       showShareStampModal,
+      showBoardSharePanel,
+      boardShareBusy,
+      boardShareUrl,
+      boardShareError,
+      openBoardSharePanel,
+      closeBoardSharePanel,
+      requestBoardShareLink,
+      onBoardShareCopied,
+      onBoardShareCopyFailed,
       shareStampUrl,
       closeShareStampModal,
       onStampShareCopied,
@@ -878,6 +896,7 @@ export default {
       boardLibraryTriggerRef,
       boardList,
       archivedList,
+      trashList,
       boardLibraryBusy,
       boardLibraryLoading,
       boardLibraryError,
@@ -982,40 +1001,52 @@ body {
   display: none !important;
 }
 
-/* Keep the logo left and the library trigger at the top-right. */
-.board-topbar { display: contents; }
+/* One full-width row keeps the logo left and Share / Boards right. */
+.board-topbar {
+  position: fixed;
+  top: 12px;
+  left: max(12px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.board-share-trigger {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  box-shadow: var(--panel-shadow);
+  cursor: pointer;
+}
+.board-share-trigger:disabled { opacity: .6; cursor: default; }
+.board-share-trigger:focus-visible { outline: 2px solid var(--selected-bg); outline-offset: 2px; }
 
 .logo {
+  flex: 0 0 auto;
+  margin-right: auto;
   font-family: 'Satisfy', cursive;
   font-size: 24px;
   line-height: normal;
-
+  white-space: nowrap;
   color: whitesmoke;
   background-color: rgb(61, 61, 61);
   border-radius: 8px;
   padding: 8px 15px;
   border: tan 4px solid;
-
-    position: absolute;
-    z-index: 10;
-    left: 12px;
-    top: 12px;
-    display: -ms-flexbox;
-    display: flex;
-    -ms-flex-direction: row;
-    flex-direction: row;
-    z-index: 200;
-    /* Render Satisfy at its final size instead of scaling a composited layer. */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 
-                0 2px 4px rgba(0, 0, 0, 0.1);
-
+  /* Render Satisfy at its final size instead of scaling a composited layer. */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
+              0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .board-library-trigger {
-  position: fixed;
-  top: 16px;
-  right: max(16px, env(safe-area-inset-right));
-  z-index: 1100;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1115,34 +1146,24 @@ body {
 }
 
 @media (max-width: 600px) {
-  /* Keep the compact board control opposite the logo on mobile. */
   .board-topbar {
-    position: fixed;
     top: max(12px, env(safe-area-inset-top));
-    left: max(12px, env(safe-area-inset-left));
     right: max(12px, env(safe-area-inset-right));
-    z-index: 1100;
-    display: flex;
-    align-items: center;
-    gap: 10px;
   }
-  .board-topbar .logo {
-    position: static;
-    flex: 0 0 auto;
-    border-radius: 5px;
-    white-space: nowrap;
-  }
+  .board-topbar .logo { border-radius: 5px; }
   .board-library-trigger {
-    position: static;
     flex: 0 0 44px;
     justify-content: center;
-    margin-left: auto;
     width: 44px;
     height: 44px;
     padding: 0;
   }
   .board-library-trigger-label { display: none; }
   .copyright { display: none; }
+}
+
+@media (max-width: 360px) {
+  .board-topbar .logo { font-size: 20px; padding: 7px 10px; }
 }
 
 .board-session-loading {

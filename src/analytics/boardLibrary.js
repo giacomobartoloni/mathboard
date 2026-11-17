@@ -22,7 +22,7 @@ import { ANALYTICS_EVENTS } from './events.js'
 const MODES = new Set(['overlay', 'pinned'])
 const CLOSE_REASONS = new Set(['close_button', 'escape', 'backdrop', 'board_action'])
 const MODE_REASONS = new Set(['user', 'viewport'])
-const BROWSE_ACTIONS = new Set(['search', 'recent', 'archived'])
+const BROWSE_ACTIONS = new Set(['search', 'recent', 'archived', 'trash'])
 const OUTCOMES = new Set(['success', 'failure'])
 const BOARD_ACTIONS = Object.freeze({
   create: 'create',
@@ -31,7 +31,10 @@ const BOARD_ACTIONS = Object.freeze({
   archive: 'archive',
   unarchive: 'unarchive',
   'unarchive-open': 'unarchive_open',
+  trash: 'trash',
+  restore: 'restore',
   delete: 'delete',
+  import: 'import',
 })
 
 /**
