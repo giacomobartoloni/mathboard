@@ -77,3 +77,23 @@ allowing arbitrary background paint.
 Delivery is stacked as PR #150 (plot foundation), PR #156 (UI and persistence),
 then PR #152 (local-agent/MCP integration). This decision does not imply merge,
 deployment or installed-client acceptance.
+
+## Follow-up — 2026-11-17 (conditional Stamp v2)
+
+The owner authorized a dedicated, backward-compatible increment to share editable
+semantic plots as selection Stamps. This supersedes the earlier Stamp v1 exclusion
+**only for new v2 payloads**; the original v1 contract and historical decision
+remain intact.
+
+Plot-free selections, including built-in kits, still encode as Stamp v1. Any
+selection containing a plot, recursively inside a Board Group, encodes as Stamp
+v2 with the original math specification and transforms rather than rendered
+paths. The reader accepts both versions, rejects a plot inside a claimed v1
+payload and rejects unknown future versions. New v2 Stamps require a current
+client; old clients safely reject the new version.
+
+Stamp materialization reuses the central semantic plot renderer, fresh-object-ID
+assignment and existing group/history/ink lifecycle. No new editor, image
+fallback, separate plot serialization format or transport endpoint is introduced.
+The existing 256 KiB decoded-JSON limit remains. This follow-up is implemented
+on a dedicated PR; merge, CI and deployment are separate gates.

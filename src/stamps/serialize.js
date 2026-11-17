@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { BoardObjectPolicy } from '../board/BoardObjectPolicy.js'
 import { readSemanticBoardObject, toStampNode } from '../board/objects/serialize.js'
-import { STAMP_VERSION, STAMP_ERROR_CODES, StampError } from './schema.js'
+import { STAMP_VERSION, STAMP_PLOT_VERSION, STAMP_ERROR_CODES, StampError } from './schema.js'
 import { encodeStampDocument } from './encode.js'
 
 const boardObjectPolicy = new BoardObjectPolicy()
@@ -66,9 +66,12 @@ export function stampDocumentFromObjects(objects) {
       'At least one object is required.',
     )
   }
+  const nodes = objects.map((object) => serializeFabricObject(object))
+  const hasPlot = (items) => items.some((node) => node.type === 'plot'
+    || (node.type === 'group' && hasPlot(node.objects)))
   return {
-    version: STAMP_VERSION,
-    objects: objects.map((object) => serializeFabricObject(object)),
+    version: hasPlot(nodes) ? STAMP_PLOT_VERSION : STAMP_VERSION,
+    objects: nodes,
   }
 }
 

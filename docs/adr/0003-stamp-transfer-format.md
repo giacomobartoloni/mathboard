@@ -39,3 +39,12 @@ Toolbar stamps call `insertStamp` and do not clear the board.
   because formulas would ship bitmaps, and the custom schema keeps latex and
   size limits explicit.
 - Reusing stamp JSON inside the history stack. Rejected; see ADR 0001.
+
+## Follow-up — 2026-11-17 (plot-safe versioning)
+
+Stamp v1 remains the wire format for existing object types and built-in kits.
+Stamp v2 is emitted only when a selection contains a semantic plot (including
+nested groups). The v2 reader validates the plot math specification and
+re-materializes it as an editable graph. A plot inside a v1 document is rejected,
+as are unknown future versions. The URL fragment and transfer-only semantics
+remain unchanged. See ADR 0012 for the plot persistence rationale.

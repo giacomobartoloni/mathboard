@@ -235,3 +235,42 @@ test('E2E-P0-007c formula stamp root padding survives re-share', async ({ page, 
   await firstContext.close()
   await secondContext.close()
 })
+
+test('E2E graph Stamp v2 shares editable math through a selection link', async ({ page, browser }) => {
+  await gotoBoard(page)
+  await selectTool(page, 'Graph')
+  await clickOnCanvas(page, { x: 320, y: 180 })
+  const editor = page.getByRole('dialog', { name: 'Create graph' })
+  await expect(editor).toBeVisible()
+  await editor.getByLabel('Function (LaTeX)').fill('x^2-5x+6')
+  const insert = editor.getByRole('button', { name: 'Insert graph', exact: true })
+  await expect(insert).toBeEnabled({ timeout: 20000 })
+  await insert.click()
+  await waitForState(page, (s) => s.objects.some((o) => o.objectKind === 'plot'), { timeout: 20000 })
+
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.press('ControlOrMeta+Shift+L')
+  const urlInput = page.getByRole('dialog', { name: 'Share board link' }).getByLabel(
+    'Anyone with this link opens a board with the current selection:',
+  )
+  const shareUrl = await urlInput.inputValue()
+  const payload = new URL(shareUrl).hash.slice(3)
+  const document = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
+  expect(document.version).toBe(2)
+  expect(document.objects[0].type).toBe('plot')
+  expect(document.objects[0].latex).toBe('x^2-5x+6')
+
+  const recipientContext = await browser.newContext()
+  const recipient = await recipientContext.newPage()
+  await gotoBoard(recipient, shareUrl)
+  const state = await waitForState(
+    recipient,
+    (s) => s.objects.some((o) => o.type === 'Group'
+      && (o.children || []).some((child) => child.objectKind === 'plot')),
+    { timeout: 25000 },
+  )
+  const plot = state.objects[0].children.find((child) => child.objectKind === 'plot')
+  expect(plot.plotSpec.latex).toBe('x^2-5x+6')
+  await expect(recipient.locator('.stamp-error')).toHaveCount(0)
+  await recipientContext.close()
+})
