@@ -78,3 +78,43 @@ test('transparent rectangle selects from its outline, not its unpainted interior
   expect(after.active.selectionCount).toBe(1)
   expect(after.history).toEqual(before.history)
 })
+
+test('group remains atomic and uses group bounds for clicks and marquee', async ({ page }) => {
+  await gotoBoard(page)
+  await selectShape(page, 'Rectangle')
+  await dragOnCanvas(page, { x1: 280, y1: 180, x2: 350, y2: 240 })
+  await selectShape(page, 'Rectangle')
+  await dragOnCanvas(page, { x1: 450, y1: 180, x2: 520, y2: 240 })
+
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.press('ControlOrMeta+G')
+  const grouped = await getBoardState(page)
+  expect(grouped.objects).toHaveLength(1)
+  expect(grouped.objects[0].type).toBe('Group')
+
+  await clickOnCanvas(page, { x: 610, y: 340 })
+  expect((await getBoardState(page)).active.selectionCount).toBe(0)
+
+  // Click on a member selects the parent group, not an individual child.
+  await clickOnCanvas(page, { x: 280, y: 210 })
+  let state = await getBoardState(page)
+  expect(state.active.type).toBe('Group')
+  expect(state.active.selectionCount).toBe(1)
+
+  await clickOnCanvas(page, { x: 610, y: 340 })
+  // Current deliberate behavior: blank space between members is clickable.
+  await clickOnCanvas(page, { x: 400, y: 210 })
+  state = await getBoardState(page)
+  expect(state.active.type).toBe('Group')
+  expect(state.active.selectionCount).toBe(1)
+
+  await clickOnCanvas(page, { x: 610, y: 340 })
+  await dragOnCanvas(page, { x1: 260, y1: 160, x2: 400, y2: 270 })
+  expect((await getBoardState(page)).active.selectionCount).toBe(0)
+
+  await dragOnCanvas(page, { x1: 260, y1: 160, x2: 540, y2: 270 })
+  state = await getBoardState(page)
+  expect(state.active.type).toBe('Group')
+  expect(state.active.selectionCount).toBe(1)
+  expect(state.history).toEqual(grouped.history)
+})
