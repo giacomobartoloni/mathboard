@@ -223,3 +223,99 @@ test('Worker logs only allowlisted reason codes for missing bindings and storage
     console.error = originalError
   }
 })
+
+test('manually promoted ciphertext preserves the same share ID and decryption key after expiry', async () => {
+  const env = fakeEnvironment()
+  const original = createEmptyBoardDocument('Durable math exercise')
+  const { bytes, key } = await encryptSharedBoard(original)
+  const created = await handleShareRequest(new Request(endpoint, {
+    method: 'POST', headers, body: bytes,
+  }), env)
+  assert.equal(created.status, 201)
+  const { id } = await created.json()
+  const temporary = env.entries.get('boards/' + id)
+  assert.ok(temporary)
+  assert.equal(env.entries.has('permanent/' + id), false)
+
+  // The administrator copies the encrypted bytes; no key, plaintext or new share ID is used.
+  env.entries.set('permanent/' + id, {
+    data: new Uint8Array(temporary.data),
+    customMetadata: { expiresAt: '1' }, // Storage prefix, not copied TTL metadata, determines promotion.
+  })
+  temporary.customMetadata.expiresAt = String(Date.now() - 1)
+  const promoted = await handleShareRequest(new Request(endpoint + '/' + id), env)
+  assert.equal(promoted.status, 200)
+  assert.deepEqual(await decryptSharedBoard(new Uint8Array(await promoted.arrayBuffer()), key), original)
+
+  // R2's 90-day lifecycle eventually removes only the original boards/ object.
+  env.entries.delete('boards/' + id)
+  const surviving = await handleShareRequest(new Request(endpoint + '/' + id), env)
+  assert.equal(surviving.status, 200)
+  assert.deepEqual(await decryptSharedBoard(new Uint8Array(await surviving.arrayBuffer()), key), original)
+  assert.equal(surviving.headers.get('Cache-Control'), 'no-store')
+})
+
+test('temporary shares remain 90-day limited and do not trigger permanent lookup before expiry', async () => {
+  const env = fakeEnvironment()
+  const data = new Uint8Array(40).fill(2)
+  const created = await handleShareRequest(new Request(endpoint, {
+    method: 'POST', headers, body: data,
+  }), env)
+  const { id } = await created.json()
+  const originalGet = env.BOARD_SHARES.get
+  const lookups = []
+  env.BOARD_SHARES.get = async key => {
+    lookups.push(key)
+    return originalGet(key)
+  }
+  assert.equal((await handleShareRequest(new Request(endpoint + '/' + id), env)).status, 200)
+  assert.deepEqual(lookups, ['boards/' + id])
+  env.entries.get('boards/' + id).customMetadata.expiresAt = String(Date.now() - 1)
+  assert.equal((await handleShareRequest(new Request(endpoint + '/' + id), env)).status, 410)
+  assert.deepEqual(lookups.slice(1), ['boards/' + id, 'permanent/' + id])
+  env.entries.delete('boards/' + id)
+  assert.equal((await handleShareRequest(new Request(endpoint + '/' + id), env)).status, 404)
+})
+
+test('permanent storage failure fails closed without silently serving an expired share', async () => {
+  const env = fakeEnvironment()
+  const id = 'C'.repeat(22)
+  env.entries.set('boards/' + id, {
+    data: new Uint8Array(40),
+    customMetadata: { expiresAt: String(Date.now() - 1) },
+  })
+  const originalGet = env.BOARD_SHARES.get
+  env.BOARD_SHARES.get = async key => {
+    if (key === 'permanent/' + id) throw new Error('Private storage details')
+    return originalGet(key)
+  }
+  const originalLog = console.error
+  const logs = []
+  console.error = value => logs.push(value)
+  try {
+    const response = await handleShareRequest(new Request(endpoint + '/' + id), env)
+    assert.equal(response.status, 503)
+    assert.deepEqual(await response.json(), { error: 'unavailable' })
+    assert.ok(!logs.join('').includes(id))
+    assert.ok(!logs.join('').includes('Private'))
+  } finally {
+    console.error = originalLog
+  }
+})
+
+test('clients cannot create or promote permanent objects through the public API', async () => {
+  const env = fakeEnvironment()
+  const payload = new Uint8Array(40)
+  const attempted = await handleShareRequest(new Request(endpoint + '/permanent', {
+    method: 'POST', headers, body: payload,
+  }), env)
+  assert.equal(attempted.status, 404)
+  assert.equal(env.entries.size, 0)
+  const created = await handleShareRequest(new Request(endpoint, {
+    method: 'POST', headers, body: payload,
+  }), env)
+  assert.equal(created.status, 201)
+  const { id } = await created.json()
+  assert.ok(env.entries.has('boards/' + id))
+  assert.equal(env.entries.has('permanent/' + id), false)
+})
