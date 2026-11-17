@@ -8,10 +8,17 @@ The regular desktop CI workflow only verifies native compilation.
 
 ## Version and identity
 
-`src-tauri/tauri.conf.json` reads the application version from `package.json`. Update
-the `package.json` version before creating release artifacts and commit the resulting
-lockfile change. Keep the `src-tauri/Cargo.toml` package version and
-corresponding `src-tauri/Cargo.lock` entry aligned before each release.
+`src-tauri/tauri.conf.json` reads the application version from `package.json`.
+From the repository root, set the next release version with:
+
+```sh
+npm run version:set -- 1.15.0
+```
+
+The command updates `package.json`, `package-lock.json`, `src-tauri/Cargo.toml`,
+and `src-tauri/Cargo.lock`; it requires an aligned starting version and accepts
+only numeric `major.minor.patch` versions. Review and commit the four-file diff
+before release. It does not create commits, tags, installers, or releases.
 
 The application identifier is `app.mathboard.desktop`. Treat it as permanent after
 distribution: changing it gives the application a different operating-system identity
