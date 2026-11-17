@@ -35,7 +35,7 @@
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' asset: http://asset.localhost data: blob:",
         "font-src": "'self' data:",
-        "connect-src": "ipc: http://ipc.localhost",
+        "connect-src": "ipc: http://ipc.localhost https://mathboard.app",
         "object-src": "'none'",
         "base-uri": "'self'"
       }

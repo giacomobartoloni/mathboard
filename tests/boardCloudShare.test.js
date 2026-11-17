@@ -42,6 +42,69 @@ test('encrypted board round-trip validates and never leaks plaintext into cipher
   tampered[tampered.length - 1] ^= 1
   await assert.rejects(decryptSharedBoard(tampered, key), error => error instanceof BoardShareError && error.stage === 'decrypt')
 })
+test('desktop sharing sends ciphertext to the public API and returns a browser link', async () => {
+  const originalFetch = globalThis.fetch
+  const id = 'B'.repeat(22)
+  try {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, endpoint)
+      assert.equal(options.method, 'POST')
+      assert.equal(options.headers['Content-Type'], 'application/octet-stream')
+      assert.ok(options.body instanceof Uint8Array)
+      assert.ok(!new TextDecoder().decode(options.body).includes('Private desktop lesson'))
+      return new Response(JSON.stringify({ id, expiresAt: '2027-01-01T00:00:00.000Z' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const document = createEmptyBoardDocument('Private desktop lesson')
+    const share = await createBoardShare(document, { desktop: true })
+    assert.match(share.url, /^https:\/\/mathboard\.app\/#b=B{22},[A-Za-z0-9_-]{43}$/)
+    assert.equal(share.expiresAt, '2027-01-01T00:00:00.000Z')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('desktop WebViews can preflight, create and download shares with narrow CORS origins', async () => {
+  for (const origin of ['tauri://localhost', 'http://tauri.localhost', 'https://tauri.localhost']) {
+    const env = fakeEnvironment()
+    const preflight = await handleShareRequest(new Request(endpoint, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: origin,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type',
+      },
+    }), env)
+    assert.equal(preflight.status, 204)
+    assert.equal(preflight.headers.get('Access-Control-Allow-Origin'), origin)
+    assert.match(preflight.headers.get('Access-Control-Allow-Headers'), /Content-Type/i)
+
+    const upload = await handleShareRequest(new Request(endpoint, {
+      method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/octet-stream' },
+      body: new Uint8Array(40),
+    }), env)
+    assert.equal(upload.status, 201)
+    assert.equal(upload.headers.get('Access-Control-Allow-Origin'), origin)
+
+    const { id } = await upload.json()
+    const download = await handleShareRequest(new Request(endpoint + '/' + id, {
+      headers: { Origin: origin },
+    }), env)
+    assert.equal(download.status, 200)
+    assert.equal(download.headers.get('Access-Control-Allow-Origin'), origin)
+  }
+
+  const untrusted = await handleShareRequest(new Request(endpoint, {
+    method: 'OPTIONS',
+    headers: { Origin: 'https://untrusted.example', 'Access-Control-Request-Method': 'POST' },
+  }), fakeEnvironment())
+  assert.equal(untrusted.status, 403)
+})
+
 test('Worker stores only ciphertext and enforces 90-day expiry on every GET', async () => {
   const env = fakeEnvironment()
   const data = new Uint8Array(50).fill(7)
