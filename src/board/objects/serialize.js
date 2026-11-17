@@ -233,7 +233,6 @@ export function readSemanticBoardObject(object, options = {}) {
  */
 export function toStampNode(semantic) {
   if (!semantic || typeof semantic !== 'object') return semantic
-  if (semantic.type === 'plot') throw new Error('Graphs cannot be shared as stamps yet.')
   const { id, objects, ...rest } = semantic
   void id
   if (semantic.type === 'group' && Array.isArray(objects)) {

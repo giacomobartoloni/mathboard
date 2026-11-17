@@ -18,9 +18,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { hasValidShapeGeometry } from '../board/objects/shapeGeometry.js'
+import { validatePlotSpec } from '../plots/plotSpec.js'
 
-/** Stamp transfer schema version. Bump when the payload shape changes. */
+/** Legacy Stamp wire version; keep emitting it for plot-free selections. */
 export const STAMP_VERSION = 1
+/** Semantic plots require a new version so older readers reject them safely. */
+export const STAMP_PLOT_VERSION = 2
 
 /** Max UTF-8 byte length of the decoded JSON document. */
 export const STAMP_MAX_BYTES = 256 * 1024
@@ -36,6 +39,7 @@ export const STAMP_NODE_TYPES = Object.freeze([
   'text',
   'formula',
   'group',
+  'plot',
 ])
 
 export const STAMP_ERROR_CODES = Object.freeze({
@@ -162,7 +166,7 @@ function validateCommonProps(node, path) {
   assertOptionalBoolean(node, 'mathboardRenderedInkIsLight', path)
 }
 
-function validateNode(node, path, depth) {
+function validateNode(node, path, depth, version) {
   if (depth > 32) {
     throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, 'Stamp nesting is too deep.')
   }
@@ -174,6 +178,10 @@ function validateNode(node, path, depth) {
       STAMP_ERROR_CODES.UNKNOWN_TYPE,
       `Unsupported type "${node.type}" at ${path}.`,
     )
+  }
+
+  if (node.type === 'plot' && version === STAMP_VERSION) {
+    throw new StampError(STAMP_ERROR_CODES.UNSUPPORTED_VERSION, 'Graphs require Stamp v2.')
   }
 
   validateCommonProps(node, path)
@@ -222,6 +230,13 @@ function validateNode(node, path, depth) {
       assertOptionalBoolean(node, 'linethrough', path)
       assertOptionalBoolean(node, 'overline', path)
       break
+    case 'plot':
+      try {
+        validatePlotSpec(node)
+      } catch (error) {
+        throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, error.message)
+      }
+      break
     case 'formula':
       if (typeof node.latex !== 'string' || !node.latex.trim()) {
         throw new StampError(
@@ -238,7 +253,7 @@ function validateNode(node, path, depth) {
         )
       }
       node.objects.forEach((child, index) => {
-        validateNode(child, `${path}.objects[${index}]`, depth + 1)
+        validateNode(child, `${path}.objects[${index}]`, depth + 1, version)
       })
       break
     default:
@@ -254,7 +269,7 @@ export function validateStampDocument(doc) {
   if (!isPlainObject(doc)) {
     throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, 'Root must be an object.')
   }
-  if (doc.version !== STAMP_VERSION) {
+  if (doc.version !== STAMP_VERSION && doc.version !== STAMP_PLOT_VERSION) {
     throw new StampError(
       STAMP_ERROR_CODES.UNSUPPORTED_VERSION,
       `Got version ${JSON.stringify(doc.version)}.`,
@@ -267,7 +282,7 @@ export function validateStampDocument(doc) {
     throw new StampError(STAMP_ERROR_CODES.INVALID_SHAPE, 'Stamp must contain at least one object.')
   }
   doc.objects.forEach((node, index) => {
-    validateNode(node, `objects[${index}]`, 0)
+    validateNode(node, `objects[${index}]`, 0, doc.version)
   })
   return doc
 }

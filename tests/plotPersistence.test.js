@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { Group } from 'fabric'
+import { Group, Rect } from 'fabric'
 import { installFabricDomStub } from './helpers/fabric-dom-stub.js'
 import { makeControllerCanvas } from './helpers/controller-canvas.js'
 import { BoardObjectPolicy } from '../src/board/BoardObjectPolicy.js'
@@ -29,7 +29,15 @@ import { serializeBoardDocument } from '../src/board/persistence/serializeBoardD
 import { materializeBoardDocument } from '../src/board/persistence/materializeBoardDocument.js'
 import { validateBoardDocument } from '../src/board/persistence/schema.js'
 import { migrateBoardDocument } from '../src/board/persistence/migrateBoardDocument.js'
-import { serializeFabricObject } from '../src/stamps/serialize.js'
+import {
+  STAMP_PLOT_VERSION,
+  STAMP_VERSION,
+  encodeObjectsAsStamp,
+  decodeStampString,
+  stampDocumentFromObjects,
+  materializeStampDocument,
+  validateStampDocument
+} from '../src/stamps/index.js'
 installFabricDomStub()
 const spec = {
   type: 'plot',
@@ -131,10 +139,56 @@ test('invalid or failed edits preserve prior object, selection and history', asy
   assert.equal(canvas.getActiveObject(), old)
   assert.equal(history.length, 1)
 })
-test('plot sharing is explicitly rejected, including inside groups', async () => {
-  const object = await buildPlotObject(spec)
-  for (const root of [object, new Group([object])])
-    assert.throws(() => serializeFabricObject(root), /Graphs cannot be shared as stamps yet/)
+test('Stamp keeps v1 for ordinary objects and emits v2 for nested semantic plots', async () => {
+  const rect = new Rect({ width: 32, height: 24, fill: '#123456' })
+  const ordinary = stampDocumentFromObjects([rect])
+  assert.equal(ordinary.version, STAMP_VERSION)
+
+  const plot = await buildPlotObject({
+    ...spec,
+    border: false,
+    axisNumbers: false,
+    transparentBackground: true,
+    color: '#2563eb'
+  })
+  assert.equal(stampDocumentFromObjects([plot]).version, STAMP_PLOT_VERSION)
+  const group = new Group([plot, rect], { left: 80, top: 120 })
+  const document = stampDocumentFromObjects([group])
+  assert.equal(document.version, STAMP_PLOT_VERSION)
+  const plotNode = document.objects[0].objects.find((node) => node.type === 'plot')
+  assert.ok(plotNode)
+  assert.equal(plotNode.id, undefined)
+  assert.equal(plotNode.latex, spec.latex)
+  assert.deepEqual(plotNode.mathWindow, spec.mathWindow)
+  assert.equal(plotNode.transparentBackground, true)
+  assert.equal(plotNode.border, false)
+
+  const decoded = decodeStampString(encodeObjectsAsStamp([group]))
+  assert.deepEqual(decoded, document)
+  const [restoredGroup] = await materializeStampDocument(decoded, { buildFormula })
+  const restoredPlot = restoredGroup.getObjects().find((object) => policy.isPlot(object))
+  assert.ok(restoredPlot)
+  assert.equal(restoredPlot.plotSpec.latex, spec.latex)
+  assert.deepEqual(restoredPlot.plotSpec.mathWindow, spec.mathWindow)
+  assert.equal(restoredPlot.plotSpec.transparentBackground, true)
+  assert.equal(restoredPlot.plotSpec.axisNumbers, false)
+  assert.equal(restoredPlot.plotSpec.color, '#2563eb')
+  assert.equal(stampDocumentFromObjects([restoredGroup]).version, STAMP_PLOT_VERSION)
+})
+
+test('Stamp v2 validates plots, rejects plots in v1 and rejects future versions', async () => {
+  const plot = await buildPlotObject(spec)
+  const nested = stampDocumentFromObjects([new Group([plot])])
+  assert.equal(nested.version, STAMP_PLOT_VERSION)
+  assert.throws(() => validateStampDocument({ ...nested, version: STAMP_VERSION }), {
+    code: 'stamp_unsupported_version'
+  })
+  assert.throws(() => validateStampDocument({ ...nested, version: 99 }), {
+    code: 'stamp_unsupported_version'
+  })
+  const invalid = structuredClone(nested)
+  invalid.objects[0].objects[0].mathWindow.xMax = invalid.objects[0].objects[0].mathWindow.xMin
+  assert.throws(() => validateStampDocument(invalid), { code: 'stamp_invalid_shape' })
 })
 
 test('moving the retained plot during async rendering preserves its latest transform', async () => {

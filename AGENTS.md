@@ -49,12 +49,12 @@ For the combined local Programmable Board acceptance/release gate (F014–F020 a
 - **`fabricStaticCanvas.js`** is a **mixin** (not a component), provides `isDrawingMode` prop
 - **Event naming**: kebab-case (`@request-formula`, `@edit-formula`, `@text-editing-completed`)
 - **Tools** (select/pan/pencil/font/formula/shapes/stamps) communicate via props+events from ToolsPanel through App to DrawBoard
-- **Stamps**: portable base64url JSON in `src/stamps/`; `insertStamp` adds a Group at viewport center with board-default AUTO ink for kit objects; `bootstrapFromStamp` clears board + resets history (URL `#s=`). Share selection: Ctrl/Cmd+Shift+L opens a modal with `#s=` URL (`exportSelectionToStamp`). About lists shipped shortcuts from `SHORTCUT_HELP` in `src/config/shortcuts.js`. ADR: `docs/adr/0003-stamp-transfer-format.md`
+- **Stamps**: portable base64url JSON in `src/stamps/` (v1 for plot-free selections; v2 for semantic plots); `insertStamp` adds a Group at viewport center with board-default AUTO ink for kit objects; `bootstrapFromStamp` clears board + resets history (URL `#s=`). Share selection: Ctrl/Cmd+Shift+L opens a modal with `#s=` URL (`exportSelectionToStamp`). About lists shipped shortcuts from `SHORTCUT_HELP` in `src/config/shortcuts.js`. ADR: `docs/adr/0003-stamp-transfer-format.md`
 - **Grouping**: permanent Fabric `Group`; selection panel + Ctrl/Cmd+G / Ctrl/Cmd+Shift+G; history commands `group` / `ungroup`
 
 ## Key implementation details
 
-- **Formulas**: FormulaModal uses KaTeX for entry/preview/validation. Board formulas use `MathJaxSvgFormulaRenderer` → MathJax SVG → Fabric vector `FormulaObject` (atomic Group). LaTeX remains source of truth; Stamp v1 persists semantic formula nodes, not path soup. MathJax NewCM dynamic SVG font ranges load via Vite same-origin chunks (no CDN). ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
+- **Formulas**: FormulaModal uses KaTeX for entry/preview/validation. Board formulas use `MathJaxSvgFormulaRenderer` → MathJax SVG → Fabric vector `FormulaObject` (atomic Group). LaTeX remains source of truth; Stamp persists semantic formula nodes and v2 semantic plot nodes, not path soup. MathJax NewCM dynamic SVG font ranges load via Vite same-origin chunks (no CDN). ADR: `docs/adr/0004-semantic-object-model-and-renderer-boundaries.md`
 - **Undo/redo**: command log, one entry per gesture, limit 50. Decision: `docs/adr/0001-command-log-history.md`
 - **Pan**: manipulates `viewportTransform[4/5]` directly
 - **Zoom**: `canvas.setZoom()`, clamp 0.1–5x

@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 export {
   STAMP_VERSION,
+  STAMP_PLOT_VERSION,
   STAMP_MAX_BYTES,
   STAMP_ERROR_CODES,
   StampError,
