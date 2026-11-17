@@ -112,6 +112,12 @@ References:
 
 Until the bucket and binding exist, the Worker responds `503 unavailable`. Do not claim end-to-end sharing works merely because a production web build or static-asset CI passed. Coordinate Cloudflare preview deployments separately; a preview Worker must not silently write to the production bucket.
 
+## Selected long-lived educational shares (maintainer only)
+
+The ordinary user-facing Share Board flow is unchanged: anonymous encrypted snapshot links expire after **90 days**, and the R2 lifecycle rule still deletes keys under `boards/`. Selected existing educational links may be **manually promoted** to a private `permanent/<same-id>` ciphertext copy by an authenticated maintainer, preserving the **same** original link and browser decryption key. The Worker only reads that prefix if the ordinary share is missing or expired. No public promotion endpoint, UI option, account system or automatic permanent link generation is included.
+
+Follow [the permanent share runbook](permanent-board-shares.md) before using this on any bucket: verify prefix-specific lifecycle rules, content authorization, source validity, byte-equal copy, deployed GET and independent recipient import. No Cloudflare resources are changed simply by merging the code. Never paste a real full share link or its decryption key into operational logs, documentation or PRs.
+
 ## Network contract
 
 - `POST /api/shares`: requires an allowed `Origin` and `application/octet-stream`; uploads at most 2 MiB of ciphertext and returns a random ID and ISO expiry.

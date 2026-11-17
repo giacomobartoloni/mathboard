@@ -8,6 +8,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 export const SHARE_TTL_MS = 90 * 24 * 60 * 60 * 1000
 export const MAX_CIPHERTEXT_BYTES = 2 * 1024 * 1024
 const KEY_PREFIX = 'boards/'
+const PERMANENT_KEY_PREFIX = 'permanent/'
 const ID_PATTERN = /^[A-Za-z0-9_-]{22}$/
 const STATIC_HEADERS = {
   'Cache-Control': 'no-store',
@@ -113,16 +114,27 @@ export async function handleShareRequest(request, env) {
     const id = url.pathname.slice('/api/shares/'.length)
     if (!ID_PATTERN.test(id)) return json({ error: 'invalid_id' }, 400, corsHeaders)
     let stored
-    try { stored = await env.BOARD_SHARES.get(KEY_PREFIX + id) }
-    catch {
+    let expired = false
+    try {
+      stored = await env.BOARD_SHARES.get(KEY_PREFIX + id)
+      if (stored) {
+        const expiresAt = Number(stored.customMetadata?.expiresAt)
+        expired = !Number.isFinite(expiresAt) || Date.now() >= expiresAt
+      }
+      // Only manually promoted ciphertext can live outside the 90-day lifecycle prefix.
+      if (!stored || expired) {
+        const permanent = await env.BOARD_SHARES.get(PERMANENT_KEY_PREFIX + id)
+        if (permanent) {
+          stored = permanent
+          expired = false
+        }
+      }
+    } catch {
       logShareFailure('download', 'storage_read_failed')
       return json({ error: 'unavailable' }, 503, corsHeaders)
     }
     if (!stored) return json({ error: 'not_found' }, 404, corsHeaders)
-    const expiresAt = Number(stored.customMetadata?.expiresAt)
-    if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
-      return json({ error: 'expired' }, 410, corsHeaders)
-    }
+    if (expired) return json({ error: 'expired' }, 410, corsHeaders)
     return new Response(stored.body, { status: 200, headers: {
       ...STATIC_HEADERS, ...corsHeaders, 'Content-Type': 'application/octet-stream',
     } })
